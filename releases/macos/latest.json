@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.6/QiemanDashboard-3.9.6.zip",
-    "name" : "QiemanDashboard-3.9.6.zip",
-    "sha256" : "a255ec34e62503d9ed772d7ac87673864819d6f4abc79697003ea85fbe9d3b21",
-    "size" : 5610752
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.7/QiemanDashboard-3.9.7.zip",
+    "name" : "QiemanDashboard-3.9.7.zip",
+    "sha256" : "3fba73aca102bd4f4272ef58982ca46fb816ec1a45032190b84f5675d2b2a775",
+    "size" : 5613195
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.6/QiemanDashboard-3.9.6.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.7/QiemanDashboard-3.9.7.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.6.zip",
-      "size" : 5610752
+      "name" : "QiemanDashboard-3.9.7.zip",
+      "size" : 5613195
     }
   ],
-  "body" : "可信度与资金安全 P0 底座",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.6",
-  "name" : "QiemanDashboard v3.9.6",
-  "notes" : "可信度与资金安全 P0 底座",
+  "body" : "模型单轮请求超时自动收敛重试",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.7",
+  "name" : "QiemanDashboard v3.9.7",
+  "notes" : "模型单轮请求超时自动收敛重试",
   "published_at" : "",
-  "sha256" : "a255ec34e62503d9ed772d7ac87673864819d6f4abc79697003ea85fbe9d3b21",
-  "tag" : "v3.9.6",
-  "tag_name" : "v3.9.6",
-  "version" : "3.9.6"
+  "sha256" : "3fba73aca102bd4f4272ef58982ca46fb816ec1a45032190b84f5675d2b2a775",
+  "tag" : "v3.9.7",
+  "tag_name" : "v3.9.7",
+  "version" : "3.9.7"
 }
