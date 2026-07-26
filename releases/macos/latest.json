@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.3/QiemanDashboard-3.9.3.zip",
-    "name" : "QiemanDashboard-3.9.3.zip",
-    "sha256" : "f40c4975b77d7c8e42a44829db4b806cd8ba0c245945cb55b2ad1e2689041ad4",
-    "size" : 5368188
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.4/QiemanDashboard-3.9.4.zip",
+    "name" : "QiemanDashboard-3.9.4.zip",
+    "sha256" : "d0abd033c59b0dbc739270f7f20cbdb1aa45e92740103b2f97c5eb5834a38deb",
+    "size" : 5370517
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.3/QiemanDashboard-3.9.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.4/QiemanDashboard-3.9.4.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.3.zip",
-      "size" : 5368188
+      "name" : "QiemanDashboard-3.9.4.zip",
+      "size" : 5370517
     }
   ],
-  "body" : "新增「下一小时操作指引」盘中分段研判",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.3",
-  "name" : "QiemanDashboard v3.9.3",
-  "notes" : "新增「下一小时操作指引」盘中分段研判",
+  "body" : "下一小时操作指引支持手动研判槽位",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.4",
+  "name" : "QiemanDashboard v3.9.4",
+  "notes" : "下一小时操作指引支持手动研判槽位",
   "published_at" : "",
-  "sha256" : "f40c4975b77d7c8e42a44829db4b806cd8ba0c245945cb55b2ad1e2689041ad4",
-  "tag" : "v3.9.3",
-  "tag_name" : "v3.9.3",
-  "version" : "3.9.3"
+  "sha256" : "d0abd033c59b0dbc739270f7f20cbdb1aa45e92740103b2f97c5eb5834a38deb",
+  "tag" : "v3.9.4",
+  "tag_name" : "v3.9.4",
+  "version" : "3.9.4"
 }
