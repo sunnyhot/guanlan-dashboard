@@ -52,6 +52,17 @@ struct TrendAnalysisValidator {
         for confidence in collectConfidenceScores(report) where confidence.score < 0 || confidence.score > 100 {
             messages.append("confidence score 必须在 0...100 之间：\(confidence.score)")
         }
+        if report.schemaVersion >= TrendAnalysisReport.currentSchemaVersion {
+            for confidence in collectConfidenceScores(report)
+            where confidence.label != confidenceLabel(for: confidence.score) {
+                messages.append(
+                    "confidence label 必须由 score 派生：\(confidence.score) 应为「\(confidenceLabel(for: confidence.score))」"
+                )
+            }
+            validateSourceStatuses(report, messages: &messages)
+            validateClaimEvidence(report, messages: &messages)
+            validateDisposition(report, messages: &messages)
+        }
 
         // privacyMode 必须与本次分析快照一致（App 在 submit 阶段已覆盖，这里做防御性校验）。
         if let expectedPrivacyMode, report.privacyMode != expectedPrivacyMode {
@@ -171,6 +182,16 @@ struct TrendAnalysisValidator {
         report.sectors.forEach { $0.evidenceIDs.forEach(append) }
         report.marketOutlook.forEach { $0.evidenceIDs.forEach(append) }
         report.opportunities.forEach { $0.evidenceIDs.forEach(append) }
+        report.portfolio.claimEvidence.allEvidenceIDs.forEach(append)
+        report.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        report.sectors.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        report.marketOutlook.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        report.opportunities.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        (report.keyAssets + report.assetTrends).forEach { asset in
+            asset.claimEvidence.allEvidenceIDs.forEach(append)
+            asset.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        }
+        report.actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
         return ids
     }
 
@@ -184,5 +205,137 @@ struct TrendAnalysisValidator {
         scores.append(contentsOf: report.actions.map(\.confidence))
         scores.append(contentsOf: (report.keyAssets + report.assetTrends).flatMap(\.horizons).map(\.confidence))
         return scores
+    }
+
+    private func validateSourceStatuses(
+        _ report: TrendAnalysisReport,
+        messages: inout [String]
+    ) {
+        let grouped = Dictionary(grouping: report.sourceStatuses, by: \.source)
+        for source in TrendDataSource.allCases {
+            let values = grouped[source] ?? []
+            if values.count != 1 {
+                messages.append("sourceStatuses 必须且只能包含一条 \(source.rawValue) 状态")
+            }
+        }
+    }
+
+    private func validateClaimEvidence(
+        _ report: TrendAnalysisReport,
+        messages: inout [String]
+    ) {
+        let policy = TrendClaimEvidencePolicy()
+        let evidenceByID = Dictionary(
+            report.evidence.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        messages.append(contentsOf: policy.validateClaim(
+            label: "组合结论",
+            direction: nil,
+            evidence: report.portfolio.claimEvidence,
+            evidenceByID: evidenceByID
+        ))
+        for horizon in report.horizons {
+            messages.append(contentsOf: policy.validateClaim(
+                label: "\(horizon.horizon.rawValue) 周期趋势",
+                direction: horizon.direction,
+                evidence: horizon.claimEvidence,
+                evidenceByID: evidenceByID
+            ))
+        }
+        for market in report.marketOutlook {
+            messages.append(contentsOf: policy.validateClaim(
+                label: "大盘/大类资产「\(market.name)」",
+                direction: market.direction,
+                evidence: market.claimEvidence,
+                evidenceByID: evidenceByID,
+                entityName: market.name
+            ))
+        }
+        for sector in report.sectors {
+            messages.append(contentsOf: policy.validateClaim(
+                label: "板块「\(sector.name)」",
+                direction: sector.direction,
+                evidence: sector.claimEvidence,
+                evidenceByID: evidenceByID,
+                sectorKey: sector.name
+            ))
+        }
+        for opportunity in report.opportunities {
+            messages.append(contentsOf: policy.validateClaim(
+                label: "机会「\(opportunity.name)」",
+                direction: opportunity.direction,
+                evidence: opportunity.claimEvidence,
+                evidenceByID: evidenceByID,
+                entityName: opportunity.name
+            ))
+        }
+        for asset in report.keyAssets + report.assetTrends {
+            messages.append(contentsOf: policy.validateClaim(
+                label: "资产「\(asset.name)」",
+                direction: nil,
+                evidence: asset.claimEvidence,
+                evidenceByID: evidenceByID,
+                entityCode: asset.code,
+                entityName: asset.name,
+                sectorKey: asset.sector
+            ))
+            for horizon in asset.horizons {
+                messages.append(contentsOf: policy.validateClaim(
+                    label: "资产「\(asset.name)」\(horizon.horizon.rawValue) 周期",
+                    direction: horizon.direction,
+                    evidence: horizon.claimEvidence,
+                    evidenceByID: evidenceByID,
+                    entityCode: asset.code,
+                    entityName: asset.name,
+                    sectorKey: asset.sector
+                ))
+            }
+        }
+        for action in report.actions {
+            messages.append(contentsOf: policy.validateAction(
+                action,
+                evidenceByID: evidenceByID
+            ))
+        }
+    }
+
+    private func validateDisposition(
+        _ report: TrendAnalysisReport,
+        messages: inout [String]
+    ) {
+        let hasAllocationAction = report.actions.contains {
+            $0.kind.evidencePolicyLevel == .allocationReview
+        }
+        switch report.disposition {
+        case .actionable:
+            if !hasAllocationAction {
+                messages.append("actionable 报告必须至少包含一条通过证据门槛的 allocationReview 行动")
+            }
+        case .analysisOnly:
+            if hasAllocationAction {
+                messages.append("analysisOnly 报告不能包含 allocationReview 行动")
+            }
+        case .insufficientEvidence:
+            if !report.actions.isEmpty {
+                messages.append("insufficientEvidence 报告必须禁用全部行动候选")
+            }
+            if report.horizons.first(where: { $0.horizon == .short })?.direction != .uncertain {
+                messages.append("insufficientEvidence 报告的 short 周期必须降为 uncertain")
+            }
+            for asset in report.keyAssets + report.assetTrends {
+                if let short = asset.horizons.first(where: { $0.horizon == .short }),
+                   short.direction != .uncertain {
+                    messages.append("insufficientEvidence 报告的资产短期方向必须降为 uncertain：\(asset.name)")
+                }
+            }
+        }
+    }
+
+    private func confidenceLabel(for score: Int) -> String {
+        if score >= 75 { return "高" }
+        if score >= 45 { return "中" }
+        return "低"
     }
 }

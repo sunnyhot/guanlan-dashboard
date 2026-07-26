@@ -49,8 +49,77 @@ struct TrendResearchQuote: Sendable, Codable, Hashable, Identifiable {
     let changeAmount: Double?
     let quotedAt: String?
     let sourceLabel: String?
+    let assessment: TrendQuoteAssessment
 
     var id: String { evidenceID }
+
+    init(
+        kind: String,
+        evidenceID: String,
+        code: String,
+        name: String,
+        price: Double?,
+        changePct: Double?,
+        changeAmount: Double?,
+        quotedAt: String?,
+        sourceLabel: String?,
+        assessment: TrendQuoteAssessment? = nil
+    ) {
+        self.kind = kind
+        self.evidenceID = evidenceID
+        self.code = code
+        self.name = name
+        self.price = price
+        self.changePct = changePct
+        self.changeAmount = changeAmount
+        self.quotedAt = quotedAt
+        self.sourceLabel = sourceLabel
+        self.assessment = assessment ?? TrendQuoteAssessment(
+            quoteType: .unknown,
+            freshnessStatus: .unknown,
+            asOf: quotedAt,
+            receivedAt: quotedAt ?? "",
+            ageSeconds: nil,
+            marketSession: .unknown
+        )
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(String.self, forKey: .kind)
+        evidenceID = try container.decode(String.self, forKey: .evidenceID)
+        code = try container.decode(String.self, forKey: .code)
+        name = try container.decode(String.self, forKey: .name)
+        price = try container.decodeIfPresent(Double.self, forKey: .price)
+        changePct = try container.decodeIfPresent(Double.self, forKey: .changePct)
+        changeAmount = try container.decodeIfPresent(Double.self, forKey: .changeAmount)
+        quotedAt = try container.decodeIfPresent(String.self, forKey: .quotedAt)
+        sourceLabel = try container.decodeIfPresent(String.self, forKey: .sourceLabel)
+        assessment = try container.decodeIfPresent(
+            TrendQuoteAssessment.self,
+            forKey: .assessment
+        ) ?? TrendQuoteAssessment(
+            quoteType: .unknown,
+            freshnessStatus: .unknown,
+            asOf: quotedAt,
+            receivedAt: quotedAt ?? "",
+            ageSeconds: nil,
+            marketSession: .unknown
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case evidenceID
+        case code
+        case name
+        case price
+        case changePct
+        case changeAmount
+        case quotedAt
+        case sourceLabel
+        case assessment
+    }
 }
 
 /// 基金估值条目。由 AppModel 从个人持仓/关注/平台持仓估值行预先聚合成 [code: estimate]，
@@ -62,11 +131,51 @@ struct TrendResearchFundEstimate: Sendable, Codable, Hashable {
     let price: Double?
     let quotedAt: String?
     let sourceLabel: String?
+    let quoteType: TrendQuoteType
+
+    init(
+        code: String,
+        name: String?,
+        estimateChangePct: Double?,
+        price: Double?,
+        quotedAt: String?,
+        sourceLabel: String?,
+        quoteType: TrendQuoteType = .unknown
+    ) {
+        self.code = code
+        self.name = name
+        self.estimateChangePct = estimateChangePct
+        self.price = price
+        self.quotedAt = quotedAt
+        self.sourceLabel = sourceLabel
+        self.quoteType = quoteType
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try container.decode(String.self, forKey: .code)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        estimateChangePct = try container.decodeIfPresent(Double.self, forKey: .estimateChangePct)
+        price = try container.decodeIfPresent(Double.self, forKey: .price)
+        quotedAt = try container.decodeIfPresent(String.self, forKey: .quotedAt)
+        sourceLabel = try container.decodeIfPresent(String.self, forKey: .sourceLabel)
+        quoteType = try container.decodeIfPresent(TrendQuoteType.self, forKey: .quoteType) ?? .unknown
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case code
+        case name
+        case estimateChangePct
+        case price
+        case quotedAt
+        case sourceLabel
+        case quoteType
+    }
 }
 
 // MARK: - 快照
 
-struct TrendResearchSnapshot: Sendable, Hashable {
+struct TrendResearchSnapshot: Sendable, Hashable, Codable {
     let runID: UUID
     /// App 接受报告的时间。
     let createdAt: String
@@ -86,6 +195,7 @@ struct TrendResearchSnapshot: Sendable, Hashable {
 
     let insightHeadline: String
     let sourceWarnings: [String]
+    let sourceStatuses: [TrendSourceStatus]
 
     init(
         runID: UUID,
@@ -100,7 +210,8 @@ struct TrendResearchSnapshot: Sendable, Hashable {
         marketQuotes: [TrendResearchQuote],
         lookThrough: PortfolioLookThroughSnapshot? = nil,
         insightHeadline: String,
-        sourceWarnings: [String]
+        sourceWarnings: [String],
+        sourceStatuses: [TrendSourceStatus] = []
     ) {
         self.runID = runID
         self.createdAt = createdAt
@@ -115,6 +226,7 @@ struct TrendResearchSnapshot: Sendable, Hashable {
         self.lookThrough = lookThrough
         self.insightHeadline = insightHeadline
         self.sourceWarnings = sourceWarnings
+        self.sourceStatuses = sourceStatuses
     }
 
     /// Validator 用来检查 assetTrends 覆盖率的基金代码全集：类型为基金且 code 非空。
@@ -151,7 +263,8 @@ struct TrendResearchSnapshotBuilder {
         runID: UUID,
         createdAt: String,
         dataAsOf: String,
-        sourceWarnings: [String]
+        sourceWarnings: [String],
+        sourceStatuses: [TrendSourceStatus] = []
     ) -> TrendResearchSnapshot {
         // 复用现有 ContextBuilder 得到脱敏后的 portfolio/assets/sectors/insightHeadline。
         // platformActions 传空：结构化信号由快照自身持有，不再用字符串化版本。
@@ -168,8 +281,19 @@ struct TrendResearchSnapshotBuilder {
         let platformSignals = Self.signals(fromPlatform: platformPayload, source: "qieman")
             + Self.signals(fromPlatform: alfaPayload, source: "alfa")
         let managerSignals = Self.managerSignals(from: managerWatchEvents)
-        let marketQuotes = Self.indexQuotes(from: marketIndexQuotes)
-            + Self.fundEstimateQuotes(from: fundEstimates)
+        let indexReceivedAt = sourceStatuses.first {
+            $0.source == .marketIndex
+        }?.receivedAt ?? createdAt
+        let fundReceivedAt = sourceStatuses.first {
+            $0.source == .fundNAV
+        }?.receivedAt ?? createdAt
+        let marketQuotes = Self.indexQuotes(
+            from: marketIndexQuotes,
+            receivedAt: indexReceivedAt
+        ) + Self.fundEstimateQuotes(
+            from: fundEstimates,
+            receivedAt: fundReceivedAt
+        )
 
         return TrendResearchSnapshot(
             runID: runID,
@@ -184,7 +308,8 @@ struct TrendResearchSnapshotBuilder {
             marketQuotes: marketQuotes,
             lookThrough: lookThrough,
             insightHeadline: context.insightHeadline,
-            sourceWarnings: sourceWarnings
+            sourceWarnings: sourceWarnings,
+            sourceStatuses: sourceStatuses
         )
     }
 
@@ -256,9 +381,17 @@ struct TrendResearchSnapshotBuilder {
 
     // MARK: 行情构造
 
-    private static func indexQuotes(from quotes: [MarketIndexKind: MarketIndexQuote]) -> [TrendResearchQuote] {
+    private static func indexQuotes(
+        from quotes: [MarketIndexKind: MarketIndexQuote],
+        receivedAt: String
+    ) -> [TrendResearchQuote] {
         quotes.values.map { quote in
-            TrendResearchQuote(
+            let assessment = TrendSourceFreshnessPolicy.assess(
+                quoteType: .indexQuote,
+                asOf: quote.quotedAt,
+                receivedAt: receivedAt
+            )
+            return TrendResearchQuote(
                 kind: "index",
                 evidenceID: "market:index:\(quote.kind.rawValue):\(quote.quotedAt)",
                 code: quote.kind.rawValue,
@@ -267,14 +400,23 @@ struct TrendResearchSnapshotBuilder {
                 changePct: quote.changePct,
                 changeAmount: quote.changeAmount,
                 quotedAt: quote.quotedAt,
-                sourceLabel: quote.sourceLabel
+                sourceLabel: quote.sourceLabel,
+                assessment: assessment
             )
         }
     }
 
-    private static func fundEstimateQuotes(from estimates: [String: TrendResearchFundEstimate]) -> [TrendResearchQuote] {
+    private static func fundEstimateQuotes(
+        from estimates: [String: TrendResearchFundEstimate],
+        receivedAt: String
+    ) -> [TrendResearchQuote] {
         estimates.values.map { estimate in
-            TrendResearchQuote(
+            let assessment = TrendSourceFreshnessPolicy.assess(
+                quoteType: estimate.quoteType,
+                asOf: estimate.quotedAt,
+                receivedAt: receivedAt
+            )
+            return TrendResearchQuote(
                 kind: "fund-estimate",
                 evidenceID: "market:fund-estimate:\(estimate.code):\(estimate.quotedAt ?? "")",
                 code: estimate.code,
@@ -283,7 +425,8 @@ struct TrendResearchSnapshotBuilder {
                 changePct: estimate.estimateChangePct,
                 changeAmount: nil,
                 quotedAt: estimate.quotedAt,
-                sourceLabel: estimate.sourceLabel
+                sourceLabel: estimate.sourceLabel,
+                assessment: assessment
             )
         }
     }

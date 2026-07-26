@@ -6,7 +6,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testOverviewThenSubmitSucceeds() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "1999-01-01 00:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "1999-01-01 00:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
         let client = ScriptedTrendAgentClient([
@@ -27,7 +29,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testPlainTextFirstThenRecoversToTools() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
         let client = ScriptedTrendAgentClient([
@@ -64,7 +68,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testLengthTruncationDoesNotExecuteIncompleteTool() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
         // 第一轮：finish_reason=length 且带一个参数残缺的工具调用，不得被执行。
@@ -93,9 +99,16 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testThirdInvalidSubmissionTerminates() async throws {
         let snapshot = makeEmptySnapshot()
-        // available 在第一版被 Validator 拒绝，连续提交都会失败。
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
+        // 缺少非投资建议声明，连续提交都会被 Validator 拒绝。
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available)
+            .groundedForSubmission(snapshot: snapshot)
+        var reportObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any]
+        )
+        reportObject["disclaimer"] = "仅供参考。"
+        let reportData = try JSONSerialization.data(withJSONObject: reportObject)
+        let reportJSON = try XCTUnwrap(String(data: reportData, encoding: .utf8))
         let submitCall = AgentToolCall(id: "s", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
 
         let overviewCall = AgentToolCall(id: "o", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
@@ -117,7 +130,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testSubmitBeforeOverviewIsRejected() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
         let submitCall = AgentToolCall(id: "s", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
         let overviewCall = AgentToolCall(id: "o", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
@@ -138,7 +153,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testWebSearchFailureTripsCircuitBreakerForRemainingRun() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
         let webClient = FailingCountingTavilyClient()
 
@@ -147,10 +164,10 @@ final class TrendResearchAgentTests: XCTestCase {
                 AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
             ])),
             .success(toolCallResponse([
-                AgentToolCall(id: "w1", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新产业政策"}"#))
+                AgentToolCall(id: "w1", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新产业政策","time_range":"day","research_target":{"kind":"macro","key":"产业政策"}}"#))
             ])),
             .success(toolCallResponse([
-                AgentToolCall(id: "w2", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新行业动态"}"#))
+                AgentToolCall(id: "w2", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新行业动态","time_range":"day","research_target":{"kind":"macro","key":"行业动态"}}"#))
             ])),
             .success(toolCallResponse([
                 AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
@@ -191,7 +208,9 @@ final class TrendResearchAgentTests: XCTestCase {
 
     func testHarnessReservesFinalBudgetAndOnlyExposesSubmitTool() async throws {
         let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
         let client = ScriptedTrendAgentClient([
             .success(toolCallResponse([

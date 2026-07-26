@@ -94,12 +94,99 @@ enum TrendActionKind: String, Codable, Hashable {
     case rebalanceReview
 }
 
+enum TrendEvidencePolicyLevel: String, Codable, Hashable, Sendable {
+    case informational
+    case allocationReview
+    case execution
+}
+
+enum TrendReportDisposition: String, Codable, Hashable, Sendable {
+    case actionable
+    case analysisOnly
+    case insufficientEvidence
+}
+
+struct TrendClaimEvidence: Codable, Hashable, Sendable {
+    let supportingEvidenceIDs: [String]
+    let counterEvidenceIDs: [String]
+    let contextEvidenceIDs: [String]
+    let exemptionReason: String?
+
+    static let empty = TrendClaimEvidence()
+
+    init(
+        supportingEvidenceIDs: [String] = [],
+        counterEvidenceIDs: [String] = [],
+        contextEvidenceIDs: [String] = [],
+        exemptionReason: String? = nil
+    ) {
+        self.supportingEvidenceIDs = Self.unique(supportingEvidenceIDs)
+        self.counterEvidenceIDs = Self.unique(counterEvidenceIDs)
+        self.contextEvidenceIDs = Self.unique(contextEvidenceIDs)
+        let trimmed = exemptionReason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.exemptionReason = trimmed?.isEmpty == false ? trimmed : nil
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            supportingEvidenceIDs: try container.decodeIfPresent(
+                [String].self,
+                forKey: .supportingEvidenceIDs
+            ) ?? [],
+            counterEvidenceIDs: try container.decodeIfPresent(
+                [String].self,
+                forKey: .counterEvidenceIDs
+            ) ?? [],
+            contextEvidenceIDs: try container.decodeIfPresent(
+                [String].self,
+                forKey: .contextEvidenceIDs
+            ) ?? [],
+            exemptionReason: try container.decodeIfPresent(
+                String.self,
+                forKey: .exemptionReason
+            )
+        )
+    }
+
+    var allEvidenceIDs: [String] {
+        Self.unique(supportingEvidenceIDs + counterEvidenceIDs + contextEvidenceIDs)
+    }
+
+    var hasStructuredExemption: Bool {
+        exemptionReason != nil
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value -> String? in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return nil }
+            return trimmed
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case supportingEvidenceIDs
+        case counterEvidenceIDs
+        case contextEvidenceIDs
+        case exemptionReason
+    }
+}
+
 struct TrendConfidence: Codable, Hashable {
     let score: Int
     let label: String
 
     var normalizedScore: Int {
         min(100, max(0, score))
+    }
+
+    var appNormalized: TrendConfidence {
+        TrendConfidence(
+            score: normalizedScore,
+            label: Self.label(for: normalizedScore)
+        )
     }
 
     init(score: Int, label: String) {
@@ -138,7 +225,7 @@ struct TrendConfidence: Codable, Hashable {
         case label
     }
 
-    private static func label(for score: Int) -> String {
+    static func label(for score: Int) -> String {
         if score >= 75 { return "高" }
         if score >= 45 { return "中" }
         return "低"
@@ -362,6 +449,37 @@ struct TrendPortfolioSummary: Codable, Hashable {
     let headline: String
     let riskLevel: TrendRiskLevel
     let summary: String
+    let claimEvidence: TrendClaimEvidence
+
+    init(
+        headline: String,
+        riskLevel: TrendRiskLevel,
+        summary: String,
+        claimEvidence: TrendClaimEvidence = .empty
+    ) {
+        self.headline = headline
+        self.riskLevel = riskLevel
+        self.summary = summary
+        self.claimEvidence = claimEvidence
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        headline = try container.decode(String.self, forKey: .headline)
+        riskLevel = try container.decode(TrendRiskLevel.self, forKey: .riskLevel)
+        summary = try container.decode(String.self, forKey: .summary)
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case headline
+        case riskLevel
+        case summary
+        case claimEvidence
+    }
 }
 
 struct TrendHorizonView: Codable, Hashable {
@@ -370,19 +488,22 @@ struct TrendHorizonView: Codable, Hashable {
     let confidence: TrendConfidence
     let rationale: String
     let counterSignals: [String]
+    let claimEvidence: TrendClaimEvidence
 
     init(
         horizon: TrendHorizon,
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
-        counterSignals: [String]
+        counterSignals: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.horizon = horizon
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
         self.counterSignals = counterSignals
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -392,6 +513,10 @@ struct TrendHorizonView: Codable, Hashable {
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decodeIfPresent(String.self, forKey: .rationale) ?? ""
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -400,6 +525,7 @@ struct TrendHorizonView: Codable, Hashable {
         case confidence
         case rationale
         case counterSignals
+        case claimEvidence
     }
 }
 
@@ -412,6 +538,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
     let rationale: String
     let evidenceIDs: [String]
     let counterSignals: [String]
+    let claimEvidence: TrendClaimEvidence
 
     init(
         id: String,
@@ -421,7 +548,8 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         confidence: TrendConfidence,
         rationale: String,
         evidenceIDs: [String],
-        counterSignals: [String]
+        counterSignals: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.id = id
         self.name = name
@@ -431,6 +559,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         self.rationale = rationale
         self.evidenceIDs = evidenceIDs
         self.counterSignals = counterSignals
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -443,6 +572,10 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         rationale = try container.decode(String.self, forKey: .rationale)
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -454,6 +587,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         case rationale
         case evidenceIDs
         case counterSignals
+        case claimEvidence
     }
 }
 
@@ -466,6 +600,7 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
     let rationale: String
     let evidenceIDs: [String]
     let counterSignals: [String]
+    let claimEvidence: TrendClaimEvidence
 
     var categoryDisplayName: String {
         switch category
@@ -488,7 +623,8 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
         confidence: TrendConfidence,
         rationale: String,
         evidenceIDs: [String],
-        counterSignals: [String]
+        counterSignals: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.id = id
         self.name = name
@@ -498,6 +634,7 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
         self.rationale = rationale
         self.evidenceIDs = evidenceIDs
         self.counterSignals = counterSignals
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -510,6 +647,10 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
         rationale = try container.decode(String.self, forKey: .rationale)
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -521,6 +662,7 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
         case rationale
         case evidenceIDs
         case counterSignals
+        case claimEvidence
     }
 }
 
@@ -533,6 +675,7 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
     let horizons: [TrendHorizonView]
     let rationale: String
     let counterSignals: [String]
+    let claimEvidence: TrendClaimEvidence
 
     init(
         id: String,
@@ -542,7 +685,8 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
         impactText: String,
         horizons: [TrendHorizonView],
         rationale: String,
-        counterSignals: [String]
+        counterSignals: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.id = id
         self.name = name
@@ -552,6 +696,7 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
         self.horizons = horizons
         self.rationale = rationale
         self.counterSignals = counterSignals
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -564,6 +709,10 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
         horizons = try container.decodeIfPresent([TrendHorizonView].self, forKey: .horizons) ?? []
         rationale = try container.decode(String.self, forKey: .rationale)
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -575,6 +724,7 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
         case horizons
         case rationale
         case counterSignals
+        case claimEvidence
     }
 }
 
@@ -589,6 +739,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
     let invalidatingConditions: [String]
     let evidenceIDs: [String]
     let counterSignals: [String]
+    let claimEvidence: TrendClaimEvidence
 
     init(
         id: String,
@@ -600,7 +751,8 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         triggerConditions: [String],
         invalidatingConditions: [String],
         evidenceIDs: [String],
-        counterSignals: [String]
+        counterSignals: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.id = id
         self.name = name
@@ -612,6 +764,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         self.invalidatingConditions = invalidatingConditions
         self.evidenceIDs = evidenceIDs
         self.counterSignals = counterSignals
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -626,6 +779,10 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -639,6 +796,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         case invalidatingConditions
         case evidenceIDs
         case counterSignals
+        case claimEvidence
     }
 }
 
@@ -651,6 +809,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
     let confidence: TrendConfidence
     let triggerConditions: [String]
     let invalidatingConditions: [String]
+    let claimEvidence: TrendClaimEvidence
 
     init(
         id: String,
@@ -660,7 +819,8 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         targetName: String?,
         confidence: TrendConfidence,
         triggerConditions: [String],
-        invalidatingConditions: [String]
+        invalidatingConditions: [String],
+        claimEvidence: TrendClaimEvidence = .empty
     ) {
         self.id = id
         self.kind = kind
@@ -670,6 +830,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         self.confidence = confidence
         self.triggerConditions = triggerConditions
         self.invalidatingConditions = invalidatingConditions
+        self.claimEvidence = claimEvidence
     }
 
     init(from decoder: Decoder) throws {
@@ -682,6 +843,10 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         triggerConditions = try container.decodeIfPresent([String].self, forKey: .triggerConditions) ?? []
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
+        claimEvidence = try container.decodeIfPresent(
+            TrendClaimEvidence.self,
+            forKey: .claimEvidence
+        ) ?? .empty
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -693,6 +858,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         case confidence
         case triggerConditions
         case invalidatingConditions
+        case claimEvidence
     }
 }
 
@@ -704,6 +870,7 @@ struct TrendEvidence: Codable, Identifiable, Hashable {
     let publishedAt: String?
     let retrievedAt: String
     let summary: String
+    let metadata: TrendEvidenceMetadata
 
     init(
         id: String,
@@ -712,7 +879,8 @@ struct TrendEvidence: Codable, Identifiable, Hashable {
         url: String?,
         publishedAt: String?,
         retrievedAt: String,
-        summary: String
+        summary: String,
+        metadata: TrendEvidenceMetadata = .unknown
     ) {
         self.id = id
         self.sourceName = sourceName
@@ -721,6 +889,7 @@ struct TrendEvidence: Codable, Identifiable, Hashable {
         self.publishedAt = publishedAt
         self.retrievedAt = retrievedAt
         self.summary = summary
+        self.metadata = metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -732,6 +901,10 @@ struct TrendEvidence: Codable, Identifiable, Hashable {
         publishedAt = try container.decodeIfPresent(String.self, forKey: .publishedAt)
         retrievedAt = try container.decode(String.self, forKey: .retrievedAt)
         summary = try container.decode(String.self, forKey: .summary)
+        metadata = try container.decodeIfPresent(
+            TrendEvidenceMetadata.self,
+            forKey: .metadata
+        ) ?? .unknown
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -742,6 +915,7 @@ struct TrendEvidence: Codable, Identifiable, Hashable {
         case publishedAt
         case retrievedAt
         case summary
+        case metadata
     }
 }
 
@@ -771,11 +945,16 @@ struct TrendWarning: Codable, Identifiable, Hashable {
 }
 
 struct TrendAnalysisReport: Codable, Identifiable, Hashable {
+    static let currentSchemaVersion = 2
+
     let id: UUID
+    let schemaVersion: Int
     var generatedAt: String
     var dataAsOf: String
+    let disposition: TrendReportDisposition
     let privacyMode: TrendPrivacyMode
     let externalSignalStatus: TrendExternalSignalStatus
+    let sourceStatuses: [TrendSourceStatus]
     let portfolio: TrendPortfolioSummary
     let horizons: [TrendHorizonView]
     let marketOutlook: [TrendMarketOutlook]
@@ -804,13 +983,19 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
         actions: [TrendActionCandidate],
         evidence: [TrendEvidence],
         warnings: [TrendWarning],
-        disclaimer: String
+        disclaimer: String,
+        schemaVersion: Int = 1,
+        disposition: TrendReportDisposition = .analysisOnly,
+        sourceStatuses: [TrendSourceStatus] = []
     ) {
         self.id = id
+        self.schemaVersion = schemaVersion
         self.generatedAt = generatedAt
         self.dataAsOf = dataAsOf
+        self.disposition = disposition
         self.privacyMode = privacyMode
         self.externalSignalStatus = externalSignalStatus
+        self.sourceStatuses = sourceStatuses
         self.portfolio = portfolio
         self.horizons = horizons
         self.marketOutlook = marketOutlook
@@ -827,10 +1012,19 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         generatedAt = try container.decodeIfPresent(String.self, forKey: .generatedAt) ?? ""
         dataAsOf = try container.decodeIfPresent(String.self, forKey: .dataAsOf) ?? ""
+        disposition = try container.decodeIfPresent(
+            TrendReportDisposition.self,
+            forKey: .disposition
+        ) ?? .analysisOnly
         privacyMode = try container.decode(TrendPrivacyMode.self, forKey: .privacyMode)
         externalSignalStatus = try container.decode(TrendExternalSignalStatus.self, forKey: .externalSignalStatus)
+        sourceStatuses = try container.decodeIfPresent(
+            [TrendSourceStatus].self,
+            forKey: .sourceStatuses
+        ) ?? []
         portfolio = try container.decode(TrendPortfolioSummary.self, forKey: .portfolio)
         horizons = try container.decode([TrendHorizonView].self, forKey: .horizons)
         marketOutlook = try container.decodeIfPresent([TrendMarketOutlook].self, forKey: .marketOutlook) ?? []
@@ -846,10 +1040,13 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case schemaVersion
         case generatedAt
         case dataAsOf
+        case disposition
         case privacyMode
         case externalSignalStatus
+        case sourceStatuses
         case portfolio
         case horizons
         case marketOutlook

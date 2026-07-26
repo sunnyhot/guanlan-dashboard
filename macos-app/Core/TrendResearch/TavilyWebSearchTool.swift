@@ -15,6 +15,38 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 "maxLength": 400,
                 "description": "搜索关键词。只包含通用行业、政策或资产类别，不得包含个人组合和金额信息。"
             ],
+            "research_target": [
+                "type": "object",
+                "description": "本次搜索要回答的结构化研究目标。App 会对目标与当前快照做校验；它只表示查询意图，不代表返回结果一定支持该目标。",
+                "properties": [
+                    "kind": [
+                        "type": "string",
+                        "enum": ["asset", "index", "sector", "assetClass", "macro"]
+                    ],
+                    "key": [
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                    ],
+                    "entityCodes": [
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": ["type": "string"]
+                    ],
+                    "sectorKeys": [
+                        "type": "array",
+                        "maxItems": 20,
+                        "items": ["type": "string"]
+                    ],
+                    "assetClassKeys": [
+                        "type": "array",
+                        "maxItems": 10,
+                        "items": ["type": "string"]
+                    ]
+                ],
+                "required": ["kind", "key"],
+                "additionalProperties": false
+            ],
             "topic": [
                 "type": "string",
                 "enum": ["general", "news", "finance"],
@@ -38,12 +70,13 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 "description": "可选域名白名单，例如 gov.cn、pbc.gov.cn、csrc.gov.cn。不要包含协议或路径。"
             ]
         ],
-        "required": ["query"],
+        "required": ["query", "research_target"],
         "additionalProperties": false
     ]
 
     private struct Params: Decodable {
         let query: String
+        let research_target: TrendResearchTarget
         let topic: String?
         let time_range: String?
         let max_results: Int?
@@ -71,6 +104,12 @@ struct TavilyWebSearchTool: TrendResearchTool {
         let query = params.query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (2...400).contains(query.count) else {
             return invalidArguments("query 长度必须在 2...400 个字符之间")
+        }
+        guard TrendAgentAuditRedactor.redactedSensitiveText(query) == query else {
+            return invalidArguments("query 包含金额、密钥或认证信息，已在联网请求前拒绝")
+        }
+        guard validate(target: params.research_target, snapshot: context.snapshot) else {
+            return invalidArguments("research_target 与本次组合快照不匹配")
         }
 
         let topic = params.topic ?? "news"
@@ -117,6 +156,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
             return await makeResult(
                 response: outcome.response,
                 query: query,
+                researchTarget: params.research_target,
                 cacheHit: outcome.cacheHit,
                 remainingSearchBudget: outcome.remainingNetworkSearches,
                 context: context
@@ -145,6 +185,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
     private func makeResult(
         response: TavilySearchResponse,
         query: String,
+        researchTarget: TrendResearchTarget,
         cacheHit: Bool,
         remainingSearchBudget: Int,
         context: TrendResearchToolContext
@@ -173,16 +214,54 @@ struct TavilyWebSearchTool: TrendResearchTool {
         }
 
         let retrievedAt = ISO8601DateFormatter().string(from: Date())
+        let registry = TrendSourceAuthorityRegistry()
         await context.evidenceLedger.record(
             results.map {
-                TrendEvidence(
+                let classification = registry.classify(urlString: $0.url)
+                let content = "\($0.title) \($0.summary)".lowercased()
+                let targetKey = researchTarget.key.lowercased()
+                let matchedCodes = researchTarget.entityCodes.filter {
+                    content.contains($0.lowercased())
+                }
+                let keyIsMentioned = targetKey.count >= 2 && content.contains(targetKey)
+                let matchedSectors = researchTarget.sectorKeys.filter {
+                    content.contains($0.lowercased())
+                }
+                let matchedAssetClasses = researchTarget.assetClassKeys.filter {
+                    content.contains($0.lowercased())
+                }
+                let entityNames = researchTarget.kind == .asset && keyIsMentioned
+                    ? [researchTarget.key]
+                    : []
+                let sectorKeys = researchTarget.kind == .sector && keyIsMentioned
+                    ? Array(Set(matchedSectors + [researchTarget.key])).sorted()
+                    : matchedSectors
+                let assetClassKeys = researchTarget.kind == .assetClass && keyIsMentioned
+                    ? Array(Set(matchedAssetClasses + [researchTarget.key])).sorted()
+                    : matchedAssetClasses
+                let hasContentTags = !matchedCodes.isEmpty
+                    || !entityNames.isEmpty
+                    || !sectorKeys.isEmpty
+                    || !assetClassKeys.isEmpty
+                return TrendEvidence(
                     id: $0.evidenceID,
                     sourceName: $0.source,
                     title: $0.title,
                     url: $0.url,
                     publishedAt: $0.publishedAt,
                     retrievedAt: retrievedAt,
-                    summary: $0.summary
+                    summary: $0.summary,
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .webSearch,
+                        sourceTier: classification.tier,
+                        publisherKey: classification.publisherKey,
+                        requestedTopicKeys: researchTarget.topicKeys,
+                        entityCodes: matchedCodes,
+                        entityNames: entityNames,
+                        sectorKeys: sectorKeys,
+                        assetClassKeys: assetClassKeys,
+                        metadataConfidence: hasContentTags ? .ruleDerived : .unknown
+                    )
                 )
             }
         )
@@ -203,6 +282,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
             TrendResearchToolEnvelope.success(
                 [
                     "query": query,
+                    "research_target": encodedObject(researchTarget),
                     "results": payload,
                     "count": results.count,
                     "request_id": response.requestID ?? NSNull(),
@@ -236,6 +316,48 @@ struct TavilyWebSearchTool: TrendResearchTool {
         }
         var seen = Set<String>()
         return domains.filter { seen.insert($0).inserted }
+    }
+
+    private func validate(
+        target: TrendResearchTarget,
+        snapshot: TrendResearchSnapshot
+    ) -> Bool {
+        let key = target.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return false }
+        switch target.kind {
+        case .asset:
+            let requestedCodes = Set(target.entityCodes.map { $0.lowercased() })
+            return snapshot.assets.contains { asset in
+                [asset.id, asset.name, asset.code]
+                    .compactMap { $0?.lowercased() }
+                    .contains(key)
+                    || asset.code.map { requestedCodes.contains($0.lowercased()) } == true
+            }
+        case .index:
+            return snapshot.marketQuotes.contains { quote in
+                quote.kind == "index"
+                    && [quote.code.lowercased(), quote.name.lowercased()].contains(key)
+            }
+        case .sector:
+            let known = snapshot.sectors.map { $0.name.lowercased() }
+                + (snapshot.lookThrough?.industries.map { $0.name.lowercased() } ?? [])
+            return known.contains(key)
+                || target.sectorKeys.contains { known.contains($0.lowercased()) }
+        case .assetClass:
+            let known = snapshot.lookThrough?.assetClasses.map { $0.name.lowercased() } ?? []
+            return known.contains(key)
+                || target.assetClassKeys.contains { known.contains($0.lowercased()) }
+        case .macro:
+            return true
+        }
+    }
+
+    private func encodedObject<T: Encodable>(_ value: T) -> Any {
+        guard let data = try? JSONEncoder().encode(value),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return [String: Any]()
+        }
+        return object
     }
 
     private func invalidArguments(_ message: String) -> TrendResearchToolResult {

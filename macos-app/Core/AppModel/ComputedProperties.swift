@@ -73,6 +73,10 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("trend-agent.log", isDirectory: false)
     }
 
+    var trendAgentRunArtifactsDirectoryURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("trend-agent-runs", isDirectory: true)
+    }
+
     var nextHourGuidanceFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("next-hour-guidance.json", isDirectory: false)
     }

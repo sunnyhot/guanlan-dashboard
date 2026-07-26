@@ -198,6 +198,10 @@ extension AppModel {
 
         appendTrendProgress("开始内嵌趋势 Agent：\(provider.model)", level: .activity)
 
+        let marketSourceStatuses = await refreshTrendResearchMarketData(
+            generatedAt: generatedAt
+        )
+
         let fundCodes = personalAssetRows.compactMap { row -> String? in
             guard row.assetType == .fund,
                   row.effectiveHoldingAmount > 0.001,
@@ -209,6 +213,12 @@ extension AppModel {
         }
         var lookThrough: PortfolioLookThroughSnapshot?
         var lookThroughWarnings: [String] = []
+        var fundDisclosureStatus = TrendSourceStatus(
+            source: .fundDisclosure,
+            status: .notRequested,
+            receivedAt: generatedAt,
+            detail: "当前组合没有需要穿透的基金持仓。"
+        )
         if !fundCodes.isEmpty {
             appendTrendProgress(
                 "读取基金底层资产披露",
@@ -222,6 +232,26 @@ extension AppModel {
                 generatedAt: generatedAt
             )
             lookThroughWarnings = batch.warnings
+            let disclosureDates = batch.disclosures.values
+                .map(\.asOf)
+                .filter { !$0.isEmpty }
+            let disclosureState: TrendDataSourceState
+            if batch.disclosures.isEmpty {
+                disclosureState = batch.warnings.isEmpty ? .successEmpty : .failed
+            } else {
+                disclosureState = .success
+            }
+            fundDisclosureStatus = TrendSourceStatus(
+                source: .fundDisclosure,
+                status: disclosureState,
+                asOf: disclosureDates.max(),
+                receivedAt: Self.timestampString(),
+                errorCode: disclosureState == .failed ? "no_usable_disclosure" : nil,
+                itemCount: batch.disclosures.count,
+                detail: batch.warnings.isEmpty
+                    ? nil
+                    : "\(batch.warnings.count) 只基金披露读取失败或不完整。"
+            )
             if let lookThrough {
                 appendTrendProgress(
                     "基金穿透快照已生成",
@@ -234,7 +264,8 @@ extension AppModel {
         let snapshot = makeTrendResearchSnapshot(
             generatedAt: generatedAt,
             lookThrough: lookThrough,
-            additionalSourceWarnings: lookThroughWarnings
+            additionalSourceWarnings: lookThroughWarnings,
+            sourceStatuses: marketSourceStatuses + [fundDisclosureStatus]
         )
         let searchText = trendSettings.webSearch.isConfigured ? "Tavily 联网搜索已配置" : "未配置联网搜索"
         appendTrendProgress(
@@ -255,6 +286,12 @@ extension AppModel {
                 settings: provider,
                 webSearchSettings: trendSettings.webSearch,
                 eventHandler: { [weak self] event in
+                    if case .auditArtifactReady(let artifact) = event {
+                        self?.saveTrendAgentRunArtifact(
+                            artifact,
+                            trigger: userInitiated ? "manual" : "scheduled"
+                        )
+                    }
                     self?.handleTrendAgentEvent(event)
                 }
             )
@@ -318,49 +355,311 @@ extension AppModel {
     private func makeTrendResearchSnapshot(
         generatedAt: String,
         lookThrough: PortfolioLookThroughSnapshot?,
-        additionalSourceWarnings: [String]
+        additionalSourceWarnings: [String],
+        sourceStatuses: [TrendSourceStatus]
     ) -> TrendResearchSnapshot {
-        var sourceWarnings: [String] = []
-        if marketIndexQuotes.isEmpty { sourceWarnings.append("当前无大盘指数行情（菜单栏行情可能未开启）。") }
-        if !trendSettings.webSearch.isConfigured { sourceWarnings.append("未配置 Tavily API Key，本次无法检索最新行业和政策信息。") }
-        sourceWarnings.append("部分底层来源未提供精确截止时间，dataAsOf 取快照创建时间。")
+        let extendedSourceStatuses = sourceStatuses + trendSignalSourceStatuses(
+            receivedAt: generatedAt
+        ) + [
+            TrendSourceStatus(
+                source: .webSearch,
+                status: trendSettings.webSearch.isConfigured ? .notRequested : .notConfigured,
+                receivedAt: generatedAt,
+                detail: trendSettings.webSearch.isConfigured
+                    ? "等待 Agent 按研究目标发起联网搜索。"
+                    : "未配置 Tavily API Key。"
+            )
+        ]
+        var sourceWarnings = extendedSourceStatuses.compactMap(\.warningText)
         sourceWarnings.append(contentsOf: additionalSourceWarnings)
         sourceWarnings.append(contentsOf: lookThrough?.warnings ?? [])
+        sourceWarnings = Array(Set(sourceWarnings)).sorted()
+
+        let sourceAsOf = extendedSourceStatuses.compactMap(\.asOf).max()
 
         return TrendResearchSnapshotBuilder().build(
             rows: personalAssetRows,
             summary: personalAssetSummary,
-            platformPayload: nil,
-            alfaPayload: nil,
-            managerWatchEvents: [],
+            platformPayload: platformPayload,
+            alfaPayload: alfaPayload,
+            managerWatchEvents: managerWatchTimelineEvents,
             marketIndexQuotes: marketIndexQuotes,
-            fundEstimates: makeTrendResearchFundEstimates(),
+            fundEstimates: makeTrendResearchFundEstimates(generatedAt: generatedAt),
             lookThrough: lookThrough,
             watchSummary: managerWatchTimelineSummary,
             insightSummary: portfolioSnapshotInsightSummary,
             privacyMode: trendPrivacyMode,
             runID: UUID(),
             createdAt: generatedAt,
-            dataAsOf: generatedAt,
-            sourceWarnings: sourceWarnings
+            dataAsOf: sourceAsOf ?? generatedAt,
+            sourceWarnings: sourceWarnings,
+            sourceStatuses: extendedSourceStatuses
         )
     }
 
     /// 从个人持仓估值行组装基金估值（已持有基金的最可靠来源）。非持有标的不纳入。
-    private func makeTrendResearchFundEstimates() -> [String: TrendResearchFundEstimate] {
+    private func makeTrendResearchFundEstimates(
+        generatedAt: String
+    ) -> [String: TrendResearchFundEstimate] {
         var estimates: [String: TrendResearchFundEstimate] = [:]
         for row in personalAssetRows {
             guard let code = row.fundCode, !code.isEmpty, estimates[code] == nil else { continue }
+            let quote = trendFundQuote(row)
             estimates[code] = TrendResearchFundEstimate(
                 code: code,
                 name: row.fundName,
                 estimateChangePct: row.estimateChangePct,
-                price: row.currentPrice,
-                quotedAt: nil,
-                sourceLabel: "本地持仓估值"
+                price: quote.price,
+                quotedAt: quote.time,
+                sourceLabel: quote.source,
+                quoteType: quote.type
             )
         }
         return estimates
+    }
+
+    private func refreshTrendResearchMarketData(
+        generatedAt: String
+    ) async -> [TrendSourceStatus] {
+        var statuses: [TrendSourceStatus] = []
+
+        appendTrendProgress(
+            "刷新趋势研判行情",
+            detail: "个人持仓报价与主要市场指数",
+            level: .activity
+        )
+
+        if activeUserPortfolioHoldings.isEmpty {
+            statuses.append(
+                TrendSourceStatus(
+                    source: .portfolioQuote,
+                    status: .successEmpty,
+                    receivedAt: generatedAt,
+                    itemCount: 0,
+                    detail: "当前没有有效个人持仓。"
+                )
+            )
+        } else if isRefreshingPortfolio {
+            statuses.append(
+                TrendSourceStatus(
+                    source: .portfolioQuote,
+                    status: .fetching,
+                    asOf: personalAssetRows.compactMap(trendQuoteTime).max(),
+                    receivedAt: generatedAt,
+                    itemCount: personalAssetRows.filter {
+                        $0.currentPrice != nil || $0.currentEstimatePrice != nil
+                    }.count,
+                    detail: "已有持仓刷新仍在进行，本次不会把旧报价标记为刷新成功。"
+                )
+            )
+        } else {
+            do {
+                try await refreshUserPortfolio(
+                    updateNotice: false,
+                    forceQuoteRefresh: true
+                )
+                let quotedRows = personalAssetRows.filter {
+                    $0.currentPrice != nil || $0.currentEstimatePrice != nil
+                }
+                statuses.append(
+                    TrendSourceStatus(
+                        source: .portfolioQuote,
+                        status: quotedRows.isEmpty ? .successEmpty : .success,
+                        asOf: personalAssetRows.compactMap(trendQuoteTime).max(),
+                        receivedAt: Self.timestampString(),
+                        itemCount: quotedRows.count
+                    )
+                )
+            } catch {
+                statuses.append(
+                    TrendSourceStatus(
+                        source: .portfolioQuote,
+                        status: .failed,
+                        asOf: personalAssetRows.compactMap(trendQuoteTime).max(),
+                        receivedAt: Self.timestampString(),
+                        errorCode: "portfolio_refresh_failed",
+                        itemCount: personalAssetRows.filter {
+                            $0.currentPrice != nil || $0.currentEstimatePrice != nil
+                        }.count,
+                        detail: error.localizedDescription
+                    )
+                )
+                appendTrendProgress(
+                    "个人持仓行情刷新失败，继续使用已有快照并降级",
+                    detail: error.localizedDescription,
+                    level: .warning
+                )
+            }
+        }
+
+        await refreshMarketIndices(
+            kinds: MarketIndexKind.allCases,
+            updateNotice: false
+        )
+        let indexReceivedAt = Self.timestampString()
+        let availableIndices = MarketIndexKind.allCases.compactMap {
+            marketIndexQuotes[$0]
+        }
+        statuses.append(
+            TrendSourceStatus(
+                source: .marketIndex,
+                status: availableIndices.isEmpty ? .failed : .success,
+                asOf: availableIndices.map(\.quotedAt).filter { !$0.isEmpty }.max(),
+                receivedAt: indexReceivedAt,
+                errorCode: availableIndices.isEmpty ? "empty_index_response" : nil,
+                itemCount: availableIndices.count,
+                detail: availableIndices.isEmpty
+                    ? "主要市场指数刷新没有取得可用报价。"
+                    : nil
+            )
+        )
+
+        let fundQuotes = personalAssetRows.filter {
+            $0.assetType == .fund
+                && ($0.currentPrice != nil || $0.currentEstimatePrice != nil)
+        }
+        statuses.append(
+            TrendSourceStatus(
+                source: .fundNAV,
+                status: fundQuotes.isEmpty ? .successEmpty : .success,
+                asOf: fundQuotes.compactMap(trendQuoteTime).max(),
+                receivedAt: Self.timestampString(),
+                itemCount: fundQuotes.count
+            )
+        )
+
+        appendTrendProgress(
+            "趋势研判行情刷新完成",
+            detail: "持仓报价 \(statuses.first { $0.source == .portfolioQuote }?.itemCount ?? 0) 条；指数 \(availableIndices.count) 条",
+            level: availableIndices.isEmpty ? .warning : .success
+        )
+        return statuses
+    }
+
+    private func trendSignalSourceStatuses(
+        receivedAt: String
+    ) -> [TrendSourceStatus] {
+        [
+            platformSourceStatus(
+                source: .qiemanAdjustment,
+                payload: platformPayload,
+                receivedAt: receivedAt
+            ),
+            platformSourceStatus(
+                source: .alfaAdjustment,
+                payload: alfaPayload,
+                receivedAt: receivedAt
+            ),
+            managerSourceStatus(receivedAt: receivedAt),
+        ]
+    }
+
+    private func platformSourceStatus(
+        source: TrendDataSource,
+        payload: PlatformPayload?,
+        receivedAt: String
+    ) -> TrendSourceStatus {
+        guard let payload else {
+            return TrendSourceStatus(
+                source: source,
+                status: .notRequested,
+                receivedAt: receivedAt,
+                detail: "本次分析没有主动刷新该平台信号，仅读取当前 App 快照。"
+            )
+        }
+        let actions = payload.actions ?? []
+        if let error = payload.error?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !error.isEmpty {
+            return TrendSourceStatus(
+                source: source,
+                status: .failed,
+                asOf: actions.compactMap { $0.txnDate ?? $0.createdAt }.max(),
+                receivedAt: receivedAt,
+                errorCode: "platform_payload_error",
+                itemCount: actions.count,
+                detail: error
+            )
+        }
+        return TrendSourceStatus(
+            source: source,
+            status: actions.isEmpty ? .successEmpty : .success,
+            asOf: actions.compactMap { $0.txnDate ?? $0.createdAt }.max(),
+            receivedAt: receivedAt,
+            itemCount: actions.count
+        )
+    }
+
+    private func managerSourceStatus(
+        receivedAt: String
+    ) -> TrendSourceStatus {
+        guard managerWatchSettings.isEnabled else {
+            return TrendSourceStatus(
+                source: .managerWatch,
+                status: .notConfigured,
+                receivedAt: receivedAt,
+                detail: "主理人巡检未启用。"
+            )
+        }
+        let events = managerWatchTimelineEvents
+        let latest = events.max { $0.occurredAt < $1.occurredAt }
+        let status: TrendDataSourceState
+        if managerWatchSettings.lastErrorMessage != nil || latest?.kind == .failed {
+            status = .failed
+        } else if managerWatchSettings.lastCheckedAt == nil {
+            status = .notRequested
+        } else {
+            status = events.isEmpty ? .successEmpty : .success
+        }
+        return TrendSourceStatus(
+            source: .managerWatch,
+            status: status,
+            asOf: latest.map { ISO8601DateFormatter().string(from: $0.occurredAt) },
+            receivedAt: receivedAt,
+            errorCode: status == .failed ? "manager_watch_failed" : nil,
+            itemCount: events.count,
+            detail: managerWatchSettings.lastErrorMessage ?? latest?.errorMessage
+        )
+    }
+
+    private func trendFundQuote(
+        _ row: PersonalAssetAggregateRow
+    ) -> (price: Double?, time: String?, source: String?, type: TrendQuoteType) {
+        guard let holding = row.holdingRow else {
+            return (row.currentPrice, nil, "本地持仓快照", .unknown)
+        }
+        if row.detectedFundMarket == .offExchange {
+            if let estimate = holding.estimatePrice {
+                return (
+                    estimate,
+                    holding.estimatePriceTime,
+                    "场外基金盘中估值",
+                    .intradayEstimate
+                )
+            }
+            if let official = holding.officialNav {
+                return (
+                    official,
+                    holding.officialNavDate,
+                    holding.resolvedPriceSource ?? "场外基金官方净值",
+                    .officialNAV
+                )
+            }
+        }
+        return (
+            holding.currentPrice ?? holding.officialNav,
+            holding.priceTime ?? holding.officialNavDate,
+            holding.resolvedPriceSource ?? "本地持仓行情",
+            row.usesMarketTradeColumns ? .lastTrade : .officialNAV
+        )
+    }
+
+    private func trendQuoteTime(
+        _ row: PersonalAssetAggregateRow
+    ) -> String? {
+        if row.assetType == .fund {
+            return trendFundQuote(row).time
+        }
+        return row.holdingRow?.priceTime ?? row.holdingRow?.resolvedPriceTime
     }
 
     // MARK: - Agent 事件 → 进度日志
@@ -434,6 +733,8 @@ extension AppModel {
                 detail: "剩余 \(remaining) 次\n\(errors.joined(separator: "\n"))",
                 level: .warning
             )
+        case .auditArtifactReady:
+            break
         case .completed(let duration):
             appendTrendProgress(
                 "Agent 已生成有效报告",
@@ -444,6 +745,26 @@ extension AppModel {
             appendTrendProgress("Agent 执行失败", detail: message, level: .error)
         case .cancelled:
             appendTrendProgress("Agent 已取消", level: .warning)
+        }
+    }
+
+    func saveTrendAgentRunArtifact(
+        _ artifact: TrendAgentRunArtifact,
+        trigger: String
+    ) {
+        guard let trendAgentRunArtifactsDirectoryURL else { return }
+        do {
+            try TrendAgentRunArtifactStore().save(
+                artifact.replacingTrigger(trigger),
+                in: trendAgentRunArtifactsDirectoryURL
+            )
+            appendTrendProgress("结构化审计产物已保存", level: .success)
+        } catch {
+            appendTrendProgress(
+                "结构化审计产物保存失败",
+                detail: error.localizedDescription,
+                level: .warning
+            )
         }
     }
 

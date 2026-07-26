@@ -100,6 +100,7 @@ enum TrendResearchAgentEvent: Sendable {
     case toolStarted(name: String)
     case toolFinished(name: String, summary: String)
     case reportValidationFailed(errors: [String], remainingAttempts: Int)
+    case auditArtifactReady(TrendAgentRunArtifact)
     case completed(duration: Double)
     case failed(message: String)
     case cancelled
@@ -178,6 +179,7 @@ struct TrendResearchAgent: Sendable {
         var invalidSubmissions = 0
         var executedByID: [String: TrendResearchToolResult] = [:]
         var executedBySignature: [String: TrendResearchToolResult] = [:]
+        var toolCallAudits: [TrendAgentToolCallAudit] = []
         var webSearchUnavailableResult: TrendResearchToolResult?
         var harnessState = TrendResearchHarnessState(snapshot: snapshot)
         var submissionMode = false
@@ -220,7 +222,12 @@ struct TrendResearchAgent: Sendable {
 
                 let webStatusBeforeRequest = await webSearchGovernor.status()
                 let shouldReserveForSubmission = harnessState.readyForSubmission(
-                    webSearchConfigured: webSearchSettings.isConfigured
+                    webSearchConfigured: webSearchSettings.isConfigured,
+                    allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
+                        && (
+                            webStatusBeforeRequest.remainingNetworkSearches == 0
+                                || webSearchUnavailableResult != nil
+                        )
                 ) && (
                     toolCallCount >= max(0, runLimits.maxToolCalls - policy.reservedSubmitToolCalls)
                         || turnCount >= max(0, runLimits.maxTurns - policy.reservedSubmitTurns)
@@ -379,6 +386,13 @@ struct TrendResearchAgent: Sendable {
                         result: rawToolResult
                     )
                     toolCallCount += 1
+                    toolCallAudits.append(
+                        TrendAgentToolCallAudit(
+                            sequence: toolCallCount,
+                            call: call,
+                            result: rawToolResult
+                        )
+                    )
                     let webStatus = await webSearchGovernor.status()
                     let enrichedToolResult = harnessState.attachingHarnessMetadata(
                         to: toolResult,
@@ -396,6 +410,15 @@ struct TrendResearchAgent: Sendable {
 
                     // submit 成功 → 结束。
                     if case .report(let report) = toolResult.completion {
+                        let artifact = TrendAgentRunArtifact.make(
+                            snapshot: snapshot,
+                            settings: settings,
+                            report: report,
+                            completedAt: ISO8601DateFormatter().string(from: Date()),
+                            toolCalls: toolCallAudits,
+                            canonicalEvidence: await ledger.allEvidence()
+                        )
+                        await eventHandler(.auditArtifactReady(artifact))
                         await eventHandler(.completed(duration: Date().timeIntervalSince(started)))
                         return report
                     }
@@ -433,12 +456,51 @@ struct TrendResearchAgent: Sendable {
 
             throw TrendResearchAgentError.turnLimitExceeded
         } catch is CancellationError {
+            await eventHandler(
+                .auditArtifactReady(
+                    TrendAgentRunArtifact.makeFailure(
+                        snapshot: snapshot,
+                        settings: settings,
+                        webSearchConfigured: webSearchSettings.isConfigured,
+                        completedAt: ISO8601DateFormatter().string(from: Date()),
+                        toolCalls: toolCallAudits,
+                        canonicalEvidence: await ledger.allEvidence(),
+                        message: "Agent 运行已取消"
+                    )
+                )
+            )
             await eventHandler(.cancelled)
             throw CancellationError()
         } catch let error as TrendResearchAgentError {
+            await eventHandler(
+                .auditArtifactReady(
+                    TrendAgentRunArtifact.makeFailure(
+                        snapshot: snapshot,
+                        settings: settings,
+                        webSearchConfigured: webSearchSettings.isConfigured,
+                        completedAt: ISO8601DateFormatter().string(from: Date()),
+                        toolCalls: toolCallAudits,
+                        canonicalEvidence: await ledger.allEvidence(),
+                        message: error.localizedDescription
+                    )
+                )
+            )
             await eventHandler(.failed(message: error.localizedDescription))
             throw error
         } catch {
+            await eventHandler(
+                .auditArtifactReady(
+                    TrendAgentRunArtifact.makeFailure(
+                        snapshot: snapshot,
+                        settings: settings,
+                        webSearchConfigured: webSearchSettings.isConfigured,
+                        completedAt: ISO8601DateFormatter().string(from: Date()),
+                        toolCalls: toolCallAudits,
+                        canonicalEvidence: await ledger.allEvidence(),
+                        message: error.localizedDescription
+                    )
+                )
+            )
             await eventHandler(.failed(message: error.localizedDescription))
             throw error
         }

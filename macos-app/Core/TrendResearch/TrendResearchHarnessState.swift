@@ -41,11 +41,18 @@ struct TrendResearchHarnessState: Sendable {
         !lookThroughRequired || lookThroughRead
     }
 
-    func readyForSubmission(webSearchConfigured: Bool) -> Bool {
+    func readyForSubmission(
+        webSearchConfigured: Bool,
+        allowInsufficientWebEvidence: Bool = false
+    ) -> Bool {
         overviewRead
             && assetCoverageComplete
             && lookThroughCoverageComplete
-            && (!webSearchConfigured || webSearchAttempts > 0)
+            && (
+                !webSearchConfigured
+                    || successfulWebSearches > 0
+                    || allowInsufficientWebEvidence
+            )
     }
 
     mutating func process(
@@ -56,8 +63,11 @@ struct TrendResearchHarnessState: Sendable {
         if toolName == TrendResearchAgent.webSearchToolName {
             webSearchAttempts += 1
             if !result.isError {
-                successfulWebSearches += 1
+                let evidenceCountBefore = seenWebEvidenceIDs.count
                 processed = deduplicatingWebEvidence(in: result)
+                if seenWebEvidenceIDs.count > evidenceCountBefore {
+                    successfulWebSearches += 1
+                }
             }
         }
 
@@ -118,7 +128,11 @@ struct TrendResearchHarnessState: Sendable {
             "web_network_searches_used": webStatus.networkSearchesUsed,
             "web_cache_hits": webStatus.cacheHits,
             "web_searches_remaining": webStatus.remainingNetworkSearches,
-            "ready_for_submission": readyForSubmission(webSearchConfigured: webSearchConfigured),
+            "ready_for_submission": readyForSubmission(
+                webSearchConfigured: webSearchConfigured,
+                allowInsufficientWebEvidence: webSearchAttempts > 0
+                    && webStatus.remainingNetworkSearches == 0
+            ),
             "next_step_hint": nextStepHint(
                 webSearchConfigured: webSearchConfigured,
                 remainingWebSearches: webStatus.remainingNetworkSearches
@@ -149,8 +163,11 @@ struct TrendResearchHarnessState: Sendable {
         if lookThroughRequired, !lookThroughRead {
             return "调用 get_fund_lookthrough 读取基金底层资产、披露日期与未知仓位。"
         }
-        if webSearchConfigured, webSearchAttempts == 0 {
-            return "至少调用一次 web_search 核验最新行业或政策信息。"
+        if webSearchConfigured, successfulWebSearches == 0 {
+            if remainingWebSearches == 0 {
+                return "联网搜索未形成有效新证据且预算已用完；以 insufficientEvidence/analysisOnly 收尾，所有行动降为 watch。"
+            }
+            return "调用 web_search 并取得至少一条非空、未重复的新证据；必须携带 research_target。"
         }
         if remainingWebSearches == 0 {
             return "联网搜索预算已用完；可读取尚需的本地行情，然后使用现有证据提交报告。"

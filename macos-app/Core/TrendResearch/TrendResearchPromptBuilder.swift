@@ -30,7 +30,7 @@ struct TrendResearchPromptBuilder: Sendable {
 2. get_portfolio_assets：分页读取全部资产明细，必须读完全部页面或用 codes 覆盖全部持有基金。
 3. get_fund_lookthrough：读取基金公开定期报告的底层股票/债券、行业、资产类别、重叠持仓、披露日期、覆盖率与未知仓位。本次快照包含穿透数据时为必调工具。
 4. get_market_snapshot：读取大盘指数与基金估值行情（可选）。
-5. web_search：通过 Tavily 搜索最新行业、宏观和政策信息。已配置时至少搜索一次，并优先使用最近一周或一个月的权威来源；查询中不得包含组合名称、个人信息或金额。
+5. web_search：通过 Tavily 搜索最新行业、宏观和政策信息。每次必须填写与当前快照匹配的 research_target；它表示查询意图，不代表结果一定支持该方向。已配置时至少取得一次非空、未重复的有效搜索，并优先使用最近一周或一个月的权威来源；查询中不得包含组合名称、个人信息或金额。
 6. submit_trend_report：提交完整报告，结束本次分析。report 必须是下述完整结构的对象。
 
 每个工具结果都包含 harness 字段，记录持仓覆盖度、去重后的网页证据数和剩余工具/搜索预算。必须遵循 harness.next_step_hint：
@@ -42,24 +42,26 @@ struct TrendResearchPromptBuilder: Sendable {
 
 【submit_trend_report 的 report 完整 JSON 契约】
 所有字段名区分大小写；中文枚举值必须与下方完全一致。confidence 为对象 {\"score\":0~100, \"label\":\"高\"|\"中\"|\"低\"}，label 规则：score≥75→高、≥45→中、否则低。
+claimEvidence 的固定结构为 {\"supportingEvidenceIDs\":[],\"counterEvidenceIDs\":[],\"contextEvidenceIDs\":[],\"exemptionReason\":null}。
 
 {
+  \"schemaVersion\": 2,
   \"privacyMode\": \"\(snapshot.privacyMode.rawValue)\",                         // 必须与本次快照一致
   \"externalSignalStatus\": \"unavailable\" | \"partial\" | \"available\", // App 最终归一化：引用 Tavily 网页证据→available；只引用市场快照→partial；只用组合事实→unavailable
-  \"portfolio\": { \"headline\": \"一句话组合判断\", \"riskLevel\": \"low\"|\"medium\"|\"high\"|\"unknown\", \"summary\": \"组合摘要\" },
+  \"portfolio\": { \"headline\": \"一句话组合判断\", \"riskLevel\": \"low\"|\"medium\"|\"high\"|\"unknown\", \"summary\": \"组合摘要\", \"claimEvidence\":{} },
   \"horizons\": [                                                          // 必填，恰好 3 个，short/medium/long 各出现一次
     { \"horizon\": \"short\"|\"medium\"|\"long\",
       \"direction\": \"bullish\"|\"neutralPositive\"|\"neutral\"|\"neutralNegative\"|\"bearish\"|\"uncertain\",
-      \"confidence\": {\"score\":0,\"label\":\"低\"}, \"rationale\": \"判断依据\", \"counterSignals\": [\"反证条件\"] }
+      \"confidence\": {\"score\":0,\"label\":\"低\"}, \"rationale\": \"判断依据\", \"counterSignals\": [\"反证条件\"], \"claimEvidence\":{} }
   ],
   \"marketOutlook\": [ // 宏观/大盘指数 与 大类资产 的整体方向；只放指数和资产类别，严禁放行业。例：沪深300、上证、创业板、恒生、纳斯达克；股票、债券、黄金、原油
-    { \"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[] } ],
+    { \"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{} } ],
   \"sectors\":        [ // 行业/主题板块 的方向与组合暴露；只放行业板块，严禁放指数或大类资产。例：消费、医药、科技、新能源、半导体、A股、港股
-    { \"id\":\"\",\"name\":\"\",\"exposureText\":\"仓位占比\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[] } ],
-  \"opportunities\":  [ { \"id\":\"\",\"name\":\"\",\"category\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[] } ],
-  \"keyAssets\":     [ { \"id\":\"\",\"name\":\"\",\"code\":\"\",\"sector\":\"\",\"impactText\":\"\",\"horizons\":[同 horizons 元素],\"rationale\":\"\",\"counterSignals\":[] } ],
-  \"assetTrends\":   [ { \"id\":\"\",\"name\":\"\",\"code\":\"\",\"sector\":\"\",\"impactText\":\"\",\"horizons\":[同 horizons 元素],\"rationale\":\"\",\"counterSignals\":[] } ],
-  \"actions\":       [ { \"id\":\"\",\"kind\":\"watch\"|\"waitForConfirmation\"|\"observeInBatches\"|\"pausePlan\"|\"considerIncrease\"|\"considerReduce\"|\"rebalanceReview\",\"title\":\"\",\"detail\":\"\",\"targetName\":null,\"confidence\":{},\"triggerConditions\":[],\"invalidatingConditions\":[] } ],
+    { \"id\":\"\",\"name\":\"\",\"exposureText\":\"仓位占比\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{} } ],
+  \"opportunities\":  [ { \"id\":\"\",\"name\":\"\",\"category\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{} } ],
+  \"keyAssets\":     [ { \"id\":\"\",\"name\":\"\",\"code\":\"\",\"sector\":\"\",\"impactText\":\"\",\"horizons\":[同 horizons 元素],\"rationale\":\"\",\"counterSignals\":[],\"claimEvidence\":{} } ],
+  \"assetTrends\":   [ { \"id\":\"\",\"name\":\"\",\"code\":\"\",\"sector\":\"\",\"impactText\":\"\",\"horizons\":[同 horizons 元素],\"rationale\":\"\",\"counterSignals\":[],\"claimEvidence\":{} } ],
+  \"actions\":       [ { \"id\":\"\",\"kind\":\"watch\"|\"waitForConfirmation\"|\"observeInBatches\"|\"pausePlan\"|\"considerIncrease\"|\"considerReduce\"|\"rebalanceReview\",\"title\":\"\",\"detail\":\"\",\"targetName\":\"目标基金、资产或组合\",\"confidence\":{},\"triggerConditions\":[],\"invalidatingConditions\":[],\"claimEvidence\":{} } ],
   \"evidence\":      [ { \"id\":\"引用工具返回的 id\",\"sourceName\":\"\",\"title\":\"\",\"url\":null,\"publishedAt\":null,\"retrievedAt\":\"\",\"summary\":\"\" } ],
   \"warnings\":      [ { \"id\":\"\",\"title\":\"\",\"detail\":\"\" } ],
   \"disclaimer\": \"必须包含「非投资建议」字样\"
@@ -67,7 +69,10 @@ struct TrendResearchPromptBuilder: Sendable {
 
 字段约束：
 - assetTrends 必须覆盖全部持有基金（get_portfolio_overview / get_portfolio_assets 返回的每只基金 code 都要出现），缺失会被校验拒绝。
-- evidenceIDs 只能填工具返回的 evidence_ids；不要凭空创造。evidence 数组的来源字段（sourceName/title/url/publishedAt/retrievedAt/summary）会被 App 用账本规范对象覆盖，你只需保证 evidenceIDs 引用的 id 真实来自工具返回。
+- claimEvidence 中的三类 evidence ID 和兼容字段 evidenceIDs 只能填工具返回的 evidence_ids；不要凭空创造。evidence 数组的来源字段与 metadata 会被 App 用账本规范对象覆盖。
+- 每条有方向的结论都必须填写 supportingEvidenceIDs。证据不足时 direction 必须为 uncertain，填写 exemptionReason，并把短期行动降为 watch；不得为满足格式而挂无关证据。
+- counterEvidenceIDs 用于真实反证，contextEvidenceIDs 只表示背景事实，不能拿上下文证据冒充方向支持。
+- watch/waitForConfirmation/observeInBatches 属于 informational；pausePlan/rebalanceReview/considerIncrease/considerReduce 属于 allocationReview。所有行动都必须填写 targetName、引用对应本地持仓/净值/行情事实并提供触发和失效条件；allocationReview 还必须有与理由匹配的结构或外部证据和仓位边界。
 - 最新行业、宏观和政策判断必须引用 web_search 返回的 web:tavily:* evidence id；不要把模型记忆当作最新事实。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
 - marketOutlook 与 sectors 互斥：同一主题只能出现在其中一个数组。指数/大类资产（沪深300、黄金、债券、原油…）只放 marketOutlook；行业板块（消费、科技、医药、新能源…）只放 sectors。不要在两边写同一个主题（例如「消费」不能同时出现在两个数组里）。

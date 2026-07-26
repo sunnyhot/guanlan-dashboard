@@ -86,6 +86,10 @@ actor TrendEvidenceLedger {
     func allIDs() -> Set<String> {
         Set(evidenceByID.keys)
     }
+
+    func allEvidence() -> [TrendEvidence] {
+        evidenceByID.values.sorted { $0.id < $1.id }
+    }
 }
 
 // MARK: - 结果信封

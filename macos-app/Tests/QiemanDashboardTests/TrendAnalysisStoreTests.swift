@@ -326,6 +326,72 @@ extension TrendAnalysisReport {
         )
     }
 
+    func groundedForSubmission(
+        snapshot: TrendResearchSnapshot
+    ) -> TrendAnalysisReport {
+        let evidenceID = "portfolio:overview:\(snapshot.runID.uuidString)"
+        let claimEvidence = TrendClaimEvidence(
+            supportingEvidenceIDs: [evidenceID]
+        )
+        let canonicalEvidence = TrendEvidence(
+            id: evidenceID,
+            sourceName: "本地组合快照",
+            title: "组合概览基线",
+            url: nil,
+            publishedAt: nil,
+            retrievedAt: snapshot.dataAsOf,
+            summary: "测试组合概览基线。",
+            metadata: TrendEvidenceMetadata(
+                sourceKind: .portfolioSnapshot,
+                sourceTier: .primary,
+                entityNames: ["组合"],
+                metadataConfidence: .deterministic
+            )
+        )
+        let statuses = TrendDataSource.allCases.map {
+            TrendSourceStatus(
+                source: $0,
+                status: .notRequested,
+                receivedAt: snapshot.createdAt
+            )
+        }
+        return TrendAnalysisReport(
+            id: id,
+            generatedAt: generatedAt,
+            dataAsOf: dataAsOf,
+            privacyMode: privacyMode,
+            externalSignalStatus: externalSignalStatus,
+            portfolio: TrendPortfolioSummary(
+                headline: portfolio.headline,
+                riskLevel: portfolio.riskLevel,
+                summary: portfolio.summary,
+                claimEvidence: claimEvidence
+            ),
+            horizons: horizons.map {
+                TrendHorizonView(
+                    horizon: $0.horizon,
+                    direction: $0.direction,
+                    confidence: $0.confidence.appNormalized,
+                    rationale: $0.rationale,
+                    counterSignals: $0.counterSignals,
+                    claimEvidence: claimEvidence
+                )
+            },
+            marketOutlook: marketOutlook,
+            sectors: sectors,
+            opportunities: opportunities,
+            keyAssets: keyAssets,
+            assetTrends: assetTrends,
+            actions: actions,
+            evidence: [canonicalEvidence],
+            warnings: warnings,
+            disclaimer: disclaimer,
+            schemaVersion: TrendAnalysisReport.currentSchemaVersion,
+            disposition: .analysisOnly,
+            sourceStatuses: statuses
+        )
+    }
+
     func replacingActions(_ actions: [TrendActionCandidate]) -> TrendAnalysisReport {
         TrendAnalysisReport(
             id: id,

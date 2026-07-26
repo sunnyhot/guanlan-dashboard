@@ -51,6 +51,25 @@ struct PortfolioOverviewTool: TrendResearchTool {
     func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
         let snapshot = context.snapshot
         let evidenceID = "portfolio:overview:\(snapshot.runID.uuidString)"
+        let signalEvidence = (snapshot.platformSignals + snapshot.managerSignals).map { signal in
+            TrendEvidence(
+                id: signal.evidenceID,
+                sourceName: signal.source,
+                title: signal.title,
+                url: signal.articleURL,
+                publishedAt: signal.occurredAt,
+                retrievedAt: snapshot.dataAsOf,
+                summary: signal.detail ?? signal.title,
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: signal.source == "manager" ? .managerSignal : .platformSignal,
+                    sourceTier: signal.articleURL == nil ? .unknown : .secondary,
+                    requestedTopicKeys: [signal.source, signal.kind, signal.title],
+                    entityCodes: [signal.fundCode].compactMap { $0 },
+                    entityNames: [signal.fundName].compactMap { $0 },
+                    metadataConfidence: .deterministic
+                )
+            )
+        }
         await context.evidenceLedger.record([
             TrendEvidence(
                 id: evidenceID,
@@ -59,9 +78,16 @@ struct PortfolioOverviewTool: TrendResearchTool {
                 url: nil,
                 publishedAt: nil,
                 retrievedAt: snapshot.dataAsOf,
-                summary: "本次分析冻结的组合基线：\(snapshot.portfolio.assetCount) 个持仓标的、\(snapshot.portfolio.holdingCount) 个已持有、\(snapshot.portfolio.activePlanCount) 个计划、\(snapshot.portfolio.pendingAssetCount) 个待确认。"
+                summary: "本次分析冻结的组合基线：\(snapshot.portfolio.assetCount) 个持仓标的、\(snapshot.portfolio.holdingCount) 个已持有、\(snapshot.portfolio.activePlanCount) 个计划、\(snapshot.portfolio.pendingAssetCount) 个待确认。",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .portfolioSnapshot,
+                    sourceTier: .primary,
+                    requestedTopicKeys: ["portfolio", "组合"],
+                    entityNames: ["组合"],
+                    metadataConfidence: .deterministic
+                )
             )
-        ])
+        ] + signalEvidence)
         let data: [String: Any] = [
             "portfolio": jsonObject(snapshot.portfolio),
             "sectors": snapshot.sectors.map { jsonObject($0) },
@@ -69,9 +95,17 @@ struct PortfolioOverviewTool: TrendResearchTool {
             "dataAsOf": snapshot.dataAsOf,
             "insightHeadline": snapshot.insightHeadline,
             "sourceWarnings": snapshot.sourceWarnings,
+            "sourceStatuses": snapshot.sourceStatuses.map { jsonObject($0) },
+            "platformSignals": snapshot.platformSignals.map { jsonObject($0) },
+            "managerSignals": snapshot.managerSignals.map { jsonObject($0) },
             "evidenceID": evidenceID
         ]
-        return .content(TrendResearchToolEnvelope.success(data, evidenceIDs: [evidenceID]))
+        return .content(
+            TrendResearchToolEnvelope.success(
+                data,
+                evidenceIDs: [evidenceID] + signalEvidence.map(\.id)
+            )
+        )
     }
 }
 
@@ -142,7 +176,16 @@ struct PortfolioAssetsTool: TrendResearchTool {
                     url: nil,
                     publishedAt: nil,
                     retrievedAt: snapshot.dataAsOf,
-                    summary: "\(asset.name)（\(asset.code ?? "无代码")）持仓明细快照。"
+                    summary: "\(asset.name)（\(asset.code ?? "无代码")）持仓明细快照。",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .portfolioSnapshot,
+                        sourceTier: .primary,
+                        requestedTopicKeys: [asset.id, asset.name, asset.code].compactMap { $0 },
+                        entityCodes: [asset.code].compactMap { $0 },
+                        entityNames: [asset.name],
+                        sectorKeys: [asset.sector],
+                        metadataConfidence: .deterministic
+                    )
                 )
             }
         )
@@ -238,7 +281,17 @@ struct FundLookThroughTool: TrendResearchTool {
                 url: disclosure.sourceURL,
                 publishedAt: disclosure.asOf.isEmpty ? nil : disclosure.asOf,
                 retrievedAt: context.snapshot.dataAsOf,
-                summary: "截至 \(disclosure.asOf.isEmpty ? "未知日期" : disclosure.asOf)，包含 \(disclosure.holdings.count) 条股票/债券持仓、\(disclosure.industries.count) 条行业配置；披露证券合计占基金净值 \(String(format: "%.2f%%", disclosure.disclosedSecurityWeightPct))。"
+                summary: "截至 \(disclosure.asOf.isEmpty ? "未知日期" : disclosure.asOf)，包含 \(disclosure.holdings.count) 条股票/债券持仓、\(disclosure.industries.count) 条行业配置；披露证券合计占基金净值 \(String(format: "%.2f%%", disclosure.disclosedSecurityWeightPct))。",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .fundDisclosure,
+                    sourceTier: .secondary,
+                    publisherKey: "fundf10.eastmoney.com",
+                    requestedTopicKeys: [disclosure.fundCode, disclosure.fundName],
+                    entityCodes: [disclosure.fundCode] + disclosure.holdings.map(\.code),
+                    entityNames: [disclosure.fundName] + disclosure.holdings.map(\.name),
+                    sectorKeys: disclosure.industries.map(\.name),
+                    metadataConfidence: .deterministic
+                )
             )
         }
         await context.evidenceLedger.record(
@@ -250,7 +303,16 @@ struct FundLookThroughTool: TrendResearchTool {
                     url: nil,
                     publishedAt: nil,
                     retrievedAt: context.snapshot.dataAsOf,
-                    summary: "按基金组合权重乘以底层披露权重聚合；覆盖 \(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只基金，已披露底层证券覆盖组合 \(String(format: "%.2f%%", snapshot.disclosedSecurityCoveragePct))，未知基金证券仓位 \(String(format: "%.2f%%", snapshot.unknownPortfolioWeightPct))。"
+                    summary: "按基金组合权重乘以底层披露权重聚合；覆盖 \(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只基金，已披露底层证券覆盖组合 \(String(format: "%.2f%%", snapshot.disclosedSecurityCoveragePct))，未知基金证券仓位 \(String(format: "%.2f%%", snapshot.unknownPortfolioWeightPct))。",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .derived,
+                        requestedTopicKeys: ["portfolio-look-through", "组合穿透"],
+                        entityCodes: snapshot.funds.map(\.fundCode),
+                        entityNames: snapshot.funds.map(\.fundName),
+                        sectorKeys: snapshot.industries.map(\.name),
+                        assetClassKeys: snapshot.assetClasses.map(\.name),
+                        metadataConfidence: .deterministic
+                    )
                 )
             ] + disclosureEvidence
         )
@@ -347,7 +409,7 @@ struct MarketSnapshotTool: TrendResearchTool {
             }
         }
         if includeIndices && !snapshot.marketQuotes.contains(where: { $0.kind == "index" }) {
-            warnings.append("当前无大盘指数行情。可在设置中开启菜单栏行情以获取指数数据。")
+            warnings.append("本次分析已主动刷新指数，但没有取得可用大盘行情；不得把缺失解读为市场平稳。")
         }
 
         await context.evidenceLedger.record(
@@ -359,7 +421,17 @@ struct MarketSnapshotTool: TrendResearchTool {
                     url: nil,
                     publishedAt: quote.quotedAt,
                     retrievedAt: snapshot.dataAsOf,
-                    summary: "\(quote.name)（\(quote.code)）行情：\(quote.price.map { String($0) } ?? "无报价")，涨跌 \(quote.changePct.map { String($0) } ?? "未知")。"
+                    summary: "\(quote.name)（\(quote.code)）行情：\(quote.price.map { String($0) } ?? "无报价")，涨跌 \(quote.changePct.map { String($0) } ?? "未知")；报价类型 \(quote.assessment.quoteType.rawValue)，新鲜度 \(quote.assessment.freshnessStatus.rawValue)。",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .marketQuote,
+                        sourceTier: .primary,
+                        requestedTopicKeys: [quote.code, quote.name],
+                        entityCodes: [quote.code],
+                        entityNames: [quote.name],
+                        quoteType: quote.assessment.quoteType,
+                        freshnessStatus: quote.assessment.freshnessStatus,
+                        metadataConfidence: .deterministic
+                    )
                 )
             }
         )

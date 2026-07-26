@@ -152,6 +152,15 @@ extension AppModel {
                 settings: provider,
                 webSearchSettings: trendSettings.webSearch
             )
+            saveTrendAgentRunArtifact(
+                TrendAgentRunArtifact.makeNextHour(
+                    snapshot: researchSnapshot,
+                    settings: provider,
+                    report: report,
+                    trigger: userInitiated ? "manual" : "scheduled"
+                ),
+                trigger: userInitiated ? "manual" : "scheduled"
+            )
             nextHourGuidanceArchive.report = report
             nextHourGuidanceArchive.lastCompletedSlotKey = slot.key
             nextHourGuidanceGenerationState = .succeeded
@@ -201,6 +210,7 @@ extension AppModel {
         let total = rows.reduce(0) { $0 + $1.effectiveHoldingAmount }
         let assets = rows.map { row in
             let quoteTime = nextHourQuoteTime(row)
+            let quoteType = nextHourQuoteType(row)
             return NextHourGuidanceAssetContext(
                 id: row.key,
                 evidenceID: "local:next-hour:asset:\(row.key)",
@@ -212,9 +222,10 @@ extension AppModel {
                 currentPrice: row.currentEstimatePrice ?? row.currentPrice,
                 quoteTime: quoteTime,
                 quoteSource: nextHourQuoteSource(row),
-                quoteIsFresh: NextHourGuidanceFreshness.isFresh(
-                    quoteTime: quoteTime,
-                    generatedAt: generatedAt
+                quoteAssessment: TrendSourceFreshnessPolicy.assess(
+                    quoteType: quoteType,
+                    asOf: quoteTime,
+                    receivedAt: generatedAt
                 ),
                 profitPct: row.profitPct,
                 estimateChangePct: row.estimateChangePct,
@@ -232,15 +243,15 @@ extension AppModel {
                     price: $0.price,
                     changePct: $0.changePct,
                     quotedAt: $0.quotedAt,
-                    sourceLabel: $0.sourceLabel
+                    sourceLabel: $0.sourceLabel,
+                    quoteAssessment: TrendSourceFreshnessPolicy.assess(
+                        quoteType: .indexQuote,
+                        asOf: $0.quotedAt,
+                        receivedAt: generatedAt
+                    )
                 )
             }
-        let freshMarketCount = market.filter {
-            NextHourGuidanceFreshness.isFresh(
-                quoteTime: $0.quotedAt,
-                generatedAt: generatedAt
-            )
-        }.count
+        let freshMarketCount = market.filter(\.quoteAssessment.isFreshForExecution).count
         let hasFreshAssetQuotes = assets.contains(where: \.quoteIsFresh)
         let marketDataIsFresh = freshMarketCount > 0 || hasFreshAssetQuotes
         var marketDataWarnings = additionalWarnings
@@ -344,7 +355,8 @@ extension AppModel {
                 estimateChangePct: row.estimateChangePct,
                 price: row.currentEstimatePrice ?? row.currentPrice,
                 quotedAt: nextHourQuoteTime(row),
-                sourceLabel: nextHourQuoteSource(row)
+                sourceLabel: nextHourQuoteSource(row),
+                quoteType: nextHourQuoteType(row)
             )
         }
         return TrendResearchSnapshotBuilder().build(
@@ -362,8 +374,110 @@ extension AppModel {
             runID: UUID(),
             createdAt: generatedAt,
             dataAsOf: userPortfolioSnapshot?.refreshedAt ?? generatedAt,
-            sourceWarnings: sourceWarnings
+            sourceWarnings: sourceWarnings,
+            sourceStatuses: makeNextHourSourceStatuses(
+                rows: rows,
+                lookThrough: lookThrough,
+                generatedAt: generatedAt
+            )
         )
+    }
+
+    private func makeNextHourSourceStatuses(
+        rows: [PersonalAssetAggregateRow],
+        lookThrough: PortfolioLookThroughSnapshot?,
+        generatedAt: String
+    ) -> [TrendSourceStatus] {
+        let quotedRows = rows.filter {
+            $0.currentPrice != nil || $0.currentEstimatePrice != nil
+        }
+        let indexQuotes = marketIndexQuotes.values.filter {
+            [.sseComposite, .csi300, .chinext].contains($0.kind)
+        }
+        let offExchangeFunds = rows.filter {
+            $0.assetType == .fund && !$0.isOnExchangeFund
+        }
+        let offExchangeQuotes = offExchangeFunds.filter {
+            $0.currentPrice != nil || $0.currentEstimatePrice != nil
+        }
+        let expectedDisclosureCount = Set(
+            rows.compactMap { row -> String? in
+                guard row.assetType == .fund else { return nil }
+                return row.fundCode
+            }
+        ).count
+        let disclosureState: TrendDataSourceState
+        if expectedDisclosureCount == 0 {
+            disclosureState = .notRequested
+        } else if let lookThrough,
+                  lookThrough.coveredFundCount == expectedDisclosureCount {
+            disclosureState = .success
+        } else {
+            disclosureState = .failed
+        }
+        let disclosureAsOf = lookThrough?.disclosures.values
+            .map(\.asOf)
+            .filter { !$0.isEmpty }
+            .max()
+
+        return [
+            TrendSourceStatus(
+                source: .portfolioQuote,
+                status: quotedRows.isEmpty ? .failed : .success,
+                asOf: rows.compactMap { nextHourQuoteTime($0) }.max(),
+                receivedAt: generatedAt,
+                errorCode: quotedRows.isEmpty ? "no_eligible_quotes" : nil,
+                itemCount: quotedRows.count
+            ),
+            TrendSourceStatus(
+                source: .marketIndex,
+                status: indexQuotes.isEmpty ? .failed : .success,
+                asOf: indexQuotes.map(\.quotedAt).max(),
+                receivedAt: generatedAt,
+                errorCode: indexQuotes.isEmpty ? "no_index_quotes" : nil,
+                itemCount: indexQuotes.count
+            ),
+            TrendSourceStatus(
+                source: .fundNAV,
+                status: offExchangeFunds.isEmpty
+                    ? .notRequested
+                    : (offExchangeQuotes.isEmpty ? .failed : .success),
+                asOf: offExchangeFunds.compactMap { nextHourQuoteTime($0) }.max(),
+                receivedAt: generatedAt,
+                errorCode: !offExchangeFunds.isEmpty && offExchangeQuotes.isEmpty
+                    ? "no_fund_nav_or_estimate"
+                    : nil,
+                itemCount: offExchangeQuotes.count
+            ),
+            TrendSourceStatus(
+                source: .fundDisclosure,
+                status: disclosureState,
+                asOf: disclosureAsOf,
+                receivedAt: generatedAt,
+                errorCode: disclosureState == .failed ? "incomplete_fund_disclosure" : nil,
+                itemCount: lookThrough?.coveredFundCount
+            ),
+            TrendSourceStatus(
+                source: .qiemanAdjustment,
+                status: .notRequested,
+                receivedAt: generatedAt
+            ),
+            TrendSourceStatus(
+                source: .alfaAdjustment,
+                status: .notRequested,
+                receivedAt: generatedAt
+            ),
+            TrendSourceStatus(
+                source: .managerWatch,
+                status: .notRequested,
+                receivedAt: generatedAt
+            ),
+            TrendSourceStatus(
+                source: .webSearch,
+                status: trendSettings.webSearch.isConfigured ? .notRequested : .notConfigured,
+                receivedAt: generatedAt
+            ),
+        ]
     }
 
     private func nextHourQuoteTime(_ row: PersonalAssetAggregateRow) -> String? {
@@ -382,6 +496,20 @@ extension AppModel {
             return "基金实时估值"
         }
         return row.holdingRow?.resolvedPriceSource ?? "本地持仓行情"
+    }
+
+    private func nextHourQuoteType(_ row: PersonalAssetAggregateRow) -> TrendQuoteType {
+        guard row.assetType == .fund, !row.isOnExchangeFund else {
+            return .lastTrade
+        }
+        if row.holdingRow?.estimatePrice != nil,
+           row.holdingRow?.estimatePriceTime != nil {
+            return .intradayEstimate
+        }
+        if row.holdingRow?.officialNavDate != nil {
+            return .officialNAV
+        }
+        return .unknown
     }
 
     private func nextHourAssetTypeText(_ row: PersonalAssetAggregateRow) -> String {

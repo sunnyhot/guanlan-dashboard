@@ -220,8 +220,11 @@ final class TrendResearchToolTests: XCTestCase {
         let snapshot = makeSnapshot(assets: [])
         let ledger = TrendEvidenceLedger()
         let context = TrendResearchToolContext(snapshot: snapshot, evidenceLedger: ledger)
+        await recordOverviewEvidence(context: context)
 
-        let report = TrendAnalysisReport.fixture(generatedAt: "1999-01-01 00:00:00", externalSignalStatus: .partial)
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "1999-01-01 00:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
         let reportObject = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any])
         let arguments = jsonString(["report": reportObject])
         let call = AgentToolCall(id: "submit_1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: arguments))
@@ -235,6 +238,12 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertEqual(normalized.dataAsOf, "2026-07-24 09:58:00")
         XCTAssertEqual(normalized.privacyMode, .sanitized)
         XCTAssertNotEqual(normalized.generatedAt, "1999-01-01 00:00:00")
+        XCTAssertEqual(normalized.disposition, .insufficientEvidence)
+        XCTAssertEqual(
+            normalized.horizons.first(where: { $0.horizon == .short })?.direction,
+            .uncertain
+        )
+        XCTAssertEqual(normalized.sourceStatuses.count, TrendDataSource.allCases.count)
     }
 
     func testSubmitPromotesStatusOnlyWhenReportReferencesTavilyEvidence() async throws {
@@ -247,7 +256,14 @@ final class TrendResearchToolTests: XCTestCase {
             url: "https://www.gov.cn/zhengce/example",
             publishedAt: "2026-07-23",
             retrievedAt: "2026-07-24T10:00:00Z",
-            summary: "国务院发布最新产业政策。"
+            summary: "国务院发布最新产业政策。",
+            metadata: TrendEvidenceMetadata(
+                sourceKind: .webSearch,
+                sourceTier: .primary,
+                publisherKey: "gov.cn",
+                sectorKeys: ["政策环境"],
+                metadataConfidence: .ruleDerived
+            )
         )
         await ledger.record([webEvidence])
         let context = TrendResearchToolContext(
@@ -255,11 +271,12 @@ final class TrendResearchToolTests: XCTestCase {
             evidenceLedger: ledger,
             webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
         )
+        await recordOverviewEvidence(context: context)
 
         let base = TrendAnalysisReport.fixture(
             generatedAt: "1999-01-01 00:00:00",
             externalSignalStatus: .unavailable
-        )
+        ).groundedForSubmission(snapshot: snapshot)
         var reportObject = try XCTUnwrap(
             JSONSerialization.jsonObject(with: JSONEncoder().encode(base)) as? [String: Any]
         )
@@ -287,7 +304,10 @@ final class TrendResearchToolTests: XCTestCase {
             return
         }
         XCTAssertEqual(normalized.externalSignalStatus, .available)
-        XCTAssertEqual(normalized.evidence, [webEvidence])
+        XCTAssertTrue(normalized.evidence.contains(webEvidence))
+        XCTAssertTrue(normalized.evidence.contains {
+            $0.id == "portfolio:overview:\(snapshot.runID.uuidString)"
+        })
     }
 
     // MARK: - Validator 增强
@@ -409,11 +429,34 @@ final class TrendResearchToolTests: XCTestCase {
         arguments: [String: Any],
         context: TrendResearchToolContext
     ) async -> TrendResearchToolResult {
+        var enrichedArguments = arguments
+        if enrichedArguments["research_target"] == nil {
+            enrichedArguments["research_target"] = [
+                "kind": "macro",
+                "key": (arguments["query"] as? String) ?? "市场"
+            ]
+        }
         let call = AgentToolCall(
             id: "web_search_call",
-            function: AgentToolFunctionCall(name: "web_search", arguments: jsonString(arguments))
+            function: AgentToolFunctionCall(
+                name: "web_search",
+                arguments: jsonString(enrichedArguments)
+            )
         )
         return await registry.execute(call, context: context)
+    }
+
+    private func recordOverviewEvidence(
+        context: TrendResearchToolContext
+    ) async {
+        let call = AgentToolCall(
+            id: "overview_for_submit",
+            function: AgentToolFunctionCall(
+                name: "get_portfolio_overview",
+                arguments: "{}"
+            )
+        )
+        _ = await registry.execute(call, context: context)
     }
 
     private func parseData(_ result: TrendResearchToolResult) throws -> [String: Any] {

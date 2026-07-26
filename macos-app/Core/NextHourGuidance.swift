@@ -261,6 +261,7 @@ struct NextHourGuidanceAction: Codable, Identifiable, Hashable, Sendable {
 
 struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
+    let runID: UUID
     let generatedAt: String
     let validUntil: String
     let slotKey: String
@@ -271,12 +272,17 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     let actions: [NextHourGuidanceAction]
     let riskChecks: [String]
     let assetCount: Int
+    let disposition: TrendReportDisposition
+    let sourceStatuses: [TrendSourceStatus]
     let evidence: [TrendEvidence]
+    let auditToolCalls: [TrendAgentToolCallAudit]
+    let auditEvidence: [TrendEvidence]
     let warnings: [String]
     let disclaimer: String
 
     init(
         id: UUID = UUID(),
+        runID: UUID = UUID(),
         generatedAt: String,
         validUntil: String,
         slotKey: String,
@@ -287,11 +293,16 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         actions: [NextHourGuidanceAction],
         riskChecks: [String],
         assetCount: Int,
+        disposition: TrendReportDisposition = .analysisOnly,
+        sourceStatuses: [TrendSourceStatus] = [],
         evidence: [TrendEvidence] = [],
+        auditToolCalls: [TrendAgentToolCallAudit] = [],
+        auditEvidence: [TrendEvidence] = [],
         warnings: [String] = [],
         disclaimer: String = "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
     ) {
         self.id = id
+        self.runID = runID
         self.generatedAt = generatedAt
         self.validUntil = validUntil
         self.slotKey = slotKey
@@ -302,7 +313,11 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         self.actions = actions
         self.riskChecks = riskChecks
         self.assetCount = assetCount
+        self.disposition = disposition
+        self.sourceStatuses = sourceStatuses
         self.evidence = evidence
+        self.auditToolCalls = auditToolCalls
+        self.auditEvidence = auditEvidence
         self.warnings = warnings
         self.disclaimer = disclaimer
     }
@@ -310,6 +325,7 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        runID = try container.decodeIfPresent(UUID.self, forKey: .runID) ?? id
         generatedAt = try container.decode(String.self, forKey: .generatedAt)
         validUntil = try container.decode(String.self, forKey: .validUntil)
         slotKey = try container.decode(String.self, forKey: .slotKey)
@@ -320,7 +336,23 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         actions = try container.decodeIfPresent([NextHourGuidanceAction].self, forKey: .actions) ?? []
         riskChecks = try container.decodeIfPresent([String].self, forKey: .riskChecks) ?? []
         assetCount = try container.decodeIfPresent(Int.self, forKey: .assetCount) ?? 0
+        disposition = try container.decodeIfPresent(
+            TrendReportDisposition.self,
+            forKey: .disposition
+        ) ?? .analysisOnly
+        sourceStatuses = try container.decodeIfPresent(
+            [TrendSourceStatus].self,
+            forKey: .sourceStatuses
+        ) ?? []
         evidence = try container.decodeIfPresent([TrendEvidence].self, forKey: .evidence) ?? []
+        auditToolCalls = try container.decodeIfPresent(
+            [TrendAgentToolCallAudit].self,
+            forKey: .auditToolCalls
+        ) ?? []
+        auditEvidence = try container.decodeIfPresent(
+            [TrendEvidence].self,
+            forKey: .auditEvidence
+        ) ?? evidence
         warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
         disclaimer = try container.decodeIfPresent(String.self, forKey: .disclaimer)
             ?? "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
@@ -328,6 +360,7 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case runID
         case generatedAt
         case validUntil
         case slotKey
@@ -338,7 +371,11 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         case actions
         case riskChecks
         case assetCount
+        case disposition
+        case sourceStatuses
         case evidence
+        case auditToolCalls
+        case auditEvidence
         case warnings
         case disclaimer
     }
@@ -394,11 +431,15 @@ struct NextHourGuidanceAssetContext: Codable, Hashable, Sendable {
     let currentPrice: Double?
     let quoteTime: String?
     let quoteSource: String?
-    let quoteIsFresh: Bool
+    let quoteAssessment: TrendQuoteAssessment
     let profitPct: Double?
     let estimateChangePct: Double?
     let pendingTradeCount: Int
     let activePlanCount: Int
+
+    var quoteIsFresh: Bool {
+        quoteAssessment.isFreshForExecution
+    }
 }
 
 struct NextHourGuidanceMarketContext: Codable, Hashable, Sendable {
@@ -408,6 +449,7 @@ struct NextHourGuidanceMarketContext: Codable, Hashable, Sendable {
     let changePct: Double?
     let quotedAt: String
     let sourceLabel: String
+    let quoteAssessment: TrendQuoteAssessment
 }
 
 struct NextHourGuidanceContext: Codable, Hashable, Sendable {
@@ -435,40 +477,15 @@ enum NextHourGuidanceFreshness {
     static func isFresh(
         quoteTime: String?,
         generatedAt: String,
-        maxAgeMinutes: Double = 20
+        maxAgeMinutes: Double = 20,
+        quoteType: TrendQuoteType = .lastTrade
     ) -> Bool {
-        guard let quoteTime,
-              let quoteDate = parse(quoteTime),
-              let generatedDate = parse(generatedAt) else {
-            return false
-        }
-        let age = generatedDate.timeIntervalSince(quoteDate)
-        return age >= -120 && age <= maxAgeMinutes * 60
-    }
-
-    private static func parse(_ value: String) -> Date? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isoFormatter = ISO8601DateFormatter()
-        if let date = isoFormatter.date(from: trimmed) {
-            return date
-        }
-        let formats = [
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy-MM-dd HH:mm",
-            "yyyy/MM/dd HH:mm:ss",
-            "yyyy/MM/dd HH:mm",
-        ]
-        for format in formats {
-            let formatter = DateFormatter()
-            formatter.calendar = Calendar(identifier: .gregorian)
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
-            formatter.dateFormat = format
-            if let date = formatter.date(from: trimmed) {
-                return date
-            }
-        }
-        return nil
+        TrendSourceFreshnessPolicy.assess(
+            quoteType: quoteType,
+            asOf: quoteTime,
+            receivedAt: generatedAt,
+            maxIntradayAgeMinutes: maxAgeMinutes
+        ).isFreshForExecution
     }
 }
 
@@ -590,7 +607,8 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 你是中国市场盘中交易研究 Agent，任务是生成有证据约束的“下一小时买卖建议”。这是真实资金决策，宁可持有，也不能猜测。
                 必须先调用 get_live_market_context 读取刚刷新的持仓、报价时间、大盘行情和旧研判边界。
                 如果提供 get_fund_lookthrough，提交前必须调用它；基金判断必须基于底层股票、行业、资产配置和披露日期，不能只看基金名称。
-                如果提供 web_search，提交前至少调用两次：一次检索最近一天的市场/政策消息，一次针对候选标的、底层行业或核心证券。搜索词不得包含用户金额或组合隐私。
+                如果提供 web_search，提交前至少调用两次：一次检索最近一天的市场/政策消息，一次针对候选标的、底层行业或核心证券。每次必须填写经过快照校验的 research_target；搜索词不得包含用户金额或组合隐私。
+                搜索失败或没有返回新的有效证据时，不得把它算作证据；在完成两次尝试后可安全提交，但所有标的只能 hold，并明确证据不足。
                 只引用工具实际返回的 evidence_id；不得编造新闻、价格、成交量、资金流或证据编号。
                 每条标的必须明确给出 buy（买入）、sell（卖出）、hold（持有）三选一，不得用观察、等待、不追涨等模糊动作替代结论。
                 买入或卖出必须同时引用该标的本地行情证据和至少两个最新网页证据；基金还必须引用该基金的穿透证据。缺少任一项时只能 hold。
@@ -617,7 +635,9 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         var invalidSubmissions = 0
         var didReadContext = false
         var didReadLookThrough = !requiresLookThrough
-        var recentSearchQueries = Set<String>()
+        var webSearchAttemptQueries = Set<String>()
+        var successfulSearchQueries = Set<String>()
+        var toolCallAudits: [TrendAgentToolCallAudit] = []
 
         while turnCount < Self.maxTurns {
             try Task.checkCancellation()
@@ -683,9 +703,9 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     if !toolResult.isError { didReadLookThrough = true }
 
                 case Self.webSearchToolName:
-                    if let query = Self.recentDaySearchQuery(call) {
-                        recentSearchQueries.insert(query)
-                    }
+                    let query = Self.recentDaySearchQuery(call)
+                    if let query { webSearchAttemptQueries.insert(query) }
+                    let evidenceBefore = await ledger.allIDs()
                     var toolContext = TrendResearchToolContext(
                         snapshot: researchSnapshot,
                         evidenceLedger: ledger,
@@ -695,13 +715,20 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     toolContext.invalidSubmissionBudget = 2
                     toolContext.invalidSubmissionsUsed = invalidSubmissions
                     toolResult = await registry.execute(call, context: toolContext)
+                    let evidenceAfter = await ledger.allIDs()
+                    let newWebEvidence = evidenceAfter
+                        .subtracting(evidenceBefore)
+                        .contains { $0.hasPrefix("web:tavily:") }
+                    if !toolResult.isError, newWebEvidence, let query {
+                        successfulSearchQueries.insert(query)
+                    }
 
                 case Self.submitToolName:
                     let missingResearch = Self.missingResearchRequirements(
                         didReadContext: didReadContext,
                         didReadLookThrough: didReadLookThrough,
                         webSearchConfigured: webSearchSettings.isConfigured,
-                        recentSearchQueryCount: recentSearchQueries.count
+                        webSearchAttemptCount: webSearchAttemptQueries.count
                     )
                     if !missingResearch.isEmpty {
                         lastErrors = missingResearch
@@ -726,16 +753,29 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                 context: context,
                                 researchSnapshot: researchSnapshot,
                                 webSearchConfigured: webSearchSettings.isConfigured,
-                                recentSearchQueries: Array(recentSearchQueries),
+                                recentSearchQueries: Array(successfulSearchQueries),
                                 ledger: ledger
                             )
                             if errors.isEmpty {
+                                let acceptedResult = TrendResearchToolResult.content(
+                                    TrendResearchToolEnvelope.success([
+                                        "accepted": true
+                                    ])
+                                )
+                                let completedToolCalls = toolCallAudits + [
+                                    TrendAgentToolCallAudit(
+                                        sequence: toolCallCount,
+                                        call: call,
+                                        result: acceptedResult
+                                    )
+                                ]
                                 return await Self.makeReport(
                                     submission: submission,
                                     context: context,
                                     researchSnapshot: researchSnapshot,
                                     webSearchConfigured: webSearchSettings.isConfigured,
-                                    ledger: ledger
+                                    ledger: ledger,
+                                    toolCalls: completedToolCalls
                                 )
                             }
                             lastErrors = errors
@@ -774,6 +814,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     )
                 }
 
+                toolCallAudits.append(
+                    TrendAgentToolCallAudit(
+                        sequence: toolCallCount,
+                        call: call,
+                        result: toolResult
+                    )
+                )
                 messages.append(.init(
                     role: .tool,
                     content: toolResult.contentJSON,
@@ -792,7 +839,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         didReadContext: Bool,
         didReadLookThrough: Bool,
         webSearchConfigured: Bool,
-        recentSearchQueryCount: Int
+        webSearchAttemptCount: Int
     ) -> [String] {
         var errors: [String] = []
         if !didReadContext {
@@ -801,8 +848,8 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         if !didReadLookThrough {
             errors.append("必须先调用 get_fund_lookthrough 读取基金底层资产")
         }
-        if webSearchConfigured, recentSearchQueryCount < minimumWebSearchAttempts {
-            errors.append("已配置联网搜索，提交前必须至少完成两次不同关键词且 time_range=day 的 web_search")
+        if webSearchConfigured, webSearchAttemptCount < minimumWebSearchAttempts {
+            errors.append("已配置联网搜索，提交前必须至少尝试两次 time_range=day 且带 research_target 的 web_search；搜索失败后可以提交 hold")
         }
         return errors
     }
@@ -812,7 +859,12 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let timeRange = object["time_range"] as? String,
               timeRange == "day",
-              let query = object["query"] as? String else {
+              let query = object["query"] as? String,
+              let target = object["research_target"] as? [String: Any],
+              let targetKind = target["kind"] as? String,
+              !targetKind.isEmpty,
+              let targetKey = target["key"] as? String,
+              !targetKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -824,7 +876,8 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         webSearchConfigured: Bool,
-        ledger: TrendEvidenceLedger
+        ledger: TrendEvidenceLedger,
+        toolCalls: [TrendAgentToolCallAudit]
     ) async -> NextHourGuidanceReport {
         var seenEvidenceIDs = Set<String>()
         let orderedEvidenceIDs = submission.actions
@@ -836,8 +889,15 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 evidence.append(item)
             }
         }
+        let auditEvidence = await ledger.allEvidence()
         var warnings = context.marketDataWarnings + researchSnapshot.sourceWarnings
         warnings.append(contentsOf: researchSnapshot.lookThrough?.warnings ?? [])
+        let sourceStatuses = await normalizedSourceStatuses(
+            snapshot: researchSnapshot,
+            webSearchConfigured: webSearchConfigured,
+            ledger: ledger
+        )
+        warnings.append(contentsOf: sourceStatuses.compactMap(\.warningText))
         if !webSearchConfigured {
             warnings.append("未配置 Tavily 联网搜索，本次风控规则禁止输出买入或卖出。")
         } else if !orderedEvidenceIDs.contains(where: { $0.hasPrefix("web:tavily:") }) {
@@ -848,6 +908,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         })).sorted()
 
         return NextHourGuidanceReport(
+            runID: researchSnapshot.runID,
             generatedAt: context.generatedAt,
             validUntil: context.slot.validUntil,
             slotKey: context.slot.key,
@@ -870,9 +931,70 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             },
             riskChecks: submission.riskChecks,
             assetCount: context.assets.count,
+            disposition: Self.reportDisposition(
+                submission: submission,
+                context: context,
+                webSearchConfigured: webSearchConfigured,
+                evidence: evidence
+            ),
+            sourceStatuses: sourceStatuses,
             evidence: evidence,
+            auditToolCalls: toolCalls,
+            auditEvidence: auditEvidence,
             warnings: warnings
         )
+    }
+
+    private static func normalizedSourceStatuses(
+        snapshot: TrendResearchSnapshot,
+        webSearchConfigured: Bool,
+        ledger: TrendEvidenceLedger
+    ) async -> [TrendSourceStatus] {
+        var bySource = Dictionary(
+            snapshot.sourceStatuses.map { ($0.source, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let webEvidence = await ledger.allEvidence().filter {
+            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
+        }
+        bySource[.webSearch] = TrendSourceStatus(
+            source: .webSearch,
+            status: webSearchConfigured
+                ? (webEvidence.isEmpty ? .failed : .success)
+                : .notConfigured,
+            asOf: webEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
+            receivedAt: webEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
+            errorCode: webSearchConfigured && webEvidence.isEmpty
+                ? "no_usable_web_evidence"
+                : nil,
+            itemCount: webEvidence.count
+        )
+        for source in TrendDataSource.allCases where bySource[source] == nil {
+            bySource[source] = TrendSourceStatus(
+                source: source,
+                status: .notRequested,
+                receivedAt: snapshot.createdAt
+            )
+        }
+        return TrendDataSource.allCases.compactMap { bySource[$0] }
+    }
+
+    private static func reportDisposition(
+        submission: Submission,
+        context: NextHourGuidanceContext,
+        webSearchConfigured: Bool,
+        evidence: [TrendEvidence]
+    ) -> TrendReportDisposition {
+        if submission.actions.contains(where: { $0.action == .buy || $0.action == .sell }) {
+            return .actionable
+        }
+        let hasWebEvidence = evidence.contains {
+            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
+        }
+        if !context.marketDataIsFresh || !webSearchConfigured || !hasWebEvidence {
+            return .insufficientEvidence
+        }
+        return .analysisOnly
     }
 
     private static func validate(
@@ -885,7 +1007,12 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     ) async -> [String] {
         var errors: [String] = []
         let assetsByID = Dictionary(uniqueKeysWithValues: context.assets.map { ($0.id, $0) })
-        let availableEvidenceIDs = await ledger.allIDs()
+        let allEvidence = await ledger.allEvidence()
+        let evidenceByID = Dictionary(
+            allEvidence.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let availableEvidenceIDs = Set(evidenceByID.keys)
         var seenTargetIDs = Set<String>()
         if submission.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             errors.append("headline 不能为空")
@@ -933,42 +1060,35 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
 
             let isTrade = action.action == .buy || action.action == .sell
             if isTrade {
-                let sizingTerms = ["%", "成", "小仓", "分批", "份额"]
-                if !sizingTerms.contains(where: { action.instruction.contains($0) }) {
-                    errors.append("\(asset.name) 的买卖 instruction 必须说明比例、小仓或分批方式")
+                let disclosure = asset.code.flatMap {
+                    researchSnapshot.lookThrough?.disclosures[$0]
                 }
-                if !context.marketDataIsFresh {
-                    errors.append("行情不满足盘中时效要求，\(asset.name) 只能给出 hold")
-                }
-                if !asset.quoteIsFresh {
-                    errors.append("\(asset.name) 的标的报价超过 20 分钟或缺少准确时间，只能给出 hold")
-                }
-                if !webSearchConfigured {
-                    errors.append("未配置联网搜索，\(asset.name) 只能给出 hold")
-                }
-                let webEvidenceCount = Set(
-                    action.evidenceIDs.filter { $0.hasPrefix("web:tavily:") }
-                ).count
-                if webEvidenceCount < 2 {
-                    errors.append("\(asset.name) 的买卖动作必须引用至少两个最新网页证据")
-                }
+                errors.append(contentsOf: TrendClaimEvidencePolicy().validateExecution(
+                    actionKind: action.action,
+                    targetName: asset.name,
+                    targetCode: asset.code,
+                    instruction: action.instruction,
+                    trigger: action.trigger,
+                    invalidation: action.invalidation,
+                    quoteAssessment: asset.quoteAssessment,
+                    marketDataIsFresh: context.marketDataIsFresh,
+                    webSearchConfigured: webSearchConfigured,
+                    evidenceIDs: action.evidenceIDs,
+                    evidenceByID: evidenceByID,
+                    relatedEntityCodes: disclosure?.holdings.map(\.code) ?? [],
+                    relatedEntityNames: disclosure?.holdings.map(\.name) ?? [],
+                    relatedSectorKeys: disclosure?.industries.map(\.name) ?? [],
+                    requiresFundDisclosure: asset.assetType.contains("基金"),
+                    fundDisclosureEvidencePrefix: asset.code.flatMap { code in
+                        disclosure == nil ? nil : "fund:look-through:\(code):"
+                    }
+                ))
                 if !hasTargetedSearch(
                     asset: asset,
                     researchSnapshot: researchSnapshot,
                     queries: recentSearchQueries
                 ) {
                     errors.append("\(asset.name) 的买卖动作缺少针对标的、底层证券或行业的最近一天搜索")
-                }
-                if asset.assetType.contains("基金") {
-                    guard let code = asset.code,
-                          researchSnapshot.lookThrough?.disclosures[code] != nil else {
-                        errors.append("\(asset.name) 缺少该基金的底层持仓披露，只能给出 hold")
-                        continue
-                    }
-                    let prefix = "fund:look-through:\(code):"
-                    if !action.evidenceIDs.contains(where: { $0.hasPrefix(prefix) }) {
-                        errors.append("\(asset.name) 的买卖动作必须引用对应基金穿透证据")
-                    }
                 }
             }
         }
@@ -1012,7 +1132,16 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 url: nil,
                 publishedAt: asset.quoteTime,
                 retrievedAt: context.generatedAt,
-                summary: "\(asset.name)（\(asset.code ?? "无代码")）价格 \(asset.currentPrice.map { String($0) } ?? "未知")，涨跌 \(asset.estimateChangePct.map { String(format: "%+.2f%%", $0) } ?? "未知")，组合权重 \(asset.weightPct.map { String(format: "%.2f%%", $0) } ?? "未知")。"
+                summary: "\(asset.name)（\(asset.code ?? "无代码")）价格 \(asset.currentPrice.map { String($0) } ?? "未知")，涨跌 \(asset.estimateChangePct.map { String(format: "%+.2f%%", $0) } ?? "未知")，组合权重 \(asset.weightPct.map { String(format: "%.2f%%", $0) } ?? "未知")。",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .portfolioSnapshot,
+                    sourceTier: .primary,
+                    entityCodes: [asset.code].compactMap { $0 },
+                    entityNames: [asset.name],
+                    quoteType: asset.quoteAssessment.quoteType,
+                    freshnessStatus: asset.quoteAssessment.freshnessStatus,
+                    metadataConfidence: .deterministic
+                )
             )
         }
         evidence.append(contentsOf: context.market.map { quote in
@@ -1023,7 +1152,15 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 url: nil,
                 publishedAt: quote.quotedAt,
                 retrievedAt: context.generatedAt,
-                summary: "\(quote.name) \(quote.price)，涨跌 \(quote.changePct.map { String(format: "%+.2f%%", $0) } ?? "未知")。"
+                summary: "\(quote.name) \(quote.price)，涨跌 \(quote.changePct.map { String(format: "%+.2f%%", $0) } ?? "未知")。",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .marketQuote,
+                    sourceTier: .primary,
+                    entityNames: [quote.name],
+                    quoteType: quote.quoteAssessment.quoteType,
+                    freshnessStatus: quote.quoteAssessment.freshnessStatus,
+                    metadataConfidence: .deterministic
+                )
             )
         })
         await ledger.record(evidence)

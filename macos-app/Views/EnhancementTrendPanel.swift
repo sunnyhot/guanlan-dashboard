@@ -208,6 +208,7 @@ extension EnhancementCenterView {
     func verificationSection(_ report: TrendAnalysisReport) -> some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             trendReportSectionTitle("核验", icon: "shield.checkered")
+            trendSourceStatusList(report.sourceStatuses)
             trendEvidenceList(report.evidence)
             trendWarnings(report)
         }
@@ -253,6 +254,11 @@ extension EnhancementCenterView {
             HStack(spacing: AppPalette.spaceS) {
                 trendMetaTag("数据时点", report.dataAsOf, tint: AppPalette.info)
                 trendMetaTag("外部信号", report.externalSignalStatus.displayText, tint: report.externalSignalStatus.tint)
+                trendMetaTag(
+                    "处置",
+                    trendDispositionText(report.disposition),
+                    tint: trendDispositionTint(report.disposition)
+                )
                 Spacer(minLength: 0)
             }
         }
@@ -274,6 +280,108 @@ extension EnhancementCenterView {
                 .foregroundStyle(tint)
         }
         .lineLimit(1)
+    }
+
+    @ViewBuilder
+    func trendSourceStatusList(_ statuses: [TrendSourceStatus]) -> some View {
+        if !statuses.isEmpty {
+            VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                Text("数据来源状态")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted)
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 210), spacing: AppPalette.spaceS)],
+                    spacing: AppPalette.spaceS
+                ) {
+                    ForEach(statuses) { status in
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(trendSourceStatusTint(status.status))
+                                .frame(width: 7, height: 7)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(trendSourceName(status.source))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(AppPalette.ink)
+                                Text(status.asOf.map { "\(trendSourceStateText(status.status)) · \($0)" }
+                                    ?? trendSourceStateText(status.status))
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(AppPalette.muted)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            trendSourceStatusTint(status.status).opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func trendDispositionText(_ disposition: TrendReportDisposition) -> String {
+        switch disposition {
+        case .actionable:
+            return "具备行动条件"
+        case .analysisOnly:
+            return "仅供研究"
+        case .insufficientEvidence:
+            return "证据不足"
+        }
+    }
+
+    func trendDispositionTint(_ disposition: TrendReportDisposition) -> Color {
+        switch disposition {
+        case .actionable:
+            return AppPalette.positive
+        case .analysisOnly:
+            return AppPalette.info
+        case .insufficientEvidence:
+            return AppPalette.warning
+        }
+    }
+
+    func trendSourceName(_ source: TrendDataSource) -> String {
+        switch source {
+        case .marketIndex: return "市场指数"
+        case .portfolioQuote: return "持仓报价"
+        case .fundNAV: return "基金净值/估值"
+        case .fundDisclosure: return "基金披露"
+        case .qiemanAdjustment: return "且慢调仓"
+        case .alfaAdjustment: return "Alfa 调仓"
+        case .managerWatch: return "主理人巡检"
+        case .webSearch: return "联网搜索"
+        }
+    }
+
+    func trendSourceStateText(_ state: TrendDataSourceState) -> String {
+        switch state {
+        case .notIntegrated: return "未接入"
+        case .notConfigured: return "未配置"
+        case .notRequested: return "未请求"
+        case .fetching: return "获取中"
+        case .successEmpty: return "成功，无数据"
+        case .success: return "成功"
+        case .failed: return "失败"
+        }
+    }
+
+    func trendSourceStatusTint(_ state: TrendDataSourceState) -> Color {
+        switch state {
+        case .success:
+            return AppPalette.positive
+        case .successEmpty:
+            return AppPalette.info
+        case .fetching:
+            return AppPalette.brand
+        case .notIntegrated, .notConfigured, .notRequested:
+            return AppPalette.muted
+        case .failed:
+            return AppPalette.danger
+        }
     }
 
     func trendPortfolioHeadline(_ report: TrendAnalysisReport) -> some View {

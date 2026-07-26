@@ -146,6 +146,11 @@ extension EnhancementCenterView {
                 trendMetaTag("生成", String(report.generatedAt.suffix(8)), tint: AppPalette.info)
                 trendMetaTag("有效至", String(report.validUntil.suffix(5)), tint: AppPalette.brand)
                 trendMetaTag("范围", report.scope.displayName, tint: AppPalette.warning)
+                trendMetaTag(
+                    "处置",
+                    trendDispositionText(report.disposition),
+                    tint: trendDispositionTint(report.disposition)
+                )
                 trendMetaTag("标的", "\(report.assetCount)", tint: AppPalette.muted)
             }
 
@@ -185,6 +190,7 @@ extension EnhancementCenterView {
             if !report.evidence.isEmpty || !report.warnings.isEmpty {
                 DisclosureGroup("判断依据与数据边界") {
                     VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                        trendSourceStatusList(report.sourceStatuses)
                         ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
                                 .font(.system(size: 9))
