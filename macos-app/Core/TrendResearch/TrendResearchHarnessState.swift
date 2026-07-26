@@ -172,7 +172,7 @@ struct TrendResearchHarnessState: Sendable {
         if remainingWebSearches == 0 {
             return "联网搜索预算已用完；可读取尚需的本地行情，然后使用现有证据提交报告。"
         }
-        return "必需数据已覆盖；仅在存在明确证据缺口时继续定向研究，否则提交报告。"
+        return "必需数据已覆盖；立即停止新增研究，进入组合、市场、持仓分批、操作风险的分模块提交。"
     }
 
     private mutating func deduplicatingWebEvidence(

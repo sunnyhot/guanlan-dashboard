@@ -110,4 +110,14 @@ final class TrendCredibilityPolicyTests: XCTestCase {
         XCTAssertFalse(redacted.contains("100000 元"))
         XCTAssertTrue(redacted.contains("[redacted]"))
     }
+
+    func testAuditRedactorOmitsModularReportPayloads() {
+        let redacted = TrendAgentAuditRedactor.redactedArguments(
+            toolName: TrendReportModuleToolName.assetBatch,
+            argumentsJSON: #"{"assetTrends":[{"code":"000001","impactText":"人民币 100000 元"}]}"#
+        )
+
+        XCTAssertEqual(redacted, #"{"report_module":"[omitted]"}"#)
+        XCTAssertFalse(redacted.contains("100000"))
+    }
 }

@@ -45,7 +45,7 @@ enum OpenAICompatibleAgentClientError: Error, LocalizedError {
             }
             return "趋势分析模型请求失败。\(suffix)"
         case .timedOut(let seconds):
-            return "趋势分析模型请求超时：\(Int(seconds.rounded())) 秒内未返回有效响应。请检查模型服务状态或稍后重试。"
+            return "趋势分析模型请求超时：\(Int(seconds.rounded())) 秒内未完成有效响应。请检查模型服务状态或稍后重试。"
         case .invalidResponse(let detail):
             return "模型接口返回格式不符合 OpenAI-compatible chat/completions：\(detail)"
         }
@@ -122,6 +122,7 @@ struct OpenAICompatibleAgentClient: Sendable {
             )
         )
         let requestStartedAt = Date()
+        let hardDeadline = requestStartedAt.addingTimeInterval(effectiveTimeout)
 
         do {
             let (bytes, response) = try await session.bytes(for: request)
@@ -130,7 +131,11 @@ struct OpenAICompatibleAgentClient: Sendable {
             }
 
             guard (200..<300).contains(http.statusCode) else {
-                let data = try await Self.collect(bytes)
+                let data = try await Self.collect(
+                    bytes,
+                    deadline: hardDeadline,
+                    timeoutSeconds: effectiveTimeout
+                )
                 throw OpenAICompatibleAgentClientError.requestFailed(
                     statusCode: http.statusCode,
                     detail: Self.providerErrorMessage(from: data, decoder: decoder)
@@ -143,13 +148,19 @@ struct OpenAICompatibleAgentClient: Sendable {
                     bytes,
                     statusCode: http.statusCode,
                     startedAt: requestStartedAt,
+                    deadline: hardDeadline,
+                    timeoutSeconds: effectiveTimeout,
                     progressHandler: streamProgress
                 )
             }
 
             // 部分 OpenAI-compatible 服务会忽略 stream=true，仍返回普通 JSON；
             // 也有代理漏写 text/event-stream。完整收集后同时兼容这两类响应。
-            let data = try await Self.collect(bytes)
+            let data = try await Self.collect(
+                bytes,
+                deadline: hardDeadline,
+                timeoutSeconds: effectiveTimeout
+            )
             if Self.looksLikeEventStream(data) {
                 return try Self.decodeBufferedEventStream(data, statusCode: http.statusCode)
             }
@@ -245,10 +256,20 @@ struct OpenAICompatibleAgentClient: Sendable {
         return url
     }
 
-    private static func collect(_ bytes: URLSession.AsyncBytes) async throws -> Data {
+    private static func collect(
+        _ bytes: URLSession.AsyncBytes,
+        deadline: Date,
+        timeoutSeconds: Double
+    ) async throws -> Data {
         var data = Data()
         for try await byte in bytes {
+            if data.count.isMultiple(of: 4_096), Date() >= deadline {
+                throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
+            }
             data.append(byte)
+        }
+        if Date() >= deadline {
+            throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
         }
         return data
     }
@@ -282,6 +303,8 @@ struct OpenAICompatibleAgentClient: Sendable {
         _ bytes: URLSession.AsyncBytes,
         statusCode: Int,
         startedAt: Date,
+        deadline: Date,
+        timeoutSeconds: Double,
         progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         var accumulator = AgentStreamingResponseAccumulator()
@@ -298,6 +321,11 @@ struct OpenAICompatibleAgentClient: Sendable {
             guard byte == 0x0A else {
                 lineBuffer.append(byte)
                 continue
+            }
+            // URLRequest.timeoutInterval 是网络空闲超时；流持续吐数据时会被续命。
+            // 在 SSE 事件边界额外检查墙钟截止，确保单轮和整次 Agent 预算是真正硬上限。
+            if Date() >= deadline {
+                throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
             }
 
             let rawLine = String(decoding: lineBuffer, as: UTF8.self)

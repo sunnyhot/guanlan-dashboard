@@ -70,7 +70,7 @@ struct TrendSettingsPanel: View {
                     trendField("模型", text: trendProviderModelBinding, placeholder: "glm-5.2")
                     trendSecureField("API Key", text: trendProviderAPIKeyBinding, placeholder: "sk-...")
                     trendField("服务超时秒数", text: trendProviderTimeoutBinding, placeholder: "300")
-                    Text("趋势 Agent 单轮无响应最多等待 90 秒，超时会收敛任务并自动重试一次；整次运行最多 300 秒。此处可设置更短的服务超时。")
+                    Text("趋势 Agent 单轮生成最多 90 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行最多 300 秒。此处可设置更短的服务超时。")
                         .font(.system(size: 11))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)

@@ -694,7 +694,7 @@ extension AppModel {
         case .modelRequestTimedOut(let turn, let timeout, let recoveryAttempt, let maxRecoveryAttempts):
             appendTrendProgress(
                 "模型请求超时，正在自动收敛重试",
-                detail: "第 \(turn) 轮在 \(Int(timeout.rounded())) 秒内未返回；恢复 \(recoveryAttempt)/\(maxRecoveryAttempts)",
+                detail: "第 \(turn) 轮在 \(Int(timeout.rounded())) 秒内未完成；恢复 \(recoveryAttempt)/\(maxRecoveryAttempts)",
                 level: .warning
             )
         case .modelStreamProgress(let turn, let progress):
@@ -821,6 +821,14 @@ extension AppModel {
             return "Tavily 搜索行业与政策"
         case "submit_trend_report":
             return "校验并提交趋势报告"
+        case TrendReportModuleToolName.overview:
+            return "提交组合判断模块"
+        case TrendReportModuleToolName.market:
+            return "提交市场与板块模块"
+        case TrendReportModuleToolName.assetBatch:
+            return "分批提交持仓基金趋势"
+        case TrendReportModuleToolName.actions:
+            return "提交操作与风险模块"
         default:
             return name
         }
@@ -831,6 +839,6 @@ extension AppModel {
             settings.timeoutSeconds,
             TrendResearchRunPolicy.defaultPerRequestTimeoutSeconds
         )
-        return "单轮无响应上限 \(Int(perRequest.rounded())) 秒；整体上限 \(Int(TrendResearchRunPolicy.defaultTotalTimeoutSeconds.rounded())) 秒；单轮超时自动收敛重试 \(TrendResearchRunPolicy.defaultMaxRequestTimeoutRecoveries) 次"
+        return "单轮生成硬上限 \(Int(perRequest.rounded())) 秒；整体上限 \(Int(TrendResearchRunPolicy.defaultTotalTimeoutSeconds.rounded())) 秒；单轮超时自动收敛重试 \(TrendResearchRunPolicy.defaultMaxRequestTimeoutRecoveries) 次"
     }
 }

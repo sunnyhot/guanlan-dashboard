@@ -365,7 +365,7 @@ struct TrendAnalysisSettings: Codable, Hashable {
         defaultPrivacyMode: TrendPrivacyMode,
         dailyAutoAnalysisEnabled: Bool,
         dailyAutoAnalysisTimes: [String] = TrendAutoAnalysisSchedule.default.timeStrings,
-        lastAutoAnalysisDay: String?,
+        lastAutoAnalysisDay: String? = nil,
         lastAutoAnalysisSlotKey: String? = nil
     ) {
         self.provider = provider

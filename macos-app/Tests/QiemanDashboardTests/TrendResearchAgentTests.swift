@@ -9,16 +9,14 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "1999-01-01 00:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([
                 AgentToolCall(id: "c1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "c2", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "c")
+        let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client)
 
         let result = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
@@ -32,17 +30,15 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(plainTextResponse("我直接给你结论：市场平稳。")),
             .success(toolCallResponse([
                 AgentToolCall(id: "c0", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "c1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "plain")
+        let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client)
 
         let result = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
@@ -71,7 +67,6 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
 
         // 第一轮：finish_reason=length 且带一个参数残缺的工具调用，不得被执行。
         let truncated = AgentCompletionResult(
@@ -82,15 +77,14 @@ final class TrendResearchAgentTests: XCTestCase {
             stopReason: .length,
             finishReason: "length"
         )
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(truncated),
             .success(toolCallResponse([
                 AgentToolCall(id: "c0", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "c1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "length")
+        let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client)
 
         let result = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
@@ -103,22 +97,25 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available)
             .groundedForSubmission(snapshot: snapshot)
-        var reportObject = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any]
-        )
-        reportObject["disclaimer"] = "仅供参考。"
-        let reportData = try JSONSerialization.data(withJSONObject: reportObject)
-        let reportJSON = try XCTUnwrap(String(data: reportData, encoding: .utf8))
-        let submitCall = AgentToolCall(id: "s", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
-
         let overviewCall = AgentToolCall(id: "o", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([overviewCall])),
-            .success(toolCallResponse([submitCall])),
-            .success(toolCallResponse([submitCall])),
-            .success(toolCallResponse([submitCall]))
-        ])
-        let agent = TrendResearchAgent(client: client)
+            try moduleSubmissionResponse(report: report, stage: .overview, id: "overview"),
+            try moduleSubmissionResponse(report: report, stage: .market, id: "market")
+        ]
+        let invalidActions = try moduleCall(
+            report: report,
+            stage: .actions,
+            id: "bad-actions",
+            disclaimerOverride: "仅供参考。"
+        )
+        responses.append(.success(toolCallResponse([invalidActions])))
+        responses.append(.success(toolCallResponse([invalidActions])))
+        responses.append(.success(toolCallResponse([invalidActions])))
+        let client = ScriptedTrendAgentClient(responses)
+        var policy = TrendResearchRunPolicy()
+        policy.maxInvalidSubmissions = 2
+        let agent = TrendResearchAgent(client: client, policy: policy)
 
         do {
             _ = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
@@ -133,22 +130,22 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
-        let submitCall = AgentToolCall(id: "s", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
+        let submitCall = AgentToolCall(id: "s", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{}"))
         let overviewCall = AgentToolCall(id: "o", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
 
-        // 第 1 轮直接 submit（未先 overview）→ 运行时拒绝；第 2 轮 overview；第 3 轮 submit 成功。
+        // 第 1 轮直接提交整份报告 → 运行时拒绝；第 2 轮 overview；随后按模块提交成功。
         // 若门控失效，首轮 submit 会直接成功，只消耗 1 条响应。
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([submitCall])),
-            .success(toolCallResponse([overviewCall])),
-            .success(toolCallResponse([submitCall]))
-        ])
+            .success(toolCallResponse([overviewCall]))
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "after-gate")
+        let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client)
 
         let result = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
         XCTAssertEqual(result.privacyMode, .sanitized)
-        XCTAssertEqual(client.responsesConsumed, 3)
+        XCTAssertEqual(client.responsesConsumed, 5)
     }
 
     func testWebSearchFailureTripsCircuitBreakerForRemainingRun() async throws {
@@ -156,23 +153,18 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
         let webClient = FailingCountingTavilyClient()
 
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([
                 AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
             ])),
             .success(toolCallResponse([
                 AgentToolCall(id: "w1", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新产业政策","time_range":"day","research_target":{"kind":"macro","key":"产业政策"}}"#))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "w2", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新行业动态","time_range":"day","research_target":{"kind":"macro","key":"行业动态"}}"#))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "web")
+        let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client, webSearchClient: webClient)
 
         _ = try await agent.run(
@@ -189,42 +181,40 @@ final class TrendResearchAgentTests: XCTestCase {
         let policy = TrendResearchRunPolicy()
 
         let small = policy.effectiveLimits(assetCount: 13)
-        XCTAssertEqual(small.maxTurns, 12)
-        XCTAssertEqual(small.maxToolCalls, 32)
+        XCTAssertEqual(small.maxTurns, 18)
+        XCTAssertEqual(small.maxToolCalls, 40)
         XCTAssertEqual(small.preferredWebSearches, 6)
         XCTAssertEqual(small.maxWebSearches, 10)
 
         let oneHundred = policy.effectiveLimits(assetCount: 100, sectorCount: 9)
-        XCTAssertEqual(oneHundred.maxTurns, 16)
-        XCTAssertEqual(oneHundred.maxToolCalls, 36)
+        XCTAssertEqual(oneHundred.maxTurns, 39)
+        XCTAssertEqual(oneHundred.maxToolCalls, 61)
         XCTAssertEqual(oneHundred.preferredWebSearches, 8)
         XCTAssertEqual(oneHundred.maxWebSearches, 12)
 
         let veryLarge = policy.effectiveLimits(assetCount: 2_000, sectorCount: 30)
-        XCTAssertEqual(veryLarge.maxTurns, 24)
-        XCTAssertEqual(veryLarge.maxToolCalls, 64)
+        XCTAssertEqual(veryLarge.maxTurns, 48)
+        XCTAssertEqual(veryLarge.maxToolCalls, 96)
         XCTAssertEqual(veryLarge.maxWebSearches, 12)
     }
 
-    func testHarnessReservesFinalBudgetAndOnlyExposesSubmitTool() async throws {
+    func testHarnessImmediatelySwitchesToOrderedModuleTools() async throws {
         let snapshot = makeEmptySnapshot()
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([
                 AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "ordered")
+        let client = ScriptedTrendAgentClient(responses)
         var policy = TrendResearchRunPolicy()
         policy.maxTurns = 4
         policy.expandedMaxTurns = 4
-        policy.maxToolCalls = 3
-        policy.expandedMaxToolCalls = 3
+        policy.maxToolCalls = 4
+        policy.expandedMaxToolCalls = 4
         policy.reservedSubmitTurns = 2
         policy.reservedSubmitToolCalls = 2
         let agent = TrendResearchAgent(client: client, policy: policy)
@@ -232,7 +222,9 @@ final class TrendResearchAgentTests: XCTestCase {
         _ = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
 
         XCTAssertEqual(client.requestedToolNames(at: 0).count, 4)
-        XCTAssertEqual(client.requestedToolNames(at: 1), ["submit_trend_report"])
+        XCTAssertEqual(client.requestedToolNames(at: 1), [TrendReportModuleToolName.overview])
+        XCTAssertEqual(client.requestedToolNames(at: 2), [TrendReportModuleToolName.market])
+        XCTAssertEqual(client.requestedToolNames(at: 3), [TrendReportModuleToolName.actions])
     }
 
     func testSingleRequestTimeoutIsCappedInsteadOfConsumingRemainingRunBudget() async throws {
@@ -240,15 +232,13 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([
                 AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
             ]))
-        ])
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "timeout-cap")
+        let client = ScriptedTrendAgentClient(responses)
         let settings = TrendAIProviderSettings(
             providerName: "Test",
             baseURL: "https://api.example.com/v1",
@@ -260,7 +250,7 @@ final class TrendResearchAgentTests: XCTestCase {
 
         _ = try await agent.run(snapshot: snapshot, settings: settings) { _ in }
 
-        XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [90, 90])
+        XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [90, 90, 90, 90])
     }
 
     func testTimedOutSubmissionAutomaticallyConvergesAndRetries() async throws {
@@ -268,16 +258,14 @@ final class TrendResearchAgentTests: XCTestCase {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
             .groundedForSubmission(snapshot: snapshot)
-        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
-        let client = ScriptedTrendAgentClient([
+        var responses: [Result<AgentCompletionResult, Error>] = [
             .success(toolCallResponse([
                 AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
             ])),
-            .failure(OpenAICompatibleAgentClientError.timedOut(90)),
-            .success(toolCallResponse([
-                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
-            ]))
-        ])
+            .failure(OpenAICompatibleAgentClientError.timedOut(90))
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "timeout-retry")
+        let client = ScriptedTrendAgentClient(responses)
         let recorder = TrendAgentEventRecorder()
         let agent = TrendResearchAgent(client: client)
 
@@ -286,8 +274,8 @@ final class TrendResearchAgentTests: XCTestCase {
         }
 
         XCTAssertEqual(result.privacyMode, .sanitized)
-        XCTAssertEqual(client.responsesConsumed, 3)
-        XCTAssertEqual(client.requestedToolNames(at: 2), ["submit_trend_report"])
+        XCTAssertEqual(client.responsesConsumed, 5)
+        XCTAssertEqual(client.requestedToolNames(at: 2), [TrendReportModuleToolName.overview])
         let timeoutEventCount = await recorder.timeoutEventCount
         XCTAssertEqual(timeoutEventCount, 1)
     }
@@ -364,6 +352,122 @@ final class TrendResearchAgentTests: XCTestCase {
     }
 
     // MARK: - 辅助
+
+    private enum ReportModuleStage {
+        case overview
+        case market
+        case actions
+    }
+
+    private func moduleSubmissionResponses(
+        report: TrendAnalysisReport,
+        prefix: String
+    ) throws -> [Result<AgentCompletionResult, Error>] {
+        var responses: [Result<AgentCompletionResult, Error>] = [
+            try moduleSubmissionResponse(
+                report: report,
+                stage: .overview,
+                id: "\(prefix)-overview"
+            ),
+            try moduleSubmissionResponse(
+                report: report,
+                stage: .market,
+                id: "\(prefix)-market"
+            )
+        ]
+        if !report.assetTrends.isEmpty {
+            for start in stride(
+                from: 0,
+                to: report.assetTrends.count,
+                by: TrendReportDraftStore.assetBatchSize
+            ) {
+                let end = min(
+                    start + TrendReportDraftStore.assetBatchSize,
+                    report.assetTrends.count
+                )
+                let batch = Array(report.assetTrends[start..<end])
+                let call = try encodedModuleCall(
+                    name: TrendReportModuleToolName.assetBatch,
+                    id: "\(prefix)-assets-\(start / TrendReportDraftStore.assetBatchSize)",
+                    value: TrendReportAssetBatchModule(assetTrends: batch)
+                )
+                responses.append(.success(toolCallResponse([call])))
+            }
+        }
+        responses.append(
+            try moduleSubmissionResponse(
+                report: report,
+                stage: .actions,
+                id: "\(prefix)-actions"
+            )
+        )
+        return responses
+    }
+
+    private func moduleSubmissionResponse(
+        report: TrendAnalysisReport,
+        stage: ReportModuleStage,
+        id: String
+    ) throws -> Result<AgentCompletionResult, Error> {
+        .success(
+            toolCallResponse([
+                try moduleCall(report: report, stage: stage, id: id)
+            ])
+        )
+    }
+
+    private func moduleCall(
+        report: TrendAnalysisReport,
+        stage: ReportModuleStage,
+        id: String,
+        disclaimerOverride: String? = nil
+    ) throws -> AgentToolCall {
+        switch stage {
+        case .overview:
+            return try encodedModuleCall(
+                name: TrendReportModuleToolName.overview,
+                id: id,
+                value: TrendReportOverviewModule(
+                    portfolio: report.portfolio,
+                    horizons: report.horizons
+                )
+            )
+        case .market:
+            return try encodedModuleCall(
+                name: TrendReportModuleToolName.market,
+                id: id,
+                value: TrendReportMarketModule(
+                    marketOutlook: report.marketOutlook,
+                    sectors: report.sectors,
+                    opportunities: report.opportunities
+                )
+            )
+        case .actions:
+            return try encodedModuleCall(
+                name: TrendReportModuleToolName.actions,
+                id: id,
+                value: TrendReportActionsModule(
+                    keyAssets: report.keyAssets,
+                    actions: report.actions,
+                    warnings: report.warnings,
+                    disclaimer: disclaimerOverride ?? report.disclaimer
+                )
+            )
+        }
+    }
+
+    private func encodedModuleCall<T: Encodable>(
+        name: String,
+        id: String,
+        value: T
+    ) throws -> AgentToolCall {
+        let data = try JSONEncoder().encode(value)
+        let arguments = try XCTUnwrap(String(data: data, encoding: .utf8))
+        return AgentToolCall(
+            id: id,
+            function: AgentToolFunctionCall(name: name, arguments: arguments)
+        )
+    }
 
     private func makeEmptySnapshot() -> TrendResearchSnapshot {
         TrendResearchSnapshot(

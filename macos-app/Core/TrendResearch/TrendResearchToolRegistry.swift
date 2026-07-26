@@ -15,6 +15,10 @@ struct TrendResearchToolRegistry: Sendable {
             FundLookThroughTool(),
             MarketSnapshotTool(),
             TavilyWebSearchTool(client: webSearchClient),
+            SubmitTrendOverviewModuleTool(),
+            SubmitTrendMarketModuleTool(),
+            SubmitTrendAssetBatchTool(),
+            SubmitTrendActionsModuleTool(),
             SubmitTrendReportTool()
         ]
         tools = Dictionary(uniqueKeysWithValues: all.map { ($0.name, $0) })

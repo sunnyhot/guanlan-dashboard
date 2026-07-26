@@ -57,7 +57,7 @@ struct TrendValidatorAuditResult: Codable, Hashable, Sendable {
 }
 
 struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
-    static let promptVersion = "trend-research-prompt-v2"
+    static let promptVersion = "trend-research-prompt-v3-modular"
     static let policyVersion = "trend-claim-evidence-v1"
 
     let runID: UUID
@@ -382,8 +382,9 @@ enum TrendAgentAuditRedactor {
         toolName: String,
         argumentsJSON: String
     ) -> String {
-        if toolName == TrendResearchAgent.submitToolName {
-            return #"{"report":"[omitted]"}"#
+        if toolName == TrendResearchAgent.submitToolName
+            || TrendReportModuleToolName.all.contains(toolName) {
+            return #"{"report_module":"[omitted]"}"#
         }
         guard let data = argumentsJSON.data(using: .utf8),
               var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
