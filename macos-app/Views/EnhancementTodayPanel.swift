@@ -39,7 +39,7 @@ extension EnhancementCenterView {
                     model.startNextHourGuidance()
                 } label: {
                     Label(
-                        model.nextHourGuidanceGenerationState == .generating ? "生成中…" : "刷新当前槽位",
+                        model.nextHourGuidanceGenerationState == .generating ? "生成中…" : "手动生成",
                         systemImage: "arrow.clockwise"
                     )
                     .font(.system(size: 10, weight: .semibold))
@@ -67,7 +67,7 @@ extension EnhancementCenterView {
                 nextHourGuidanceReportView(report)
             } else {
                 Text(model.trendSettings.provider.isConfigured
-                     ? "将在下一个交易时段槽位自动生成。场外基金不会参与盘中逐小时研判，只在 14:50 收盘前统一复核。"
+                     ? "将在下一个交易时段槽位自动生成；也可以随时手动触发。场外基金不会参与盘中逐小时研判，只在 14:50 或手动研判时纳入。"
                      : "配置 AI 模型后自动启用。生成成功会发送系统提醒，点击提醒可回到 AI 研判。")
                     .font(.system(size: 11))
                     .foregroundStyle(AppPalette.muted)

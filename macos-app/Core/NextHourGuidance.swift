@@ -5,6 +5,7 @@ import Foundation
 enum NextHourGuidanceScope: String, Codable, Hashable, Sendable {
     case marketTrading = "market_trading"
     case closingWindow = "closing_window"
+    case manual = "manual"
 
     var displayName: String {
         switch self {
@@ -12,11 +13,13 @@ enum NextHourGuidanceScope: String, Codable, Hashable, Sendable {
             return "盘中交易"
         case .closingWindow:
             return "收盘前决策"
+        case .manual:
+            return "手动研判"
         }
     }
 
     var includesOffExchangeFunds: Bool {
-        self == .closingWindow
+        self == .closingWindow || self == .manual
     }
 }
 
@@ -77,6 +80,38 @@ struct NextHourGuidanceSchedule: Hashable, Sendable {
         )
         guard slot.key != lastAttemptedSlotKey else { return nil }
         return slot
+    }
+
+    /// 手动触发不受交易日和交易时段限制，有效期从点击时刻起算一小时。
+    func manualSlot(at timestamp: String) -> NextHourGuidanceSlot? {
+        guard let parts = Self.timestampParts(timestamp) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let hour = parts.minuteOfDay / 60
+        let minute = parts.minuteOfDay % 60
+        guard let start = calendar.date(
+            from: DateComponents(
+                year: parts.year,
+                month: parts.month,
+                day: parts.day,
+                hour: hour,
+                minute: minute
+            )
+        ), let end = calendar.date(byAdding: .hour, value: 1, to: start) else {
+            return nil
+        }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        let timeString = String(format: "%02d:%02d", hour, minute)
+        return NextHourGuidanceSlot(
+            day: parts.dayString,
+            timeString: timeString,
+            validUntil: formatter.string(from: end),
+            scope: .manual
+        )
     }
 
     private static func timestampParts(

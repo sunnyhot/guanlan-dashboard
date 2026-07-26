@@ -55,11 +55,12 @@ extension AppModel {
             return
         }
         let timestamp = Self.timestampString()
-        guard let slot = NextHourGuidanceSchedule.default.dueSlot(
+        let schedule = NextHourGuidanceSchedule.default
+        guard let slot = schedule.dueSlot(
             at: timestamp,
             lastAttemptedSlotKey: nil
-        ) else {
-            noticeMessage = "当前不在下一小时指引运行窗口（交易日 09:15–11:30、13:15–15:00）。"
+        ) ?? schedule.manualSlot(at: timestamp) else {
+            nextHourGuidanceError = "无法识别当前时间，请稍后重试。"
             return
         }
         guard trendGenerationState != .generating,
@@ -213,11 +214,18 @@ extension AppModel {
         let latestAssetConclusions = (trendReport?.assetTrends ?? []).prefix(12).map {
             "\($0.name)：\($0.impactText)；\($0.rationale)"
         }
+        let scopeRule: String
+        switch slot.scope {
+        case .marketTrading:
+            scopeRule = "本次只包含 A 股/股票和场内基金，不包含场外基金。"
+        case .closingWindow:
+            scopeRule = "这是 14:50 收盘前窗口；场外基金只能给出收盘前申赎或计划复核建议，不能描述为盘中成交。"
+        case .manual:
+            scopeRule = "这是用户手动触发的研判，已纳入场外基金；非交易时段不得把静态净值或估值描述为实时成交价格。"
+        }
         let rules = [
             "本次有效窗口：\(slot.timeString) 至 \(String(slot.validUntil.suffix(5)))。",
-            slot.scope.includesOffExchangeFunds
-                ? "这是 14:50 收盘前窗口；场外基金只能给出收盘前申赎或计划复核建议，不能描述为盘中成交。"
-                : "本次只包含 A 股/股票和场内基金，不包含场外基金。",
+            scopeRule,
             "缺少实时成交量、盘口或新闻时必须降低置信度，不得补造数据。",
         ]
         return NextHourGuidanceContext(

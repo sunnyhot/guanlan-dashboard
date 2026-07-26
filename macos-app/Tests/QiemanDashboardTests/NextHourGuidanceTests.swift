@@ -63,6 +63,19 @@ final class NextHourGuidanceTests: XCTestCase {
         )
     }
 
+    func testManualSlotWorksOutsideTradingHoursAndAcrossMidnight() throws {
+        let schedule = NextHourGuidanceSchedule.default
+
+        let weekendSlot = try XCTUnwrap(schedule.manualSlot(at: "2026-08-01 20:10:00"))
+        XCTAssertEqual(weekendSlot.scope, .manual)
+        XCTAssertEqual(weekendSlot.key, "2026-08-01 20:10")
+        XCTAssertEqual(weekendSlot.validUntil, "2026-08-01 21:10")
+        XCTAssertTrue(weekendSlot.scope.includesOffExchangeFunds)
+
+        let lateSlot = try XCTUnwrap(schedule.manualSlot(at: "2026-08-01 23:30:00"))
+        XCTAssertEqual(lateSlot.validUntil, "2026-08-02 00:30")
+    }
+
     func testStoreRoundTripsReportAndSlotState() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("next-hour-guidance-\(UUID().uuidString)", isDirectory: true)
