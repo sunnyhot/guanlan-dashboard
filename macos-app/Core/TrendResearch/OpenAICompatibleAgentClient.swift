@@ -148,7 +148,6 @@ struct OpenAICompatibleAgentClient: Sendable {
                     bytes,
                     statusCode: http.statusCode,
                     startedAt: requestStartedAt,
-                    deadline: hardDeadline,
                     timeoutSeconds: effectiveTimeout,
                     progressHandler: streamProgress
                 )
@@ -303,7 +302,6 @@ struct OpenAICompatibleAgentClient: Sendable {
         _ bytes: URLSession.AsyncBytes,
         statusCode: Int,
         startedAt: Date,
-        deadline: Date,
         timeoutSeconds: Double,
         progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
@@ -313,6 +311,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         var reachedDone = false
         var lastReportedChunkCount = 0
         var lastProgressReportedAt = startedAt
+        var lastActivityAt = startedAt
 
         // 不使用 AsyncBytes.lines：它会忽略 SSE 事件之间的空行，进而把相邻
         // `data: {...}\n\ndata: {...}` 错误拼成同一个 JSON。这里直接按原始字节
@@ -322,11 +321,14 @@ struct OpenAICompatibleAgentClient: Sendable {
                 lineBuffer.append(byte)
                 continue
             }
-            // URLRequest.timeoutInterval 是网络空闲超时；流持续吐数据时会被续命。
-            // 在 SSE 事件边界额外检查墙钟截止，确保单轮和整次 Agent 预算是真正硬上限。
-            if Date() >= deadline {
+            // 流式超时改为“分片间空闲”：收到字节即续期，超过 timeoutSeconds 无新数据才判超时。
+            // 这样推理模型(GLM 等)的长流式响应只要持续吐片就能完成；彻底无字节的卡死由
+            // URLSession 的 timeoutInterval 兜底，整体上限由 Agent 整次运行总预算保证。
+            let now = Date()
+            if now.timeIntervalSince(lastActivityAt) >= timeoutSeconds {
                 throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
             }
+            lastActivityAt = now
 
             let rawLine = String(decoding: lineBuffer, as: UTF8.self)
             lineBuffer.removeAll(keepingCapacity: true)

@@ -38,10 +38,13 @@ extension OpenAICompatibleAgentClient: TrendResearchAgentClient {}
 // MARK: - 运行策略与事件
 
 struct TrendResearchRunPolicy: Sendable {
-    /// 单轮模型请求不能独占整次运行预算。即使流仍在持续吐分片，90 秒墙钟
-    /// 截止后也会取消本轮，由 Harness 收敛任务后自动重试。
+    /// 单轮模型请求不能独占整次运行预算。流式输出按“分片间空闲”判定：只要持续
+    /// 有字节到达就续期，超过 perRequestTimeoutSeconds 无新数据才判超时，由 Harness
+    /// 收敛任务后自动重试。彻底无字节的卡死由 URLSession 的 timeoutInterval 兜底，
+    /// 整体上限由 totalTimeoutSeconds 在轮与轮之间保证。
     static let defaultPerRequestTimeoutSeconds: Double = 90
-    static let defaultTotalTimeoutSeconds: Double = 300
+    /// 整次运行总预算基线，按组合规模与搜索预算动态扩张（见 effectiveTotalTimeout）。
+    static let defaultTotalTimeoutSeconds: Double = 480
     static let defaultMaxRequestTimeoutRecoveries = 1
 
     var maxTurns: Int = 18
@@ -57,6 +60,9 @@ struct TrendResearchRunPolicy: Sendable {
     var maxPlainTextResponses: Int = 2
     var perRequestTimeoutSeconds: Double = Self.defaultPerRequestTimeoutSeconds
     var totalTimeoutSeconds: Double = Self.defaultTotalTimeoutSeconds
+    var expandedTotalTimeoutSeconds: Double = 900
+    var totalTimeoutPerAssetSeconds: Double = 4
+    var totalTimeoutPerWebSearchSeconds: Double = 15
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
     var temperature: Double = 0.2
@@ -106,6 +112,15 @@ struct TrendResearchRunPolicy: Sendable {
             ),
             maxWebSearches: effectiveMaxWebSearches
         )
+    }
+
+    /// 整次运行总预算随组合规模和搜索预算扩张：分块报告与多次联网搜索都比单次提交
+    /// 更耗时，固定基线对大组合偏紧。最终受 expandedTotalTimeoutSeconds 约束。
+    func effectiveTotalTimeout(assetCount: Int, maxWebSearches: Int) -> Double {
+        let scaled = totalTimeoutSeconds
+            + Double(max(0, assetCount)) * totalTimeoutPerAssetSeconds
+            + Double(max(0, maxWebSearches)) * totalTimeoutPerWebSearchSeconds
+        return min(expandedTotalTimeoutSeconds, scaled)
     }
 }
 
@@ -221,6 +236,11 @@ struct TrendResearchAgent: Sendable {
             sectorCount: snapshot.sectors.count,
             reportAssetCount: snapshot.expectedFundCodes.count
         )
+        // 整次运行总预算随组合规模与搜索预算动态扩张；固定值对大组合+联网搜索偏紧。
+        let effectiveTotal = policy.effectiveTotalTimeout(
+            assetCount: snapshot.assets.count,
+            maxWebSearches: runLimits.maxWebSearches
+        )
         let webSearchGovernor = TrendWebSearchGovernor(
             maxNetworkSearches: runLimits.maxWebSearches,
             cache: webSearchCache
@@ -240,7 +260,7 @@ struct TrendResearchAgent: Sendable {
             while turnCount < runLimits.maxTurns {
                 try Task.checkCancellation()
                 // 整体超时是硬截止：剩余预算不足则不再发起新请求；单次请求超时不超过剩余预算。
-                let remainingTotal = policy.totalTimeoutSeconds - Date().timeIntervalSince(started)
+                let remainingTotal = effectiveTotal - Date().timeIntervalSince(started)
                 if remainingTotal <= 0 {
                     throw TrendResearchAgentError.totalTimeoutExceeded
                 }
