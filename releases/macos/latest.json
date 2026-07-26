@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.9/QiemanDashboard-3.9.9.zip",
-    "name" : "QiemanDashboard-3.9.9.zip",
-    "sha256" : "31f63d0ba04fe25ffc3390c875c6fc68324ab26837e468f43eb6e45531bee427",
-    "size" : 5654907
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.10/QiemanDashboard-3.9.10.zip",
+    "name" : "QiemanDashboard-3.9.10.zip",
+    "sha256" : "284d6bce1eb4e02dbcc3896030d232734484d088a495fe3ed67a99bab872c77d",
+    "size" : 5654277
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.9/QiemanDashboard-3.9.9.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.10/QiemanDashboard-3.9.10.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.9.zip",
-      "size" : 5654907
+      "name" : "QiemanDashboard-3.9.10.zip",
+      "size" : 5654277
     }
   ],
-  "body" : "总预算按规模动态扩张 + 流式超时改为分片间空闲",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.9",
-  "name" : "QiemanDashboard v3.9.9",
-  "notes" : "总预算按规模动态扩张 + 流式超时改为分片间空闲",
+  "body" : "总超时降级为宽松兜底，不再腰斩慢运行",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.10",
+  "name" : "QiemanDashboard v3.9.10",
+  "notes" : "总超时降级为宽松兜底，不再腰斩慢运行",
   "published_at" : "",
-  "sha256" : "31f63d0ba04fe25ffc3390c875c6fc68324ab26837e468f43eb6e45531bee427",
-  "tag" : "v3.9.9",
-  "tag_name" : "v3.9.9",
-  "version" : "3.9.9"
+  "sha256" : "284d6bce1eb4e02dbcc3896030d232734484d088a495fe3ed67a99bab872c77d",
+  "tag" : "v3.9.10",
+  "tag_name" : "v3.9.10",
+  "version" : "3.9.10"
 }
