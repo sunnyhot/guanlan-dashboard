@@ -170,7 +170,7 @@ extension EnhancementCenterView {
                 trendDirectionBadge(outlook.direction)
                 Spacer(minLength: 4)
                 trendConfidenceMeter(outlook.confidence)
-                Text(outlook.category)
+                Text(outlook.categoryDisplayName)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
@@ -346,11 +346,8 @@ extension EnhancementCenterView {
                 trendDirectionBadge(sector.direction)
                 Spacer(minLength: 4)
                 trendConfidenceMeter(sector.confidence)
-                Text(sector.exposureText)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppPalette.info)
-                    .lineLimit(1)
             }
+            trendSectorExposure(sector.exposureText)
             Text(sector.rationale)
                 .font(.system(size: 10))
                 .foregroundStyle(AppPalette.muted)
@@ -366,6 +363,27 @@ extension EnhancementCenterView {
             fill: AppPalette.cardStrong,
             strokeOpacity: 0.18,
             activeStrokeOpacity: 0.40
+        )
+    }
+
+    func trendSectorExposure(_ exposureText: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "scope")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(AppPalette.info)
+                .padding(.top, 2)
+            Text(exposureText)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(AppPalette.info)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            AppPalette.info.opacity(AppPalette.accentSubtle),
+            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
         )
     }
 

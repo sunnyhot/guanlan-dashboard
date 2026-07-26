@@ -359,6 +359,11 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertTrue(trendSource.contains("marketCardColumns"))
         XCTAssertTrue(trendSource.contains("columns: columns"))
         XCTAssertFalse(trendSource.contains(".adaptive(minimum: 200)"))
+        XCTAssertTrue(trendSource.contains("Text(outlook.categoryDisplayName)"))
+        XCTAssertFalse(trendSource.contains("Text(outlook.category)"))
+        // 组合暴露从拥挤的标题行移到独立信息区，允许多行完整展示。
+        XCTAssertTrue(trendSource.contains("trendSectorExposure(sector.exposureText)"))
+        XCTAssertTrue(trendSource.contains("func trendSectorExposure(_ exposureText: String)"))
         // 板块卡说明不再截断（sector rationale 用 fixedSize 完整展示，无 lineLimit）
         XCTAssertTrue(trendSource.contains("Text(sector.rationale)"))
     }

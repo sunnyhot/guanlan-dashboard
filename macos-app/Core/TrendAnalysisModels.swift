@@ -467,6 +467,19 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
     let evidenceIDs: [String]
     let counterSignals: [String]
 
+    var categoryDisplayName: String {
+        switch category
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() {
+        case "index":
+            return "指数"
+        case "assetclass", "asset_class", "asset class":
+            return "大类资产"
+        default:
+            return category
+        }
+    }
+
     init(
         id: String,
         name: String,

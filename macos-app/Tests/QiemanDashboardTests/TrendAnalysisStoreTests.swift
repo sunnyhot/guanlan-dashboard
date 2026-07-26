@@ -168,9 +168,30 @@ final class TrendAnalysisStoreTests: XCTestCase {
         let report = try JSONDecoder().decode(TrendAnalysisReport.self, from: data)
 
         XCTAssertEqual(report.marketOutlook.map(\.name), ["沪深300", "黄金"])
+        XCTAssertEqual(report.marketOutlook.map(\.categoryDisplayName), ["大盘宽基", "商品"])
         XCTAssertEqual(report.opportunities.map(\.name), ["黄金配置窗口"])
         XCTAssertEqual(report.assetTrends.map(\.name), ["消费指数基金"])
         XCTAssertEqual(report.assetTrends.first?.code, "000001")
+    }
+
+    func testMarketOutlookLocalizesStructuredCategoryValues() {
+        func outlook(category: String) -> TrendMarketOutlook {
+            TrendMarketOutlook(
+                id: category,
+                name: "测试",
+                category: category,
+                direction: .neutral,
+                confidence: TrendConfidence(score: 60, label: "中"),
+                rationale: "测试",
+                evidenceIDs: [],
+                counterSignals: []
+            )
+        }
+
+        XCTAssertEqual(outlook(category: "index").categoryDisplayName, "指数")
+        XCTAssertEqual(outlook(category: "assetClass").categoryDisplayName, "大类资产")
+        XCTAssertEqual(outlook(category: "asset_class").categoryDisplayName, "大类资产")
+        XCTAssertEqual(outlook(category: "商品").categoryDisplayName, "商品")
     }
 
     func testLegacyReportDecodesMissingExpandedSectionsAsEmptyArrays() throws {
