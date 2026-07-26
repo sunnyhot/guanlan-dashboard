@@ -12,6 +12,7 @@ struct TrendResearchToolRegistry: Sendable {
         let all: [any TrendResearchTool] = [
             PortfolioOverviewTool(),
             PortfolioAssetsTool(),
+            FundLookThroughTool(),
             MarketSnapshotTool(),
             TavilyWebSearchTool(client: webSearchClient),
             SubmitTrendReportTool()
@@ -155,6 +156,139 @@ struct PortfolioAssetsTool: TrendResearchTool {
             "total_count": totalCount
         ]
         return .content(TrendResearchToolEnvelope.success(data, evidenceIDs: evidenceIDs))
+    }
+}
+
+// MARK: - get_fund_lookthrough
+
+struct FundLookThroughTool: TrendResearchTool {
+    let name = "get_fund_lookthrough"
+    let description = "读取基金公开定期报告的组合穿透结果：底层股票/债券、基金间重叠持仓、行业与资产类别暴露、披露日期、覆盖率和未知仓位。默认返回组合聚合摘要；fund_codes 最多指定 5 只基金以读取细项。披露数据不是实时持仓。"
+    let parameters: AgentJSONValue = [
+        "type": "object",
+        "properties": [
+            "fund_codes": [
+                "type": "array",
+                "maxItems": 5,
+                "items": ["type": "string"],
+                "description": "可选：返回这些基金的底层披露细项，最多 5 只"
+            ]
+        ],
+        "additionalProperties": false
+    ]
+
+    private struct Params: Codable {
+        var fund_codes: [String]?
+    }
+
+    func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
+        let params: Params
+        do {
+            if argumentsJSON.isEmpty || argumentsJSON == "{}" {
+                params = Params()
+            } else {
+                params = try JSONDecoder().decode(Params.self, from: Data(argumentsJSON.utf8))
+            }
+        } catch {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "invalid_arguments",
+                    message: "参数不是合法 JSON：\(error.localizedDescription)"
+                ),
+                isError: true
+            )
+        }
+
+        if let codes = params.fund_codes, codes.count > 5 {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "invalid_arguments",
+                    message: "fund_codes 最多指定 5 只基金。"
+                ),
+                isError: true
+            )
+        }
+        guard let snapshot = context.snapshot.lookThrough else {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "look_through_unavailable",
+                    message: "当前组合没有可用的基金穿透快照。"
+                ),
+                isError: true
+            )
+        }
+
+        let requestedCodes = Set(
+            (params.fund_codes ?? [])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        let selectedDisclosures = requestedCodes.isEmpty
+            ? []
+            : snapshot.disclosures.values
+                .filter { requestedCodes.contains($0.fundCode) }
+                .sorted { $0.fundCode < $1.fundCode }
+
+        let aggregateEvidenceID = "portfolio:look-through:\(context.snapshot.runID.uuidString)"
+        let disclosureEvidence = snapshot.disclosures.values.map { disclosure in
+            TrendEvidence(
+                id: evidenceID(for: disclosure),
+                sourceName: disclosure.sourceLabel,
+                title: "\(disclosure.fundName)（\(disclosure.fundCode)）底层资产披露",
+                url: disclosure.sourceURL,
+                publishedAt: disclosure.asOf.isEmpty ? nil : disclosure.asOf,
+                retrievedAt: context.snapshot.dataAsOf,
+                summary: "截至 \(disclosure.asOf.isEmpty ? "未知日期" : disclosure.asOf)，包含 \(disclosure.holdings.count) 条股票/债券持仓、\(disclosure.industries.count) 条行业配置；披露证券合计占基金净值 \(String(format: "%.2f%%", disclosure.disclosedSecurityWeightPct))。"
+            )
+        }
+        await context.evidenceLedger.record(
+            [
+                TrendEvidence(
+                    id: aggregateEvidenceID,
+                    sourceName: "本地组合穿透计算",
+                    title: "基金底层资产聚合",
+                    url: nil,
+                    publishedAt: nil,
+                    retrievedAt: context.snapshot.dataAsOf,
+                    summary: "按基金组合权重乘以底层披露权重聚合；覆盖 \(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只基金，已披露底层证券覆盖组合 \(String(format: "%.2f%%", snapshot.disclosedSecurityCoveragePct))，未知基金证券仓位 \(String(format: "%.2f%%", snapshot.unknownPortfolioWeightPct))。"
+                )
+            ] + disclosureEvidence
+        )
+
+        var data: [String: Any] = [
+            "summary": [
+                "expected_fund_count": snapshot.expectedFundCount,
+                "covered_fund_count": snapshot.coveredFundCount,
+                "fund_data_coverage_pct": snapshot.fundDataCoveragePct,
+                "disclosed_security_coverage_pct": snapshot.disclosedSecurityCoveragePct,
+                "unknown_portfolio_weight_pct": snapshot.unknownPortfolioWeightPct,
+                "calculation": "组合内基金权重 × 基金底层资产披露权重；直接股票按 100% 计入并与基金间接持仓合并",
+                "disclosure_boundary": "公开定期报告口径，不是实时完整持仓"
+            ],
+            "top_positions": snapshot.topPositions.prefix(30).map { jsonObject($0) },
+            "industries": snapshot.industries.prefix(20).map { jsonObject($0) },
+            "asset_classes": snapshot.assetClasses.map { jsonObject($0) },
+            "funds": snapshot.funds.map { jsonObject($0) }
+        ]
+        if !requestedCodes.isEmpty {
+            data["fund_details"] = selectedDisclosures.map { jsonObject($0) }
+            let missing = requestedCodes.subtracting(selectedDisclosures.map(\.fundCode))
+            if !missing.isEmpty {
+                data["missing_fund_codes"] = missing.sorted()
+            }
+        }
+
+        return .content(
+            TrendResearchToolEnvelope.success(
+                data,
+                warnings: snapshot.warnings,
+                evidenceIDs: [aggregateEvidenceID] + disclosureEvidence.map(\.id)
+            )
+        )
+    }
+
+    private func evidenceID(for disclosure: FundLookThroughDisclosure) -> String {
+        "fund:look-through:\(disclosure.fundCode):\(disclosure.asOf)"
     }
 }
 

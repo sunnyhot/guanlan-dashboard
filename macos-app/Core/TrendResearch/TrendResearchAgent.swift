@@ -142,6 +142,7 @@ struct TrendResearchAgent: Sendable {
 
     /// 运行时强制：submit 前必须先调用的工具。
     static let overviewToolName = "get_portfolio_overview"
+    static let lookThroughToolName = "get_fund_lookthrough"
     static let webSearchToolName = "web_search"
     static let submitToolName = "submit_trend_report"
 
@@ -300,11 +301,13 @@ struct TrendResearchAgent: Sendable {
                     let missingOverview = isSubmit && !harnessState.overviewRead
                     // 标的明细必须完整覆盖，否则模型无法生成完整 assetTrends。
                     let missingAssets = isSubmit && !harnessState.assetCoverageComplete
+                    // 有基金穿透快照时必须读取，避免继续把场内/场外基金误当成真实板块。
+                    let missingLookThrough = isSubmit && !harnessState.lookThroughCoverageComplete
                     // 配置了 Tavily 时至少尝试一次联网搜索，避免把模型记忆冒充最新行业/政策信息。
                     let missingWebSearch = isSubmit
                         && webSearchSettings.isConfigured
                         && harnessState.webSearchAttempts == 0
-                    let missingRequiredTool = missingOverview || missingAssets || missingWebSearch
+                    let missingRequiredTool = missingOverview || missingAssets || missingLookThrough || missingWebSearch
 
                     var rawToolResult: TrendResearchToolResult
                     if missingOverview {
@@ -319,6 +322,15 @@ struct TrendResearchAgent: Sendable {
                             isError: true
                         )
                         await eventHandler(.modelCorrection(message: "报告提交被延后：仍有 \(harnessState.unreadAssetCount) 个标的未读取。"))
+                    } else if missingLookThrough {
+                        rawToolResult = .content(
+                            TrendResearchToolEnvelope.error(
+                                code: "missing_required_tool",
+                                message: "本次快照包含基金底层资产披露，提交报告前必须调用 get_fund_lookthrough，读取真实行业/证券暴露、披露日期和未知仓位。"
+                            ),
+                            isError: true
+                        )
+                        await eventHandler(.modelCorrection(message: "报告提交被延后：必须先读取基金底层资产穿透结果。"))
                     } else if missingWebSearch {
                         rawToolResult = .content(TrendResearchToolEnvelope.error(code: "missing_required_tool", message: "已配置 Tavily，提交报告前必须至少调用一次 web_search 获取最新行业或政策信息。"), isError: true)
                         await eventHandler(.modelCorrection(message: "报告提交被延后：已配置 Tavily，必须先完成一次联网搜索。"))

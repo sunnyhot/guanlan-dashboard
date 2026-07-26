@@ -404,6 +404,10 @@ struct PersonalAssetAggregateRow: Identifiable, Hashable {
         holdingRow?.estimatedDailyChangeAmount
     }
 
+    var changePeriodTitle: String {
+        holdingRow?.changePeriodTitle ?? "今日涨跌"
+    }
+
     var pendingTradeCount: Int {
         pendingTrades.count
     }

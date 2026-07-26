@@ -67,7 +67,7 @@ struct PersonalAssetDetailSummary: Hashable {
                 tone: marketTone(for: row.profitAmount)
             ),
             PersonalAssetDetailMetric(
-                title: "今日涨跌",
+                title: row.changePeriodTitle,
                 value: dailyChangeCurrencyText(row.estimateChangeAmount, market: market),
                 detail: dailyChangePercentText(row.estimateChangePct),
                 tone: marketTone(for: row.estimateChangeAmount)

@@ -60,7 +60,7 @@ struct PersonalAssetOverviewCard: View {
                     AssetMiniStat(title: "当前估值", value: currencyText(estimateValue, market: row.detectedMarket), tint: changeTint)
                 }
                 AssetMiniStat(title: "总收益", value: signedCurrencyText(row.profitAmount, market: row.detectedMarket), tint: profitTint)
-                AssetMiniStat(title: "今日涨跌", value: dailyChangeCurrencyText(row.estimateChangeAmount, market: row.detectedMarket), tint: changeTint)
+                AssetMiniStat(title: row.changePeriodTitle, value: dailyChangeCurrencyText(row.estimateChangeAmount, market: row.detectedMarket), tint: changeTint)
                 AssetMiniStat(
                     title: "待确认",
                     value: row.pendingCashAmount > 0 ? currencyText(row.pendingCashAmount, market: row.detectedMarket) : (row.pendingUnitAmount > 0 ? "\(unitsText(row.pendingUnitAmount)) 份" : "—"),

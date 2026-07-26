@@ -221,6 +221,7 @@ struct PortfolioSectionView: View {
     @ViewBuilder
     private var portfolioSummaryMetricCards: some View {
         let dailyChange = model.userPortfolioSnapshot?.dailyChangeSummary
+        let dailyChangeTitle = model.userPortfolioSnapshot?.dailyChangeTitle ?? "今日涨跌"
         let dailyChangeTint = AppPalette.marketTint(for: dailyChange?.amount)
 
         MetricCard(
@@ -241,9 +242,9 @@ struct PortfolioSectionView: View {
             valueTint: totalProfitTint
         )
         MetricCard(
-            title: "今日涨跌",
+            title: dailyChangeTitle,
             value: dailyChangeCurrencyText(dailyChange?.amount),
-            subtitle: "今日涨跌率 \(dailyChangePercentText(dailyChange?.pct))",
+            subtitle: "\(dailyChangeTitle)率 \(dailyChangePercentText(dailyChange?.pct))",
             icon: "waveform.path.ecg",
             accent: dailyChangeTint,
             valueTint: dailyChangeTint

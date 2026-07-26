@@ -241,7 +241,7 @@ struct UserPortfolioValuationRow: Hashable, Identifiable {
     func dropdownQuote(marketDate: String) -> UserPortfolioDisplayQuote {
         if holding.assetType == .stock || holding.detectedFundMarket == .onExchange {
             return UserPortfolioDisplayQuote(
-                label: "实时净值",
+                label: priceTime?.hasPrefix(marketDate) == true ? "实时净值" : "最新净值",
                 price: currentPrice,
                 time: priceTime
             )
@@ -272,13 +272,35 @@ struct UserPortfolioValuationRow: Hashable, Identifiable {
         )
     }
 
-    private static func currentMarketDateString() -> String {
+    static func currentMarketDateString() -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: Date())
+    }
+
+    var changeDate: String? {
+        guard estimateChangePct != nil else { return nil }
+        let rawValue: String?
+        if estimatePrice != nil {
+            rawValue = estimatePriceTime ?? priceTime ?? officialNavDate
+        } else {
+            rawValue = priceTime ?? officialNavDate
+        }
+        guard let rawValue else { return nil }
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        return String(value.prefix(10))
+    }
+
+    var changePeriodTitle: String {
+        changePeriodTitle(marketDate: Self.currentMarketDateString())
+    }
+
+    func changePeriodTitle(marketDate: String) -> String {
+        changeDate == marketDate ? "今日涨跌" : "最近涨跌"
     }
 
     var estimatedMarketValue: Double? {
@@ -376,18 +398,31 @@ struct UserPortfolioSnapshot: Hashable {
     var latestOfficialNavDate: String? {
         rows.compactMap(\.officialNavDate).map { String($0.prefix(10)) }.max()
     }
+    var latestChangeDate: String? {
+        rows.compactMap(\.changeDate).max()
+    }
+    var dailyChangeTitle: String {
+        dailyChangeTitle(marketDate: UserPortfolioValuationRow.currentMarketDateString())
+    }
+    func dailyChangeTitle(marketDate: String) -> String {
+        let coveredRows = rows.filter {
+            $0.estimatedDailyChangeAmount != nil || $0.estimateChangePct != nil
+        }
+        guard !coveredRows.isEmpty else { return "今日涨跌" }
+        return coveredRows.allSatisfy { $0.changeDate == marketDate } ? "今日涨跌" : "最近涨跌"
+    }
     var refreshNoticeMessage: String {
         guard holdingCount > 0 else { return "个人持仓已刷新。" }
         if dailyChangeCoverageCount == holdingCount {
-            return "个人持仓估值和今日涨跌已刷新。"
+            return "个人持仓估值和涨跌已刷新。"
         }
         if dailyChangeCoverageCount == 0 {
             if let latestOfficialNavDate {
-                return "持仓净值已刷新至 \(latestOfficialNavDate)；今日涨跌待净值公布。"
+                return "持仓净值已刷新至 \(latestOfficialNavDate)；涨跌数据待公布。"
             }
-            return "个人持仓已刷新；今日涨跌暂时没有可用数据。"
+            return "个人持仓已刷新；涨跌暂时没有可用数据。"
         }
-        return "个人持仓已刷新；今日涨跌已更新 \(dailyChangeCoverageCount)/\(holdingCount)，其余待公布。"
+        return "个人持仓已刷新；涨跌已更新 \(dailyChangeCoverageCount)/\(holdingCount)，其余待公布。"
     }
     var hasIncompleteValuationCoverage: Bool {
         rows.contains { $0.marketValue == nil }

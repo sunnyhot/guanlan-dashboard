@@ -41,6 +41,26 @@ final class UserPortfolioDropdownQuoteTests: XCTestCase {
         XCTAssertEqual(quote.compactText, "实时 4.3210")
     }
 
+    func testStockUsesLatestQuoteAfterMarketClose() {
+        let row = valuationRow(
+            fundCode: "600519",
+            assetType: .stock,
+            stockMarket: .aShare,
+            currentPrice: 1520.5,
+            priceTime: "2026-06-16 15:00",
+            officialNav: 1500,
+            officialNavDate: "2026-06-16",
+            estimateChangePct: 1.37
+        )
+
+        let quote = row.dropdownQuote(marketDate: "2026-06-17")
+
+        XCTAssertEqual(quote.label, "最新净值")
+        XCTAssertEqual(quote.price, 1520.5)
+        XCTAssertEqual(quote.trimmedTime, "2026-06-16 15:00")
+        XCTAssertEqual(row.changePeriodTitle(marketDate: "2026-06-17"), "最近涨跌")
+    }
+
     func testOffExchangeFundUsesEstimateBeforeTodayNav() {
         let row = valuationRow(
             fundCode: "000001",

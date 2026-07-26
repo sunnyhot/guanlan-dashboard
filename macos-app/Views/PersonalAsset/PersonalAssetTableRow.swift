@@ -331,7 +331,9 @@ struct PersonalAssetTableRow: View {
             }
             return compact ? "今日净值待公布" : "今日涨跌 待净值公布"
         }
-        let prefix = compact ? "今日" : "今日涨跌"
+        let prefix = compact
+            ? (row.changePeriodTitle == "今日涨跌" ? "今日" : "最近")
+            : row.changePeriodTitle
         return "\(prefix) \(dailyChangeCurrencyText(row.estimateChangeAmount, market: row.detectedMarket)) · \(dailyChangePercentText(row.estimateChangePct))"
     }
 

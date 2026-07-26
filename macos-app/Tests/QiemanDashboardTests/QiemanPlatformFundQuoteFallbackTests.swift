@@ -76,7 +76,8 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
             XCTAssertEqual(row.officialNavDate, "2026-07-13")
             XCTAssertEqual(try XCTUnwrap(row.marketValue), nav * 100, accuracy: 0.001)
             XCTAssertNil(row.estimatePrice)
-            XCTAssertNil(row.estimateChangePct)
+            XCTAssertEqual(row.estimateChangePct, -0.21)
+            XCTAssertNotNil(row.estimatedDailyChangeAmount)
         }
     }
 
@@ -123,7 +124,7 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
         XCTAssertEqual(row.estimateChangePct, 2.5)
         XCTAssertEqual(try XCTUnwrap(row.estimatedDailyChangeAmount), 2.5, accuracy: 0.01)
         XCTAssertEqual(snapshot.dailyChangeCoverageCount, 1)
-        XCTAssertEqual(snapshot.refreshNoticeMessage, "个人持仓估值和今日涨跌已刷新。")
+        XCTAssertEqual(snapshot.refreshNoticeMessage, "个人持仓估值和涨跌已刷新。")
     }
 
     func testInvalidLatestNavResponseFallsBackToHistory() async throws {
@@ -494,7 +495,7 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
         XCTAssertEqual(snapshot.dailyChangeCoverageCount, 1)
     }
 
-    func testStalePrimaryEstimateIsNotReportedAsTodayChange() async throws {
+    func testStalePrimaryEstimateFallsBackToLatestOfficialChange() async throws {
         MockQiemanPlatformURLProtocol.requestHandler = { request in
             let url = try XCTUnwrap(request.url)
             switch url.host {
@@ -539,9 +540,91 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
         let row = try XCTUnwrap(snapshot.rows.first)
 
         XCTAssertNil(row.estimatePrice)
-        XCTAssertNil(row.estimateChangePct)
-        XCTAssertNil(row.estimatedDailyChangeAmount)
-        XCTAssertEqual(snapshot.dailyChangeCoverageCount, 0)
+        XCTAssertEqual(row.estimateChangePct, 9)
+        XCTAssertEqual(
+            try XCTUnwrap(row.estimatedDailyChangeAmount),
+            100 - 100 / 1.09,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(snapshot.dailyChangeCoverageCount, 1)
+    }
+
+    func testLatestOfficialNavDerivesChangeFromPreviousPublishedNAV() async throws {
+        MockQiemanPlatformURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            switch url.host {
+            case "fund.eastmoney.com":
+                return Self.response(
+                    for: url,
+                    data: Data("""
+                    var fS_name = "净值计算基金";
+                    var Data_netWorthTrend = [];
+                    """.utf8)
+                )
+            case "api.fund.eastmoney.com":
+                let data = try JSONSerialization.data(withJSONObject: [
+                    "ErrCode": 0,
+                    "Data": [
+                        "LSJZList": [
+                            ["DWJZ": "1.0300", "FSRQ": "2026-07-17", "JZZZL": NSNull()],
+                            ["DWJZ": "1.0000", "FSRQ": "2026-07-16", "JZZZL": "0.00"],
+                        ],
+                    ],
+                ])
+                return Self.response(for: url, data: data)
+            case "fundgz.1234567.com.cn":
+                return Self.response(for: url, data: Data("jsonpgz();".utf8))
+            case "hq.sinajs.cn", "qt.gtimg.cn":
+                return Self.response(for: url, data: Data("var empty=\"\";".utf8))
+            default:
+                XCTFail("Unexpected request: \(url.absoluteString)")
+                throw URLError(.unsupportedURL)
+            }
+        }
+
+        let snapshot = try await makeClient().fetchUserPortfolioSnapshot(
+            holdings: [holding(code: "000001")]
+        )
+        let row = try XCTUnwrap(snapshot.rows.first)
+
+        XCTAssertEqual(row.currentPrice, 1.03)
+        XCTAssertEqual(try XCTUnwrap(row.estimateChangePct), 3, accuracy: 0.000_001)
+        XCTAssertEqual(try XCTUnwrap(row.estimatedDailyChangeAmount), 3, accuracy: 0.001)
+        XCTAssertEqual(row.changePeriodTitle(marketDate: "2026-07-20"), "最近涨跌")
+    }
+
+    func testStockUsesLastMarketQuoteAndItsActualTradingDate() async throws {
+        MockQiemanPlatformURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            guard url.host == "push2.eastmoney.com" else {
+                XCTFail("Unexpected request: \(url.absoluteString)")
+                throw URLError(.unsupportedURL)
+            }
+            let data = try JSONSerialization.data(withJSONObject: [
+                "data": [
+                    "f43": 129_741,
+                    "f57": "600519",
+                    "f58": "贵州茅台",
+                    "f59": 2,
+                    "f60": 129_201,
+                    "f86": 1_784_271_600,
+                    "f170": 42,
+                ],
+            ])
+            return Self.response(for: url, data: data)
+        }
+
+        let snapshot = try await makeClient().fetchUserPortfolioSnapshot(
+            holdings: [stockHolding(code: "600519")]
+        )
+        let row = try XCTUnwrap(snapshot.rows.first)
+
+        XCTAssertEqual(row.currentPrice, 1_297.41)
+        XCTAssertEqual(row.priceTime.map { String($0.prefix(10)) }, "2026-07-17")
+        XCTAssertEqual(row.estimateChangePct, 0.42)
+        XCTAssertNotNil(row.estimatedDailyChangeAmount)
+        XCTAssertEqual(row.changePeriodTitle(marketDate: "2026-07-20"), "最近涨跌")
+        XCTAssertEqual(row.dropdownQuote(marketDate: "2026-07-20").label, "最新净值")
     }
 
     func testForcedQuoteRefreshBypassesUsableQuoteCache() async throws {
@@ -659,6 +742,17 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
             costPrice: 1,
             displayName: "测试基金 \(code)",
             fundMarket: .offExchange
+        )
+    }
+
+    private func stockHolding(code: String) -> UserPortfolioHolding {
+        UserPortfolioHolding(
+            fundCode: code,
+            assetType: .stock,
+            units: 100,
+            costPrice: 1_000,
+            displayName: "测试股票 \(code)",
+            stockMarket: .aShare
         )
     }
 

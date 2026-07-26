@@ -81,9 +81,41 @@ struct TrendResearchSnapshot: Sendable, Hashable {
     let platformSignals: [TrendResearchSignal]
     let managerSignals: [TrendResearchSignal]
     let marketQuotes: [TrendResearchQuote]
+    /// 基于基金公开定期报告计算的组合穿透快照。比例字段不含金额，适用于两种隐私模式。
+    let lookThrough: PortfolioLookThroughSnapshot?
 
     let insightHeadline: String
     let sourceWarnings: [String]
+
+    init(
+        runID: UUID,
+        createdAt: String,
+        dataAsOf: String,
+        privacyMode: TrendPrivacyMode,
+        portfolio: TrendContextPortfolio,
+        assets: [TrendContextAsset],
+        sectors: [TrendContextSector],
+        platformSignals: [TrendResearchSignal],
+        managerSignals: [TrendResearchSignal],
+        marketQuotes: [TrendResearchQuote],
+        lookThrough: PortfolioLookThroughSnapshot? = nil,
+        insightHeadline: String,
+        sourceWarnings: [String]
+    ) {
+        self.runID = runID
+        self.createdAt = createdAt
+        self.dataAsOf = dataAsOf
+        self.privacyMode = privacyMode
+        self.portfolio = portfolio
+        self.assets = assets
+        self.sectors = sectors
+        self.platformSignals = platformSignals
+        self.managerSignals = managerSignals
+        self.marketQuotes = marketQuotes
+        self.lookThrough = lookThrough
+        self.insightHeadline = insightHeadline
+        self.sourceWarnings = sourceWarnings
+    }
 
     /// Validator 用来检查 assetTrends 覆盖率的基金代码全集：类型为基金且 code 非空。
     var expectedFundCodes: [String] {
@@ -112,6 +144,7 @@ struct TrendResearchSnapshotBuilder {
         managerWatchEvents: [ManagerWatchTimelineEvent],
         marketIndexQuotes: [MarketIndexKind: MarketIndexQuote],
         fundEstimates: [String: TrendResearchFundEstimate],
+        lookThrough: PortfolioLookThroughSnapshot? = nil,
         watchSummary: ManagerWatchTimelineSummary,
         insightSummary: PortfolioSnapshotInsightSummary,
         privacyMode: TrendPrivacyMode,
@@ -149,6 +182,7 @@ struct TrendResearchSnapshotBuilder {
             platformSignals: platformSignals,
             managerSignals: managerSignals,
             marketQuotes: marketQuotes,
+            lookThrough: lookThrough,
             insightHeadline: context.insightHeadline,
             sourceWarnings: sourceWarnings
         )

@@ -111,6 +111,7 @@ final class AppModel: ObservableObject {
     let managerWatchStore = ManagerWatchStore()
     let notificationManager = LocalNotificationManager()
     let personalAssetAutomation = PersonalAssetAutomation()
+    var fundLookThroughClient: any FundLookThroughClientProtocol = FundLookThroughClient()
     var trendResearchAgent: any TrendResearchAgentProtocol = TrendResearchAgent()
     /// 工具调用能力探测器；默认走真实 client，测试可替换以避免联网。
     var trendCapabilityProbe: @Sendable (TrendAIProviderSettings) async throws -> TrendProviderCapabilities = { settings in

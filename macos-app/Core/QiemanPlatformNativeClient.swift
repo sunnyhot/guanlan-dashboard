@@ -1169,10 +1169,14 @@ final class QiemanPlatformNativeClient {
             fundName: history?.fundName ?? ""
         )
 
-        if let latestOfficialQuote, latestOfficialQuote.estimateChangePct != nil {
+        if let latestOfficialQuote,
+           latestOfficialQuote.estimateChangePct != nil,
+           isCurrentMarketDate(latestOfficialQuote.officialNavDate) {
             return latestOfficialQuote
         }
-        if let historyQuote, historyQuote.estimateChangePct != nil {
+        if let historyQuote,
+           historyQuote.estimateChangePct != nil,
+           isCurrentMarketDate(historyQuote.officialNavDate) {
             return historyQuote
         }
 
@@ -1469,14 +1473,19 @@ final class QiemanPlatformNativeClient {
 
     private func latestHistoryQuote(fundCode: String, history: NativeFundHistory?) -> NativeFundQuote? {
         guard let latest = history?.series.last else { return nil }
-        let changePct = currentDayChangePct(latest.changePct, dateText: latest.date)
+        let previousNav = history?.series.dropLast().last?.nav
+        let changePct = resolvedChangePct(
+            reported: latest.changePct,
+            latest: latest.nav,
+            previous: previousNav
+        )
         return NativeFundQuote(
             fundCode: fundCode,
             fundName: history?.fundName ?? "",
             price: latest.nav,
             priceTime: latest.date,
             priceSource: "official_nav",
-            priceSourceLabel: changePct == nil ? "最近净值" : "当日确认净值",
+            priceSourceLabel: isCurrentMarketDate(latest.date) ? "当日确认净值" : "最近净值",
             officialNav: latest.nav,
             officialNavDate: latest.date,
             estimatePrice: nil,
@@ -1526,7 +1535,7 @@ final class QiemanPlatformNativeClient {
         components?.queryItems = [
             URLQueryItem(name: "fundCode", value: fundCode),
             URLQueryItem(name: "pageIndex", value: "1"),
-            URLQueryItem(name: "pageSize", value: "1"),
+            URLQueryItem(name: "pageSize", value: "2"),
         ]
         guard let url = components?.url else {
             throw NativePlatformError.invalidResponse
@@ -1552,9 +1561,13 @@ final class QiemanPlatformNativeClient {
         }
 
         let officialNavDate = normalizedString(latest["FSRQ"])
-        let changePct = currentDayChangePct(
-            doubleValue(latest["JZZZL"]),
-            dateText: officialNavDate
+        let previousNav = rows.dropFirst()
+            .compactMap { doubleValue($0["DWJZ"]) }
+            .first(where: { $0 > 0 })
+        let changePct = resolvedChangePct(
+            reported: doubleValue(latest["JZZZL"]),
+            latest: officialNav,
+            previous: previousNav
         )
         return NativeFundQuote(
             fundCode: fundCode,
@@ -1562,7 +1575,7 @@ final class QiemanPlatformNativeClient {
             price: officialNav,
             priceTime: officialNavDate,
             priceSource: "official_nav",
-            priceSourceLabel: changePct == nil ? "最近净值" : "当日确认净值",
+            priceSourceLabel: isCurrentMarketDate(officialNavDate) ? "当日确认净值" : "最近净值",
             officialNav: officialNav,
             officialNavDate: officialNavDate,
             estimatePrice: nil,
@@ -1602,7 +1615,7 @@ final class QiemanPlatformNativeClient {
         guard let secid = stockSecID(for: stockCode) else {
             return .empty(stockCode)
         }
-        let url = URL(string: "https://push2.eastmoney.com/api/qt/stock/get?secid=\(secid)&fields=f43,f57,f58,f59,f60,f169,f170")!
+        let url = URL(string: "https://push2.eastmoney.com/api/qt/stock/get?secid=\(secid)&fields=f43,f57,f58,f59,f60,f86,f169,f170")!
         let text = try await requestText(hostURL: url, absoluteURL: url, headers: [
             "Accept": "application/json",
             "Referer": "https://quote.eastmoney.com/",
@@ -1617,13 +1630,21 @@ final class QiemanPlatformNativeClient {
         let scale = pow(10.0, Double(intValue(data["f59"]) ?? 2))
         let price = scaledQuoteValue(data["f43"], scale: scale)
         let previousClose = scaledQuoteValue(data["f60"], scale: scale)
-        let changePct = scaledQuoteValue(data["f170"], scale: 100)
+        let changePct = resolvedChangePct(
+            reported: scaledQuoteValue(data["f170"], scale: 100),
+            latest: price,
+            previous: previousClose
+        )
+        let quoteTime = intValue(data["f86"]).flatMap { seconds -> String? in
+            guard seconds > 0 else { return nil }
+            return isoDateTime(Date(timeIntervalSince1970: TimeInterval(seconds)))
+        }
 
         return NativeStockQuote(
             stockCode: code,
             stockName: normalizedString(data["f58"]),
             price: price ?? 0,
-            priceTime: isoTimestampNow(),
+            priceTime: quoteTime ?? isoTimestampNow(),
             priceSource: "stock_quote",
             priceSourceLabel: "股票行情",
             previousClose: previousClose,
@@ -1668,7 +1689,11 @@ final class QiemanPlatformNativeClient {
         let code = normalizedString(parts[safe: 2]).nilIfEmpty ?? stockCode
         let price = doubleValue(parts[safe: 3]) ?? 0
         let previousClose = doubleValue(parts[safe: 4])
-        let changePct = doubleValue(parts[safe: 32])
+        let changePct = resolvedChangePct(
+            reported: doubleValue(parts[safe: 32]),
+            latest: price,
+            previous: previousClose
+        )
 
         return NativeStockQuote(
             stockCode: code,
@@ -1972,9 +1997,16 @@ final class QiemanPlatformNativeClient {
         Self.dateOnlyFormatter.string(from: now())
     }
 
-    private func currentDayChangePct(_ value: Double?, dateText: String) -> Double? {
-        guard normalizeDateText(dateText) == currentMarketDateText() else { return nil }
-        return value
+    private func isCurrentMarketDate(_ dateText: String) -> Bool {
+        normalizeDateText(dateText) == currentMarketDateText()
+    }
+
+    private func resolvedChangePct(reported: Double?, latest: Double?, previous: Double?) -> Double? {
+        if let reported, reported.isFinite {
+            return reported
+        }
+        guard let latest, latest > 0, let previous, previous > 0 else { return nil }
+        return (latest / previous - 1) * 100
     }
 
     private func dateKey(_ value: String) -> Int {

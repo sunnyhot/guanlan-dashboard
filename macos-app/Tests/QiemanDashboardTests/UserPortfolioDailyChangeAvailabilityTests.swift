@@ -20,7 +20,7 @@ final class UserPortfolioDailyChangeAvailabilityTests: XCTestCase {
         XCTAssertEqual(snapshot.latestOfficialNavDate, "2026-07-17")
         XCTAssertEqual(
             snapshot.refreshNoticeMessage,
-            "持仓净值已刷新至 2026-07-17；今日涨跌待净值公布。"
+            "持仓净值已刷新至 2026-07-17；涨跌数据待公布。"
         )
     }
 
@@ -34,8 +34,20 @@ final class UserPortfolioDailyChangeAvailabilityTests: XCTestCase {
         XCTAssertEqual(snapshot.dailyChangePendingCount, 1)
         XCTAssertEqual(
             snapshot.refreshNoticeMessage,
-            "个人持仓已刷新；今日涨跌已更新 1/2，其余待公布。"
+            "个人持仓已刷新；涨跌已更新 1/2，其余待公布。"
         )
+    }
+
+    func testChangeTitleDistinguishesCurrentAndLatestTradingDay() {
+        let current = makeSnapshot([
+            row(code: "000001", navDate: "2026-07-20", changePct: 1),
+        ])
+        let latest = makeSnapshot([
+            row(code: "000001", navDate: "2026-07-17", changePct: 1),
+        ])
+
+        XCTAssertEqual(current.dailyChangeTitle(marketDate: "2026-07-20"), "今日涨跌")
+        XCTAssertEqual(latest.dailyChangeTitle(marketDate: "2026-07-20"), "最近涨跌")
     }
 
     private func makeSnapshot(_ rows: [UserPortfolioValuationRow]) -> UserPortfolioSnapshot {

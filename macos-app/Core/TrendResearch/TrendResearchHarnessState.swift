@@ -6,8 +6,10 @@ import Foundation
 /// 并把剩余预算与缺口附加到每个工具结果中，让模型能及时收敛到提交阶段。
 struct TrendResearchHarnessState: Sendable {
     private let requiredAssetIDs: Set<String>
+    private let lookThroughRequired: Bool
     private(set) var overviewRead = false
     private(set) var assetIDsRead: Set<String> = []
+    private(set) var lookThroughRead = false
     private(set) var marketSnapshotRead = false
     private(set) var webSearchAttempts = 0
     private(set) var successfulWebSearches = 0
@@ -16,6 +18,7 @@ struct TrendResearchHarnessState: Sendable {
 
     init(snapshot: TrendResearchSnapshot) {
         requiredAssetIDs = Set(snapshot.assets.map(\.id))
+        lookThroughRequired = snapshot.lookThrough != nil
     }
 
     var requiredAssetCount: Int {
@@ -34,9 +37,14 @@ struct TrendResearchHarnessState: Sendable {
         unreadAssetCount == 0
     }
 
+    var lookThroughCoverageComplete: Bool {
+        !lookThroughRequired || lookThroughRead
+    }
+
     func readyForSubmission(webSearchConfigured: Bool) -> Bool {
         overviewRead
             && assetCoverageComplete
+            && lookThroughCoverageComplete
             && (!webSearchConfigured || webSearchAttempts > 0)
     }
 
@@ -69,6 +77,8 @@ struct TrendResearchHarnessState: Sendable {
                     assetIDsRead.insert(id)
                 }
             }
+        case "get_fund_lookthrough":
+            lookThroughRead = true
         case "get_market_snapshot":
             marketSnapshotRead = true
         default:
@@ -98,6 +108,8 @@ struct TrendResearchHarnessState: Sendable {
             "portfolio_assets_read": readAssetCount,
             "portfolio_assets_total": requiredAssetCount,
             "portfolio_coverage_complete": assetCoverageComplete,
+            "fund_look_through_required": lookThroughRequired,
+            "fund_look_through_read": lookThroughRead,
             "market_snapshot_read": marketSnapshotRead,
             "web_search_attempts": webSearchAttempts,
             "successful_web_searches": successfulWebSearches,
@@ -133,6 +145,9 @@ struct TrendResearchHarnessState: Sendable {
         }
         if !assetCoverageComplete {
             return "继续分页调用 get_portfolio_assets，尚有 \(unreadAssetCount) 个标的未读取。"
+        }
+        if lookThroughRequired, !lookThroughRead {
+            return "调用 get_fund_lookthrough 读取基金底层资产、披露日期与未知仓位。"
         }
         if webSearchConfigured, webSearchAttempts == 0 {
             return "至少调用一次 web_search 核验最新行业或政策信息。"

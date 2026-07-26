@@ -198,7 +198,44 @@ extension AppModel {
 
         appendTrendProgress("开始内嵌趋势 Agent：\(provider.model)", level: .activity)
 
-        let snapshot = makeTrendResearchSnapshot(generatedAt: generatedAt)
+        let fundCodes = personalAssetRows.compactMap { row -> String? in
+            guard row.assetType == .fund,
+                  row.effectiveHoldingAmount > 0.001,
+                  let code = row.fundCode,
+                  !code.isEmpty else {
+                return nil
+            }
+            return code
+        }
+        var lookThrough: PortfolioLookThroughSnapshot?
+        var lookThroughWarnings: [String] = []
+        if !fundCodes.isEmpty {
+            appendTrendProgress(
+                "读取基金底层资产披露",
+                detail: "\(Set(fundCodes).count) 只基金；股票、债券、行业与资产配置",
+                level: .activity
+            )
+            let batch = await fundLookThroughClient.fetchDisclosures(fundCodes: fundCodes)
+            lookThrough = PortfolioLookThroughCalculator.make(
+                rows: personalAssetRows,
+                disclosures: batch.disclosures,
+                generatedAt: generatedAt
+            )
+            lookThroughWarnings = batch.warnings
+            if let lookThrough {
+                appendTrendProgress(
+                    "基金穿透快照已生成",
+                    detail: "覆盖 \(lookThrough.coveredFundCount)/\(lookThrough.expectedFundCount) 只基金；底层证券覆盖组合 \(String(format: "%.2f%%", lookThrough.disclosedSecurityCoveragePct))",
+                    level: lookThrough.coveredFundCount > 0 ? .success : .warning
+                )
+            }
+        }
+
+        let snapshot = makeTrendResearchSnapshot(
+            generatedAt: generatedAt,
+            lookThrough: lookThrough,
+            additionalSourceWarnings: lookThroughWarnings
+        )
         let searchText = trendSettings.webSearch.isConfigured ? "Tavily 联网搜索已配置" : "未配置联网搜索"
         appendTrendProgress(
             "分析快照已冻结",
@@ -277,11 +314,17 @@ extension AppModel {
 
     // MARK: - 快照组装
 
-    private func makeTrendResearchSnapshot(generatedAt: String) -> TrendResearchSnapshot {
+    private func makeTrendResearchSnapshot(
+        generatedAt: String,
+        lookThrough: PortfolioLookThroughSnapshot?,
+        additionalSourceWarnings: [String]
+    ) -> TrendResearchSnapshot {
         var sourceWarnings: [String] = []
         if marketIndexQuotes.isEmpty { sourceWarnings.append("当前无大盘指数行情（菜单栏行情可能未开启）。") }
         if !trendSettings.webSearch.isConfigured { sourceWarnings.append("未配置 Tavily API Key，本次无法检索最新行业和政策信息。") }
         sourceWarnings.append("部分底层来源未提供精确截止时间，dataAsOf 取快照创建时间。")
+        sourceWarnings.append(contentsOf: additionalSourceWarnings)
+        sourceWarnings.append(contentsOf: lookThrough?.warnings ?? [])
 
         return TrendResearchSnapshotBuilder().build(
             rows: personalAssetRows,
@@ -291,6 +334,7 @@ extension AppModel {
             managerWatchEvents: [],
             marketIndexQuotes: marketIndexQuotes,
             fundEstimates: makeTrendResearchFundEstimates(),
+            lookThrough: lookThrough,
             watchSummary: managerWatchTimelineSummary,
             insightSummary: portfolioSnapshotInsightSummary,
             privacyMode: trendPrivacyMode,
@@ -436,6 +480,8 @@ extension AppModel {
             return "读取组合概览"
         case "get_portfolio_assets":
             return "读取持仓明细"
+        case "get_fund_lookthrough":
+            return "读取基金底层资产"
         case "get_market_snapshot":
             return "读取市场快照"
         case "web_search":

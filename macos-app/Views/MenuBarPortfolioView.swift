@@ -371,6 +371,7 @@ private struct MenuBarSummaryCard: View {
     var body: some View {
         let dailyChange = snapshot.dailyChangeSummary
         let dailyTint = AppPalette.marketTint(for: dailyChange.amount)
+        let changeTitle = snapshot.dailyChangeTitle
 
         VStack(alignment: .leading, spacing: 5) {
             Text(currencyText(personalSummary?.totalEffectiveHoldingAmount ?? snapshot.totalMarketValue))
@@ -378,8 +379,8 @@ private struct MenuBarSummaryCard: View {
                 .foregroundStyle(AppPalette.ink)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
-                SummaryPill(title: "今日涨跌", value: dailyChangeCurrencyText(dailyChange.amount), tint: dailyTint)
-                SummaryPill(title: "今日涨跌率", value: dailyChangePercentText(dailyChange.pct), tint: dailyTint)
+                SummaryPill(title: changeTitle, value: dailyChangeCurrencyText(dailyChange.amount), tint: dailyTint)
+                SummaryPill(title: "\(changeTitle)率", value: dailyChangePercentText(dailyChange.pct), tint: dailyTint)
                 SummaryPill(title: "总收益", value: signedCurrencyText(snapshot.totalProfitAmount), tint: profitTint)
                 SummaryPill(title: "总收益率", value: percentOptional(snapshot.totalProfitPct), tint: profitTint)
             }
@@ -494,7 +495,7 @@ private struct MenuBarHoldingRow: View {
                     .foregroundStyle(dailyTint)
                     .monospacedDigit()
                     .lineLimit(1)
-                Text(row.estimateChangePct.map(dailyChangePercentText) ?? latestNAVCaption)
+                Text(changeCaption)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(dailyTint)
                     .monospacedDigit()
@@ -516,6 +517,15 @@ private struct MenuBarHoldingRow: View {
     private var latestNAVCaption: String {
         guard let date = row.officialNavDate, !date.isEmpty else { return "待公布" }
         return "截至 \(date.suffix(5))"
+    }
+
+    private var changeCaption: String {
+        guard let changePct = row.estimateChangePct else { return latestNAVCaption }
+        let changeText = dailyChangePercentText(changePct)
+        guard row.changePeriodTitle == "最近涨跌", let date = row.changeDate else {
+            return changeText
+        }
+        return "\(date.suffix(5)) · \(changeText)"
     }
 }
 
