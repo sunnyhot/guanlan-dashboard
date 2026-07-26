@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.1/QiemanDashboard-3.9.1.zip",
-    "name" : "QiemanDashboard-3.9.1.zip",
-    "sha256" : "acdd5ec0c2a6b74b3d6057085072c48b8dfcdb9cc9c693b44bf25832c3704e8a",
-    "size" : 5245091
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.2/QiemanDashboard-3.9.2.zip",
+    "name" : "QiemanDashboard-3.9.2.zip",
+    "sha256" : "184242284b18faa9f3c9a583c3fce326b9d16000beb0586d9162e59b8886fc64",
+    "size" : 5248815
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.1/QiemanDashboard-3.9.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.2/QiemanDashboard-3.9.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.1.zip",
-      "size" : 5245091
+      "name" : "QiemanDashboard-3.9.2.zip",
+      "size" : 5248815
     }
   ],
-  "body" : "基金底层穿透与最近交易日涨跌",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.1",
-  "name" : "QiemanDashboard v3.9.1",
-  "notes" : "基金底层穿透与最近交易日涨跌",
+  "body" : "市场视图类别中文化与板块仓位卡片化",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.2",
+  "name" : "QiemanDashboard v3.9.2",
+  "notes" : "市场视图类别中文化与板块仓位卡片化",
   "published_at" : "",
-  "sha256" : "acdd5ec0c2a6b74b3d6057085072c48b8dfcdb9cc9c693b44bf25832c3704e8a",
-  "tag" : "v3.9.1",
-  "tag_name" : "v3.9.1",
-  "version" : "3.9.1"
+  "sha256" : "184242284b18faa9f3c9a583c3fce326b9d16000beb0586d9162e59b8886fc64",
+  "tag" : "v3.9.2",
+  "tag_name" : "v3.9.2",
+  "version" : "3.9.2"
 }
