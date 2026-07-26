@@ -26,7 +26,7 @@ extension EnhancementCenterView {
                     .frame(width: 30, height: 30)
                     .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("下一小时操作指引")
+                    Text("下一小时买卖建议")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(model.nextHourGuidanceScheduleText)
@@ -52,11 +52,23 @@ extension EnhancementCenterView {
                 )
             }
 
+            if model.trendSettings.provider.isConfigured,
+               !model.trendSettings.webSearch.isConfigured {
+                Label(
+                    "未配置 Tavily 联网搜索：Agent 仍会读取行情和基金穿透，但风控规则只允许输出持有。",
+                    systemImage: "lock.trianglebadge.exclamationmark"
+                )
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(AppPalette.warning)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             if model.nextHourGuidanceGenerationState == .generating {
                 HStack(spacing: AppPalette.spaceS) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在刷新持仓和大盘行情，并生成当前时段指引…")
+                    Text("正在刷新行情、穿透基金底层资产并搜索最新消息，再生成买入 / 卖出 / 持有建议…")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
@@ -170,6 +182,24 @@ extension EnhancementCenterView {
                 )
             }
 
+            if !report.evidence.isEmpty || !report.warnings.isEmpty {
+                DisclosureGroup("判断依据与数据边界") {
+                    VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                        ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
+                            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(AppPalette.warning)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        trendEvidenceList(report.evidence)
+                    }
+                    .padding(.top, AppPalette.spaceS)
+                }
+                .font(.system(size: 10, weight: .semibold))
+                .tint(AppPalette.info)
+            }
+
             Text(report.disclaimer)
                 .font(.system(size: 8))
                 .foregroundStyle(AppPalette.muted.opacity(0.85))
@@ -197,6 +227,9 @@ extension EnhancementCenterView {
                     Text("置信度 \(action.confidence)")
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
+                    Text("依据 \(action.evidenceIDs.count)")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(AppPalette.info)
                 }
                 Text(action.instruction)
                     .font(.system(size: 10, weight: .semibold))
@@ -254,12 +287,14 @@ extension EnhancementCenterView {
 
     private func nextHourActionTint(_ action: NextHourGuidanceActionKind) -> Color {
         switch action {
+        case .buy, .buySmall:
+            return AppPalette.marketGain
+        case .sell, .reduceSmall:
+            return AppPalette.marketLoss
         case .hold, .watch, .wait:
             return AppPalette.info
-        case .avoidChasing, .reduceSmall:
-            return AppPalette.warning
-        case .buySmall:
-            return AppPalette.positive
+        case .avoidChasing:
+            return AppPalette.info
         }
     }
 

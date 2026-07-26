@@ -118,7 +118,7 @@ final class AppModel: ObservableObject {
         let manager = LocalNotificationManager()
         guard await manager.requestAuthorizationIfNeeded() else { return }
         await manager.send(
-            title: "下一小时操作指引已生成",
+            title: "下一小时买卖建议已生成",
             subtitle: report.scope.displayName,
             body: "\(report.headline) · 有效至 \(String(report.validUntil.suffix(5)))",
             deepLink: NotificationDeepLinkPayload(

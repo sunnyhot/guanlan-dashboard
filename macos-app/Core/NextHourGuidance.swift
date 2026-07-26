@@ -163,7 +163,7 @@ enum NextHourGuidancePosture: String, Codable, Hashable, Sendable {
         case .balanced:
             return "均衡"
         case .selective:
-            return "精选观察"
+            return "选择性交易"
         case .opportunistic:
             return "条件式进攻"
         }
@@ -171,7 +171,10 @@ enum NextHourGuidancePosture: String, Codable, Hashable, Sendable {
 }
 
 enum NextHourGuidanceActionKind: String, Codable, Hashable, Sendable {
+    case buy
+    case sell
     case hold
+    // 旧版本兼容：历史报告仍可解码，新的 Agent 不再生成这些动作。
     case watch
     case wait
     case avoidChasing = "avoid_chasing"
@@ -180,24 +183,21 @@ enum NextHourGuidanceActionKind: String, Codable, Hashable, Sendable {
 
     var displayName: String {
         switch self {
+        case .buy, .buySmall:
+            return "建议买入"
+        case .sell, .reduceSmall:
+            return "建议卖出"
         case .hold:
-            return "持有"
-        case .watch:
-            return "观察"
-        case .wait:
-            return "等待"
-        case .avoidChasing:
-            return "不追涨"
-        case .buySmall:
-            return "小仓试探"
-        case .reduceSmall:
-            return "小幅降低"
+            return "建议持有"
+        case .watch, .wait, .avoidChasing:
+            return "建议持有"
         }
     }
 }
 
 struct NextHourGuidanceAction: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
+    let targetID: String?
     let targetName: String
     let action: NextHourGuidanceActionKind
     let instruction: String
@@ -205,18 +205,22 @@ struct NextHourGuidanceAction: Codable, Identifiable, Hashable, Sendable {
     let trigger: String
     let invalidation: String
     let confidence: Int
+    let evidenceIDs: [String]
 
     init(
         id: UUID = UUID(),
+        targetID: String? = nil,
         targetName: String,
         action: NextHourGuidanceActionKind,
         instruction: String,
         rationale: String,
         trigger: String,
         invalidation: String,
-        confidence: Int
+        confidence: Int,
+        evidenceIDs: [String] = []
     ) {
         self.id = id
+        self.targetID = targetID
         self.targetName = targetName
         self.action = action
         self.instruction = instruction
@@ -224,6 +228,34 @@ struct NextHourGuidanceAction: Codable, Identifiable, Hashable, Sendable {
         self.trigger = trigger
         self.invalidation = invalidation
         self.confidence = min(100, max(0, confidence))
+        self.evidenceIDs = evidenceIDs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        targetID = try container.decodeIfPresent(String.self, forKey: .targetID)
+        targetName = try container.decode(String.self, forKey: .targetName)
+        action = try container.decode(NextHourGuidanceActionKind.self, forKey: .action)
+        instruction = try container.decode(String.self, forKey: .instruction)
+        rationale = try container.decode(String.self, forKey: .rationale)
+        trigger = try container.decode(String.self, forKey: .trigger)
+        invalidation = try container.decode(String.self, forKey: .invalidation)
+        confidence = min(100, max(0, try container.decode(Int.self, forKey: .confidence)))
+        evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case targetID
+        case targetName
+        case action
+        case instruction
+        case rationale
+        case trigger
+        case invalidation
+        case confidence
+        case evidenceIDs
     }
 }
 
@@ -239,6 +271,8 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     let actions: [NextHourGuidanceAction]
     let riskChecks: [String]
     let assetCount: Int
+    let evidence: [TrendEvidence]
+    let warnings: [String]
     let disclaimer: String
 
     init(
@@ -253,6 +287,8 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         actions: [NextHourGuidanceAction],
         riskChecks: [String],
         assetCount: Int,
+        evidence: [TrendEvidence] = [],
+        warnings: [String] = [],
         disclaimer: String = "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
     ) {
         self.id = id
@@ -266,7 +302,45 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         self.actions = actions
         self.riskChecks = riskChecks
         self.assetCount = assetCount
+        self.evidence = evidence
+        self.warnings = warnings
         self.disclaimer = disclaimer
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        generatedAt = try container.decode(String.self, forKey: .generatedAt)
+        validUntil = try container.decode(String.self, forKey: .validUntil)
+        slotKey = try container.decode(String.self, forKey: .slotKey)
+        scope = try container.decode(NextHourGuidanceScope.self, forKey: .scope)
+        headline = try container.decode(String.self, forKey: .headline)
+        posture = try container.decode(NextHourGuidancePosture.self, forKey: .posture)
+        summary = try container.decode(String.self, forKey: .summary)
+        actions = try container.decodeIfPresent([NextHourGuidanceAction].self, forKey: .actions) ?? []
+        riskChecks = try container.decodeIfPresent([String].self, forKey: .riskChecks) ?? []
+        assetCount = try container.decodeIfPresent(Int.self, forKey: .assetCount) ?? 0
+        evidence = try container.decodeIfPresent([TrendEvidence].self, forKey: .evidence) ?? []
+        warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        disclaimer = try container.decodeIfPresent(String.self, forKey: .disclaimer)
+            ?? "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case generatedAt
+        case validUntil
+        case slotKey
+        case scope
+        case headline
+        case posture
+        case summary
+        case actions
+        case riskChecks
+        case assetCount
+        case evidence
+        case warnings
+        case disclaimer
     }
 }
 
@@ -311,12 +385,16 @@ struct NextHourGuidanceStore {
 
 struct NextHourGuidanceAssetContext: Codable, Hashable, Sendable {
     let id: String
+    let evidenceID: String
     let name: String
     let code: String?
     let assetType: String
     let status: String
     let weightPct: Double?
     let currentPrice: Double?
+    let quoteTime: String?
+    let quoteSource: String?
+    let quoteIsFresh: Bool
     let profitPct: Double?
     let estimateChangePct: Double?
     let pendingTradeCount: Int
@@ -324,10 +402,12 @@ struct NextHourGuidanceAssetContext: Codable, Hashable, Sendable {
 }
 
 struct NextHourGuidanceMarketContext: Codable, Hashable, Sendable {
+    let evidenceID: String
     let name: String
     let price: Double
     let changePct: Double?
     let quotedAt: String
+    let sourceLabel: String
 }
 
 struct NextHourGuidanceContext: Codable, Hashable, Sendable {
@@ -335,6 +415,8 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     let slot: NextHourGuidanceSlot
     let assets: [NextHourGuidanceAssetContext]
     let market: [NextHourGuidanceMarketContext]
+    let marketDataIsFresh: Bool
+    let marketDataWarnings: [String]
     let latestTrendGeneratedAt: String?
     let latestTrendHeadline: String?
     let latestTrendActions: [String]
@@ -349,12 +431,55 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     }
 }
 
+enum NextHourGuidanceFreshness {
+    static func isFresh(
+        quoteTime: String?,
+        generatedAt: String,
+        maxAgeMinutes: Double = 20
+    ) -> Bool {
+        guard let quoteTime,
+              let quoteDate = parse(quoteTime),
+              let generatedDate = parse(generatedAt) else {
+            return false
+        }
+        let age = generatedDate.timeIntervalSince(quoteDate)
+        return age >= -120 && age <= maxAgeMinutes * 60
+    }
+
+    private static func parse(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isoFormatter = ISO8601DateFormatter()
+        if let date = isoFormatter.date(from: trimmed) {
+            return date
+        }
+        let formats = [
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy/MM/dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm",
+        ]
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+            formatter.dateFormat = format
+            if let date = formatter.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
+    }
+}
+
 // MARK: - Focused AI agent
 
 protocol NextHourGuidanceAgentProtocol: Sendable {
     func run(
         context: NextHourGuidanceContext,
-        settings: TrendAIProviderSettings
+        researchSnapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        webSearchSettings: TavilySearchSettings
     ) async throws -> NextHourGuidanceReport
 }
 
@@ -362,15 +487,24 @@ enum NextHourGuidanceAgentError: Error, LocalizedError {
     case missingConfiguration
     case missingToolCall
     case invalidSubmission([String])
+    case turnLimitExceeded
+    case toolCallLimitExceeded
+    case totalTimeoutExceeded
 
     var errorDescription: String? {
         switch self {
         case .missingConfiguration:
-            return "尚未配置趋势分析模型，无法生成下一小时操作指引。"
+            return "尚未配置趋势分析模型，无法生成下一小时买卖建议。"
         case .missingToolCall:
-            return "模型没有按要求提交下一小时操作指引。"
+            return "模型没有按要求提交下一小时买卖建议。"
         case .invalidSubmission(let errors):
-            return "下一小时操作指引校验失败：\(errors.joined(separator: "；"))"
+            return "下一小时买卖建议校验失败：\(errors.joined(separator: "；"))"
+        case .turnLimitExceeded:
+            return "买卖建议 Agent 已达最大研究轮次，仍未提交有效结果。"
+        case .toolCallLimitExceeded:
+            return "买卖建议 Agent 已达最大工具调用次数。"
+        case .totalTimeoutExceeded:
+            return "买卖建议 Agent 研究超时，请稍后重试。"
         }
     }
 }
@@ -385,6 +519,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     }
 
     private struct ActionSubmission: Codable {
+        let targetID: String
         let targetName: String
         let action: NextHourGuidanceActionKind
         let instruction: String
@@ -392,104 +527,327 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let trigger: String
         let invalidation: String
         let confidence: Int
+        let evidenceIDs: [String]
     }
 
     let client: any TrendResearchAgentClient
+    let registry: TrendResearchToolRegistry
+    let webSearchCache: TrendWebSearchResponseCache
 
-    init(client: any TrendResearchAgentClient = OpenAICompatibleAgentClient()) {
+    private static let contextToolName = "get_live_market_context"
+    private static let lookThroughToolName = "get_fund_lookthrough"
+    private static let webSearchToolName = "web_search"
+    private static let submitToolName = "submit_next_hour_guidance"
+    private static let maxTurns = 10
+    private static let maxToolCalls = 20
+    private static let maxWebSearches = 4
+    private static let minimumWebSearchAttempts = 2
+    private static let totalTimeoutSeconds: Double = 300
+
+    init(
+        client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
+        webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
+        webSearchCache: TrendWebSearchResponseCache = TrendWebSearchResponseCache(
+            ttlSeconds: 10 * 60
+        )
+    ) {
         self.client = client
+        self.registry = TrendResearchToolRegistry(webSearchClient: webSearchClient)
+        self.webSearchCache = webSearchCache
     }
 
     func run(
         context: NextHourGuidanceContext,
-        settings: TrendAIProviderSettings
+        researchSnapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        webSearchSettings: TavilySearchSettings = .empty
     ) async throws -> NextHourGuidanceReport {
         guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
 
-        let tool = Self.submitTool()
+        let ledger = TrendEvidenceLedger()
+        let webSearchGovernor = TrendWebSearchGovernor(
+            maxNetworkSearches: Self.maxWebSearches,
+            cache: webSearchCache
+        )
+        let requiresLookThrough = researchSnapshot.lookThrough != nil
+        let commonToolNames: Set<String> = [
+            Self.lookThroughToolName,
+            Self.webSearchToolName,
+        ]
+        let commonDefinitions = registry.definitions.filter { definition in
+            let name = definition.function.name
+            guard commonToolNames.contains(name) else { return false }
+            if name == Self.lookThroughToolName { return requiresLookThrough }
+            if name == Self.webSearchToolName { return webSearchSettings.isConfigured }
+            return true
+        }
+        let tools = [Self.contextTool()] + commonDefinitions + [Self.submitTool()]
+        let started = Date()
         var messages: [AgentChatMessage] = [
             .init(
                 role: .system,
                 content: """
-                你是中国市场盘中风控助手。任务是根据提供的本地持仓和行情快照，生成“下一小时操作指引”。
-                只讨论当前有效时段；不得编造未提供的新闻、价格或成交量。建议必须是条件式的，明确触发条件和失效条件。
-                没有清晰优势时，必须建议持有、观察、等待或不追涨，不能为了凑动作而建议交易。
-                单次最多给 5 条动作。场外基金只会在 14:50 收盘前窗口出现在输入中；不要把它描述为可盘中实时成交。
+                你是中国市场盘中交易研究 Agent，任务是生成有证据约束的“下一小时买卖建议”。这是真实资金决策，宁可持有，也不能猜测。
+                必须先调用 get_live_market_context 读取刚刷新的持仓、报价时间、大盘行情和旧研判边界。
+                如果提供 get_fund_lookthrough，提交前必须调用它；基金判断必须基于底层股票、行业、资产配置和披露日期，不能只看基金名称。
+                如果提供 web_search，提交前至少调用两次：一次检索最近一天的市场/政策消息，一次针对候选标的、底层行业或核心证券。搜索词不得包含用户金额或组合隐私。
+                只引用工具实际返回的 evidence_id；不得编造新闻、价格、成交量、资金流或证据编号。
+                每条标的必须明确给出 buy（买入）、sell（卖出）、hold（持有）三选一，不得用观察、等待、不追涨等模糊动作替代结论。
+                买入或卖出必须同时引用该标的本地行情证据和至少两个最新网页证据；基金还必须引用该基金的穿透证据。缺少任一项时只能 hold。
+                买入或卖出时，instruction 必须说明小仓/分批方式或大致仓位比例，并给出触发和失效条件。没有清晰优势时明确 hold，不能为了凑交易强行买卖。
+                从工具返回的持仓中选择最需要决策的 1 到 5 个标的。场外基金不可描述为盘中实时成交。
                 必须调用 submit_next_hour_guidance 工具提交结果，不要输出普通文本。
                 """
             ),
             .init(
                 role: .user,
-                content: "请基于以下 JSON 快照生成下一小时操作指引：\n\(context.jsonString())"
+                content: """
+                研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)，候选标的 \(context.assets.count) 个。
+                联网搜索：\(webSearchSettings.isConfigured ? "已配置，必须完成至少两次最新搜索" : "未配置，任何标的都不得给出 buy/sell，只能 hold")。
+                请先调用只读工具取证，再提交买入/卖出/持有建议。
+                """
             ),
         ]
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         var lastErrors: [String] = []
+        var turnCount = 0
+        var toolCallCount = 0
+        var plainTextResponses = 0
+        var invalidSubmissions = 0
+        var didReadContext = false
+        var didReadLookThrough = !requiresLookThrough
+        var recentSearchQueries = Set<String>()
 
-        for _ in 0..<2 {
+        while turnCount < Self.maxTurns {
             try Task.checkCancellation()
+            let remainingTotal = Self.totalTimeoutSeconds - Date().timeIntervalSince(started)
+            guard remainingTotal > 0 else {
+                throw NextHourGuidanceAgentError.totalTimeoutExceeded
+            }
+            turnCount += 1
             let result = try await client.complete(
                 messages: messages,
-                tools: [tool],
-                toolChoice: .function(name: "submit_next_hour_guidance"),
+                tools: tools,
+                toolChoice: .auto,
                 temperature: 0.1,
                 settings: settings,
-                timeout: min(120, settings.timeoutSeconds),
+                timeout: min(90, settings.timeoutSeconds, remainingTotal),
                 streamProgress: nil
             )
+            messages.append(result.assistantMessage)
 
-            guard let call = result.toolCalls.first(where: {
-                $0.function.name == "submit_next_hour_guidance"
-            }) else {
-                messages.append(result.assistantMessage)
+            if case .length = result.stopReason {
                 messages.append(.init(
                     role: .user,
-                    content: "没有收到工具提交。请立即调用 submit_next_hour_guidance。"
+                    content: "上次响应被截断。不要执行不完整参数，请重新发出完整工具调用。"
                 ))
-                lastErrors = ["模型未调用提交工具"]
                 continue
             }
 
-            do {
-                let submission = try decoder.decode(
-                    Submission.self,
-                    from: Data(call.function.arguments.utf8)
-                )
-                let errors = Self.validate(submission)
-                guard errors.isEmpty else {
-                    lastErrors = errors
-                    messages.append(result.assistantMessage)
-                    messages.append(.init(
-                        role: .tool,
-                        content: "提交无效：\(errors.joined(separator: "；"))。请修正后重新提交。",
-                        toolCallID: call.id
-                    ))
-                    continue
+            guard !result.toolCalls.isEmpty else {
+                plainTextResponses += 1
+                if plainTextResponses > 2 {
+                    throw NextHourGuidanceAgentError.missingToolCall
                 }
-                return Self.makeReport(submission: submission, context: context)
-            } catch {
-                lastErrors = ["JSON 参数无法解码：\(error.localizedDescription)"]
-                messages.append(result.assistantMessage)
+                messages.append(.init(
+                    role: .user,
+                    content: "普通文本不会被接收。请调用取证工具，最后通过 submit_next_hour_guidance 提交。"
+                ))
+                continue
+            }
+
+            for call in result.toolCalls {
+                guard toolCallCount < Self.maxToolCalls else {
+                    throw NextHourGuidanceAgentError.toolCallLimitExceeded
+                }
+                toolCallCount += 1
+                let toolName = call.function.name
+                let toolResult: TrendResearchToolResult
+
+                switch toolName {
+                case Self.contextToolName:
+                    toolResult = await Self.contextToolResult(context: context, ledger: ledger)
+                    didReadContext = !toolResult.isError
+
+                case Self.lookThroughToolName:
+                    var toolContext = TrendResearchToolContext(
+                        snapshot: researchSnapshot,
+                        evidenceLedger: ledger,
+                        webSearchSettings: webSearchSettings,
+                        webSearchGovernor: webSearchGovernor
+                    )
+                    toolContext.invalidSubmissionBudget = 2
+                    toolContext.invalidSubmissionsUsed = invalidSubmissions
+                    toolResult = await registry.execute(call, context: toolContext)
+                    if !toolResult.isError { didReadLookThrough = true }
+
+                case Self.webSearchToolName:
+                    if let query = Self.recentDaySearchQuery(call) {
+                        recentSearchQueries.insert(query)
+                    }
+                    var toolContext = TrendResearchToolContext(
+                        snapshot: researchSnapshot,
+                        evidenceLedger: ledger,
+                        webSearchSettings: webSearchSettings,
+                        webSearchGovernor: webSearchGovernor
+                    )
+                    toolContext.invalidSubmissionBudget = 2
+                    toolContext.invalidSubmissionsUsed = invalidSubmissions
+                    toolResult = await registry.execute(call, context: toolContext)
+
+                case Self.submitToolName:
+                    let missingResearch = Self.missingResearchRequirements(
+                        didReadContext: didReadContext,
+                        didReadLookThrough: didReadLookThrough,
+                        webSearchConfigured: webSearchSettings.isConfigured,
+                        recentSearchQueryCount: recentSearchQueries.count
+                    )
+                    if !missingResearch.isEmpty {
+                        lastErrors = missingResearch
+                        toolResult = .content(
+                            TrendResearchToolEnvelope.submitValidationError(
+                                code: "missing_required_research",
+                                message: "提交前的取证步骤尚未完成。",
+                                errors: missingResearch,
+                                remainingRepairAttempts: max(0, 2 - invalidSubmissions)
+                            ),
+                            isError: true
+                        )
+                        invalidSubmissions += 1
+                    } else {
+                        do {
+                            let submission = try decoder.decode(
+                                Submission.self,
+                                from: Data(call.function.arguments.utf8)
+                            )
+                            let errors = await Self.validate(
+                                submission,
+                                context: context,
+                                researchSnapshot: researchSnapshot,
+                                webSearchConfigured: webSearchSettings.isConfigured,
+                                recentSearchQueries: Array(recentSearchQueries),
+                                ledger: ledger
+                            )
+                            if errors.isEmpty {
+                                return await Self.makeReport(
+                                    submission: submission,
+                                    context: context,
+                                    researchSnapshot: researchSnapshot,
+                                    webSearchConfigured: webSearchSettings.isConfigured,
+                                    ledger: ledger
+                                )
+                            }
+                            lastErrors = errors
+                            invalidSubmissions += 1
+                            toolResult = .content(
+                                TrendResearchToolEnvelope.submitValidationError(
+                                    code: "invalid_guidance",
+                                    message: "买卖建议没有通过证据与风控校验。",
+                                    errors: errors,
+                                    remainingRepairAttempts: max(0, 2 - invalidSubmissions)
+                                ),
+                                isError: true
+                            )
+                        } catch {
+                            lastErrors = ["提交 JSON 无法解码：\(error.localizedDescription)"]
+                            invalidSubmissions += 1
+                            toolResult = .content(
+                                TrendResearchToolEnvelope.submitValidationError(
+                                    code: "invalid_json",
+                                    message: "提交参数无法解码。",
+                                    errors: lastErrors,
+                                    remainingRepairAttempts: max(0, 2 - invalidSubmissions)
+                                ),
+                                isError: true
+                            )
+                        }
+                    }
+
+                default:
+                    toolResult = .content(
+                        TrendResearchToolEnvelope.error(
+                            code: "unknown_tool",
+                            message: "未知工具：\(toolName)"
+                        ),
+                        isError: true
+                    )
+                }
+
                 messages.append(.init(
                     role: .tool,
-                    content: "提交参数无法解码，请严格按 schema 重新提交。",
+                    content: toolResult.contentJSON,
                     toolCallID: call.id
                 ))
+                if invalidSubmissions > 2 {
+                    throw NextHourGuidanceAgentError.invalidSubmission(lastErrors)
+                }
             }
         }
 
-        if lastErrors == ["模型未调用提交工具"] {
-            throw NextHourGuidanceAgentError.missingToolCall
+        throw NextHourGuidanceAgentError.turnLimitExceeded
+    }
+
+    private static func missingResearchRequirements(
+        didReadContext: Bool,
+        didReadLookThrough: Bool,
+        webSearchConfigured: Bool,
+        recentSearchQueryCount: Int
+    ) -> [String] {
+        var errors: [String] = []
+        if !didReadContext {
+            errors.append("必须先调用 get_live_market_context 读取实时行情上下文")
         }
-        throw NextHourGuidanceAgentError.invalidSubmission(lastErrors)
+        if !didReadLookThrough {
+            errors.append("必须先调用 get_fund_lookthrough 读取基金底层资产")
+        }
+        if webSearchConfigured, recentSearchQueryCount < minimumWebSearchAttempts {
+            errors.append("已配置联网搜索，提交前必须至少完成两次不同关键词且 time_range=day 的 web_search")
+        }
+        return errors
+    }
+
+    private static func recentDaySearchQuery(_ call: AgentToolCall) -> String? {
+        guard let data = call.function.arguments.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let timeRange = object["time_range"] as? String,
+              timeRange == "day",
+              let query = object["query"] as? String else {
+            return nil
+        }
+        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
     }
 
     private static func makeReport(
         submission: Submission,
-        context: NextHourGuidanceContext
-    ) -> NextHourGuidanceReport {
-        NextHourGuidanceReport(
+        context: NextHourGuidanceContext,
+        researchSnapshot: TrendResearchSnapshot,
+        webSearchConfigured: Bool,
+        ledger: TrendEvidenceLedger
+    ) async -> NextHourGuidanceReport {
+        var seenEvidenceIDs = Set<String>()
+        let orderedEvidenceIDs = submission.actions
+            .flatMap(\.evidenceIDs)
+            .filter { seenEvidenceIDs.insert($0).inserted }
+        var evidence: [TrendEvidence] = []
+        for evidenceID in orderedEvidenceIDs {
+            if let item = await ledger.canonical(for: evidenceID) {
+                evidence.append(item)
+            }
+        }
+        var warnings = context.marketDataWarnings + researchSnapshot.sourceWarnings
+        warnings.append(contentsOf: researchSnapshot.lookThrough?.warnings ?? [])
+        if !webSearchConfigured {
+            warnings.append("未配置 Tavily 联网搜索，本次风控规则禁止输出买入或卖出。")
+        } else if !orderedEvidenceIDs.contains(where: { $0.hasPrefix("web:tavily:") }) {
+            warnings.append("联网搜索未形成可引用证据，本次只允许持有建议。")
+        }
+        warnings = Array(Set(warnings.filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        })).sorted()
+
+        return NextHourGuidanceReport(
             generatedAt: context.generatedAt,
             validUntil: context.slot.validUntil,
             slotKey: context.slot.key,
@@ -499,22 +857,36 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             summary: submission.summary.trimmingCharacters(in: .whitespacesAndNewlines),
             actions: submission.actions.map {
                 NextHourGuidanceAction(
+                    targetID: $0.targetID,
                     targetName: $0.targetName,
                     action: $0.action,
                     instruction: $0.instruction,
                     rationale: $0.rationale,
                     trigger: $0.trigger,
                     invalidation: $0.invalidation,
-                    confidence: $0.confidence
+                    confidence: $0.confidence,
+                    evidenceIDs: $0.evidenceIDs
                 )
             },
             riskChecks: submission.riskChecks,
-            assetCount: context.assets.count
+            assetCount: context.assets.count,
+            evidence: evidence,
+            warnings: warnings
         )
     }
 
-    private static func validate(_ submission: Submission) -> [String] {
+    private static func validate(
+        _ submission: Submission,
+        context: NextHourGuidanceContext,
+        researchSnapshot: TrendResearchSnapshot,
+        webSearchConfigured: Bool,
+        recentSearchQueries: [String],
+        ledger: TrendEvidenceLedger
+    ) async -> [String] {
         var errors: [String] = []
+        let assetsByID = Dictionary(uniqueKeysWithValues: context.assets.map { ($0.id, $0) })
+        let availableEvidenceIDs = await ledger.allIDs()
+        var seenTargetIDs = Set<String>()
         if submission.headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             errors.append("headline 不能为空")
         }
@@ -524,7 +896,20 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         if submission.actions.isEmpty || submission.actions.count > 5 {
             errors.append("actions 必须为 1 到 5 条")
         }
+        if !(2...4).contains(submission.riskChecks.count) {
+            errors.append("risk_checks 必须提供 2 到 4 条执行前复核项")
+        }
         for (index, action) in submission.actions.enumerated() {
+            guard let asset = assetsByID[action.targetID] else {
+                errors.append("第 \(index + 1) 条动作的 target_id 不属于本次候选持仓")
+                continue
+            }
+            if !seenTargetIDs.insert(action.targetID).inserted {
+                errors.append("同一标的不能重复给出多条互相冲突的动作：\(asset.name)")
+            }
+            if ![NextHourGuidanceActionKind.buy, .sell, .hold].contains(action.action) {
+                errors.append("第 \(index + 1) 条动作必须是 buy、sell 或 hold")
+            }
             let values = [
                 action.targetName,
                 action.instruction,
@@ -538,14 +923,152 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             if !(0...100).contains(action.confidence) {
                 errors.append("第 \(index + 1) 条动作置信度超出 0 到 100")
             }
+            let missingEvidence = Set(action.evidenceIDs).subtracting(availableEvidenceIDs)
+            if !missingEvidence.isEmpty {
+                errors.append("第 \(index + 1) 条动作引用了不存在的证据：\(missingEvidence.sorted().joined(separator: "、"))")
+            }
+            if !action.evidenceIDs.contains(asset.evidenceID) {
+                errors.append("第 \(index + 1) 条动作必须引用该标的的本地行情证据 \(asset.evidenceID)")
+            }
+
+            let isTrade = action.action == .buy || action.action == .sell
+            if isTrade {
+                let sizingTerms = ["%", "成", "小仓", "分批", "份额"]
+                if !sizingTerms.contains(where: { action.instruction.contains($0) }) {
+                    errors.append("\(asset.name) 的买卖 instruction 必须说明比例、小仓或分批方式")
+                }
+                if !context.marketDataIsFresh {
+                    errors.append("行情不满足盘中时效要求，\(asset.name) 只能给出 hold")
+                }
+                if !asset.quoteIsFresh {
+                    errors.append("\(asset.name) 的标的报价超过 20 分钟或缺少准确时间，只能给出 hold")
+                }
+                if !webSearchConfigured {
+                    errors.append("未配置联网搜索，\(asset.name) 只能给出 hold")
+                }
+                let webEvidenceCount = Set(
+                    action.evidenceIDs.filter { $0.hasPrefix("web:tavily:") }
+                ).count
+                if webEvidenceCount < 2 {
+                    errors.append("\(asset.name) 的买卖动作必须引用至少两个最新网页证据")
+                }
+                if !hasTargetedSearch(
+                    asset: asset,
+                    researchSnapshot: researchSnapshot,
+                    queries: recentSearchQueries
+                ) {
+                    errors.append("\(asset.name) 的买卖动作缺少针对标的、底层证券或行业的最近一天搜索")
+                }
+                if asset.assetType.contains("基金") {
+                    guard let code = asset.code,
+                          researchSnapshot.lookThrough?.disclosures[code] != nil else {
+                        errors.append("\(asset.name) 缺少该基金的底层持仓披露，只能给出 hold")
+                        continue
+                    }
+                    let prefix = "fund:look-through:\(code):"
+                    if !action.evidenceIDs.contains(where: { $0.hasPrefix(prefix) }) {
+                        errors.append("\(asset.name) 的买卖动作必须引用对应基金穿透证据")
+                    }
+                }
+            }
         }
         return errors
+    }
+
+    private static func hasTargetedSearch(
+        asset: NextHourGuidanceAssetContext,
+        researchSnapshot: TrendResearchSnapshot,
+        queries: [String]
+    ) -> Bool {
+        var terms = [asset.name, asset.code].compactMap { value -> String? in
+            let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+            return normalized.count >= 2 ? normalized : nil
+        }
+        if let code = asset.code,
+           let disclosure = researchSnapshot.lookThrough?.disclosures[code] {
+            terms.append(contentsOf: disclosure.holdings.prefix(12).flatMap {
+                [$0.name.lowercased(), $0.code.lowercased()]
+            })
+            terms.append(contentsOf: disclosure.industries.prefix(8).map {
+                $0.name.lowercased()
+            })
+        }
+        return queries.contains { query in
+            terms.contains { term in
+                term.count >= 2 && query.contains(term)
+            }
+        }
+    }
+
+    private static func contextToolResult(
+        context: NextHourGuidanceContext,
+        ledger: TrendEvidenceLedger
+    ) async -> TrendResearchToolResult {
+        var evidence: [TrendEvidence] = context.assets.map { asset in
+            TrendEvidence(
+                id: asset.evidenceID,
+                sourceName: asset.quoteSource ?? "本地持仓行情",
+                title: "\(asset.name) 行情与持仓快照",
+                url: nil,
+                publishedAt: asset.quoteTime,
+                retrievedAt: context.generatedAt,
+                summary: "\(asset.name)（\(asset.code ?? "无代码")）价格 \(asset.currentPrice.map { String($0) } ?? "未知")，涨跌 \(asset.estimateChangePct.map { String(format: "%+.2f%%", $0) } ?? "未知")，组合权重 \(asset.weightPct.map { String(format: "%.2f%%", $0) } ?? "未知")。"
+            )
+        }
+        evidence.append(contentsOf: context.market.map { quote in
+            TrendEvidence(
+                id: quote.evidenceID,
+                sourceName: quote.sourceLabel,
+                title: quote.name,
+                url: nil,
+                publishedAt: quote.quotedAt,
+                retrievedAt: context.generatedAt,
+                summary: "\(quote.name) \(quote.price)，涨跌 \(quote.changePct.map { String(format: "%+.2f%%", $0) } ?? "未知")。"
+            )
+        })
+        await ledger.record(evidence)
+
+        guard let data = try? JSONEncoder().encode(context),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "context_serialization_failed",
+                    message: "实时行情上下文序列化失败。"
+                ),
+                isError: true
+            )
+        }
+        return .content(
+            TrendResearchToolEnvelope.success(
+                [
+                    "context": object,
+                    "fresh_market_data": context.marketDataIsFresh,
+                    "trade_gate": context.marketDataIsFresh
+                        ? "行情时效满足；买卖仍需网页与基金穿透证据"
+                        : "行情时效不足；所有标的只能 hold",
+                ],
+                warnings: context.marketDataWarnings,
+                evidenceIDs: evidence.map(\.id)
+            )
+        )
+    }
+
+    private static func contextTool() -> AgentToolDefinition {
+        AgentToolDefinition.function(
+            name: contextToolName,
+            description: "读取刚刷新的持仓报价、报价时间、指数行情、数据新鲜度、旧研判边界和本次候选标的。提交前必须调用。",
+            parameters: [
+                "type": "object",
+                "properties": [:],
+                "additionalProperties": false,
+            ]
+        )
     }
 
     private static func submitTool() -> AgentToolDefinition {
         AgentToolDefinition.function(
             name: "submit_next_hour_guidance",
-            description: "提交下一小时操作指引。所有动作必须是条件式建议。",
+            description: "提交有可核验证据的下一小时买卖建议。每条动作必须明确为买入、卖出或持有。",
             parameters: [
                 "type": "object",
                 "properties": [
@@ -568,26 +1091,39 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                         "items": [
                             "type": "object",
                             "properties": [
+                                "target_id": [
+                                    "type": "string",
+                                    "description": "必须原样使用 get_live_market_context 返回的资产 id"
+                                ],
                                 "target_name": ["type": "string"],
                                 "action": [
                                     "type": "string",
-                                    "enum": ["hold", "watch", "wait", "avoid_chasing", "buy_small", "reduce_small"]
+                                    "enum": ["buy", "sell", "hold"]
                                 ],
                                 "instruction": ["type": "string"],
                                 "rationale": ["type": "string"],
                                 "trigger": ["type": "string"],
                                 "invalidation": ["type": "string"],
                                 "confidence": ["type": "integer", "minimum": 0, "maximum": 100],
+                                "evidence_ids": [
+                                    "type": "array",
+                                    "minItems": 1,
+                                    "maxItems": 8,
+                                    "items": ["type": "string"],
+                                    "description": "只能引用本次工具结果实际返回的 evidence_id"
+                                ],
                             ],
                             "required": [
-                                "target_name", "action", "instruction", "rationale",
-                                "trigger", "invalidation", "confidence",
+                                "target_id", "target_name", "action", "instruction",
+                                "rationale", "trigger", "invalidation", "confidence",
+                                "evidence_ids",
                             ],
                             "additionalProperties": false,
                         ],
                     ],
                     "risk_checks": [
                         "type": "array",
+                        "minItems": 2,
                         "items": ["type": "string"],
                         "maxItems": 4,
                     ],

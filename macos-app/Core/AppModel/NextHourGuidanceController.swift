@@ -13,7 +13,7 @@ extension AppModel {
                 nextHourGuidanceGenerationState = .succeeded
             }
         } catch {
-            nextHourGuidanceError = "读取下一小时指引失败：\(error.localizedDescription)"
+            nextHourGuidanceError = "读取下一小时买卖建议失败：\(error.localizedDescription)"
         }
     }
 
@@ -97,7 +97,10 @@ extension AppModel {
         saveNextHourGuidanceArchive()
 
         if !activeUserPortfolioHoldings.isEmpty, !isRefreshingPortfolio {
-            try? await refreshUserPortfolio(updateNotice: false)
+            try? await refreshUserPortfolio(
+                updateNotice: false,
+                forceQuoteRefresh: true
+            )
         }
         await refreshMarketIndices(
             kinds: [.sseComposite, .csi300, .chinext],
@@ -127,26 +130,39 @@ extension AppModel {
                 }
             }
 
+            let lookThroughResult = await makeNextHourLookThrough(
+                rows: rows,
+                generatedAt: generatedAt
+            )
             let context = makeNextHourGuidanceContext(
                 rows: rows,
                 slot: slot,
-                generatedAt: generatedAt
+                generatedAt: generatedAt,
+                additionalWarnings: lookThroughResult.warnings
+            )
+            let researchSnapshot = makeNextHourResearchSnapshot(
+                rows: rows,
+                generatedAt: generatedAt,
+                lookThrough: lookThroughResult.snapshot,
+                sourceWarnings: context.marketDataWarnings + lookThroughResult.warnings
             )
             let report = try await nextHourGuidanceAgent.run(
                 context: context,
-                settings: provider
+                researchSnapshot: researchSnapshot,
+                settings: provider,
+                webSearchSettings: trendSettings.webSearch
             )
             nextHourGuidanceArchive.report = report
             nextHourGuidanceArchive.lastCompletedSlotKey = slot.key
             nextHourGuidanceGenerationState = .succeeded
             saveNextHourGuidanceArchive()
             if userInitiated {
-                noticeMessage = "下一小时操作指引已更新。"
+                noticeMessage = "下一小时买卖建议已更新。"
             }
             await nextHourGuidanceNotificationSender(report)
         } catch is CancellationError {
             nextHourGuidanceGenerationState = .failed
-            nextHourGuidanceError = "下一小时操作指引生成已取消。"
+            nextHourGuidanceError = "下一小时买卖建议生成已取消。"
             saveNextHourGuidanceArchive()
         } catch {
             nextHourGuidanceGenerationState = .failed
@@ -179,18 +195,27 @@ extension AppModel {
     private func makeNextHourGuidanceContext(
         rows: [PersonalAssetAggregateRow],
         slot: NextHourGuidanceSlot,
-        generatedAt: String
+        generatedAt: String,
+        additionalWarnings: [String]
     ) -> NextHourGuidanceContext {
         let total = rows.reduce(0) { $0 + $1.effectiveHoldingAmount }
         let assets = rows.map { row in
-            NextHourGuidanceAssetContext(
+            let quoteTime = nextHourQuoteTime(row)
+            return NextHourGuidanceAssetContext(
                 id: row.key,
+                evidenceID: "local:next-hour:asset:\(row.key)",
                 name: row.fundName,
                 code: row.fundCode,
                 assetType: nextHourAssetTypeText(row),
                 status: row.combinedStatusText,
                 weightPct: total > 0 ? row.effectiveHoldingAmount / total * 100 : nil,
-                currentPrice: row.currentPrice,
+                currentPrice: row.currentEstimatePrice ?? row.currentPrice,
+                quoteTime: quoteTime,
+                quoteSource: nextHourQuoteSource(row),
+                quoteIsFresh: NextHourGuidanceFreshness.isFresh(
+                    quoteTime: quoteTime,
+                    generatedAt: generatedAt
+                ),
                 profitPct: row.profitPct,
                 estimateChangePct: row.estimateChangePct,
                 pendingTradeCount: row.pendingTradeCount,
@@ -202,12 +227,39 @@ extension AppModel {
             .sorted { $0.kind.rawValue < $1.kind.rawValue }
             .map {
                 NextHourGuidanceMarketContext(
+                    evidenceID: "market:index:\($0.kind.rawValue):\($0.quotedAt)",
                     name: $0.name,
                     price: $0.price,
                     changePct: $0.changePct,
-                    quotedAt: $0.quotedAt
+                    quotedAt: $0.quotedAt,
+                    sourceLabel: $0.sourceLabel
                 )
             }
+        let freshMarketCount = market.filter {
+            NextHourGuidanceFreshness.isFresh(
+                quoteTime: $0.quotedAt,
+                generatedAt: generatedAt
+            )
+        }.count
+        let hasFreshAssetQuotes = assets.contains(where: \.quoteIsFresh)
+        let marketDataIsFresh = freshMarketCount > 0 || hasFreshAssetQuotes
+        var marketDataWarnings = additionalWarnings
+        if market.isEmpty, !hasFreshAssetQuotes {
+            marketDataWarnings.append("未取得上证、沪深300或创业板指数行情，风控规则禁止输出买入或卖出。")
+        } else if freshMarketCount == 0, !hasFreshAssetQuotes {
+            marketDataWarnings.append("大盘行情时间距当前超过 20 分钟，风控规则禁止输出买入或卖出。")
+        } else if freshMarketCount == 0 {
+            marketDataWarnings.append("大盘指数行情不够新；仅报价在 20 分钟内的标的可形成买卖建议，并应降低置信度。")
+        }
+        let staleAssetNames = assets.filter { !$0.quoteIsFresh }.map(\.name)
+        if !staleAssetNames.isEmpty {
+            marketDataWarnings.append(
+                "以下标的报价超过 20 分钟或缺少准确时间，只允许持有：\(staleAssetNames.prefix(8).joined(separator: "、"))"
+            )
+        }
+        if !trendSettings.webSearch.isConfigured {
+            marketDataWarnings.append("未配置 Tavily 联网搜索，风控规则禁止输出买入或卖出。")
+        }
         let latestActions = (trendReport?.actions ?? []).prefix(5).map {
             "\($0.title)：\($0.detail)"
         }
@@ -233,12 +285,103 @@ extension AppModel {
             slot: slot,
             assets: assets,
             market: market,
+            marketDataIsFresh: marketDataIsFresh,
+            marketDataWarnings: marketDataWarnings,
             latestTrendGeneratedAt: trendReport?.generatedAt,
             latestTrendHeadline: trendReport?.portfolio.headline,
             latestTrendActions: latestActions,
             latestAssetConclusions: latestAssetConclusions,
             dataRules: rules
         )
+    }
+
+    private func makeNextHourLookThrough(
+        rows: [PersonalAssetAggregateRow],
+        generatedAt: String
+    ) async -> (snapshot: PortfolioLookThroughSnapshot?, warnings: [String]) {
+        let fundCodes = rows.compactMap { row -> String? in
+            guard row.assetType == .fund,
+                  row.effectiveHoldingAmount > 0.001,
+                  let code = row.fundCode,
+                  !code.isEmpty else {
+                return nil
+            }
+            return code
+        }
+        guard !fundCodes.isEmpty else { return (nil, []) }
+
+        let batch = await fundLookThroughClient.fetchDisclosures(
+            fundCodes: Array(Set(fundCodes)).sorted()
+        )
+        let snapshot = PortfolioLookThroughCalculator.make(
+            rows: rows,
+            disclosures: batch.disclosures,
+            generatedAt: generatedAt
+        )
+        var warnings = batch.warnings
+        if snapshot == nil {
+            warnings.append("本次未形成可用的基金穿透快照；基金只能给出持有建议。")
+        }
+        return (snapshot, warnings)
+    }
+
+    private func makeNextHourResearchSnapshot(
+        rows: [PersonalAssetAggregateRow],
+        generatedAt: String,
+        lookThrough: PortfolioLookThroughSnapshot?,
+        sourceWarnings: [String]
+    ) -> TrendResearchSnapshot {
+        var fundEstimates: [String: TrendResearchFundEstimate] = [:]
+        for row in rows {
+            guard row.assetType == .fund,
+                  let code = row.fundCode,
+                  !code.isEmpty else {
+                continue
+            }
+            fundEstimates[code] = TrendResearchFundEstimate(
+                code: code,
+                name: row.fundName,
+                estimateChangePct: row.estimateChangePct,
+                price: row.currentEstimatePrice ?? row.currentPrice,
+                quotedAt: nextHourQuoteTime(row),
+                sourceLabel: nextHourQuoteSource(row)
+            )
+        }
+        return TrendResearchSnapshotBuilder().build(
+            rows: rows,
+            summary: nil,
+            platformPayload: nil,
+            alfaPayload: nil,
+            managerWatchEvents: [],
+            marketIndexQuotes: marketIndexQuotes,
+            fundEstimates: fundEstimates,
+            lookThrough: lookThrough,
+            watchSummary: managerWatchTimelineSummary,
+            insightSummary: portfolioSnapshotInsightSummary,
+            privacyMode: trendPrivacyMode,
+            runID: UUID(),
+            createdAt: generatedAt,
+            dataAsOf: userPortfolioSnapshot?.refreshedAt ?? generatedAt,
+            sourceWarnings: sourceWarnings
+        )
+    }
+
+    private func nextHourQuoteTime(_ row: PersonalAssetAggregateRow) -> String? {
+        if row.assetType == .fund, !row.isOnExchangeFund {
+            return row.holdingRow?.estimatePriceTime
+                ?? row.holdingRow?.priceTime
+                ?? row.holdingRow?.officialNavDate
+        }
+        return row.holdingRow?.priceTime ?? row.holdingRow?.resolvedPriceTime
+    }
+
+    private func nextHourQuoteSource(_ row: PersonalAssetAggregateRow) -> String? {
+        if row.assetType == .fund,
+           !row.isOnExchangeFund,
+           row.holdingRow?.estimatePrice != nil {
+            return "基金实时估值"
+        }
+        return row.holdingRow?.resolvedPriceSource ?? "本地持仓行情"
     }
 
     private func nextHourAssetTypeText(_ row: PersonalAssetAggregateRow) -> String {
@@ -256,7 +399,7 @@ extension AppModel {
                 to: nextHourGuidanceFileURL
             )
         } catch {
-            nextHourGuidanceError = "保存下一小时指引失败：\(error.localizedDescription)"
+            nextHourGuidanceError = "保存下一小时买卖建议失败：\(error.localizedDescription)"
         }
     }
 }

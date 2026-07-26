@@ -96,57 +96,97 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(permissions?.intValue, 0o600)
     }
 
+    func testMarketFreshnessRequiresTimestampWithinTwentyMinutes() {
+        XCTAssertTrue(
+            NextHourGuidanceFreshness.isFresh(
+                quoteTime: "2026-07-27 10:02:00",
+                generatedAt: "2026-07-27 10:15:00"
+            )
+        )
+        XCTAssertFalse(
+            NextHourGuidanceFreshness.isFresh(
+                quoteTime: "2026-07-27 09:30:00",
+                generatedAt: "2026-07-27 10:15:00"
+            )
+        )
+        XCTAssertFalse(
+            NextHourGuidanceFreshness.isFresh(
+                quoteTime: "2026-07-26 15:00:00",
+                generatedAt: "2026-07-27 09:15:00"
+            )
+        )
+    }
+
     func testFocusedAgentDecodesSubmittedGuidance() async throws {
         let arguments = """
         {
-          "headline": "缩量震荡，先等确认",
+          "headline": "缩量震荡，以持有为主",
           "posture": "balanced",
-          "summary": "下一小时以观察为主，突破前不追价。",
+          "summary": "下一小时以持有为主，没有明确买入或卖出信号。",
           "actions": [{
+            "target_id": "fund:510300",
             "target_name": "沪深300ETF",
-            "action": "avoid_chasing",
-            "instruction": "保持现有仓位，不在脉冲上涨时追加。",
+            "action": "hold",
+            "instruction": "持有现有仓位，暂不新增买卖。",
             "rationale": "当前快照只支持震荡判断。",
             "trigger": "指数回到日内关键位置且涨幅稳定",
             "invalidation": "指数跌破前低并持续走弱",
-            "confidence": 68
+            "confidence": 68,
+            "evidence_ids": ["local:next-hour:asset:fund:510300"]
           }],
-          "risk_checks": ["确认行情时间没有滞后"]
+          "risk_checks": ["确认行情时间没有滞后", "确认没有待处理的重复订单"]
         }
         """
         let client = FakeNextHourAgentClient(arguments: arguments)
         let agent = NextHourGuidanceAgent(client: client)
-        let slot = try XCTUnwrap(
-            NextHourGuidanceSchedule.default.dueSlot(
-                at: "2026-07-27 10:15:00",
-                lastAttemptedSlotKey: nil
-            )
+        let context = try makeAgentContext()
+        let settings = TrendAIProviderSettings(
+            providerName: "Test",
+            baseURL: "https://api.example.com/v1",
+            model: "test-model",
+            apiKey: "sk-test",
+            timeoutSeconds: 300
         )
-        let context = NextHourGuidanceContext(
-            generatedAt: "2026-07-27 10:15:00",
-            slot: slot,
-            assets: [
-                .init(
-                    id: "fund:510300",
-                    name: "沪深300ETF",
-                    code: "510300",
-                    assetType: "场内基金",
-                    status: "已持有",
-                    weightPct: 100,
-                    currentPrice: 4.2,
-                    profitPct: 3.1,
-                    estimateChangePct: -0.4,
-                    pendingTradeCount: 0,
-                    activePlanCount: 0
-                )
-            ],
-            market: [],
-            latestTrendGeneratedAt: "2026-07-27 09:30:00",
-            latestTrendHeadline: "中性",
-            latestTrendActions: [],
-            latestAssetConclusions: [],
-            dataRules: []
+        let researchSnapshot = makeResearchSnapshot()
+
+        let report = try await agent.run(
+            context: context,
+            researchSnapshot: researchSnapshot,
+            settings: settings,
+            webSearchSettings: .empty
         )
+
+        XCTAssertEqual(report.slotKey, "2026-07-27 10:15")
+        XCTAssertEqual(report.validUntil, "2026-07-27 11:15")
+        XCTAssertEqual(report.posture, .balanced)
+        XCTAssertEqual(report.actions.first?.action, .hold)
+        XCTAssertEqual(report.actions.first?.confidence, 68)
+        XCTAssertEqual(report.actions.first?.evidenceIDs, ["local:next-hour:asset:fund:510300"])
+        XCTAssertEqual(client.callCount, 2)
+    }
+
+    func testAgentRejectsBuyWhenWebSearchIsNotConfigured() async throws {
+        let arguments = """
+        {
+          "headline": "尝试买入",
+          "posture": "opportunistic",
+          "summary": "测试缺少联网搜索时的风控门槛。",
+          "actions": [{
+            "target_id": "fund:510300",
+            "target_name": "沪深300ETF",
+            "action": "buy",
+            "instruction": "分批买入 5% 仓位。",
+            "rationale": "测试理由。",
+            "trigger": "价格保持强势",
+            "invalidation": "价格转弱",
+            "confidence": 70,
+            "evidence_ids": ["local:next-hour:asset:fund:510300"]
+          }],
+          "risk_checks": ["确认行情时间", "确认没有重复订单"]
+        }
+        """
+        let client = FakeNextHourAgentClient(arguments: arguments)
+        let agent = NextHourGuidanceAgent(client: client)
         let settings = TrendAIProviderSettings(
             providerName: "Test",
             baseURL: "https://api.example.com/v1",
@@ -155,14 +195,84 @@ final class NextHourGuidanceTests: XCTestCase {
             timeoutSeconds: 300
         )
 
-        let report = try await agent.run(context: context, settings: settings)
+        do {
+            _ = try await agent.run(
+                context: makeAgentContext(),
+                researchSnapshot: makeResearchSnapshot(),
+                settings: settings,
+                webSearchSettings: .empty
+            )
+            XCTFail("未配置联网搜索时不应接受 buy")
+        } catch let error as NextHourGuidanceAgentError {
+            XCTAssertTrue(error.localizedDescription.contains("未配置联网搜索"))
+        }
+    }
 
-        XCTAssertEqual(report.slotKey, "2026-07-27 10:15")
-        XCTAssertEqual(report.validUntil, "2026-07-27 11:15")
-        XCTAssertEqual(report.posture, .balanced)
-        XCTAssertEqual(report.actions.first?.action, .avoidChasing)
-        XCTAssertEqual(report.actions.first?.confidence, 68)
-        XCTAssertEqual(client.callCount, 1)
+    private func makeAgentContext() throws -> NextHourGuidanceContext {
+        let slot = try XCTUnwrap(
+            NextHourGuidanceSchedule.default.dueSlot(
+                at: "2026-07-27 10:15:00",
+                lastAttemptedSlotKey: nil
+            )
+        )
+        return NextHourGuidanceContext(
+            generatedAt: "2026-07-27 10:15:00",
+            slot: slot,
+            assets: [
+                .init(
+                    id: "fund:510300",
+                    evidenceID: "local:next-hour:asset:fund:510300",
+                    name: "沪深300ETF",
+                    code: "510300",
+                    assetType: "场内基金",
+                    status: "已持有",
+                    weightPct: 100,
+                    currentPrice: 4.2,
+                    quoteTime: "2026-07-27 10:14:00",
+                    quoteSource: "测试行情",
+                    quoteIsFresh: true,
+                    profitPct: 3.1,
+                    estimateChangePct: -0.4,
+                    pendingTradeCount: 0,
+                    activePlanCount: 0
+                )
+            ],
+            market: [],
+            marketDataIsFresh: true,
+            marketDataWarnings: [],
+            latestTrendGeneratedAt: "2026-07-27 09:30:00",
+            latestTrendHeadline: "中性",
+            latestTrendActions: [],
+            latestAssetConclusions: [],
+            dataRules: []
+        )
+    }
+
+    private func makeResearchSnapshot() -> TrendResearchSnapshot {
+        TrendResearchSnapshot(
+            runID: UUID(),
+            createdAt: "2026-07-27 10:15:00",
+            dataAsOf: "2026-07-27 10:15:00",
+            privacyMode: .sanitized,
+            portfolio: TrendContextPortfolio(
+                assetCount: 1,
+                holdingCount: 1,
+                activePlanCount: 0,
+                pendingAssetCount: 0,
+                totalMarketValue: nil,
+                totalPendingCashAmount: nil,
+                totalEstimatedNextPlanAmount: nil,
+                totalEffectiveHoldingAmount: nil
+            ),
+            assets: [],
+            sectors: [],
+            platformSignals: [],
+            managerSignals: [],
+            marketQuotes: [],
+            lookThrough: nil,
+            insightHeadline: "",
+            sourceWarnings: []
+        )
     }
 
     private func makeReport() -> NextHourGuidanceReport {
@@ -211,12 +321,16 @@ private final class FakeNextHourAgentClient: TrendResearchAgentClient, @unchecke
     ) async throws -> AgentCompletionResult {
         lock.lock()
         callCount += 1
+        let currentCallCount = callCount
         lock.unlock()
+        let toolName = currentCallCount == 1
+            ? "get_live_market_context"
+            : "submit_next_hour_guidance"
         let call = AgentToolCall(
-            id: "call-next-hour",
+            id: "call-next-hour-\(currentCallCount)",
             function: AgentToolFunctionCall(
-                name: "submit_next_hour_guidance",
-                arguments: arguments
+                name: toolName,
+                arguments: currentCallCount == 1 ? "{}" : arguments
             )
         )
         let message = AgentChatMessage(

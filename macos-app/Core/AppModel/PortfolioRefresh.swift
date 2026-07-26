@@ -3,7 +3,10 @@ import Foundation
 // MARK: - Portfolio Refresh & Market Indices
 
 extension AppModel {
-    func refreshUserPortfolio(updateNotice: Bool = true) async throws {
+    func refreshUserPortfolio(
+        updateNotice: Bool = true,
+        forceQuoteRefresh: Bool? = nil
+    ) async throws {
         let holdings = activeUserPortfolioHoldings
         let telemetryStart = PerformanceTelemetry.start()
         var telemetryResult = "completed"
@@ -38,7 +41,7 @@ extension AppModel {
         do {
             let snapshot = try await platformClient.fetchUserPortfolioSnapshot(
                 holdings: holdings,
-                forceQuoteRefresh: updateNotice
+                forceQuoteRefresh: forceQuoteRefresh ?? updateNotice
             )
             userPortfolioSnapshot = snapshot
             rebuildAssetRows()
