@@ -65,6 +65,25 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         XCTAssertTrue(restored.lastTrendError.contains("最大轮次"))
     }
 
+    func testAgentFailureEventAndThrownErrorAreLoggedOnlyOnce() async {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings()
+        installSupportingProbe(model)
+        model.trendResearchAgent = FakeTrendResearchAgent(
+            result: .failure(TrendResearchAgentError.turnLimitExceeded),
+            emitsFailureEvent: true
+        )
+
+        await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 12:00:00")
+
+        let matchingFailures = model.trendProgressLogs.filter {
+            $0.level == .error
+                && $0.detail == TrendResearchAgentError.turnLimitExceeded.localizedDescription
+        }
+        XCTAssertEqual(matchingFailures.count, 1)
+        XCTAssertEqual(matchingFailures.first?.message, "Agent 执行失败")
+    }
+
     func testCancelledGenerationKeepsLastReport() async {
         let model = AppModel()
         let previous = TrendAnalysisReport.fixture(generatedAt: "2026-06-21 12:00:00", externalSignalStatus: .partial)
@@ -183,9 +202,14 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
     private let lock = NSLock()
     private(set) var runCount = 0
     let result: Result<TrendAnalysisReport, Error>
+    let emitsFailureEvent: Bool
 
-    init(result: Result<TrendAnalysisReport, Error>) {
+    init(
+        result: Result<TrendAnalysisReport, Error>,
+        emitsFailureEvent: Bool = false
+    ) {
         self.result = result
+        self.emitsFailureEvent = emitsFailureEvent
     }
 
     func run(
@@ -204,6 +228,9 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
         case .success(let report):
             return report
         case .failure(let error):
+            if emitsFailureEvent {
+                await eventHandler(.failed(message: error.localizedDescription))
+            }
             throw error
         }
     }

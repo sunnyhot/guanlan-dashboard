@@ -235,6 +235,82 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(client.requestedToolNames(at: 1), ["submit_trend_report"])
     }
 
+    func testSingleRequestTimeoutIsCappedInsteadOfConsumingRemainingRunBudget() async throws {
+        let snapshot = makeEmptySnapshot()
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
+        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
+        let client = ScriptedTrendAgentClient([
+            .success(toolCallResponse([
+                AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
+            ])),
+            .success(toolCallResponse([
+                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
+            ]))
+        ])
+        let settings = TrendAIProviderSettings(
+            providerName: "Test",
+            baseURL: "https://api.example.com/v1",
+            model: "glm-5.2",
+            apiKey: "sk-test",
+            timeoutSeconds: 300
+        )
+        let agent = TrendResearchAgent(client: client)
+
+        _ = try await agent.run(snapshot: snapshot, settings: settings) { _ in }
+
+        XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [90, 90])
+    }
+
+    func testTimedOutSubmissionAutomaticallyConvergesAndRetries() async throws {
+        let snapshot = makeEmptySnapshot()
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
+        let reportJSON = try XCTUnwrap(String(data: JSONEncoder().encode(report), encoding: .utf8))
+        let client = ScriptedTrendAgentClient([
+            .success(toolCallResponse([
+                AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
+            ])),
+            .failure(OpenAICompatibleAgentClientError.timedOut(90)),
+            .success(toolCallResponse([
+                AgentToolCall(id: "s1", function: AgentToolFunctionCall(name: "submit_trend_report", arguments: "{\"report\":\(reportJSON)}"))
+            ]))
+        ])
+        let recorder = TrendAgentEventRecorder()
+        let agent = TrendResearchAgent(client: client)
+
+        let result = try await agent.run(snapshot: snapshot, settings: testSettings()) { event in
+            await recorder.record(event)
+        }
+
+        XCTAssertEqual(result.privacyMode, .sanitized)
+        XCTAssertEqual(client.responsesConsumed, 3)
+        XCTAssertEqual(client.requestedToolNames(at: 2), ["submit_trend_report"])
+        let timeoutEventCount = await recorder.timeoutEventCount
+        XCTAssertEqual(timeoutEventCount, 1)
+    }
+
+    func testSecondConsecutiveRequestTimeoutFailsAfterRecoveryBudget() async throws {
+        let snapshot = makeEmptySnapshot()
+        let client = ScriptedTrendAgentClient([
+            .success(toolCallResponse([
+                AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
+            ])),
+            .failure(OpenAICompatibleAgentClientError.timedOut(15)),
+            .failure(OpenAICompatibleAgentClientError.timedOut(15))
+        ])
+        let agent = TrendResearchAgent(client: client)
+
+        do {
+            _ = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
+            XCTFail("Expected modelRequestTimeoutRecoveryExceeded")
+        } catch TrendResearchAgentError.modelRequestTimeoutRecoveryExceeded {
+            // expected
+        }
+    }
+
     func testHarnessRemovesRepeatedWebEvidenceFromLaterToolResult() throws {
         var harness = TrendResearchHarnessState(snapshot: makeEmptySnapshot())
         let content = TrendResearchToolEnvelope.success(
@@ -362,6 +438,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
     private let lock = NSLock()
     private var responses: [Result<AgentCompletionResult, Error>]
     private var requestToolNames: [[String]] = []
+    private var recordedRequestTimeouts: [Double?] = []
     private(set) var responsesConsumed = 0
 
     init(_ responses: [Result<AgentCompletionResult, Error>]) {
@@ -380,6 +457,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         lock.lock()
         responsesConsumed += 1
         requestToolNames.append(tools.map(\.function.name))
+        recordedRequestTimeouts.append(timeout)
         let next = responses.isEmpty
             ? Result<AgentCompletionResult, Error>.failure(URLError(.badServerResponse))
             : responses.removeFirst()
@@ -397,5 +475,21 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         defer { lock.unlock() }
         guard requestToolNames.indices.contains(index) else { return [] }
         return requestToolNames[index]
+    }
+
+    var requestedTimeouts: [Double?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedRequestTimeouts
+    }
+}
+
+private actor TrendAgentEventRecorder {
+    private(set) var timeoutEventCount = 0
+
+    func record(_ event: TrendResearchAgentEvent) {
+        if case .modelRequestTimedOut = event {
+            timeoutEventCount += 1
+        }
     }
 }

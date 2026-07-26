@@ -276,7 +276,7 @@ extension AppModel {
 
         appendTrendProgress(
             "准备请求模型：\(provider.model)",
-            detail: "单次超时 \(trendTimeoutText(provider))",
+            detail: trendTimeoutText(provider),
             level: .activity
         )
 
@@ -313,11 +313,16 @@ extension AppModel {
         } catch {
             trendGenerationState = .failed
             lastTrendError = error.localizedDescription
-            appendTrendProgress(
-                "趋势分析失败",
-                detail: error.localizedDescription,
-                level: .error
-            )
+            let failureAlreadyLogged = trendProgressLogs.last.map {
+                $0.level == .error && $0.detail == error.localizedDescription
+            } ?? false
+            if !failureAlreadyLogged {
+                appendTrendProgress(
+                    "趋势分析失败",
+                    detail: error.localizedDescription,
+                    level: .error
+                )
+            }
         }
     }
 
@@ -686,6 +691,12 @@ extension AppModel {
             appendTrendProgress("进入第 \(turn) 轮", level: .info)
         case .modelRequestStarted:
             appendTrendProgress("正在等待模型响应", level: .activity)
+        case .modelRequestTimedOut(let turn, let timeout, let recoveryAttempt, let maxRecoveryAttempts):
+            appendTrendProgress(
+                "模型请求超时，正在自动收敛重试",
+                detail: "第 \(turn) 轮在 \(Int(timeout.rounded())) 秒内未返回；恢复 \(recoveryAttempt)/\(maxRecoveryAttempts)",
+                level: .warning
+            )
         case .modelStreamProgress(let turn, let progress):
             switch progress {
             case .firstChunk(let elapsed):
@@ -816,6 +827,10 @@ extension AppModel {
     }
 
     private func trendTimeoutText(_ settings: TrendAIProviderSettings) -> String {
-        "\(Int(settings.timeoutSeconds.rounded())) 秒"
+        let perRequest = min(
+            settings.timeoutSeconds,
+            TrendResearchRunPolicy.defaultPerRequestTimeoutSeconds
+        )
+        return "单轮无响应上限 \(Int(perRequest.rounded())) 秒；整体上限 \(Int(TrendResearchRunPolicy.defaultTotalTimeoutSeconds.rounded())) 秒；单轮超时自动收敛重试 \(TrendResearchRunPolicy.defaultMaxRequestTimeoutRecoveries) 次"
     }
 }

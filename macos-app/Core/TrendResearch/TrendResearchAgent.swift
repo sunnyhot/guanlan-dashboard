@@ -38,6 +38,12 @@ extension OpenAICompatibleAgentClient: TrendResearchAgentClient {}
 // MARK: - 运行策略与事件
 
 struct TrendResearchRunPolicy: Sendable {
+    /// 单轮模型请求不能独占整次运行预算。模型 90 秒内连首个有效响应都没有返回时，
+    /// 视为本轮卡住，由 Harness 收敛任务后自动重试。
+    static let defaultPerRequestTimeoutSeconds: Double = 90
+    static let defaultTotalTimeoutSeconds: Double = 300
+    static let defaultMaxRequestTimeoutRecoveries = 1
+
     var maxTurns: Int = 12
     var maxToolCalls: Int = 32
     var expandedMaxTurns: Int = 24
@@ -49,8 +55,9 @@ struct TrendResearchRunPolicy: Sendable {
     var reservedSubmitTurns: Int = 2
     var maxInvalidSubmissions: Int = 2
     var maxPlainTextResponses: Int = 2
-    var perRequestTimeoutSeconds: Double = TrendAIProviderSettings.defaultGenerationTimeoutSeconds
-    var totalTimeoutSeconds: Double = 300
+    var perRequestTimeoutSeconds: Double = Self.defaultPerRequestTimeoutSeconds
+    var totalTimeoutSeconds: Double = Self.defaultTotalTimeoutSeconds
+    var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
     var temperature: Double = 0.2
 
@@ -94,6 +101,7 @@ enum TrendResearchAgentEvent: Sendable {
     case harnessGuidance(message: String)
     case turnStarted(Int)
     case modelRequestStarted(turn: Int)
+    case modelRequestTimedOut(turn: Int, timeout: Double, recoveryAttempt: Int, maxRecoveryAttempts: Int)
     case modelStreamProgress(turn: Int, progress: AgentStreamProgress)
     case modelResponseReceived(turn: Int, duration: Double)
     case modelCorrection(message: String)
@@ -112,6 +120,7 @@ enum TrendResearchAgentError: Error, LocalizedError {
     case toolCallLimitExceeded
     case missingToolCalls
     case invalidSubmissionLimitExceeded(errors: [String])
+    case modelRequestTimeoutRecoveryExceeded(timeout: Double)
     case totalTimeoutExceeded
 
     var errorDescription: String? {
@@ -126,8 +135,10 @@ enum TrendResearchAgentError: Error, LocalizedError {
             return "模型连续返回普通文本，未调用工具。"
         case .invalidSubmissionLimitExceeded(let errors):
             return "报告多次校验未通过：\n" + errors.joined(separator: "\n")
+        case .modelRequestTimeoutRecoveryExceeded(let timeout):
+            return "趋势模型连续请求超时（单轮上限 \(Int(timeout.rounded())) 秒）。Agent 已自动收敛任务并重试，但模型服务仍未返回；已保留上一次报告，请检查模型服务状态后重试。"
         case .totalTimeoutExceeded:
-            return "趋势 Agent 整体超时。"
+            return "趋势 Agent 已达到 300 秒整体运行上限。已保留上一次报告，请检查模型服务状态后重试。"
         }
     }
 }
@@ -183,6 +194,7 @@ struct TrendResearchAgent: Sendable {
         var webSearchUnavailableResult: TrendResearchToolResult?
         var harnessState = TrendResearchHarnessState(snapshot: snapshot)
         var submissionMode = false
+        var consecutiveRequestTimeoutRecoveries = 0
         var didWarnPreferredWebSearches = false
         var didWarnWebSearchExhausted = false
         let started = Date()
@@ -257,20 +269,61 @@ struct TrendResearchAgent: Sendable {
                 let requestStarted = Date()
                 let currentTurn = turnCount
 
-                let response = try await client.complete(
-                    messages: messages,
-                    tools: toolsForRequest,
-                    toolChoice: .auto,
-                    temperature: policy.temperature,
-                    settings: settings,
-                    timeout: perRequestTimeout,
-                    streamProgress: { progress in
-                        await eventHandler(
-                            .modelStreamProgress(turn: currentTurn, progress: progress)
+                let response: AgentCompletionResult
+                do {
+                    response = try await client.complete(
+                        messages: messages,
+                        tools: toolsForRequest,
+                        toolChoice: .auto,
+                        temperature: policy.temperature,
+                        settings: settings,
+                        timeout: perRequestTimeout,
+                        streamProgress: { progress in
+                            await eventHandler(
+                                .modelStreamProgress(turn: currentTurn, progress: progress)
+                            )
+                        }
+                    )
+                } catch OpenAICompatibleAgentClientError.timedOut {
+                    guard consecutiveRequestTimeoutRecoveries < policy.maxRequestTimeoutRecoveries else {
+                        throw TrendResearchAgentError.modelRequestTimeoutRecoveryExceeded(
+                            timeout: perRequestTimeout
                         )
                     }
-                )
 
+                    consecutiveRequestTimeoutRecoveries += 1
+                    let webStatus = await webSearchGovernor.status()
+                    let researchReady = harnessState.readyForSubmission(
+                        webSearchConfigured: webSearchSettings.isConfigured,
+                        allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
+                            && (
+                                webStatus.remainingNetworkSearches == 0
+                                    || webSearchUnavailableResult != nil
+                            )
+                    )
+                    if researchReady {
+                        submissionMode = true
+                    }
+
+                    await eventHandler(
+                        .modelRequestTimedOut(
+                            turn: currentTurn,
+                            timeout: perRequestTimeout,
+                            recoveryAttempt: consecutiveRequestTimeoutRecoveries,
+                            maxRecoveryAttempts: policy.maxRequestTimeoutRecoveries
+                        )
+                    )
+                    let nextStep = researchReady
+                        ? "研究覆盖已经满足要求。停止新增搜索和解释，只调用 submit_trend_report 提交完整报告。"
+                        : "不要重复展开分析，本轮只完成一个必要动作：\(harnessState.nextStepHint(webSearchConfigured: webSearchSettings.isConfigured, remainingWebSearches: webStatus.remainingNetworkSearches))"
+                    let guidance = "第 \(currentTurn) 轮模型请求超时。Harness 正在自动恢复：\(nextStep)"
+                    messages.append(correctionMessage(guidance))
+                    await eventHandler(.harnessGuidance(message: guidance))
+                    compactContextIfNeeded(&messages)
+                    continue
+                }
+
+                consecutiveRequestTimeoutRecoveries = 0
                 await eventHandler(.modelResponseReceived(turn: turnCount, duration: Date().timeIntervalSince(requestStarted)))
                 messages.append(response.assistantMessage)
 

@@ -45,7 +45,7 @@ enum OpenAICompatibleAgentClientError: Error, LocalizedError {
             }
             return "趋势分析模型请求失败。\(suffix)"
         case .timedOut(let seconds):
-            return "趋势分析模型请求超时：\(Int(seconds)) 秒内未返回。建议稍后重试或减少明细范围。"
+            return "趋势分析模型请求超时：\(Int(seconds.rounded())) 秒内未返回有效响应。请检查模型服务状态或稍后重试。"
         case .invalidResponse(let detail):
             return "模型接口返回格式不符合 OpenAI-compatible chat/completions：\(detail)"
         }
