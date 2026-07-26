@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.4/QiemanDashboard-3.9.4.zip",
-    "name" : "QiemanDashboard-3.9.4.zip",
-    "sha256" : "d0abd033c59b0dbc739270f7f20cbdb1aa45e92740103b2f97c5eb5834a38deb",
-    "size" : 5370517
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.5/QiemanDashboard-3.9.5.zip",
+    "name" : "QiemanDashboard-3.9.5.zip",
+    "sha256" : "747e4cc5ed110ebe978218dd88284c893ba74c51ce249f474ed0816e16fdeb2b",
+    "size" : 5416476
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.4/QiemanDashboard-3.9.4.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.5/QiemanDashboard-3.9.5.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.4.zip",
-      "size" : 5370517
+      "name" : "QiemanDashboard-3.9.5.zip",
+      "size" : 5416476
     }
   ],
-  "body" : "下一小时操作指引支持手动研判槽位",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.4",
-  "name" : "QiemanDashboard v3.9.4",
-  "notes" : "下一小时操作指引支持手动研判槽位",
+  "body" : "下一小时买卖建议接入基金穿透、行情新鲜度与证据溯源",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.5",
+  "name" : "QiemanDashboard v3.9.5",
+  "notes" : "下一小时买卖建议接入基金穿透、行情新鲜度与证据溯源",
   "published_at" : "",
-  "sha256" : "d0abd033c59b0dbc739270f7f20cbdb1aa45e92740103b2f97c5eb5834a38deb",
-  "tag" : "v3.9.4",
-  "tag_name" : "v3.9.4",
-  "version" : "3.9.4"
+  "sha256" : "747e4cc5ed110ebe978218dd88284c893ba74c51ce249f474ed0816e16fdeb2b",
+  "tag" : "v3.9.5",
+  "tag_name" : "v3.9.5",
+  "version" : "3.9.5"
 }
