@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.10/QiemanDashboard-3.9.10.zip",
-    "name" : "QiemanDashboard-3.9.10.zip",
-    "sha256" : "284d6bce1eb4e02dbcc3896030d232734484d088a495fe3ed67a99bab872c77d",
-    "size" : 5654277
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.11/QiemanDashboard-3.9.11.zip",
+    "name" : "QiemanDashboard-3.9.11.zip",
+    "sha256" : "5e3b3ba2127c5f74aff2cd193d93d043eea51995b1e6e38661f9a2d9b154d4b3",
+    "size" : 5657409
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.10/QiemanDashboard-3.9.10.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.11/QiemanDashboard-3.9.11.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.10.zip",
-      "size" : 5654277
+      "name" : "QiemanDashboard-3.9.11.zip",
+      "size" : 5657409
     }
   ],
-  "body" : "总超时降级为宽松兜底，不再腰斩慢运行",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.10",
-  "name" : "QiemanDashboard v3.9.10",
-  "notes" : "总超时降级为宽松兜底，不再腰斩慢运行",
+  "body" : "非 action 研究结论证据无关联时降级，不再硬拒整份报告",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.11",
+  "name" : "QiemanDashboard v3.9.11",
+  "notes" : "非 action 研究结论证据无关联时降级，不再硬拒整份报告",
   "published_at" : "",
-  "sha256" : "284d6bce1eb4e02dbcc3896030d232734484d088a495fe3ed67a99bab872c77d",
-  "tag" : "v3.9.10",
-  "tag_name" : "v3.9.10",
-  "version" : "3.9.10"
+  "sha256" : "5e3b3ba2127c5f74aff2cd193d93d043eea51995b1e6e38661f9a2d9b154d4b3",
+  "tag" : "v3.9.11",
+  "tag_name" : "v3.9.11",
+  "version" : "3.9.11"
 }
