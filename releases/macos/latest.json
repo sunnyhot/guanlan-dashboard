@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.8/QiemanDashboard-3.9.8.zip",
-    "name" : "QiemanDashboard-3.9.8.zip",
-    "sha256" : "2fb1365bb2105e2a911226f7b77066fc661d66b510a1cfd96fc76599d80c2dad",
-    "size" : 5655603
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.9/QiemanDashboard-3.9.9.zip",
+    "name" : "QiemanDashboard-3.9.9.zip",
+    "sha256" : "31f63d0ba04fe25ffc3390c875c6fc68324ab26837e468f43eb6e45531bee427",
+    "size" : 5654907
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.8/QiemanDashboard-3.9.8.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.9/QiemanDashboard-3.9.9.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.8.zip",
-      "size" : 5655603
+      "name" : "QiemanDashboard-3.9.9.zip",
+      "size" : 5654907
     }
   ],
-  "body" : "报告分模块提交，避免大组合单次 tool_call 超限",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.8",
-  "name" : "QiemanDashboard v3.9.8",
-  "notes" : "报告分模块提交，避免大组合单次 tool_call 超限",
+  "body" : "总预算按规模动态扩张 + 流式超时改为分片间空闲",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.9",
+  "name" : "QiemanDashboard v3.9.9",
+  "notes" : "总预算按规模动态扩张 + 流式超时改为分片间空闲",
   "published_at" : "",
-  "sha256" : "2fb1365bb2105e2a911226f7b77066fc661d66b510a1cfd96fc76599d80c2dad",
-  "tag" : "v3.9.8",
-  "tag_name" : "v3.9.8",
-  "version" : "3.9.8"
+  "sha256" : "31f63d0ba04fe25ffc3390c875c6fc68324ab26837e468f43eb6e45531bee427",
+  "tag" : "v3.9.9",
+  "tag_name" : "v3.9.9",
+  "version" : "3.9.9"
 }
