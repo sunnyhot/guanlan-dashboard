@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.0/QiemanDashboard-3.9.0.zip",
-    "name" : "QiemanDashboard-3.9.0.zip",
-    "sha256" : "d41f63d315d71e9619953bd5a4b7358fed5febc099b060722126475f98d75b1e",
-    "size" : 5129960
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.1/QiemanDashboard-3.9.1.zip",
+    "name" : "QiemanDashboard-3.9.1.zip",
+    "sha256" : "acdd5ec0c2a6b74b3d6057085072c48b8dfcdb9cc9c693b44bf25832c3704e8a",
+    "size" : 5245091
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.0/QiemanDashboard-3.9.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.1/QiemanDashboard-3.9.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.0.zip",
-      "size" : 5129960
+      "name" : "QiemanDashboard-3.9.1.zip",
+      "size" : 5245091
     }
   ],
-  "body" : "release: v3.9.0 内嵌式趋势研究 Agent\n流式输出、联网搜索收敛与实时日志\n内嵌式趋势研究 Agent + Tavily 联网搜索\n内嵌式趋势研究 Agent 技术设计",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.0",
-  "name" : "QiemanDashboard v3.9.0",
-  "notes" : "release: v3.9.0 内嵌式趋势研究 Agent\n流式输出、联网搜索收敛与实时日志\n内嵌式趋势研究 Agent + Tavily 联网搜索\n内嵌式趋势研究 Agent 技术设计",
+  "body" : "基金底层穿透与最近交易日涨跌",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.1",
+  "name" : "QiemanDashboard v3.9.1",
+  "notes" : "基金底层穿透与最近交易日涨跌",
   "published_at" : "",
-  "sha256" : "d41f63d315d71e9619953bd5a4b7358fed5febc099b060722126475f98d75b1e",
-  "tag" : "v3.9.0",
-  "tag_name" : "v3.9.0",
-  "version" : "3.9.0"
+  "sha256" : "acdd5ec0c2a6b74b3d6057085072c48b8dfcdb9cc9c693b44bf25832c3704e8a",
+  "tag" : "v3.9.1",
+  "tag_name" : "v3.9.1",
+  "version" : "3.9.1"
 }
