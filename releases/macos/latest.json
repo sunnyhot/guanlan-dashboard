@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.7/QiemanDashboard-3.9.7.zip",
-    "name" : "QiemanDashboard-3.9.7.zip",
-    "sha256" : "3fba73aca102bd4f4272ef58982ca46fb816ec1a45032190b84f5675d2b2a775",
-    "size" : 5613195
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.8/QiemanDashboard-3.9.8.zip",
+    "name" : "QiemanDashboard-3.9.8.zip",
+    "sha256" : "2fb1365bb2105e2a911226f7b77066fc661d66b510a1cfd96fc76599d80c2dad",
+    "size" : 5655603
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.7/QiemanDashboard-3.9.7.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.8/QiemanDashboard-3.9.8.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.7.zip",
-      "size" : 5613195
+      "name" : "QiemanDashboard-3.9.8.zip",
+      "size" : 5655603
     }
   ],
-  "body" : "模型单轮请求超时自动收敛重试",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.7",
-  "name" : "QiemanDashboard v3.9.7",
-  "notes" : "模型单轮请求超时自动收敛重试",
+  "body" : "报告分模块提交，避免大组合单次 tool_call 超限",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.8",
+  "name" : "QiemanDashboard v3.9.8",
+  "notes" : "报告分模块提交，避免大组合单次 tool_call 超限",
   "published_at" : "",
-  "sha256" : "3fba73aca102bd4f4272ef58982ca46fb816ec1a45032190b84f5675d2b2a775",
-  "tag" : "v3.9.7",
-  "tag_name" : "v3.9.7",
-  "version" : "3.9.7"
+  "sha256" : "2fb1365bb2105e2a911226f7b77066fc661d66b510a1cfd96fc76599d80c2dad",
+  "tag" : "v3.9.8",
+  "tag_name" : "v3.9.8",
+  "version" : "3.9.8"
 }
