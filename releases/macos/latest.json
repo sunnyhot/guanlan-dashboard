@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.11/QiemanDashboard-3.9.11.zip",
-    "name" : "QiemanDashboard-3.9.11.zip",
-    "sha256" : "5e3b3ba2127c5f74aff2cd193d93d043eea51995b1e6e38661f9a2d9b154d4b3",
-    "size" : 5657409
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.12/QiemanDashboard-3.9.12.zip",
+    "name" : "QiemanDashboard-3.9.12.zip",
+    "sha256" : "c0c4aa75f6a5c134d0bbf12c0712af1bba24ba50242d7179a0166683bc28fe9a",
+    "size" : 5657414
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.11/QiemanDashboard-3.9.11.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.12/QiemanDashboard-3.9.12.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.11.zip",
-      "size" : 5657409
+      "name" : "QiemanDashboard-3.9.12.zip",
+      "size" : 5657414
     }
   ],
-  "body" : "非 action 研究结论证据无关联时降级，不再硬拒整份报告",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.11",
-  "name" : "QiemanDashboard v3.9.11",
-  "notes" : "非 action 研究结论证据无关联时降级，不再硬拒整份报告",
+  "body" : "单轮空闲超时 90s → 180s，给推理模型静默思考留余量",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.12",
+  "name" : "QiemanDashboard v3.9.12",
+  "notes" : "单轮空闲超时 90s → 180s，给推理模型静默思考留余量",
   "published_at" : "",
-  "sha256" : "5e3b3ba2127c5f74aff2cd193d93d043eea51995b1e6e38661f9a2d9b154d4b3",
-  "tag" : "v3.9.11",
-  "tag_name" : "v3.9.11",
-  "version" : "3.9.11"
+  "sha256" : "c0c4aa75f6a5c134d0bbf12c0712af1bba24ba50242d7179a0166683bc28fe9a",
+  "tag" : "v3.9.12",
+  "tag_name" : "v3.9.12",
+  "version" : "3.9.12"
 }
