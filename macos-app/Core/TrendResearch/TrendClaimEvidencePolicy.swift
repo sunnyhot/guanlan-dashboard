@@ -53,24 +53,40 @@ struct TrendClaimEvidencePolicy {
             return messages
         }
 
-        let associationCandidates = evidence.supportingEvidenceIDs.compactMap {
-            evidenceByID[$0]
+        // 非 uncertain 的方向性结论才硬卡证据关联；uncertain（含 App 已降级的）研究结论不硬拒，
+        // 由 validateAction 对资金动作单独严卡。
+        guard direction != .uncertain else { return messages }
+        if lacksAssociatedSupport(
+            evidence: evidence,
+            evidenceByID: evidenceByID,
+            entityCode: entityCode,
+            entityName: entityName,
+            sectorKey: sectorKey
+        ) {
+            messages.append("\(label)没有与目标标的或板块关联的支持证据")
         }
+        return messages
+    }
+
+    /// supporting 证据存在但无一与 claim 的标的/板块关联时返回 true；
+    /// supporting 为空或不需要关联时返回 false。供 SubmitTrendReportTool 做降级判断。
+    func lacksAssociatedSupport(
+        evidence: TrendClaimEvidence,
+        evidenceByID: [String: TrendEvidence],
+        entityCode: String? = nil,
+        entityName: String? = nil,
+        sectorKey: String? = nil
+    ) -> Bool {
+        let supporting = evidence.supportingEvidenceIDs.compactMap { evidenceByID[$0] }
+        guard !supporting.isEmpty else { return false }
         let expectsAssociation = [entityCode, entityName, sectorKey].contains {
             guard let value = $0 else { return false }
             return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        if expectsAssociation,
-           !associationCandidates.contains(where: {
-               $0.metadata.isAssociated(
-                   entityCode: entityCode,
-                   entityName: entityName,
-                   sectorKey: sectorKey
-               )
-           }) {
-            messages.append("\(label)没有与目标标的或板块关联的支持证据")
+        guard expectsAssociation else { return false }
+        return !supporting.contains {
+            $0.metadata.isAssociated(entityCode: entityCode, entityName: entityName, sectorKey: sectorKey)
         }
-        return messages
     }
 
     func validateAction(

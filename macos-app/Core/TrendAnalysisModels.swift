@@ -484,7 +484,7 @@ struct TrendPortfolioSummary: Codable, Hashable {
 
 struct TrendHorizonView: Codable, Hashable {
     let horizon: TrendHorizon
-    let direction: TrendDirection
+    var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
     let counterSignals: [String]
@@ -533,7 +533,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let exposureText: String
-    let direction: TrendDirection
+    var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
     let evidenceIDs: [String]
@@ -595,7 +595,7 @@ struct TrendMarketOutlook: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let category: String
-    let direction: TrendDirection
+    var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
     let evidenceIDs: [String]
@@ -732,7 +732,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let category: String
-    let direction: TrendDirection
+    var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
     let triggerConditions: [String]

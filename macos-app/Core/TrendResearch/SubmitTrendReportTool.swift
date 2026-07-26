@@ -81,9 +81,39 @@ struct SubmitTrendReportTool: TrendResearchTool {
                 forceShortUncertainReasons: insufficientReasons
             )
         }
-        let normalizedMarket = decoded.marketOutlook.map(Self.normalized)
-        let normalizedSectors = decoded.sectors.map(Self.normalized)
-        let normalizedOpportunities = decoded.opportunities.map(Self.normalized)
+        var normalizedMarket = decoded.marketOutlook.map(Self.normalized)
+        var normalizedSectors = decoded.sectors.map(Self.normalized)
+        var normalizedOpportunities = decoded.opportunities.map(Self.normalized)
+
+        // 非 action 研究结论（板块/大类资产/机会）若 supporting 证据与该主题无关联，
+        // 降级为 uncertain 并登记 warning——不硬拒整份报告；资金动作仍由 validateAction 严卡。
+        let canonicalByID = Dictionary(canonical.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let claimPolicy = TrendClaimEvidencePolicy()
+        var associationDowngradeWarnings: [TrendWarning] = []
+        for index in normalizedSectors.indices {
+            let claim = normalizedSectors[index]
+            guard claim.direction != .uncertain else { continue }
+            if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, sectorKey: claim.name) {
+                normalizedSectors[index].direction = .uncertain
+                associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-sector-\(claim.id)", title: "证据关联降级", detail: "板块「\(claim.name)」的支持证据与该板块无明确关联，已降级为 uncertain。"))
+            }
+        }
+        for index in normalizedMarket.indices {
+            let claim = normalizedMarket[index]
+            guard claim.direction != .uncertain else { continue }
+            if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, entityName: claim.name) {
+                normalizedMarket[index].direction = .uncertain
+                associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-market-\(claim.id)", title: "证据关联降级", detail: "大盘/大类资产「\(claim.name)」的支持证据与该主题无明确关联，已降级为 uncertain。"))
+            }
+        }
+        for index in normalizedOpportunities.indices {
+            let claim = normalizedOpportunities[index]
+            guard claim.direction != .uncertain else { continue }
+            if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, entityName: claim.name) {
+                normalizedOpportunities[index].direction = .uncertain
+                associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-opportunity-\(claim.id)", title: "证据关联降级", detail: "机会「\(claim.name)」的支持证据与该主题无明确关联，已降级为 uncertain。"))
+            }
+        }
         let normalizedKeyAssets = decoded.keyAssets.map {
             Self.normalized($0, forceShortUncertainReasons: insufficientReasons)
         }
@@ -114,7 +144,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             )
         }
         let warnings = Self.uniqueWarnings(
-            decoded.warnings + sourceWarnings + insufficiencyWarnings
+            decoded.warnings + sourceWarnings + insufficiencyWarnings + associationDowngradeWarnings
         )
 
         // 6. 用快照覆盖 privacyMode（let，需重建）和 dataAsOf；用当前时间覆盖 generatedAt。
