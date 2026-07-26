@@ -142,6 +142,9 @@ final class EnhancementState: ObservableObject {
     @Published var lastTrendError = ""
     @Published var lastTrendConnectionMessage = ""
     @Published var trendProgressLogs: [TrendProgressLog] = []
+    @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
+    @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
+    @Published var nextHourGuidanceError = ""
     @Published var tradeSignalSettings: TradeSignalSettings = .default
     @Published var tradeSignalNotificationState = TradeSignalNotificationState()
     @Published var selectedWorkbenchSegment: WorkbenchSegment = .today

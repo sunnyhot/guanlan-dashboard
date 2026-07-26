@@ -73,6 +73,10 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("trend-agent.log", isDirectory: false)
     }
 
+    var nextHourGuidanceFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("next-hour-guidance.json", isDirectory: false)
+    }
+
     var tradeSignalSettingsFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("trade-signal-settings.json", isDirectory: false)
     }

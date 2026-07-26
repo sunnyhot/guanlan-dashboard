@@ -3,14 +3,263 @@ import SwiftUI
 extension EnhancementCenterView {
     /// 今日研判：组合结论 + 数据时间 + 周期/市场/板块/重点标的 + 行动候选(可加入跟踪) + 全部持仓研判 + 折叠证据边界
     var todayContent: some View {
-        Group {
-            if let report = model.trendReport {
-                todayReportView(report)
-            } else if model.trendSettings.provider.isConfigured {
-                trendEmptyState("等待生成", detail: "趋势分析会结合本地持仓、平台动态和模型可用的外部信号，输出条件式判断和反证条件。")
-            } else {
-                trendEmptyState("未配置模型", detail: "点右上角「设置」填写模型地址、模型名称和 API Key 后即可生成。")
+        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+            nextHourGuidanceModule
+            Group {
+                if let report = model.trendReport {
+                    todayReportView(report)
+                } else if model.trendSettings.provider.isConfigured {
+                    trendEmptyState("等待生成", detail: "趋势分析会结合本地持仓、平台动态和模型可用的外部信号，输出条件式判断和反证条件。")
+                } else {
+                    trendEmptyState("未配置模型", detail: "点右上角「设置」填写模型地址、模型名称和 API Key 后即可生成。")
+                }
             }
+        }
+    }
+
+    private var nextHourGuidanceModule: some View {
+        VStack(alignment: .leading, spacing: AppPalette.spaceM) {
+            HStack(spacing: AppPalette.spaceS) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppPalette.onBrand)
+                    .frame(width: 30, height: 30)
+                    .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("下一小时操作指引")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text(model.nextHourGuidanceScheduleText)
+                        .font(.system(size: 9))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                Spacer(minLength: AppPalette.spaceS)
+                nextHourGuidanceStatus
+                Button {
+                    model.startNextHourGuidance()
+                } label: {
+                    Label(
+                        model.nextHourGuidanceGenerationState == .generating ? "生成中…" : "刷新当前槽位",
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.appSecondary)
+                .disabled(
+                    !model.trendSettings.provider.isConfigured
+                        || model.nextHourGuidanceGenerationState == .generating
+                        || model.trendGenerationState == .generating
+                )
+            }
+
+            if model.nextHourGuidanceGenerationState == .generating {
+                HStack(spacing: AppPalette.spaceS) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在刷新持仓和大盘行情，并生成当前时段指引…")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                .padding(.vertical, AppPalette.spaceS)
+            }
+
+            if let report = model.nextHourGuidanceReport {
+                nextHourGuidanceReportView(report)
+            } else {
+                Text(model.trendSettings.provider.isConfigured
+                     ? "将在下一个交易时段槽位自动生成。场外基金不会参与盘中逐小时研判，只在 14:50 收盘前统一复核。"
+                     : "配置 AI 模型后自动启用。生成成功会发送系统提醒，点击提醒可回到 AI 研判。")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, AppPalette.spaceS)
+            }
+
+            if !model.nextHourGuidanceError.isEmpty {
+                Label(model.nextHourGuidanceError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(AppPalette.warning)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(AppPalette.spaceL)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .staticSurface(
+            tint: AppPalette.brand,
+            fill: AppPalette.cardStrong,
+            strokeOpacity: 0.20,
+            activeStrokeOpacity: 0.42
+        )
+    }
+
+    @ViewBuilder
+    private var nextHourGuidanceStatus: some View {
+        switch model.nextHourGuidanceGenerationState {
+        case .generating:
+            trendMetaTag("状态", "生成中", tint: AppPalette.info)
+        case .succeeded:
+            trendMetaTag("状态", "已更新", tint: AppPalette.positive)
+        case .failed, .rejected:
+            trendMetaTag("状态", "上次失败", tint: AppPalette.warning)
+        case .idle:
+            trendMetaTag("状态", "等待时段", tint: AppPalette.muted)
+        }
+    }
+
+    private func nextHourGuidanceReportView(
+        _ report: NextHourGuidanceReport
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppPalette.spaceM) {
+            HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
+                Text(report.headline)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: AppPalette.spaceS)
+                Text(report.posture.displayName)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(nextHourPostureTint(report.posture))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        nextHourPostureTint(report.posture).opacity(AppPalette.accentFill),
+                        in: Capsule()
+                    )
+            }
+
+            HStack(spacing: 6) {
+                trendMetaTag("生成", String(report.generatedAt.suffix(8)), tint: AppPalette.info)
+                trendMetaTag("有效至", String(report.validUntil.suffix(5)), tint: AppPalette.brand)
+                trendMetaTag("范围", report.scope.displayName, tint: AppPalette.warning)
+                trendMetaTag("标的", "\(report.assetCount)", tint: AppPalette.muted)
+            }
+
+            Text(report.summary)
+                .font(.system(size: 11))
+                .foregroundStyle(AppPalette.muted)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: AppPalette.spaceS) {
+                ForEach(report.actions) { action in
+                    nextHourGuidanceActionRow(action)
+                }
+            }
+
+            if !report.riskChecks.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("执行前复核")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppPalette.warning)
+                    ForEach(Array(report.riskChecks.enumerated()), id: \.offset) { _, item in
+                        Label(item, systemImage: "checkmark.shield")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AppPalette.muted)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(AppPalette.spaceS)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    AppPalette.warning.opacity(0.10),
+                    in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+                )
+            }
+
+            Text(report.disclaimer)
+                .font(.system(size: 8))
+                .foregroundStyle(AppPalette.muted.opacity(0.85))
+        }
+    }
+
+    private func nextHourGuidanceActionRow(
+        _ action: NextHourGuidanceAction
+    ) -> some View {
+        let tint = nextHourActionTint(action.action)
+        return HStack(alignment: .top, spacing: AppPalette.spaceS) {
+            Rectangle()
+                .fill(tint)
+                .frame(width: 3)
+                .clipShape(Capsule())
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(action.targetName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text(action.action.displayName)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(tint)
+                    Spacer(minLength: 4)
+                    Text("置信度 \(action.confidence)")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                Text(action.instruction)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(action.rationale)
+                    .font(.system(size: 9))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: AppPalette.spaceS) {
+                        nextHourCondition("触发", action.trigger, tint: AppPalette.info)
+                        nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        nextHourCondition("触发", action.trigger, tint: AppPalette.info)
+                        nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
+                    }
+                }
+            }
+        }
+        .padding(AppPalette.spaceS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppPalette.controlFill, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+    }
+
+    private func nextHourCondition(_ title: String, _ text: String, tint: Color) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            Text(title)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(.system(size: 8))
+                .foregroundStyle(AppPalette.muted)
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func nextHourPostureTint(_ posture: NextHourGuidancePosture) -> Color {
+        switch posture {
+        case .defensive:
+            return AppPalette.warning
+        case .balanced:
+            return AppPalette.info
+        case .selective:
+            return AppPalette.brand
+        case .opportunistic:
+            return AppPalette.positive
+        }
+    }
+
+    private func nextHourActionTint(_ action: NextHourGuidanceActionKind) -> Color {
+        switch action {
+        case .hold, .watch, .wait:
+            return AppPalette.info
+        case .avoidChasing, .reduceSmall:
+            return AppPalette.warning
+        case .buySmall:
+            return AppPalette.positive
         }
     }
 

@@ -19,6 +19,7 @@ extension AppModel {
         loadImportUndoSnapshot()
         loadPortfolioInsightSnapshots()
         loadTrendAnalysisState()
+        loadNextHourGuidanceState()
         loadTradeSignalState()
         loadTrendTrackingState()
     }

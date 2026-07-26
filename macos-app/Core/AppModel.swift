@@ -113,6 +113,20 @@ final class AppModel: ObservableObject {
     let personalAssetAutomation = PersonalAssetAutomation()
     var fundLookThroughClient: any FundLookThroughClientProtocol = FundLookThroughClient()
     var trendResearchAgent: any TrendResearchAgentProtocol = TrendResearchAgent()
+    var nextHourGuidanceAgent: any NextHourGuidanceAgentProtocol = NextHourGuidanceAgent()
+    var nextHourGuidanceNotificationSender: @Sendable (NextHourGuidanceReport) async -> Void = { report in
+        let manager = LocalNotificationManager()
+        guard await manager.requestAuthorizationIfNeeded() else { return }
+        await manager.send(
+            title: "下一小时操作指引已生成",
+            subtitle: report.scope.displayName,
+            body: "\(report.headline) · 有效至 \(String(report.validUntil.suffix(5)))",
+            deepLink: NotificationDeepLinkPayload(
+                type: .workbenchTrend,
+                targetID: "next-hour-guidance"
+            )
+        )
+    }
     /// 工具调用能力探测器；默认走真实 client，测试可替换以避免联网。
     var trendCapabilityProbe: @Sendable (TrendAIProviderSettings) async throws -> TrendProviderCapabilities = { settings in
         try await OpenAICompatibleAgentClient().checkToolCallingCapability(settings: settings)
@@ -127,6 +141,8 @@ final class AppModel: ObservableObject {
     var personalAssetAutomationTask: Task<Void, Never>?
     var portfolioAutoRefreshTask: Task<Void, Never>?
     var trendGenerationTask: Task<Void, Never>?
+    var nextHourGuidanceSchedulerTask: Task<Void, Never>?
+    var nextHourGuidanceGenerationTask: Task<Void, Never>?
     var activeCommentsRequestKey = ""
     var isApplyingPersonalAssetAutomation = false
     private var cancellables = Set<AnyCancellable>()
@@ -408,6 +424,25 @@ final class AppModel: ObservableObject {
         set { enhancementState.trendProgressLogs = newValue }
     }
 
+    var nextHourGuidanceArchive: NextHourGuidanceArchive {
+        get { enhancementState.nextHourGuidanceArchive }
+        set { enhancementState.nextHourGuidanceArchive = newValue }
+    }
+
+    var nextHourGuidanceReport: NextHourGuidanceReport? {
+        nextHourGuidanceArchive.report
+    }
+
+    var nextHourGuidanceGenerationState: TrendGenerationState {
+        get { enhancementState.nextHourGuidanceGenerationState }
+        set { enhancementState.nextHourGuidanceGenerationState = newValue }
+    }
+
+    var nextHourGuidanceError: String {
+        get { enhancementState.nextHourGuidanceError }
+        set { enhancementState.nextHourGuidanceError = newValue }
+    }
+
     var tradeSignalSettings: TradeSignalSettings {
         get { enhancementState.tradeSignalSettings }
         set { enhancementState.tradeSignalSettings = newValue }
@@ -537,6 +572,8 @@ final class AppModel: ObservableObject {
         managerWatchTask?.cancel()
         personalAssetAutomationTask?.cancel()
         portfolioAutoRefreshTask?.cancel()
+        nextHourGuidanceSchedulerTask?.cancel()
+        nextHourGuidanceGenerationTask?.cancel()
     }
 
     func start() async {
@@ -604,6 +641,7 @@ final class AppModel: ObservableObject {
         restartManagerWatchLoop(immediate: false)
         restartPersonalAssetAutomationLoop()
         restartPortfolioAutoRefreshLoop()
+        restartNextHourGuidanceSchedulerLoop(immediate: true)
         scheduleAutomaticUpdateCheckIfNeeded()
     }
 
