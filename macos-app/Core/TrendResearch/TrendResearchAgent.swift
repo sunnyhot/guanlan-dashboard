@@ -43,8 +43,9 @@ struct TrendResearchRunPolicy: Sendable {
     /// 收敛任务后自动重试。彻底无字节的卡死由 URLSession 的 timeoutInterval 兜底，
     /// 整体上限由 totalTimeoutSeconds 在轮与轮之间保证。
     static let defaultPerRequestTimeoutSeconds: Double = 90
-    /// 整次运行总预算基线，按组合规模与搜索预算动态扩张（见 effectiveTotalTimeout）。
-    static let defaultTotalTimeoutSeconds: Double = 480
+    /// 整次运行总预算：宽松兜底，只在极端失控（远超正常轮次耗时）时截断。
+    /// 正常运行靠单轮空闲超时 + 轮次/工具上限自然终止，慢但正常推进的运行应能跑完。
+    static let defaultTotalTimeoutSeconds: Double = 1800
     static let defaultMaxRequestTimeoutRecoveries = 1
 
     var maxTurns: Int = 18
@@ -60,7 +61,7 @@ struct TrendResearchRunPolicy: Sendable {
     var maxPlainTextResponses: Int = 2
     var perRequestTimeoutSeconds: Double = Self.defaultPerRequestTimeoutSeconds
     var totalTimeoutSeconds: Double = Self.defaultTotalTimeoutSeconds
-    var expandedTotalTimeoutSeconds: Double = 900
+    var expandedTotalTimeoutSeconds: Double = 1800
     var totalTimeoutPerAssetSeconds: Double = 4
     var totalTimeoutPerWebSearchSeconds: Double = 15
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
@@ -150,7 +151,7 @@ enum TrendResearchAgentError: Error, LocalizedError {
     case missingToolCalls
     case invalidSubmissionLimitExceeded(errors: [String])
     case modelRequestTimeoutRecoveryExceeded(timeout: Double)
-    case totalTimeoutExceeded
+    case totalTimeoutExceeded(limit: Double)
 
     var errorDescription: String? {
         switch self {
@@ -166,8 +167,8 @@ enum TrendResearchAgentError: Error, LocalizedError {
             return "报告多次校验未通过：\n" + errors.joined(separator: "\n")
         case .modelRequestTimeoutRecoveryExceeded(let timeout):
             return "趋势模型连续请求超时（单轮上限 \(Int(timeout.rounded())) 秒）。Agent 已自动收敛任务并重试，但模型服务仍未返回；已保留上一次报告，请检查模型服务状态后重试。"
-        case .totalTimeoutExceeded:
-            return "趋势 Agent 已达到 300 秒整体运行上限。已保留上一次报告，请检查模型服务状态后重试。"
+        case .totalTimeoutExceeded(let limit):
+            return "趋势 Agent 已达到 \(Int(limit.rounded())) 秒整体运行上限。已保留上一次报告，请检查模型服务状态后重试。"
         }
     }
 }
@@ -259,16 +260,17 @@ struct TrendResearchAgent: Sendable {
         do {
             while turnCount < runLimits.maxTurns {
                 try Task.checkCancellation()
-                // 整体超时是硬截止：剩余预算不足则不再发起新请求；单次请求超时不超过剩余预算。
+                // 总预算仅作极端失控兜底：正常运行靠单轮空闲超时 + 轮次/工具上限自然终止，
+                // 不会触及；真到这里说明远超正常耗时，终止并保留上一份报告。
                 let remainingTotal = effectiveTotal - Date().timeIntervalSince(started)
                 if remainingTotal <= 0 {
-                    throw TrendResearchAgentError.totalTimeoutExceeded
+                    throw TrendResearchAgentError.totalTimeoutExceeded(limit: effectiveTotal)
                 }
                 let configuredTimeout = max(1, settings.timeoutSeconds)
+                // 每轮超时不再随总预算缩减：让慢但正常推进的运行能跑完，而不是越到后面越被掐。
                 let perRequestTimeout = min(
                     policy.perRequestTimeoutSeconds,
-                    configuredTimeout,
-                    remainingTotal
+                    configuredTimeout
                 )
 
                 let webStatusBeforeRequest = await webSearchGovernor.status()
