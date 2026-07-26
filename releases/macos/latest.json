@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.5/QiemanDashboard-3.9.5.zip",
-    "name" : "QiemanDashboard-3.9.5.zip",
-    "sha256" : "747e4cc5ed110ebe978218dd88284c893ba74c51ce249f474ed0816e16fdeb2b",
-    "size" : 5416476
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.6/QiemanDashboard-3.9.6.zip",
+    "name" : "QiemanDashboard-3.9.6.zip",
+    "sha256" : "a255ec34e62503d9ed772d7ac87673864819d6f4abc79697003ea85fbe9d3b21",
+    "size" : 5610752
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.5/QiemanDashboard-3.9.5.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.6/QiemanDashboard-3.9.6.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.5.zip",
-      "size" : 5416476
+      "name" : "QiemanDashboard-3.9.6.zip",
+      "size" : 5610752
     }
   ],
-  "body" : "下一小时买卖建议接入基金穿透、行情新鲜度与证据溯源",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.5",
-  "name" : "QiemanDashboard v3.9.5",
-  "notes" : "下一小时买卖建议接入基金穿透、行情新鲜度与证据溯源",
+  "body" : "可信度与资金安全 P0 底座",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.6",
+  "name" : "QiemanDashboard v3.9.6",
+  "notes" : "可信度与资金安全 P0 底座",
   "published_at" : "",
-  "sha256" : "747e4cc5ed110ebe978218dd88284c893ba74c51ce249f474ed0816e16fdeb2b",
-  "tag" : "v3.9.5",
-  "tag_name" : "v3.9.5",
-  "version" : "3.9.5"
+  "sha256" : "a255ec34e62503d9ed772d7ac87673864819d6f4abc79697003ea85fbe9d3b21",
+  "tag" : "v3.9.6",
+  "tag_name" : "v3.9.6",
+  "version" : "3.9.6"
 }
