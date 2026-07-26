@@ -42,7 +42,8 @@ struct TrendResearchRunPolicy: Sendable {
     /// 有字节到达就续期，超过 perRequestTimeoutSeconds 无新数据才判超时，由 Harness
     /// 收敛任务后自动重试。彻底无字节的卡死由 URLSession 的 timeoutInterval 兜底，
     /// 整体上限由 totalTimeoutSeconds 在轮与轮之间保证。
-    static let defaultPerRequestTimeoutSeconds: Double = 90
+    /// 取 180s：推理模型（如 GLM-5.2）首 token 前常有较长的静默思考期，90s 偏短会误杀。
+    static let defaultPerRequestTimeoutSeconds: Double = 180
     /// 整次运行总预算：宽松兜底，只在极端失控（远超正常轮次耗时）时截断。
     /// 正常运行靠单轮空闲超时 + 轮次/工具上限自然终止，慢但正常推进的运行应能跑完。
     static let defaultTotalTimeoutSeconds: Double = 1800
