@@ -533,6 +533,14 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let summary: String
         let actions: [ActionSubmission]
         let riskChecks: [String]
+
+        private enum CodingKeys: String, CodingKey {
+            case headline
+            case posture
+            case summary
+            case actions
+            case riskChecks = "risk_checks"
+        }
     }
 
     private struct ActionSubmission: Codable {
@@ -545,6 +553,18 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let invalidation: String
         let confidence: Int
         let evidenceIDs: [String]
+
+        private enum CodingKeys: String, CodingKey {
+            case targetID = "target_id"
+            case targetName = "target_name"
+            case action
+            case instruction
+            case rationale
+            case trigger
+            case invalidation
+            case confidence
+            case evidenceIDs = "evidence_ids"
+        }
     }
 
     let client: any TrendResearchAgentClient
@@ -790,7 +810,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                 isError: true
                             )
                         } catch {
-                            lastErrors = ["提交 JSON 无法解码：\(error.localizedDescription)"]
+                            lastErrors = ["提交 JSON 无法解码：\(Self.describeDecodeError(error))"]
                             invalidSubmissions += 1
                             toolResult = .content(
                                 TrendResearchToolEnvelope.submitValidationError(
@@ -1200,6 +1220,22 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 "additionalProperties": false,
             ]
         )
+    }
+
+    private static func describeDecodeError(_ error: Error) -> String {
+        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
+        switch decodingError {
+        case .keyNotFound(let key, _):
+            return "缺少字段 \(key.stringValue)"
+        case .valueNotFound(_, let context):
+            return "缺少必要值（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
+        case .typeMismatch(_, let context):
+            return "字段类型不匹配（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
+        case .dataCorrupted(let context):
+            return context.debugDescription
+        @unknown default:
+            return error.localizedDescription
+        }
     }
 
     private static func submitTool() -> AgentToolDefinition {
