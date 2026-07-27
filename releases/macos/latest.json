@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.16/QiemanDashboard-3.9.16.zip",
-    "name" : "QiemanDashboard-3.9.16.zip",
-    "sha256" : "acc351bb10f1e6055290afbbe4bb00b6ec19c6d1ca910f6971d07ae150d4e43e",
-    "size" : 5662071
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.17/QiemanDashboard-3.9.17.zip",
+    "name" : "QiemanDashboard-3.9.17.zip",
+    "sha256" : "c0396e8383572b641a317181294833e9e938252fe3ef673d4eb80a1f269e3713",
+    "size" : 5682714
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.16/QiemanDashboard-3.9.16.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.17/QiemanDashboard-3.9.17.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.16.zip",
-      "size" : 5662071
+      "name" : "QiemanDashboard-3.9.17.zip",
+      "size" : 5682714
     }
   ],
-  "body" : "实时日志工具调用合并为单行，颜色变化标识状态",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.16",
-  "name" : "QiemanDashboard v3.9.16",
-  "notes" : "实时日志工具调用合并为单行，颜色变化标识状态",
+  "body" : "优化设置页宽屏布局与分组卡片",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.17",
+  "name" : "QiemanDashboard v3.9.17",
+  "notes" : "优化设置页宽屏布局与分组卡片",
   "published_at" : "",
-  "sha256" : "acc351bb10f1e6055290afbbe4bb00b6ec19c6d1ca910f6971d07ae150d4e43e",
-  "tag" : "v3.9.16",
-  "tag_name" : "v3.9.16",
-  "version" : "3.9.16"
+  "sha256" : "c0396e8383572b641a317181294833e9e938252fe3ef673d4eb80a1f269e3713",
+  "tag" : "v3.9.17",
+  "tag_name" : "v3.9.17",
+  "version" : "3.9.17"
 }
