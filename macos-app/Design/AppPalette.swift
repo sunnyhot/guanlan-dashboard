@@ -97,11 +97,33 @@ enum AppPalette {
     }
 
     /// 统一字体构造入口，替代散落的 .font(.system(size: N, weight: W))。
-    static func appFont(_ size: AppFontSize, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
-        .system(size: size.rawValue, weight: weight, design: design)
+    /// 支持自动响应 Bold Text 辅助功能设置（legibilityWeight）。
+    static func appFont(
+        _ size: AppFontSize,
+        weight: Font.Weight = .regular,
+        design: Font.Design = .default,
+        legibilityWeight: Font.Weight? = nil
+    ) -> Font {
+        let resolvedWeight = legibilityWeight == .bold ? .bold : weight
+        return .system(size: size.rawValue, weight: resolvedWeight, design: design)
+    }
+
+    /// 快捷构造：在已有 weight 基础上，如果用户开了 Bold Text 则升级到 .bold。
+    static func appFontAdaptive(
+        _ size: AppFontSize,
+        weight: Font.Weight = .regular,
+        design: Font.Design = .default,
+        isBoldText: Bool = false
+    ) -> Font {
+        appFont(size, weight: isBoldText ? .bold : weight, design: design)
     }
 
     // MARK: - Border / Stroke Opacity Presets
+
+    /// 根据是否增加对比度返回描边透明度。HIG 要求 Increase Contrast 开启时加粗/加深。
+    static func borderOpacity(isIncreasedContrast: Bool) -> Double {
+        isIncreasedContrast ? 0.85 : borderLight
+    }
 
     static let borderLight: Double = 0.32
     static let borderMedium: Double = 0.42

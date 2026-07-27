@@ -11,6 +11,7 @@ extension Notification.Name {
     static let qiemanNotificationDeepLink = Notification.Name("qieman.notificationDeepLink")
     static let qiemanAppearanceDidChange = Notification.Name("qieman.appearanceDidChange")
     static let qiemanFocusSearch = Notification.Name("qieman.focusSearch")
+    static let qiemanToggleSidebar = Notification.Name("qieman.toggleSidebar")
 }
 
 enum AppAppearance: String, CaseIterable, Identifiable {

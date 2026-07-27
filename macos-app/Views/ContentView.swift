@@ -30,10 +30,15 @@ enum PersonalAssetSortOption: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.legibilityWeight) private var legibilityWeight
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @AppStorage("qieman.dashboard.hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebarNavigation
                 .navigationSplitViewColumnWidth(min: 200, ideal: 232)
                 .modifier(SidebarFloatingCompatModifier())
@@ -52,6 +57,14 @@ struct ContentView: View {
         .buttonStyle(.appSecondary)
         .preferredColorScheme(model.appearance.colorScheme)
         .respectsReducedMotion()
+        .onReceive(NotificationCenter.default.publisher(for: .qiemanToggleSidebar)) { _ in
+            withAnimation(AppPalette.motionStandard) {
+                switch columnVisibility {
+                case .all: columnVisibility = .detailOnly
+                default: columnVisibility = .all
+                }
+            }
+        }
         .sheet(isPresented: Binding(
             get: { !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
@@ -98,7 +111,8 @@ struct ContentView: View {
                 ForEach(AppSection.allCases) { section in
                     SidebarSectionButton(
                         section: section,
-                        isSelected: model.selectedSection == section
+                        isSelected: model.selectedSection == section,
+                        badgeCount: sidebarBadge(for: section)
                     ) {
                         if model.selectedSection != section {
                             model.selectedSection = section
@@ -155,8 +169,14 @@ struct ContentView: View {
             .padding(.top, AppPalette.toolbarPaddingTop)
             .padding(.bottom, AppPalette.toolbarPaddingBottom)
             .background(
-                MaterialPanel(material: .windowBackground, blendingMode: .withinWindow)
-                    .opacity(AppPalette.bgToolbar)
+                Group {
+                    if reduceTransparency {
+                        AppPalette.surface
+                    } else {
+                        MaterialPanel(material: .windowBackground, blendingMode: .withinWindow)
+                            .opacity(AppPalette.bgToolbar)
+                    }
+                }
             )
 
             Divider()
@@ -167,8 +187,8 @@ struct ContentView: View {
     private var toolbarTitleBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.selectedSection.rawValue)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(AppPalette.ink)
+                .font(.system(size: 20, weight: legibilityWeight == .bold ? .bold : .bold))
+                .foregroundStyle(colorSchemeContrast == .increased ? .primary : AppPalette.ink)
             HStack(spacing: AppPalette.spaceXS + 2) {
                 ToolbarBadge(
                     title: model.liveModeLabel,
@@ -180,6 +200,21 @@ struct ContentView: View {
 
     private var toolbarActionRow: some View {
         HStack(spacing: 10) {
+            Button {
+                withAnimation(AppPalette.motionStandard) {
+                    switch columnVisibility {
+                    case .all: columnVisibility = .detailOnly
+                    default: columnVisibility = .all
+                    }
+                }
+            } label: {
+                Label("侧边栏", systemImage: "sidebar.left")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(.appSecondary)
+            .controlSize(.regular)
+            .help("显示/隐藏侧边栏")
+
             Button {
                 Task { try? await model.refreshLatest(persist: false) }
             } label: {
@@ -259,6 +294,14 @@ struct ContentView: View {
         NSPasteboard.general.setString(model.errorMessage, forType: .string)
     }
 
+    private func sidebarBadge(for section: AppSection) -> Int {
+        switch section {
+        case .portfolio: return model.pendingTrades.count
+        case .enhancement: return model.trendTrackingItems.count
+        default: return 0
+        }
+    }
+
     @ViewBuilder
     private var detailPanel: some View {
         switch model.selectedSection {
@@ -282,8 +325,10 @@ struct ContentView: View {
 }
 
 private struct SidebarSectionButton: View {
+    @EnvironmentObject private var model: AppModel
     let section: AppSection
     let isSelected: Bool
+    var badgeCount: Int = 0
     let action: () -> Void
 
     @State private var isHovering = false
@@ -330,6 +375,15 @@ private struct SidebarSectionButton: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if badgeCount > 0 {
+                    Text("\(badgeCount)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(AppPalette.brand, in: Capsule())
+                }
             }
             .padding(.horizontal, AppPalette.spaceS)
             .padding(.vertical, 8)
@@ -351,6 +405,28 @@ private struct SidebarSectionButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel(section.rawValue)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .contextMenu {
+            Button("前往「\(section.rawValue)」") {
+                if model.selectedSection != section {
+                    model.selectedSection = section
+                }
+            }
+            Divider()
+            Button("刷新数据") {
+                Task { try? await model.refreshLatest(persist: false) }
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            if section == .enhancement {
+                Divider()
+                Button("生成趋势分析") {
+                    model.startTrendAnalysis(userInitiated: true)
+                }
+                Button("快捷操作") {
+                    model.isPresentingCommandPalette = true
+                }
+                .keyboardShortcut("k", modifiers: .command)
+            }
+        }
         .animation(AppPalette.motionStandard, value: isHovering)
         .animation(AppPalette.motionSpring, value: isSelected)
         .onHover { hovering in
@@ -509,14 +585,23 @@ private struct AppUpdateSheet: View {
 /// Uses a translucent material background, rounded corners, padding, and
 /// a subtle shadow to create the "hovering" look.
 struct SidebarFloatingCompatModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func body(content: Content) -> some View {
         content
             .padding(.vertical, AppPalette.spaceS)
             .padding(.leading, AppPalette.spaceS)
             .padding(.trailing, AppPalette.spaceXS)
             .background(
-                MaterialPanel(material: .sidebar, blendingMode: .behindWindow)
-                    .ignoresSafeArea()
+                Group {
+                    if reduceTransparency {
+                        AppPalette.surface
+                            .ignoresSafeArea()
+                    } else {
+                        MaterialPanel(material: .sidebar, blendingMode: .behindWindow)
+                            .ignoresSafeArea()
+                    }
+                }
             )
             .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
             .shadow(color: AppPalette.sidebarShadowColor, radius: AppPalette.sidebarShadowRadius, x: AppPalette.sidebarShadowX, y: 0)

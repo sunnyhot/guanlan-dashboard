@@ -9,6 +9,16 @@ struct EnhancementCenterView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
                 workbenchSegmentBar
+                if model.trendReport != nil {
+                    HStack(spacing: 8) {
+                        ShareLink(item: shareReportText()) {
+                            Label("分享报告", systemImage: "square.and.arrow.up")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .buttonStyle(.appSecondary)
+                        .controlSize(.small)
+                    }
+                }
                 TrendLiveLogPanel()
                 workbenchSegmentContent
             }
@@ -18,6 +28,15 @@ struct EnhancementCenterView: View {
             normalizeSelectedTab()
             normalizeDefaultSegment()
         }
+    }
+
+    private func shareReportText() -> String {
+        guard let report = model.trendReport else { return "" }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(report),
+              let json = String(data: data, encoding: .utf8) else { return "" }
+        return json
     }
 
     // MARK: - Workbench Segments

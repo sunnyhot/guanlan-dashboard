@@ -459,6 +459,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
+        window.setFrameAutosaveName("QiemanDashboardMainWindow")
 
         // Transparent toolbar for proper content-under-titlebar layout
         // without occluding content behind the system title bar area.
@@ -477,6 +478,34 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let refreshItem = menu.addItem(withTitle: "刷新数据", action: #selector(dockRefresh), keyEquivalent: "")
+        refreshItem.target = self
+        menu.addItem(.separator())
+        for section in AppSection.allCases {
+            let item = menu.addItem(withTitle: section.rawValue, action: #selector(dockNavigate(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = section.rawValue
+        }
+        return menu
+    }
+
+    @objc private func dockRefresh() {
+        Task { @MainActor in
+            guard let model else { return }
+            try? await model.refreshLatest(persist: false)
+        }
+    }
+
+    @objc private func dockNavigate(_ sender: NSMenuItem) {
+        guard let model,
+              let raw = sender.representedObject as? String,
+              let section = AppSection(rawValue: raw) else { return }
+        model.selectedSection = section
+        showMainWindow()
     }
 
     /// Intercepts the window close action: hides the window instead of destroying it
@@ -757,11 +786,13 @@ struct QiemanDashboardApp: App {
                 Button("打开数据目录") {
                     model.openDataDirectory()
                 }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()
                 Button(model.isCheckingForUpdates ? "检查更新中…" : "检查更新…") {
                     Task { await model.checkForUpdates(userInitiated: true) }
                 }
                 .disabled(model.isCheckingForUpdates)
+                .keyboardShortcut("u", modifiers: .command)
                 Divider()
                 Button("快捷操作") {
                     model.isPresentingCommandPalette = true
@@ -773,6 +804,13 @@ struct QiemanDashboardApp: App {
                     Task { try? await model.refreshLatest(persist: false) }
                 }
                 .keyboardShortcut("r")
+            }
+
+            CommandGroup(after: .toolbar) {
+                Button("切换侧边栏") {
+                    NotificationCenter.default.post(name: .qiemanToggleSidebar, object: nil)
+                }
+                .keyboardShortcut("s", modifiers: [.command, .control])
             }
 
             CommandMenu("导航") {
@@ -823,6 +861,12 @@ struct QiemanDashboardApp: App {
                 .keyboardShortcut("f")
                 .disabled(![AppSection.portfolio, .platform].contains(model.selectedSection))
             }
+        }
+
+        // 原生 Settings 场景，支持标准 ⌘, 打开偏好设置窗口
+        Settings {
+            SettingsSectionView()
+                .environmentObject(model)
         }
     }
 }

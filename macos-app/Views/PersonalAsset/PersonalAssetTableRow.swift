@@ -322,6 +322,23 @@ struct PersonalAssetTableRow: View {
         .sheet(isPresented: $isPresentingPlanManager) {
             PersonalInvestmentPlanManagementSheet(row: row)
         }
+        .contextMenu {
+            Button("编辑持仓…") { isPresentingHoldingEditor = true }
+            Button("管理计划…") { isPresentingPlanManager = true }
+            Divider()
+            Button("查看详情…") { onOpenDetail?() }
+            if let summary = trendSummary {
+                Button("复制趋势摘要") {
+                    let text = "\(row.fundName)(\(row.fundCode ?? "-"))：\(summary.impactText)"
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+            }
+            Divider()
+            Button("删除", role: .destructive) {
+                pendingDeleteScope = .all
+            }
+        }
     }
 
     private func dailyChangeLine(compact: Bool) -> String {
