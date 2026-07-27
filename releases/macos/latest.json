@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.17/QiemanDashboard-3.9.17.zip",
-    "name" : "QiemanDashboard-3.9.17.zip",
-    "sha256" : "c0396e8383572b641a317181294833e9e938252fe3ef673d4eb80a1f269e3713",
-    "size" : 5682714
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.18/QiemanDashboard-3.9.18.zip",
+    "name" : "QiemanDashboard-3.9.18.zip",
+    "sha256" : "c261656c2fa7cdf54c3242d83fee2c33c7002e75f1f95c7b48ebea4d3e0a1398",
+    "size" : 5725484
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.17/QiemanDashboard-3.9.17.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.18/QiemanDashboard-3.9.18.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.17.zip",
-      "size" : 5682714
+      "name" : "QiemanDashboard-3.9.18.zip",
+      "size" : 5725484
     }
   ],
-  "body" : "优化设置页宽屏布局与分组卡片",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.17",
-  "name" : "QiemanDashboard v3.9.17",
-  "notes" : "优化设置页宽屏布局与分组卡片",
+  "body" : "macOS Design Checklist P0+P1+P2 改进",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.18",
+  "name" : "QiemanDashboard v3.9.18",
+  "notes" : "macOS Design Checklist P0+P1+P2 改进",
   "published_at" : "",
-  "sha256" : "c0396e8383572b641a317181294833e9e938252fe3ef673d4eb80a1f269e3713",
-  "tag" : "v3.9.17",
-  "tag_name" : "v3.9.17",
-  "version" : "3.9.17"
+  "sha256" : "c261656c2fa7cdf54c3242d83fee2c33c7002e75f1f95c7b48ebea4d3e0a1398",
+  "tag" : "v3.9.18",
+  "tag_name" : "v3.9.18",
+  "version" : "3.9.18"
 }
