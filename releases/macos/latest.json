@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.12/QiemanDashboard-3.9.12.zip",
-    "name" : "QiemanDashboard-3.9.12.zip",
-    "sha256" : "c0c4aa75f6a5c134d0bbf12c0712af1bba24ba50242d7179a0166683bc28fe9a",
-    "size" : 5657414
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.13/QiemanDashboard-3.9.13.zip",
+    "name" : "QiemanDashboard-3.9.13.zip",
+    "sha256" : "ecb6f19d4c9a9ed7bffbcfd4629d16beb9eaeb9b6c1358afe3929dbf1e32ee8b",
+    "size" : 5659670
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.12/QiemanDashboard-3.9.12.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.13/QiemanDashboard-3.9.13.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.12.zip",
-      "size" : 5657414
+      "name" : "QiemanDashboard-3.9.13.zip",
+      "size" : 5659670
     }
   ],
-  "body" : "单轮空闲超时 90s → 180s，给推理模型静默思考留余量",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.12",
-  "name" : "QiemanDashboard v3.9.12",
-  "notes" : "单轮空闲超时 90s → 180s，给推理模型静默思考留余量",
+  "body" : "修复下一小时买卖建议提交 JSON 解码失败",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.13",
+  "name" : "QiemanDashboard v3.9.13",
+  "notes" : "修复下一小时买卖建议提交 JSON 解码失败",
   "published_at" : "",
-  "sha256" : "c0c4aa75f6a5c134d0bbf12c0712af1bba24ba50242d7179a0166683bc28fe9a",
-  "tag" : "v3.9.12",
-  "tag_name" : "v3.9.12",
-  "version" : "3.9.12"
+  "sha256" : "ecb6f19d4c9a9ed7bffbcfd4629d16beb9eaeb9b6c1358afe3929dbf1e32ee8b",
+  "tag" : "v3.9.13",
+  "tag_name" : "v3.9.13",
+  "version" : "3.9.13"
 }
