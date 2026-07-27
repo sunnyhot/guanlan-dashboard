@@ -527,7 +527,7 @@ enum NextHourGuidanceAgentError: Error, LocalizedError {
 }
 
 struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
-    private struct Submission: Codable {
+    private struct Submission: Decodable {
         let headline: String
         let posture: NextHourGuidancePosture
         let summary: String
@@ -543,16 +543,18 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         }
     }
 
-    private struct ActionSubmission: Codable {
+    private struct ActionSubmission: Decodable {
         let targetID: String?
         let targetName: String
-        let action: NextHourGuidanceActionKind
+        let action: NextHourGuidanceActionKind?
         let instruction: String
         let rationale: String
         let trigger: String
         let invalidation: String
-        let confidence: Int
+        let confidence: Int?
         let evidenceIDs: [String]
+        /// 解码时记录的缺失必填字段（snake_case），供校验一次性报出。
+        let missingFields: [String]
 
         private enum CodingKeys: String, CodingKey {
             case targetID = "target_id"
@@ -564,6 +566,28 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             case invalidation
             case confidence
             case evidenceIDs = "evidence_ids"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            targetID = try c.decodeIfPresent(String.self, forKey: .targetID)
+            targetName = try c.decodeIfPresent(String.self, forKey: .targetName) ?? ""
+            action = try c.decodeIfPresent(NextHourGuidanceActionKind.self, forKey: .action)
+            instruction = try c.decodeIfPresent(String.self, forKey: .instruction) ?? ""
+            rationale = try c.decodeIfPresent(String.self, forKey: .rationale) ?? ""
+            trigger = try c.decodeIfPresent(String.self, forKey: .trigger) ?? ""
+            invalidation = try c.decodeIfPresent(String.self, forKey: .invalidation) ?? ""
+            confidence = try c.decodeIfPresent(Int.self, forKey: .confidence)
+            evidenceIDs = try c.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
+            var missing: [String] = []
+            if targetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("target_name") }
+            if action == nil { missing.append("action") }
+            if instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("instruction") }
+            if rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("rationale") }
+            if trigger.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("trigger") }
+            if invalidation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("invalidation") }
+            if confidence == nil { missing.append("confidence") }
+            missingFields = missing
         }
     }
 
@@ -940,12 +964,12 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 NextHourGuidanceAction(
                     targetID: $0.targetID,
                     targetName: $0.targetName,
-                    action: $0.action,
+                    action: $0.action ?? .hold,
                     instruction: $0.instruction,
                     rationale: $0.rationale,
                     trigger: $0.trigger,
                     invalidation: $0.invalidation,
-                    confidence: $0.confidence,
+                    confidence: $0.confidence ?? 0,
                     evidenceIDs: $0.evidenceIDs
                 )
             },
@@ -1054,40 +1078,35 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             errors.append("risk_checks 必须提供 2 到 4 条执行前复核项")
         }
         for (index, action) in submission.actions.enumerated() {
+            // 一次性报出该动作所有缺失的必填字段，避免逐字段往返。
+            if !action.missingFields.isEmpty {
+                errors.append("第 \(index + 1) 条动作缺少字段：\(action.missingFields.joined(separator: "、"))")
+            }
             let trimmedID = action.targetID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let asset: NextHourGuidanceAssetContext?
             if !trimmedID.isEmpty {
                 asset = assetsByID[trimmedID]
+            } else if !action.targetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                asset = assetsByName[action.targetName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()]
             } else {
-                // 模型偶有只填 target_name 不填 target_id 的情况：按名称在候选持仓里回查。
-                let key = action.targetName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                asset = assetsByName[key]
+                asset = nil
             }
             guard let asset else {
-                if trimmedID.isEmpty {
-                    errors.append("第 \(index + 1) 条动作缺少 target_id，且无法根据 target_name「\(action.targetName)」定位标的；请使用 get_live_market_context 返回的 target_id")
-                } else {
+                if !trimmedID.isEmpty {
                     errors.append("第 \(index + 1) 条动作的 target_id(\(trimmedID)) 不属于本次候选持仓")
+                } else if !action.targetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    errors.append("第 \(index + 1) 条动作无法根据 target_name「\(action.targetName)」定位标的；请使用 get_live_market_context 返回的 target_id")
                 }
+                // target_name 也缺时，missingFields 已报过，不重复
                 continue
             }
             if !seenTargetIDs.insert(asset.id).inserted {
                 errors.append("同一标的不能重复给出多条互相冲突的动作：\(asset.name)")
             }
-            if ![NextHourGuidanceActionKind.buy, .sell, .hold].contains(action.action) {
+            if let actionKind = action.action, ![NextHourGuidanceActionKind.buy, .sell, .hold].contains(actionKind) {
                 errors.append("第 \(index + 1) 条动作必须是 buy、sell 或 hold")
             }
-            let values = [
-                action.targetName,
-                action.instruction,
-                action.rationale,
-                action.trigger,
-                action.invalidation,
-            ]
-            if values.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-                errors.append("第 \(index + 1) 条动作字段不完整")
-            }
-            if !(0...100).contains(action.confidence) {
+            if let confidence = action.confidence, !(0...100).contains(confidence) {
                 errors.append("第 \(index + 1) 条动作置信度超出 0 到 100")
             }
             let missingEvidence = Set(action.evidenceIDs).subtracting(availableEvidenceIDs)
@@ -1104,7 +1123,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     researchSnapshot.lookThrough?.disclosures[$0]
                 }
                 errors.append(contentsOf: TrendClaimEvidencePolicy().validateExecution(
-                    actionKind: action.action,
+                    actionKind: action.action ?? .hold,
                     targetName: asset.name,
                     targetCode: asset.code,
                     instruction: action.instruction,
