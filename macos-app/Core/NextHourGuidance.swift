@@ -544,7 +544,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     }
 
     private struct ActionSubmission: Codable {
-        let targetID: String
+        let targetID: String?
         let targetName: String
         let action: NextHourGuidanceActionKind
         let instruction: String
@@ -1027,6 +1027,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     ) async -> [String] {
         var errors: [String] = []
         let assetsByID = Dictionary(uniqueKeysWithValues: context.assets.map { ($0.id, $0) })
+        let assetsByName = Dictionary(
+            context.assets.compactMap {
+                let key = $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return key.isEmpty ? nil : (key, $0)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
         let allEvidence = await ledger.allEvidence()
         let evidenceByID = Dictionary(
             allEvidence.map { ($0.id, $0) },
@@ -1047,11 +1054,24 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             errors.append("risk_checks 必须提供 2 到 4 条执行前复核项")
         }
         for (index, action) in submission.actions.enumerated() {
-            guard let asset = assetsByID[action.targetID] else {
-                errors.append("第 \(index + 1) 条动作的 target_id 不属于本次候选持仓")
+            let trimmedID = action.targetID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let asset: NextHourGuidanceAssetContext?
+            if !trimmedID.isEmpty {
+                asset = assetsByID[trimmedID]
+            } else {
+                // 模型偶有只填 target_name 不填 target_id 的情况：按名称在候选持仓里回查。
+                let key = action.targetName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                asset = assetsByName[key]
+            }
+            guard let asset else {
+                if trimmedID.isEmpty {
+                    errors.append("第 \(index + 1) 条动作缺少 target_id，且无法根据 target_name「\(action.targetName)」定位标的；请使用 get_live_market_context 返回的 target_id")
+                } else {
+                    errors.append("第 \(index + 1) 条动作的 target_id(\(trimmedID)) 不属于本次候选持仓")
+                }
                 continue
             }
-            if !seenTargetIDs.insert(action.targetID).inserted {
+            if !seenTargetIDs.insert(asset.id).inserted {
                 errors.append("同一标的不能重复给出多条互相冲突的动作：\(asset.name)")
             }
             if ![NextHourGuidanceActionKind.buy, .sell, .hold].contains(action.action) {
