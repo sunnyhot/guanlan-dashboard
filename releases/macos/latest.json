@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.13/QiemanDashboard-3.9.13.zip",
-    "name" : "QiemanDashboard-3.9.13.zip",
-    "sha256" : "ecb6f19d4c9a9ed7bffbcfd4629d16beb9eaeb9b6c1358afe3929dbf1e32ee8b",
-    "size" : 5659670
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.14/QiemanDashboard-3.9.14.zip",
+    "name" : "QiemanDashboard-3.9.14.zip",
+    "sha256" : "460b5a4a99a8626833ec6f9c5e11b1c6f54678f3e8d6d74f9bb09e86a7659577",
+    "size" : 5661188
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.13/QiemanDashboard-3.9.13.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.14/QiemanDashboard-3.9.14.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.13.zip",
-      "size" : 5659670
+      "name" : "QiemanDashboard-3.9.14.zip",
+      "size" : 5661188
     }
   ],
-  "body" : "修复下一小时买卖建议提交 JSON 解码失败",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.13",
-  "name" : "QiemanDashboard v3.9.13",
-  "notes" : "修复下一小时买卖建议提交 JSON 解码失败",
+  "body" : "下一小时动作缺 target_id 时按 target_name 回查，不再解码失败",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.14",
+  "name" : "QiemanDashboard v3.9.14",
+  "notes" : "下一小时动作缺 target_id 时按 target_name 回查，不再解码失败",
   "published_at" : "",
-  "sha256" : "ecb6f19d4c9a9ed7bffbcfd4629d16beb9eaeb9b6c1358afe3929dbf1e32ee8b",
-  "tag" : "v3.9.13",
-  "tag_name" : "v3.9.13",
-  "version" : "3.9.13"
+  "sha256" : "460b5a4a99a8626833ec6f9c5e11b1c6f54678f3e8d6d74f9bb09e86a7659577",
+  "tag" : "v3.9.14",
+  "tag_name" : "v3.9.14",
+  "version" : "3.9.14"
 }
