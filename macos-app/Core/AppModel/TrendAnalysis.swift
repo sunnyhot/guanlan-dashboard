@@ -733,11 +733,23 @@ extension AppModel {
                 level: .activity
             )
         case .toolFinished(let name, let summary):
-            appendTrendProgress(
-                "完成：\(trendToolDisplayName(name))",
-                detail: "工具：\(name)\n结果：\(summary)",
-                level: summary.hasPrefix("失败") ? .warning : .success
-            )
+            let displayName = trendToolDisplayName(name)
+            let level: TrendProgressLog.Level = summary.hasPrefix("失败") ? .warning : .success
+            let startedMessage = "开始：\(displayName)"
+            // 把对应的"开始"条目原地更新为"完成"：同一行、颜色/图标变化，不再追加新行。
+            if let index = trendProgressLogs.lastIndex(where: { $0.message == startedMessage && $0.level == .activity }) {
+                let original = trendProgressLogs[index]
+                trendProgressLogs[index] = TrendProgressLog(
+                    id: original.id,
+                    timestamp: original.timestamp,
+                    message: "完成：\(displayName)",
+                    detail: summary.isEmpty ? original.detail : "结果：\(summary)",
+                    level: level
+                )
+            } else {
+                // "开始"条目可能已被裁剪，回退为追加。
+                appendTrendProgress("完成：\(displayName)", detail: "结果：\(summary)", level: level)
+            }
         case .reportValidationFailed(let errors, let remaining):
             appendTrendProgress(
                 "报告校验失败，正在自动修正",
