@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.18/QiemanDashboard-3.9.18.zip",
-    "name" : "QiemanDashboard-3.9.18.zip",
-    "sha256" : "c261656c2fa7cdf54c3242d83fee2c33c7002e75f1f95c7b48ebea4d3e0a1398",
-    "size" : 5725484
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.19/QiemanDashboard-3.9.19.zip",
+    "name" : "QiemanDashboard-3.9.19.zip",
+    "sha256" : "46100e830a1d48ce53101a61c2b9808d911f9a164f5eff32ba217de091c1f3ec",
+    "size" : 5718101
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.18/QiemanDashboard-3.9.18.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.19/QiemanDashboard-3.9.19.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.18.zip",
-      "size" : 5725484
+      "name" : "QiemanDashboard-3.9.19.zip",
+      "size" : 5718101
     }
   ],
-  "body" : "macOS Design Checklist P0+P1+P2 改进",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.18",
-  "name" : "QiemanDashboard v3.9.18",
-  "notes" : "macOS Design Checklist P0+P1+P2 改进",
+  "body" : "切换设置面板不再闪烁，移除 opacity+move transition",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.19",
+  "name" : "QiemanDashboard v3.9.19",
+  "notes" : "切换设置面板不再闪烁，移除 opacity+move transition",
   "published_at" : "",
-  "sha256" : "c261656c2fa7cdf54c3242d83fee2c33c7002e75f1f95c7b48ebea4d3e0a1398",
-  "tag" : "v3.9.18",
-  "tag_name" : "v3.9.18",
-  "version" : "3.9.18"
+  "sha256" : "46100e830a1d48ce53101a61c2b9808d911f9a164f5eff32ba217de091c1f3ec",
+  "tag" : "v3.9.19",
+  "tag_name" : "v3.9.19",
+  "version" : "3.9.19"
 }
