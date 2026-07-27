@@ -5,13 +5,43 @@ import SwiftUI
 extension SettingsSectionView {
     var appPanel: some View {
         SettingsPanel(title: "通用", subtitle: "应用外观、启动方式、本地数据与软件更新", icon: "gearshape") {
-            VStack(alignment: .leading, spacing: 0) {
-                SettingsGroupHeader(title: "外观与启动")
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 14) {
+                        appearanceAndLaunchCard
+                        localDataCard
+                    }
+                    .frame(minWidth: 360, maxWidth: .infinity)
 
+                    VStack(spacing: 14) {
+                        softwareUpdateCard
+                        applicationCard
+                    }
+                    .frame(minWidth: 360, maxWidth: .infinity)
+                }
+
+                VStack(spacing: 14) {
+                    appearanceAndLaunchCard
+                    localDataCard
+                    softwareUpdateCard
+                    applicationCard
+                }
+            }
+        }
+    }
+
+    private var appearanceAndLaunchCard: some View {
+        SettingsCardGroup(
+            title: "外观与启动",
+            subtitle: "显示方式与应用入口",
+            icon: "circle.lefthalf.filled",
+            tint: AppPalette.info
+        ) {
+            VStack(spacing: 0) {
                 SettingsControlRow(
                     title: "外观",
                     detail: "选择浅色、深色或跟随系统",
-                    icon: "circle.lefthalf.filled",
+                    icon: "paintpalette",
                     tint: AppPalette.info
                 ) {
                     Picker("外观", selection: $model.appearance) {
@@ -21,11 +51,10 @@ extension SettingsSectionView {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: 220)
+                    .frame(width: 190)
                 }
 
                 SettingsDivider()
-
                 SettingsToggleRow(
                     title: "开机时启动",
                     detail: model.launchAtLoginStatusText,
@@ -35,7 +64,6 @@ extension SettingsSectionView {
                 )
 
                 SettingsDivider()
-
                 SettingsToggleRow(
                     title: "在 Dock 中显示",
                     detail: "关闭后仍可从系统菜单栏打开应用",
@@ -43,30 +71,42 @@ extension SettingsSectionView {
                     tint: model.showsInDock ? AppPalette.info : AppPalette.muted,
                     isOn: $model.showsInDock
                 )
+            }
+        }
+    }
 
-                SettingsDivider()
-
-                SettingsGroupHeader(title: "本地数据")
-
-                SettingsControlRow(
-                    title: "数据目录",
-                    detail: dataDirectoryDescription,
-                    icon: "folder",
-                    tint: AppPalette.brand
-                ) {
-                    Button {
-                        model.openDataDirectory()
-                    } label: {
-                        Label("在访达中打开", systemImage: "arrow.up.forward.app")
-                    }
-                    .buttonStyle(.appSecondary)
-                    .disabled(model.dataDirectoryURL == nil)
+    private var localDataCard: some View {
+        SettingsCardGroup(
+            title: "本地数据",
+            subtitle: "数据文件仅保存在当前 Mac",
+            icon: "externaldrive",
+            tint: AppPalette.brand
+        ) {
+            SettingsControlRow(
+                title: "数据目录",
+                detail: dataDirectoryDescription,
+                icon: "folder",
+                tint: AppPalette.brand
+            ) {
+                Button {
+                    model.openDataDirectory()
+                } label: {
+                    Label("在访达中打开", systemImage: "arrow.up.forward.app")
                 }
+                .buttonStyle(.appSecondary)
+                .disabled(model.dataDirectoryURL == nil)
+            }
+        }
+    }
 
-                SettingsDivider()
-
-                SettingsGroupHeader(title: "软件更新")
-
+    private var softwareUpdateCard: some View {
+        SettingsCardGroup(
+            title: "软件更新",
+            subtitle: "保持应用功能与数据接口最新",
+            icon: "arrow.triangle.2.circlepath",
+            tint: model.availableUpdate == nil ? AppPalette.brand : AppPalette.positive
+        ) {
+            VStack(spacing: 0) {
                 SettingsToggleRow(
                     title: "启动时检查更新",
                     detail: "每次打开应用自动检测新版本",
@@ -76,7 +116,6 @@ extension SettingsSectionView {
                 )
 
                 SettingsDivider()
-
                 SettingsRow(
                     title: "当前版本",
                     value: AppUpdateChecker.bundleVersion,
@@ -133,25 +172,30 @@ extension SettingsSectionView {
                         }
                         ToastBar(text: model.updateInstallProgress, tint: AppPalette.info)
                     }
-                    .padding(.top, 12)
+                    .padding(.bottom, 12)
                 }
+            }
+        }
+    }
 
-                SettingsDivider()
-
-                SettingsGroupHeader(title: "应用")
-
-                SettingsControlRow(
-                    title: "退出且慢主理人",
-                    detail: "结束菜单栏组件和所有后台巡检",
-                    icon: "power",
-                    tint: AppPalette.danger
-                ) {
-                    Button("退出应用") {
-                        model.quitApplication()
-                    }
-                    .buttonStyle(.appSecondary)
-                    .tint(AppPalette.danger)
+    private var applicationCard: some View {
+        SettingsCardGroup(
+            title: "应用",
+            subtitle: "结束当前会话与后台任务",
+            icon: "power",
+            tint: AppPalette.danger
+        ) {
+            SettingsControlRow(
+                title: "退出且慢主理人",
+                detail: "结束菜单栏组件和所有后台巡检",
+                icon: "power",
+                tint: AppPalette.danger
+            ) {
+                Button("退出应用") {
+                    model.quitApplication()
                 }
+                .buttonStyle(.appSecondary)
+                .tint(AppPalette.danger)
             }
         }
     }

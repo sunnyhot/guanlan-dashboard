@@ -41,10 +41,9 @@ struct SettingsPanel<Content: View>: View {
                 .overlay(AppPalette.hairline.opacity(AppPalette.strokeSubtle))
 
             content
-                .padding(.horizontal, 18)
-                .padding(.bottom, 6)
+                .padding(16)
         }
-        .frame(maxWidth: 1_080, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             AppPalette.panelBackground.opacity(AppPalette.bgSettings),
             in: RoundedRectangle(cornerRadius: AppPalette.panelRadius)
@@ -57,6 +56,69 @@ struct SettingsPanel<Content: View>: View {
             color: AppPalette.panelShadowColor,
             radius: AppPalette.panelShadowRadius,
             y: AppPalette.panelShadowY
+        )
+    }
+}
+
+struct SettingsCardGroup<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let tint: Color
+    let content: Content
+
+    init(
+        title: String,
+        subtitle: String,
+        icon: String,
+        tint: Color,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.icon = icon
+        self.tint = tint
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 30, height: 30)
+                    .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text(subtitle)
+                        .font(.system(size: 9))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Divider()
+                .overlay(AppPalette.hairline.opacity(AppPalette.borderFaint))
+
+            content
+                .padding(.horizontal, 14)
+                .padding(.bottom, 4)
+        }
+        .background(
+            AppPalette.cardStrong.opacity(0.62),
+            in: RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(AppPalette.hairline.opacity(AppPalette.borderFaint), lineWidth: 1)
         )
     }
 }

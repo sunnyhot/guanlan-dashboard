@@ -51,6 +51,11 @@ enum SettingsFocus: CaseIterable, Identifiable {
     }
 }
 
+private enum SettingsNavigationLayout {
+    case sidebar
+    case grid
+}
+
 struct SettingsSectionView: View {
     @EnvironmentObject var model: AppModel
     @State var selectedSettingsFocus: SettingsFocus = .general
@@ -98,27 +103,46 @@ struct SettingsSectionView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                settingsNavigation
-
-                selectedSettingsPanel
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .id(selectedSettingsFocus)
-                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+        GeometryReader { proxy in
+            ScrollView(showsIndicators: false) {
+                settingsLayout(for: proxy.size.width)
+                    .frame(maxWidth: 1_320, alignment: .topLeading)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 22)
+                    .frame(maxWidth: .infinity, alignment: .top)
             }
-            .frame(maxWidth: 1_080, alignment: .topLeading)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
         .animation(AppPalette.motionSection, value: selectedSettingsFocus)
     }
 
-    private var settingsNavigation: some View {
+    @ViewBuilder
+    private func settingsLayout(for availableWidth: CGFloat) -> some View {
+        if availableWidth >= 1_120 {
+            HStack(alignment: .top, spacing: AppPalette.spaceXL) {
+                settingsNavigation(layout: .sidebar)
+                    .frame(width: 240)
+
+                selectedSettingsContent
+            }
+        } else {
+            VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+                settingsNavigation(layout: .grid)
+                selectedSettingsContent
+            }
+        }
+    }
+
+    private var selectedSettingsContent: some View {
+        selectedSettingsPanel
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .id(selectedSettingsFocus)
+            .transition(.opacity.combined(with: .move(edge: .trailing)))
+    }
+
+    private func settingsNavigation(layout: SettingsNavigationLayout) -> some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceM) {
+            HStack(alignment: .top, spacing: AppPalette.spaceM) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("设置中心")
                         .font(.system(size: 14, weight: .bold))
@@ -138,23 +162,32 @@ struct SettingsSectionView: View {
                     .background(AppPalette.brandSoft, in: Capsule())
             }
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
+            switch layout {
+            case .sidebar:
+                VStack(spacing: AppPalette.spaceS) {
                     ForEach(SettingsFocus.allCases) { focus in
-                        settingsNavigationButton(for: focus)
-                            .frame(minWidth: 158, maxWidth: .infinity)
+                        settingsNavigationButton(for: focus, layout: layout)
                     }
                 }
+            case .grid:
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        ForEach(SettingsFocus.allCases) { focus in
+                            settingsNavigationButton(for: focus, layout: layout)
+                                .frame(minWidth: 158, maxWidth: .infinity)
+                        }
+                    }
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(minimum: 170), spacing: 10),
-                        GridItem(.flexible(minimum: 170), spacing: 10),
-                    ],
-                    spacing: 10
-                ) {
-                    ForEach(SettingsFocus.allCases) { focus in
-                        settingsNavigationButton(for: focus)
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(minimum: 170), spacing: 10),
+                            GridItem(.flexible(minimum: 170), spacing: 10),
+                        ],
+                        spacing: 10
+                    ) {
+                        ForEach(SettingsFocus.allCases) { focus in
+                            settingsNavigationButton(for: focus, layout: layout)
+                        }
                     }
                 }
             }
@@ -175,7 +208,10 @@ struct SettingsSectionView: View {
         )
     }
 
-    private func settingsNavigationButton(for focus: SettingsFocus) -> some View {
+    private func settingsNavigationButton(
+        for focus: SettingsFocus,
+        layout: SettingsNavigationLayout
+    ) -> some View {
         Button {
             selectedSettingsFocus = focus
         } label: {
@@ -185,7 +221,8 @@ struct SettingsSectionView: View {
                 status: settingsStatus(for: focus),
                 icon: focus.systemImage,
                 tint: settingsStatusTint(for: focus),
-                isSelected: selectedSettingsFocus == focus
+                isSelected: selectedSettingsFocus == focus,
+                isCompact: layout == .sidebar
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())
@@ -247,6 +284,7 @@ private struct SettingsNavigationRow: View {
     let icon: String
     let tint: Color
     let isSelected: Bool
+    let isCompact: Bool
 
     @State private var isHovering = false
 
@@ -296,7 +334,7 @@ private struct SettingsNavigationRow: View {
             }
         }
         .padding(11)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: isCompact ? 68 : 76, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius)
                 .fill(
