@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.15/QiemanDashboard-3.9.15.zip",
-    "name" : "QiemanDashboard-3.9.15.zip",
-    "sha256" : "4ed0e48de5e11729ec4d916db22f9982b73d1716497682de38d940f70e95239f",
-    "size" : 5661681
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.16/QiemanDashboard-3.9.16.zip",
+    "name" : "QiemanDashboard-3.9.16.zip",
+    "sha256" : "acc351bb10f1e6055290afbbe4bb00b6ec19c6d1ca910f6971d07ae150d4e43e",
+    "size" : 5662071
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.15/QiemanDashboard-3.9.15.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.16/QiemanDashboard-3.9.16.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.15.zip",
-      "size" : 5661681
+      "name" : "QiemanDashboard-3.9.16.zip",
+      "size" : 5662071
     }
   ],
-  "body" : "下一小时动作全字段容错解码，一次性报出所有缺失字段",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.15",
-  "name" : "QiemanDashboard v3.9.15",
-  "notes" : "下一小时动作全字段容错解码，一次性报出所有缺失字段",
+  "body" : "实时日志工具调用合并为单行，颜色变化标识状态",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.16",
+  "name" : "QiemanDashboard v3.9.16",
+  "notes" : "实时日志工具调用合并为单行，颜色变化标识状态",
   "published_at" : "",
-  "sha256" : "4ed0e48de5e11729ec4d916db22f9982b73d1716497682de38d940f70e95239f",
-  "tag" : "v3.9.15",
-  "tag_name" : "v3.9.15",
-  "version" : "3.9.15"
+  "sha256" : "acc351bb10f1e6055290afbbe4bb00b6ec19c6d1ca910f6971d07ae150d4e43e",
+  "tag" : "v3.9.16",
+  "tag_name" : "v3.9.16",
+  "version" : "3.9.16"
 }
