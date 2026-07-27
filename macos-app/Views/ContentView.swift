@@ -30,6 +30,7 @@ enum PersonalAssetSortOption: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
+    @AppStorage("qieman.dashboard.hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         NavigationSplitView {
@@ -51,6 +52,16 @@ struct ContentView: View {
         .buttonStyle(.appSecondary)
         .preferredColorScheme(model.appearance.colorScheme)
         .respectsReducedMotion()
+        .sheet(isPresented: Binding(
+            get: { !hasCompletedOnboarding },
+            set: { if !$0 { hasCompletedOnboarding = true } }
+        )) {
+            OnboardingView()
+        }
+        .sheet(isPresented: $model.isPresentingCommandPalette) {
+            CommandPaletteView()
+                .environmentObject(model)
+        }
         .task {
             await model.start()
             await model.runDailyTrendAnalysisIfNeeded()
@@ -96,7 +107,8 @@ struct ContentView: View {
                 }
             }
             .padding(.horizontal, AppPalette.spaceM)
-            .padding(.vertical, AppPalette.spaceL)
+            .padding(.top, 34)
+            .padding(.bottom, AppPalette.spaceL)
         }
         .scrollIndicators(.hidden)
     }
@@ -236,7 +248,7 @@ struct ContentView: View {
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         await MainActor.run {
             guard model.noticeMessage == message else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
+            withAnimation(AppPalette.motionStandard) {
                 model.noticeMessage = ""
             }
         }

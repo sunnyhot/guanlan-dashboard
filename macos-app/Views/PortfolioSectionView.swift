@@ -134,6 +134,7 @@ struct PortfolioSectionView: View {
                         }
                         .buttonStyle(.appSecondary)
                         .controlSize(.small)
+                        .keyboardShortcut("n", modifiers: .command)
                     }) {
                         if let summary = model.investmentPlanSummary, !model.investmentPlans.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {

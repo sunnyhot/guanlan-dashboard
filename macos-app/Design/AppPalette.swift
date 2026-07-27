@@ -51,6 +51,7 @@ enum AppPalette {
     static let motionFastDuration: Double = 0.12
     static let motionStandardDuration: Double = 0.18
     static let motionSectionDuration: Double = 0.20
+    static let motionSlowDuration: Double = 0.25
 
     static var motionFast: Animation {
         .easeOut(duration: motionFastDuration)
@@ -64,6 +65,10 @@ enum AppPalette {
         .easeInOut(duration: motionSectionDuration)
     }
 
+    static var motionSlow: Animation {
+        .easeInOut(duration: motionSlowDuration)
+    }
+
     static var motionSpring: Animation {
         .interactiveSpring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08)
     }
@@ -74,6 +79,27 @@ enum AppPalette {
     static let selectionGlowRadius: CGFloat = 12
     static let selectionRailWidth: CGFloat = 3
     static let sidebarRowRadius: CGFloat = 9
+
+    // MARK: - Typography Tokens
+
+    /// 语义字号阶梯，对应全仓 .font(.system(size:)) 的实际分布（89% 集中在 8-13pt）。
+    enum AppFontSize: CGFloat {
+        case caption2 = 8
+        case caption = 9
+        case footnote = 10
+        case subheadline = 11
+        case body = 12
+        case headline = 13
+        case title3 = 14
+        case title2 = 16
+        case title = 18
+        case largeTitle = 22
+    }
+
+    /// 统一字体构造入口，替代散落的 .font(.system(size: N, weight: W))。
+    static func appFont(_ size: AppFontSize, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        .system(size: size.rawValue, weight: weight, design: design)
+    }
 
     // MARK: - Border / Stroke Opacity Presets
 

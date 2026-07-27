@@ -468,6 +468,11 @@ final class AppModel: ObservableObject {
         set { enhancementState.selectedTrendTrackingItemID = newValue }
     }
 
+    var isPresentingCommandPalette: Bool {
+        get { enhancementState.isPresentingCommandPalette }
+        set { enhancementState.isPresentingCommandPalette = newValue }
+    }
+
     // MARK: Cache proxies (forwarding to portfolioState)
 
     var _cachedAssetRows: [PersonalAssetAggregateRow]? {

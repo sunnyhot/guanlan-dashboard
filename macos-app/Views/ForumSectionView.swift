@@ -237,7 +237,7 @@ struct ForumSectionView: View {
             Button {
                 model.selectedPostID = record.id
                 if isCompact {
-                    withAnimation(.easeInOut(duration: 0.25)) {
+                    withAnimation(AppPalette.motionSlow) {
                         scrollProxy.scrollTo(detailAnchor, anchor: .top)
                     }
                 }

@@ -228,7 +228,7 @@ struct PlatformMonthlyOverview: View {
                     .frame(width: tooltipWidth, alignment: .leading)
                     .position(x: tipX + tooltipWidth / 2, y: tipY + tooltipHeight / 2)
                     .transition(.opacity)
-                    .animation(.easeOut(duration: 0.12), value: selectedMonth?.id)
+                    .animation(AppPalette.motionFast, value: selectedMonth?.id)
             }
         }
     }

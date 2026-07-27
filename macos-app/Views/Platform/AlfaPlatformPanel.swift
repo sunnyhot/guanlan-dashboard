@@ -205,7 +205,7 @@ struct AlfaPlatformPanel: View {
             Button {
                 selectedActionID = action.id
                 if isCompact {
-                    withAnimation(.easeInOut(duration: 0.25)) {
+                    withAnimation(AppPalette.motionSlow) {
                         scrollProxy.scrollTo(detailAnchor, anchor: .top)
                     }
                 }

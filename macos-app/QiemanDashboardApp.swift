@@ -458,6 +458,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         configureMainWindowIdentity(window)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
 
         // Transparent toolbar for proper content-under-titlebar layout
         // without occluding content behind the system title bar area.
@@ -761,6 +762,12 @@ struct QiemanDashboardApp: App {
                     Task { await model.checkForUpdates(userInitiated: true) }
                 }
                 .disabled(model.isCheckingForUpdates)
+                Divider()
+                Button("快捷操作") {
+                    model.isPresentingCommandPalette = true
+                    appDelegate.showMainWindow()
+                }
+                .keyboardShortcut("k", modifiers: .command)
                 Divider()
                 Button("立即刷新") {
                     Task { try? await model.refreshLatest(persist: false) }

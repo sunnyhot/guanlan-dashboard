@@ -150,6 +150,7 @@ final class EnhancementState: ObservableObject {
     @Published var selectedWorkbenchSegment: WorkbenchSegment = .today
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
+    @Published var isPresentingCommandPalette = false
 }
 
 enum EnhancementCenterTab: String, CaseIterable, Identifiable {

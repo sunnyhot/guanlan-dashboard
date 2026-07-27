@@ -28,7 +28,7 @@ struct PlatformActivitySectionView: View {
             ForEach(PlatformActivityTab.allCases) { tab in
                 let isSelected = model.selectedPlatformActivityTab == tab
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppPalette.motionSection) {
                         model.selectedPlatformActivityTab = tab
                     }
                 } label: {
@@ -121,7 +121,7 @@ struct PlatformSectionView: View {
         HStack(spacing: 6) {
             ForEach(PlatformViewMode.allCases, id: \.self) { mode in
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(AppPalette.motionSection) {
                         viewMode = mode
                     }
                     if mode == .alfa, model.alfaPayload == nil {
@@ -217,7 +217,7 @@ struct PlatformSectionView: View {
     private var collapsibleMonthlySection: some View {
         VStack(spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(AppPalette.motionSlow) {
                     isMonthlyExpanded.toggle()
                 }
             } label: {
@@ -316,7 +316,7 @@ struct PlatformSectionView: View {
 
                 if model.filterState.sideFilter != .all || !model.filterState.searchText.isEmpty {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(AppPalette.motionSection) {
                             model.filterState.reset()
                         }
                     } label: {
@@ -368,7 +368,7 @@ struct PlatformSectionView: View {
             if totalPages > 1 {
                 HStack(spacing: 8) {
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(AppPalette.motionSection) {
                             model.filterState.currentPage = max(0, currentPage - 1)
                         }
                     } label: {
@@ -393,7 +393,7 @@ struct PlatformSectionView: View {
                         .foregroundStyle(AppPalette.muted)
 
                     Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(AppPalette.motionSection) {
                             model.filterState.currentPage = min(totalPages - 1, currentPage + 1)
                         }
                     } label: {
@@ -435,7 +435,7 @@ struct PlatformSectionView: View {
                 Button {
                     model.selectPlatformAction(action.id)
                     if isCompact {
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(AppPalette.motionSlow) {
                             scrollProxy.scrollTo(detailAnchor, anchor: .top)
                         }
                     }
