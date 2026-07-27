@@ -113,7 +113,6 @@ struct SettingsSectionView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .animation(AppPalette.motionSection, value: selectedSettingsFocus)
     }
 
     @ViewBuilder
@@ -137,7 +136,6 @@ struct SettingsSectionView: View {
         selectedSettingsPanel
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .id(selectedSettingsFocus)
-            .transition(.opacity.combined(with: .move(edge: .trailing)))
     }
 
     private func settingsNavigation(layout: SettingsNavigationLayout) -> some View {
