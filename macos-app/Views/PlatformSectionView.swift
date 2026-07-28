@@ -60,6 +60,7 @@ struct PlatformActivitySectionView: View {
 struct PlatformWorkspaceLayout {
     static let compactThreshold: CGFloat = 900
     static let actionListHeight: CGFloat = 430
+    static let adjustmentWorkspaceHeight: CGFloat = 520
     private static let forumListChromeHeight: CGFloat = 124
 
     static func listWidth(for availableWidth: CGFloat) -> CGFloat {
@@ -165,7 +166,7 @@ struct PlatformSectionView: View {
                 if isCompact {
                     VStack(alignment: .leading, spacing: 8) {
                         platformListPanel(isCompact: true, scrollProxy: scrollProxy)
-                        platformDetailPanel
+                        platformDetailPanel(isCompact: true)
                             .id(detailAnchor)
                     }
                 } else {
@@ -176,7 +177,7 @@ struct PlatformSectionView: View {
                                 alignment: .top
                             )
 
-                        platformDetailPanel
+                        platformDetailPanel(isCompact: false)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
@@ -418,7 +419,12 @@ struct PlatformSectionView: View {
             }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
+            maxHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
+            alignment: .topLeading
+        )
         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
         .overlay(
             AppPalette.borderOverlay(radius: AppPalette.panelRadius, opacity: AppPalette.borderStrong)
@@ -454,19 +460,11 @@ struct PlatformSectionView: View {
 
     // MARK: - Detail Panel
 
-    private var platformDetailPanel: some View {
+    private func platformDetailPanel(isCompact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("调仓详情")
-                    .font(AppPalette.appFont(.body, weight: .semibold))
-                    .foregroundStyle(AppPalette.ink)
-                Spacer()
-                if let action = model.selectedPlatformAction {
-                    Text(action.txnDate ?? action.createdAt ?? "未知时间")
-                        .font(AppPalette.appFont(.footnote))
-                        .foregroundStyle(AppPalette.muted)
-                }
-            }
+            Text("调仓详情")
+                .font(AppPalette.appFont(.body, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
 
             if let selectedAction = model.selectedPlatformAction {
                 PlatformActionDetailCard(action: selectedAction)
@@ -489,7 +487,12 @@ struct PlatformSectionView: View {
             }
         }
         .padding(10)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
+            maxHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
+            alignment: .topLeading
+        )
         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
         .overlay(
             AppPalette.borderOverlay(radius: AppPalette.panelRadius, opacity: AppPalette.borderStrong)

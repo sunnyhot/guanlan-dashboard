@@ -7,6 +7,7 @@ final class PlatformActionPresentationTests: XCTestCase {
         XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 1_600), 480)
         XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 2_400), 520)
         XCTAssertEqual(PlatformWorkspaceLayout.actionListHeight, 430)
+        XCTAssertEqual(PlatformWorkspaceLayout.adjustmentWorkspaceHeight, 520)
     }
 
     func testForumListHeightFillsTallWorkspacesAndPreservesTheMinimumViewport() {

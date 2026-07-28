@@ -16,8 +16,49 @@ struct PlatformActionDetailCard: View {
         AppPalette.marketTint(for: action.valuationChangePct ?? action.valuationChangeAmount)
     }
 
+    private var fundIdentityText: String {
+        let name = action.fundName ?? action.title ?? "未命名标的"
+        guard let code = action.fundCode, !code.isEmpty else { return name }
+        return "\(name) · \(code)"
+    }
+
+    private var compactActionDateText: String {
+        let raw = action.txnDate ?? action.createdAt ?? "未知时间"
+        return raw.count >= 10 ? String(raw.prefix(10)) : raw
+    }
+
+    private var distinctComment: String? {
+        guard let comment = action.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !comment.isEmpty,
+              comment != action.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        else {
+            return nil
+        }
+        return comment
+    }
+
+    private var sourceSummaryText: String? {
+        let sources = [action.tradeValuationSource, action.currentValuationSource]
+            .compactMap { source -> String? in
+                let trimmed = source?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            .reduce(into: [String]()) { result, source in
+                if !result.contains(source) {
+                    result.append(source)
+                }
+            }
+        guard !sources.isEmpty else { return nil }
+        return "数据来源：\(sources.joined(separator: " · "))"
+    }
+
+    private var articleURL: URL? {
+        guard let article = action.articleUrl else { return nil }
+        return URL(string: article)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(
@@ -47,7 +88,7 @@ struct PlatformActionDetailCard: View {
                             )
                     }
 
-                    Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
+                    Text("\(fundIdentityText) · \(compactActionDateText)")
                         .font(AppPalette.appFont(.body))
                         .foregroundStyle(AppPalette.muted)
                 }
@@ -55,18 +96,13 @@ struct PlatformActionDetailCard: View {
                 Spacer()
             }
 
-            Label("调仓概览", systemImage: "rectangle.grid.2x2")
-                .font(AppPalette.appFont(.subheadline, weight: .semibold))
-                .foregroundStyle(AppPalette.info)
-
             LazyVGrid(
                 columns: Array(
                     repeating: GridItem(.flexible(minimum: 116), spacing: 10),
-                    count: 4
+                    count: 3
                 ),
                 spacing: 10
             ) {
-                detailMetric("调仓时间", action.txnDate ?? action.createdAt ?? "未知", tint: AppPalette.ink)
                 if action.isPercentBased {
                     detailMetric("调仓前", QiemanAlfaClient.percentText(before: action.beforePercent, after: nil), tint: AppPalette.ink)
                     detailMetric("调仓后", QiemanAlfaClient.percentText(before: nil, after: action.afterPercent), tint: AppPalette.ink)
@@ -75,7 +111,6 @@ struct PlatformActionDetailCard: View {
                     if let group = action.groupName {
                         detailMetric("分组", group, tint: AppPalette.ink)
                     }
-                    detailMetric("调仓单", action.adjustmentId.map(String.init) ?? "—", tint: AppPalette.ink)
                 } else {
                     detailMetric("调仓估值", decimalOptional(action.tradeValuation), tint: AppPalette.ink)
                     detailMetric("当前估值", decimalOptional(action.currentValuation), tint: AppPalette.ink)
@@ -83,16 +118,14 @@ struct PlatformActionDetailCard: View {
                     detailMetric("变化金额", signedCurrencyText(action.valuationChangeAmount), tint: changeTint)
                     detailMetric("计划份数", action.postPlanUnit.map(String.init) ?? "—", tint: AppPalette.ink)
                     detailMetric("交易份数", action.tradeUnit.map(String.init) ?? "—", tint: AppPalette.ink)
-                    detailMetric("净值", decimalOptional(action.nav), tint: AppPalette.ink)
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("来源与记录", systemImage: "doc.text.magnifyingglass")
-                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppPalette.info)
+            if distinctComment != nil || sourceSummaryText != nil || articleURL != nil {
+                Divider()
+                    .overlay(AppPalette.line.opacity(0.35))
 
-                if let comment = action.comment, !comment.isEmpty {
+                if let comment = distinctComment {
                     Text(comment)
                         .font(AppPalette.appFont(.body))
                         .foregroundStyle(AppPalette.ink)
@@ -100,31 +133,28 @@ struct PlatformActionDetailCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                WrapLine(items: [
-                    sourceText("调仓估值", source: action.tradeValuationSource, date: action.tradeValuationDate),
-                    sourceText("当前估值", source: action.currentValuationSource, date: action.currentValuationTime),
-                    action.navDate.map { "净值日期 \($0)" },
-                    action.adjustmentId.map { "调仓单 \($0)" },
-                    action.orderCountInAdjustment.map { "同单动作 \($0)" }
-                ].compactMap { $0 })
+                HStack(spacing: 10) {
+                    if let sourceSummaryText {
+                        Label(sourceSummaryText, systemImage: "info.circle")
+                            .font(AppPalette.appFont(.footnote))
+                            .foregroundStyle(AppPalette.muted)
+                            .lineLimit(1)
+                            .help(sourceSummaryText)
+                    }
 
-                if let article = action.articleUrl, let url = URL(string: article) {
-                    Link(destination: url) {
-                        Label("打开平台原文", systemImage: "arrow.up.right.square")
-                            .font(AppPalette.appFont(.body, weight: .semibold))
-                            .foregroundStyle(AppPalette.brand)
+                    Spacer(minLength: 8)
+
+                    if let articleURL {
+                        Link(destination: articleURL) {
+                            Label("平台原文", systemImage: "arrow.up.right.square")
+                                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppPalette.brand)
+                        }
                     }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(AppPalette.cardStrong.opacity(0.58), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppPalette.cardRadius)
-                    .stroke(AppPalette.line.opacity(0.28), lineWidth: 1)
-            )
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
         .overlay(
@@ -161,48 +191,4 @@ struct PlatformActionDetailCard: View {
         return String(format: "%+.2f%%", diff)
     }
 
-    private func sourceText(_ title: String, source: String?, date: String?) -> String? {
-        let parts = [source, date].compactMap { value in
-            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        guard !parts.isEmpty else { return nil }
-        return "\(title)：\(parts.joined(separator: " · "))"
-    }
-}
-
-// MARK: - WrapLine
-
-struct WrapLine: View {
-    let items: [String]
-
-    var body: some View {
-        if !items.isEmpty {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    chips
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    chips
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var chips: some View {
-        ForEach(items, id: \.self) { item in
-            Text(item)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(AppPalette.cardStrong.opacity(0.60), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppPalette.badgeRadius)
-                        .stroke(AppPalette.line.opacity(AppPalette.borderSubtle), lineWidth: 1)
-                )
-        }
-    }
 }

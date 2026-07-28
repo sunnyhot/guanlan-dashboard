@@ -168,6 +168,23 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(forum.contains(".clipped()"))
     }
 
+    func testAdjustmentWorkspaceKeepsColumnsAlignedAndDetailConcise() throws {
+        let platform = try source(at: "Views/PlatformSectionView.swift")
+        let detail = try source(at: "Views/Platform/PlatformActionDetailCard.swift")
+
+        XCTAssertTrue(platform.contains("PlatformWorkspaceLayout.adjustmentWorkspaceHeight"))
+        XCTAssertTrue(platform.contains("platformDetailPanel(isCompact: false)"))
+        XCTAssertTrue(platform.contains("minHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight"))
+        XCTAssertFalse(platform.contains("Text(action.txnDate ?? action.createdAt ?? \"未知时间\")"))
+
+        XCTAssertFalse(detail.contains("Label(\"调仓概览\""))
+        XCTAssertFalse(detail.contains("Label(\"来源与记录\""))
+        XCTAssertFalse(detail.contains("detailMetric(\"净值\""))
+        XCTAssertFalse(detail.contains("detailMetric(\"调仓单\""))
+        XCTAssertTrue(detail.contains("sourceSummaryText"))
+        XCTAssertTrue(detail.contains("comment != action.displayTitle"))
+    }
+
     func testAlfaPanelUsesThePlatformWorkspaceScrollAndWidthContext() throws {
         let platform = try source(at: "Views/PlatformSectionView.swift")
         let alfa = try source(at: "Views/Platform/AlfaPlatformPanel.swift")
