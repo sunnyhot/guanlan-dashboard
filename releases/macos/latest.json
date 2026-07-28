@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.26/QiemanDashboard-3.9.26.zip",
-    "name" : "QiemanDashboard-3.9.26.zip",
-    "sha256" : "746a332a07c100a9bd7edf29fd204b98b355098c7e33563c33eafebc8f085ca2",
-    "size" : 5797623
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.27/QiemanDashboard-3.9.27.zip",
+    "name" : "QiemanDashboard-3.9.27.zip",
+    "sha256" : "94191510ceac7c3efad0aa315aaa5d9f77d830f154cb5bbe99a5fb3d9e76e751",
+    "size" : 5792508
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.26/QiemanDashboard-3.9.26.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.27/QiemanDashboard-3.9.27.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.26.zip",
-      "size" : 5797623
+      "name" : "QiemanDashboard-3.9.27.zip",
+      "size" : 5792508
     }
   ],
-  "body" : "优化主理人动态信息层级",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.26",
-  "name" : "QiemanDashboard v3.9.26",
-  "notes" : "优化主理人动态信息层级",
+  "body" : "平台动态卡片与回归测试样式微调",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.27",
+  "name" : "QiemanDashboard v3.9.27",
+  "notes" : "平台动态卡片与回归测试样式微调",
   "published_at" : "",
-  "sha256" : "746a332a07c100a9bd7edf29fd204b98b355098c7e33563c33eafebc8f085ca2",
-  "tag" : "v3.9.26",
-  "tag_name" : "v3.9.26",
-  "version" : "3.9.26"
+  "sha256" : "94191510ceac7c3efad0aa315aaa5d9f77d830f154cb5bbe99a5fb3d9e76e751",
+  "tag" : "v3.9.27",
+  "tag_name" : "v3.9.27",
+  "version" : "3.9.27"
 }
