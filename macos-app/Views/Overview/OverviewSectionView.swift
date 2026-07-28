@@ -40,27 +40,22 @@ struct OverviewSectionView: View {
             subtitle: "调仓动作与最新发言",
             icon: "person.crop.circle"
         ) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    managerActivityHeader(
-                        title: "最近调仓",
-                        subtitle: "主理人调仓动作",
-                        icon: "arrow.left.arrow.right",
-                        action: openAllPlatformActions
-                    )
+            VStack(alignment: .leading, spacing: 10) {
+                managerActivityGroup(
+                    title: "最近调仓",
+                    icon: "arrow.left.arrow.right",
+                    itemCount: model.latestPlatformActions.count,
+                    action: openAllPlatformActions
+                ) {
                     recentPlatformActions
                 }
 
-                Divider()
-                    .overlay(AppPalette.line.opacity(0.42))
-
-                VStack(alignment: .leading, spacing: 8) {
-                    managerActivityHeader(
-                        title: model.currentSnapshot?.snapshotType == "posts" ? "最近发言" : "最近记录",
-                        subtitle: model.currentSnapshot?.kindLabel == "帖子" ? "主理人发言摘要" : "当前模式下的最新原生结果",
-                        icon: "text.bubble",
-                        action: openAllForumPosts
-                    )
+                managerActivityGroup(
+                    title: model.currentSnapshot?.snapshotType == "posts" ? "最近发言" : "最近记录",
+                    icon: "text.bubble",
+                    itemCount: model.forumRecords.count,
+                    action: openAllForumPosts
+                ) {
                     recentForumPosts
                 }
             }
@@ -121,34 +116,51 @@ struct OverviewSectionView: View {
         }
     }
 
-    private func managerActivityHeader(
+    private func managerActivityGroup<Content: View>(
         title: String,
-        subtitle: String,
         icon: String,
-        action: @escaping () -> Void
+        itemCount: Int,
+        action: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(AppPalette.appFont(.caption, weight: .semibold))
-                .foregroundStyle(AppPalette.brand)
-                .frame(width: 18, height: 18)
-                .background(AppPalette.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
+                    .foregroundStyle(AppPalette.brand)
+                    .frame(width: 14)
 
-            VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
-                Text(subtitle)
+
+                Text(managerActivityCountText(itemCount))
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
-            }
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            Button("查看全部", action: action)
+                Button(action: action) {
+                    Label("查看全部", systemImage: "chevron.right")
+                        .labelStyle(.titleAndIcon)
+                }
                 .buttonStyle(.appText)
                 .controlSize(.small)
+            }
+
+            content()
         }
+        .padding(10)
+        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(AppPalette.line.opacity(0.34), lineWidth: 1)
+        )
+    }
+
+    private func managerActivityCountText(_ itemCount: Int) -> String {
+        guard itemCount > 0 else { return "暂无" }
+        return "\(min(itemCount, 3)) 条"
     }
 
     private func openAllPlatformActions() {

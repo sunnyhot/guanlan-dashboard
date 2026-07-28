@@ -258,9 +258,13 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertEqual(overview.components(separatedBy: "SectionCard(").count - 1, 1)
         XCTAssertTrue(overview.contains("title: \"主理人动态\""))
         XCTAssertTrue(overview.contains("subtitle: \"调仓动作与最新发言\""))
-        XCTAssertTrue(overview.contains("managerActivityHeader("))
+        XCTAssertTrue(overview.contains("managerActivityGroup("))
+        XCTAssertTrue(overview.contains("managerActivityCountText"))
+        XCTAssertTrue(overview.contains(".background(AppPalette.cardStrong"))
+        XCTAssertTrue(overview.contains("Label(\"查看全部\", systemImage: \"chevron.right\")"))
         XCTAssertTrue(overview.contains("action: openAllPlatformActions"))
         XCTAssertTrue(overview.contains("action: openAllForumPosts"))
+        XCTAssertFalse(overview.contains("managerActivityHeader("))
     }
 
     func testQuitApplicationIsReachableFromMenuBarPopoverAndSettings() throws {
