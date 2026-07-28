@@ -28,85 +28,140 @@ struct OverviewSectionView: View {
                     action: handleTrendDashboardAction
                 )
 
-                SectionCard(title: "最近调仓", subtitle: "原生卡片直接消费平台接口", icon: "arrow.left.arrow.right", trailing: {
-                    Spacer()
-                    Button("查看全部") {
-                        withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
-                            model.selectedPlatformActivityTab = .adjustments
-                            model.selectedSection = .platform
-                        }
-                    }
-                    .buttonStyle(.appSecondary)
-                    .controlSize(.small)
-                }) {
-                    if model.latestPlatformActions.isEmpty {
-                        EmptySectionState(
-                            title: "最近调仓暂时为空",
-                            subtitle: "平台接口现在会和论坛分开刷新；点一次刷新后，这里会优先恢复可用数据。",
-                            actionTitle: "刷新"
-                        ) {
-                            Task { try? await model.refreshLatest(persist: false) }
-                        }
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(Array(model.latestPlatformActions.prefix(3))) { action in
-                                Button {
-                                    openPlatform(action)
-                                } label: {
-                                    PlatformActionRow(
-                                        action: action,
-                                        isCompact: true,
-                                        showsCompactArticleLink: true
-                                    )
-                                }
-                                .buttonStyle(PressResponsiveButtonStyle())
-                                .help("打开平台调仓详情")
-                            }
-                        }
-                    }
-                }
-
-                // Recent posts
-                SectionCard(
-                    title: model.currentSnapshot?.snapshotType == "posts" ? "最近发言" : "最近记录",
-                    subtitle: model.currentSnapshot?.kindLabel == "帖子" ? "主理人发言摘要" : "当前模式下的最新原生结果",
-                    icon: "text.bubble",
-                    trailing: {
-                        Spacer()
-                        Button("查看全部") {
-                            withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
-                                model.selectedPlatformActivityTab = .forum
-                                model.selectedSection = .platform
-                            }
-                        }
-                        .buttonStyle(.appSecondary)
-                        .controlSize(.small)
-                    }
-                ) {
-                    if model.hasForumPosts {
-                        VStack(spacing: 8) {
-                            ForEach(Array(model.forumRecords.prefix(3))) { record in
-                                Button {
-                                    openForum(record)
-                                } label: {
-                                    ForumRecordRow(record: record)
-                                }
-                                .buttonStyle(PressResponsiveButtonStyle())
-                                .help("打开论坛发言详情")
-                            }
-                        }
-                    } else {
-                        EmptySectionState(
-                            title: "最近发言暂时为空",
-                            subtitle: "论坛页会自动补拉帖子流；这里也会跟着恢复到最新发言。",
-                            actionTitle: "刷新"
-                        ) {
-                            Task { try? await model.refreshLatest(persist: false) }
-                        }
-                    }
-                }
+                managerActivityPanel
             }
             .padding(14)
+        }
+    }
+
+    private var managerActivityPanel: some View {
+        SectionCard(
+            title: "主理人动态",
+            subtitle: "调仓动作与最新发言",
+            icon: "person.crop.circle"
+        ) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    managerActivityHeader(
+                        title: "最近调仓",
+                        subtitle: "主理人调仓动作",
+                        icon: "arrow.left.arrow.right",
+                        action: openAllPlatformActions
+                    )
+                    recentPlatformActions
+                }
+
+                Divider()
+                    .overlay(AppPalette.line.opacity(0.42))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    managerActivityHeader(
+                        title: model.currentSnapshot?.snapshotType == "posts" ? "最近发言" : "最近记录",
+                        subtitle: model.currentSnapshot?.kindLabel == "帖子" ? "主理人发言摘要" : "当前模式下的最新原生结果",
+                        icon: "text.bubble",
+                        action: openAllForumPosts
+                    )
+                    recentForumPosts
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentPlatformActions: some View {
+        if model.latestPlatformActions.isEmpty {
+            EmptySectionState(
+                title: "最近调仓暂时为空",
+                subtitle: "平台接口现在会和论坛分开刷新；点一次刷新后，这里会优先恢复可用数据。",
+                actionTitle: "刷新"
+            ) {
+                Task { try? await model.refreshLatest(persist: false) }
+            }
+        } else {
+            VStack(spacing: 8) {
+                ForEach(Array(model.latestPlatformActions.prefix(3))) { action in
+                    Button {
+                        openPlatform(action)
+                    } label: {
+                        PlatformActionRow(
+                            action: action,
+                            isCompact: true,
+                            showsCompactArticleLink: true
+                        )
+                    }
+                    .buttonStyle(PressResponsiveButtonStyle())
+                    .help("打开平台调仓详情")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentForumPosts: some View {
+        if model.hasForumPosts {
+            VStack(spacing: 8) {
+                ForEach(Array(model.forumRecords.prefix(3))) { record in
+                    Button {
+                        openForum(record)
+                    } label: {
+                        ForumRecordRow(record: record)
+                    }
+                    .buttonStyle(PressResponsiveButtonStyle())
+                    .help("打开论坛发言详情")
+                }
+            }
+        } else {
+            EmptySectionState(
+                title: "最近发言暂时为空",
+                subtitle: "论坛页会自动补拉帖子流；这里也会跟着恢复到最新发言。",
+                actionTitle: "刷新"
+            ) {
+                Task { try? await model.refreshLatest(persist: false) }
+            }
+        }
+    }
+
+    private func managerActivityHeader(
+        title: String,
+        subtitle: String,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+                .foregroundStyle(AppPalette.brand)
+                .frame(width: 18, height: 18)
+                .background(AppPalette.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Text(subtitle)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("查看全部", action: action)
+                .buttonStyle(.appText)
+                .controlSize(.small)
+        }
+    }
+
+    private func openAllPlatformActions() {
+        withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
+            model.selectedPlatformActivityTab = .adjustments
+            model.selectedSection = .platform
+        }
+    }
+
+    private func openAllForumPosts() {
+        withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
+            model.selectedPlatformActivityTab = .forum
+            model.selectedSection = .platform
         }
     }
 

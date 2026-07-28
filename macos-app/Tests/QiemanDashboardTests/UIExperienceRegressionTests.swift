@@ -241,9 +241,26 @@ final class UIExperienceRegressionTests: XCTestCase {
 
     func testOverviewUsesCompactRecentPlatformActionCards() throws {
         let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
+        let actionRow = try source(at: "Views/Platform/PlatformActionRow.swift")
 
         XCTAssertTrue(overview.contains("isCompact: true"))
         XCTAssertTrue(overview.contains("showsCompactArticleLink: true"))
+        XCTAssertTrue(actionRow.contains("ViewThatFits(in: .horizontal)"))
+        XCTAssertTrue(actionRow.contains("compactWideLayout"))
+        XCTAssertTrue(actionRow.contains("compactStackedLayout"))
+        XCTAssertTrue(actionRow.contains("Label(\"平台原文\", systemImage: \"arrow.up.right\")"))
+        XCTAssertFalse(actionRow.contains("compactMetricPill"))
+    }
+
+    func testOverviewGroupsManagerActivityIntoOneSection() throws {
+        let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
+
+        XCTAssertEqual(overview.components(separatedBy: "SectionCard(").count - 1, 1)
+        XCTAssertTrue(overview.contains("title: \"主理人动态\""))
+        XCTAssertTrue(overview.contains("subtitle: \"调仓动作与最新发言\""))
+        XCTAssertTrue(overview.contains("managerActivityHeader("))
+        XCTAssertTrue(overview.contains("action: openAllPlatformActions"))
+        XCTAssertTrue(overview.contains("action: openAllForumPosts"))
     }
 
     func testQuitApplicationIsReachableFromMenuBarPopoverAndSettings() throws {

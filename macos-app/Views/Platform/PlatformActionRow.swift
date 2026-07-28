@@ -33,51 +33,9 @@ struct PlatformActionRow: View {
 
             VStack(alignment: .leading, spacing: isCompact ? 6 : 6) {
                 if isCompact {
-                    HStack(alignment: .center, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(displayTitleWithPrefix)
-                                .font(AppPalette.appFont(.body, weight: .semibold))
-                                .foregroundStyle(AppPalette.ink)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
-                                .help(displayTitleWithPrefix)
-                            Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
-                                .font(AppPalette.appFont(.footnote))
-                                .foregroundStyle(AppPalette.muted)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
-                        }
-                        Spacer(minLength: 8)
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(isBuy ? "买入" : "卖出")
-                                .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                                .foregroundStyle(sideColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(sideColor.opacity(0.14), in: Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .stroke(sideColor.opacity(0.22), lineWidth: 1)
-                                )
-                            if showsCompactArticleLink,
-                               let article = action.articleUrl,
-                               let url = URL(string: article) {
-                                Link("打开平台原文", destination: url)
-                                    .font(AppPalette.appFont(.caption))
-                                    .foregroundStyle(AppPalette.brand)
-                            }
-                        }
-                    }
-
-                    HStack(spacing: 6) {
-                        compactMetricPill(title: "时间", value: compactDateText(action.txnDate ?? action.createdAt), tint: AppPalette.muted)
-                        if action.isPercentBased {
-                            compactMetricPill(title: "仓位", value: QiemanAlfaClient.percentText(before: action.beforePercent, after: action.afterPercent), tint: AppPalette.ink, isEmphasized: true)
-                        } else {
-                            compactMetricPill(title: "调仓", value: decimalText(action.tradeValuation), tint: AppPalette.ink)
-                            compactMetricPill(title: "当前", value: decimalText(action.currentValuation), tint: AppPalette.ink)
-                            compactMetricPill(title: "变化", value: percentText(action.valuationChangePct), tint: changeTint, isEmphasized: true)
-                        }
+                    ViewThatFits(in: .horizontal) {
+                        compactWideLayout
+                        compactStackedLayout
                     }
                 } else {
                     HStack {
@@ -140,6 +98,148 @@ struct PlatformActionRow: View {
         )
     }
 
+    private var compactIdentity: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(displayTitleWithPrefix)
+                .font(AppPalette.appFont(.body, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .help(displayTitleWithPrefix)
+            Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
+                .font(AppPalette.appFont(.footnote))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+    }
+
+    private var compactWideLayout: some View {
+        HStack(alignment: .center, spacing: 12) {
+            compactIdentity
+                .frame(minWidth: 220, idealWidth: 260, maxWidth: 300, alignment: .leading)
+
+            compactWideMetrics
+
+            Spacer(minLength: 8)
+            compactActions
+        }
+    }
+
+    private var compactStackedLayout: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .center, spacing: 8) {
+                compactIdentity
+                Spacer(minLength: 8)
+                compactActions
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 112), spacing: 7, alignment: .leading)],
+                alignment: .leading,
+                spacing: 7
+            ) {
+                compactMetricCell(
+                    title: "调仓日期",
+                    value: compactDateText(action.txnDate ?? action.createdAt),
+                    tint: AppPalette.muted
+                )
+                if action.isPercentBased {
+                    compactMetricCell(
+                        title: "仓位变化",
+                        value: QiemanAlfaClient.percentText(before: action.beforePercent, after: action.afterPercent),
+                        tint: AppPalette.ink,
+                        isEmphasized: true
+                    )
+                } else {
+                    compactMetricCell(title: "调仓估值", value: decimalText(action.tradeValuation), tint: AppPalette.ink)
+                    compactMetricCell(title: "当前估值", value: decimalText(action.currentValuation), tint: AppPalette.ink)
+                    compactMetricCell(
+                        title: "估值变化",
+                        value: percentText(action.valuationChangePct),
+                        tint: changeTint,
+                        isEmphasized: true
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var compactWideMetrics: some View {
+        HStack(spacing: 0) {
+            compactMetric(
+                title: "调仓日期",
+                value: compactDateText(action.txnDate ?? action.createdAt),
+                tint: AppPalette.muted
+            )
+            .frame(width: 100, alignment: .leading)
+
+            compactMetricDivider
+
+            if action.isPercentBased {
+                compactMetric(
+                    title: "仓位变化",
+                    value: QiemanAlfaClient.percentText(before: action.beforePercent, after: action.afterPercent),
+                    tint: AppPalette.ink,
+                    isEmphasized: true
+                )
+                .frame(width: 150, alignment: .leading)
+            } else {
+                compactMetric(title: "调仓估值", value: decimalText(action.tradeValuation), tint: AppPalette.ink)
+                    .frame(width: 84, alignment: .leading)
+
+                compactMetricDivider
+
+                compactMetric(title: "当前估值", value: decimalText(action.currentValuation), tint: AppPalette.ink)
+                    .frame(width: 84, alignment: .leading)
+
+                compactMetricDivider
+
+                compactMetric(
+                    title: "估值变化",
+                    value: percentText(action.valuationChangePct),
+                    tint: changeTint,
+                    isEmphasized: true
+                )
+                .frame(width: 84, alignment: .leading)
+            }
+        }
+    }
+
+    private var compactMetricDivider: some View {
+        Divider()
+            .frame(height: 28)
+            .padding(.horizontal, 10)
+    }
+
+    @ViewBuilder
+    private var compactActions: some View {
+        VStack(alignment: .trailing, spacing: 3) {
+            Text(isBuy ? "买入" : "卖出")
+                .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                .foregroundStyle(sideColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(sideColor.opacity(0.14), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(sideColor.opacity(0.22), lineWidth: 1)
+                )
+            if showsCompactArticleLink,
+               let article = action.articleUrl,
+               let url = URL(string: article) {
+                Link(destination: url) {
+                    Label("平台原文", systemImage: "arrow.up.right")
+                        .labelStyle(.titleAndIcon)
+                }
+                .font(AppPalette.appFont(.caption, weight: .medium))
+                .foregroundStyle(AppPalette.brand)
+                .help("打开平台原文")
+            }
+        }
+    }
+
     private func decimalText(_ value: Double?) -> String {
         guard let value else { return "—" }
         return String(format: "%.4f", value)
@@ -158,11 +258,15 @@ struct PlatformActionRow: View {
         return value
     }
 
-    @ViewBuilder
-    private func compactMetricPill(title: String, value: String, tint: Color, isEmphasized: Bool = false) -> some View {
-        HStack(spacing: 5) {
+    private func compactMetric(
+        title: String,
+        value: String,
+        tint: Color,
+        isEmphasized: Bool = false
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(AppPalette.appFont(.caption, weight: .medium, design: .rounded))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
                 .font(AppPalette.appFont(isEmphasized ? .subheadline : .footnote, weight: isEmphasized ? .bold : .semibold, design: .monospaced))
@@ -170,13 +274,21 @@ struct PlatformActionRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
         }
+    }
+
+    private func compactMetricCell(
+        title: String,
+        value: String,
+        tint: Color,
+        isEmphasized: Bool = false
+    ) -> some View {
+        compactMetric(title: title, value: value, tint: tint, isEmphasized: isEmphasized)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 5)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+        .padding(7)
+        .background(AppPalette.paper.opacity(0.62), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
         .overlay(
             RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                .stroke(tint.opacity(0.14), lineWidth: 1)
+                .stroke(tint.opacity(0.12), lineWidth: 1)
         )
     }
 }
