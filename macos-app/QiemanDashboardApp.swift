@@ -448,6 +448,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         guard let model else { return }
         let contentView = ContentView()
             .environmentObject(model)
+            .tint(AppPalette.brand)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
@@ -764,6 +765,7 @@ struct QiemanDashboardApp: App {
         Window("且慢主理人", id: AppSceneIdentifier.mainWindow) {
             ContentView()
                 .environmentObject(model)
+                .tint(AppPalette.brand)
                 .onAppear {
                     appDelegate.configure(model: model)
                     appDelegate.syncWindowAppearances()

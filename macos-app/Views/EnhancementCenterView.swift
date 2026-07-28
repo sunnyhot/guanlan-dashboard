@@ -19,12 +19,10 @@ struct EnhancementCenterView: View {
                         .controlSize(.small)
                     }
                 }
-                ReadingPanel(maxWidth: 960) {
-                    workbenchSegmentContent
-                }
                 TrendLiveLogPanel()
+                workbenchSegmentContent
             }
-            .padding(AppPalette.spaceL)
+            .padding(18)
         }
         .onAppear {
             normalizeSelectedTab()
@@ -98,7 +96,7 @@ struct EnhancementCenterView: View {
                 selectedFill: AppPalette.brand,
                 strokeOpacity: AppPalette.strokeSubtle,
                 activeStrokeOpacity: AppPalette.selectionStrokeOpacity,
-                lift: 0
+                lift: 0.5
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())

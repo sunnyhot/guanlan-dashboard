@@ -22,14 +22,36 @@ struct PortfolioSectionView: View {
         AppPalette.marketTint(for: totalProfitAmount)
     }
 
+    private var portfolioSummaryWideColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 180), spacing: 12, alignment: .top), count: 6)
+    }
+
+    private var portfolioSummaryMediumColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 180), spacing: 12, alignment: .top), count: 3)
+    }
+
+    private var portfolioSummaryCompactColumns: [GridItem] {
+        [GridItem(.flexible(minimum: 180), spacing: 12, alignment: .top)]
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
                 if hasAnyPersonalData {
-                    MetricStrip(items: portfolioSummaryItems, minimumCellWidth: 156)
-                        .padding(.vertical, AppPalette.spaceS)
-                        .background(AppPalette.card.opacity(0.56), in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-                        .panelStroke(opacity: AppPalette.strokeSubtle)
+                    ViewThatFits(in: .horizontal) {
+                        LazyVGrid(columns: portfolioSummaryWideColumns, alignment: .leading, spacing: 12) {
+                            portfolioSummaryMetricCards
+                        }
+
+                        LazyVGrid(columns: portfolioSummaryMediumColumns, alignment: .leading, spacing: 12) {
+                            portfolioSummaryMetricCards
+                        }
+
+                        LazyVGrid(columns: portfolioSummaryCompactColumns, alignment: .leading, spacing: 12) {
+                            portfolioSummaryMetricCards
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 10) {
@@ -197,54 +219,58 @@ struct PortfolioSectionView: View {
         }
     }
 
-    private var portfolioSummaryItems: [MetricStripItem] {
+    @ViewBuilder
+    private var portfolioSummaryMetricCards: some View {
         let dailyChange = model.userPortfolioSnapshot?.dailyChangeSummary
         let dailyChangeTitle = model.userPortfolioSnapshot?.dailyChangeTitle ?? "今日涨跌"
         let dailyChangeTint = AppPalette.marketTint(for: dailyChange?.amount)
 
-        return [
-        MetricStripItem(
-            id: "total",
+        MetricCard(
             title: "总持仓",
             value: model.personalAssetSummary.map { currencyText($0.totalEffectiveHoldingAmount) } ?? "—",
-            detail: model.personalAssetSummary.map {
+            subtitle: model.personalAssetSummary.map {
                 "已持有 \(currencyText($0.totalMarketValue)) + 待确认 \(currencyText($0.totalPendingCashAmount)) + 下次计划 \(currencyText($0.totalEstimatedNextPlanAmount))"
-            } ?? "自动聚合已持有、买入中和计划档案"
-        ),
-        MetricStripItem(
-            id: "profit",
+            } ?? "自动聚合你的已持有、买入中和计划档案",
+            icon: "yensign.circle",
+            accent: AppPalette.brand
+        )
+        MetricCard(
             title: "总收益",
             value: signedCurrencyText(totalProfitAmount),
-            detail: "收益率 \(percentOptional(totalProfitPct))",
-            tint: totalProfitTint
-        ),
-        MetricStripItem(
-            id: "daily",
+            subtitle: "收益率 \(percentOptional(totalProfitPct))",
+            icon: "plusminus.circle",
+            accent: totalProfitTint,
+            valueTint: totalProfitTint
+        )
+        MetricCard(
             title: dailyChangeTitle,
             value: dailyChangeCurrencyText(dailyChange?.amount),
-            detail: "\(dailyChangeTitle)率 \(dailyChangePercentText(dailyChange?.pct))",
-            tint: dailyChangeTint
-        ),
-        MetricStripItem(
-            id: "pending",
+            subtitle: "\(dailyChangeTitle)率 \(dailyChangePercentText(dailyChange?.pct))",
+            icon: "waveform.path.ecg",
+            accent: dailyChangeTint,
+            valueTint: dailyChangeTint
+        )
+        MetricCard(
             title: "待确认金额",
             value: model.personalAssetSummary.map { currencyText($0.totalPendingCashAmount) } ?? "—",
-            detail: model.pendingTradeSummary.map { "\($0.actionCount) 笔交易进行中" } ?? "暂无待确认交易",
-            tint: model.pendingTrades.isEmpty ? AppPalette.ink : AppPalette.warning
-        ),
-        MetricStripItem(
-            id: "plans",
+            subtitle: model.pendingTradeSummary.map { "\($0.actionCount) 笔交易进行中" } ?? "暂无待确认交易",
+            icon: "clock.badge.exclamationmark",
+            accent: AppPalette.warning
+        )
+        MetricCard(
             title: "计划档案",
             value: model.investmentPlanSummary.map { "\($0.activePlanCount) / \($0.pausedPlanCount) / \($0.endedPlanCount)" } ?? "—",
-            detail: model.investmentPlanSummary.map { "进行中 / 暂停 / 终止，共 \($0.planCount)" } ?? "支持完整计划档案"
-        ),
-        MetricStripItem(
-            id: "coverage",
+            subtitle: model.investmentPlanSummary.map { "进行中 / 暂停 / 终止 · 共 \($0.planCount)" } ?? "支持完整计划档案",
+            icon: "calendar.badge.clock",
+            accent: AppPalette.info
+        )
+        MetricCard(
             title: "覆盖标的",
             value: model.personalAssetSummary.map { "\($0.fundCount)" } ?? "0",
-            detail: model.personalAssetSummary.map { "持有 \($0.holdingFundCount)，待确认 \($0.pendingFundCount)，有计划 \($0.activePlanFundCount)" } ?? "支持手动录入与维护"
-        ),
-        ]
+            subtitle: model.personalAssetSummary.map { "持有 \($0.holdingFundCount) · 待确认 \($0.pendingFundCount) · 有计划 \($0.activePlanFundCount)" } ?? "支持手动录入与维护",
+            icon: "square.grid.3x2",
+            accent: AppPalette.accentWarm
+        )
     }
 
     @ViewBuilder

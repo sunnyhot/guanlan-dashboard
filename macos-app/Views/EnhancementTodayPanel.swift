@@ -167,18 +167,18 @@ extension EnhancementCenterView {
             }
 
             if !report.riskChecks.isEmpty {
-                DisclosureGroup("执行前复核 \(report.riskChecks.count) 项") {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("执行前复核")
+                        .font(AppPalette.appFont(.footnote, weight: .bold))
+                        .foregroundStyle(AppPalette.warning)
                     ForEach(Array(report.riskChecks.enumerated()), id: \.offset) { _, item in
                         Label(item, systemImage: "checkmark.shield")
-                            .font(AppPalette.appFont(.footnote))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
                             .lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.top, AppPalette.spaceS)
                 }
-                .font(AppPalette.appFont(.footnote, weight: .bold))
-                .tint(AppPalette.warning)
                 .padding(AppPalette.spaceS)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
@@ -242,29 +242,21 @@ extension EnhancementCenterView {
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
-
-                DisclosureGroup("依据与条件") {
-                    VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                        Text(action.rationale)
-                            .font(AppPalette.appFont(.footnote))
-                            .foregroundStyle(AppPalette.muted)
-                            .lineSpacing(4)
-                            .fixedSize(horizontal: false, vertical: true)
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .top, spacing: AppPalette.spaceS) {
-                                nextHourCondition("触发", action.trigger, tint: AppPalette.info)
-                                nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
-                            }
-                            VStack(alignment: .leading, spacing: 4) {
-                                nextHourCondition("触发", action.trigger, tint: AppPalette.info)
-                                nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
-                            }
-                        }
+                Text(action.rationale)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: AppPalette.spaceS) {
+                        nextHourCondition("触发", action.trigger, tint: AppPalette.info)
+                        nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
                     }
-                    .padding(.top, AppPalette.spaceS)
+                    VStack(alignment: .leading, spacing: 4) {
+                        nextHourCondition("触发", action.trigger, tint: AppPalette.info)
+                        nextHourCondition("失效", action.invalidation, tint: AppPalette.warning)
+                    }
                 }
-                .font(AppPalette.appFont(.footnote, weight: .semibold))
-                .tint(tint)
             }
         }
         .padding(AppPalette.spaceS)

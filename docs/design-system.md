@@ -1,6 +1,6 @@
 # 且慢主理人看板 — 设计系统规范
 
-版本：1.1 | 更新：2026-07-28 | 对应代码：`Design/AppPalette.swift`
+版本：1.0 | 更新：2026-07-28 | 对应代码：`Design/AppPalette.swift`
 
 ---
 
@@ -40,16 +40,16 @@ AppPalette.marketTint(for: changePct)
 
 | Token (`AppFontSize`) | pt | 场景 |
 |---|---|---|
-| `.caption2` | 9 | 图表刻度/免责声明；不承载正文或操作说明 |
-| `.caption` | 10 | badge 文字/时间戳/来源标注 |
-| `.footnote` | 11 | 卡片说明/rationale/辅助信息 |
-| `.subheadline` | 12 | 二级说明/摘要/正文下限 |
-| `.body` | 13 | 列表标题/板块名/常规 UI 文字（主力） |
-| `.headline` | 14 | 侧边栏项/按钮文字/section 标题 |
-| `.title3` | 15 | 设置分区标题/弹窗标题 |
-| `.title2` | 17 | 卡片大标题 |
-| `.title` | 20 | 页面主标题 |
-| `.largeTitle` | 24 | Onboarding 标题 |
+| `.caption2` | 8 | 微标/Tag 数字/免责声明 |
+| `.caption` | 9 | badge 文字/时间戳/来源标注 |
+| `.footnote` | 10 | 卡片正文/rationale/说明文字（主力） |
+| `.subheadline` | 11 | 二级说明/摘要 |
+| `.body` | 12 | 列表标题/板块名/常规 UI 文字（主力） |
+| `.headline` | 13 | 侧边栏项/按钮文字/section 标题 |
+| `.title3` | 14 | 设置分区标题/弹窗标题 |
+| `.title2` | 16 | 卡片大标题 |
+| `.title` | 18 | 工具栏主标题 |
+| `.largeTitle` | 22 | Onboarding 标题 |
 
 ### 用法
 ```swift
@@ -68,7 +68,6 @@ AppPalette.marketTint(for: changePct)
 
 ### 规则
 - **禁止** `.font(.system(size: N))` 硬编码字号
-- 11pt 以下文字不承载正文、操作建议或风险说明
 - 字重默认 `.regular`；标题/按钮 `.semibold` 或 `.bold`
 - 金额/代码用 `design: .monospaced`；统计数字用 `design: .rounded`
 
@@ -107,31 +106,15 @@ AppPalette.marketTint(for: changePct)
 
 ---
 
-## 五、表面层级与阴影
-
-### 表面层级
-
-| 层级 | 用途 | 推荐实现 |
-|---|---|---|
-| S0 | 窗口画布 | `surface` / 系统 window material |
-| S1 | 页面分区 | 间距 + 标题，必要时使用 `SectionCard` 的弱底板 |
-| S2 | 可交互分组 | `card` / `cardStrong.opacity(...)` + 弱描边 |
-| S3 | 临时浮层 | Sheet、Popover、菜单，允许 material 与阴影 |
-
-规则：
-
-- 任意普通内容区域不超过三层可见表面。
-- 普通 Section 不同时使用强背景、完整描边和阴影。
-- 统计摘要优先使用 `MetricStrip`，不要拆成一排等权彩色卡片。
-- 长篇 AI 或报告内容优先放入 `ReadingPanel`，正文宽度受控。
+## 五、阴影
 
 | 函数 | 用途 |
 |---|---|
-| `AppPalette.cardShadow()` | 少量需要抬升的卡片，默认 `0.08 / 8 / 2` |
-| `AppPalette.subtleShadow()` | 临时 hover 或浮层反馈 |
-| `AppPalette.panelShadow()` | 真正独立的大面板或浮层 |
+| `AppPalette.cardShadow()` | 常规卡片 |
+| `AppPalette.subtleShadow()` | 微弱阴影（hover） |
+| `AppPalette.panelShadow()` | 大面板 |
 
-普通 `SectionCard` 默认不使用阴影；`sectionShadow*` 与选中态 glow 保留为兼容 token，但当前值为关闭。侧边栏不使用投影模拟浮层。
+预设常量：`sectionShadow*` / `panelShadow*` / `sidebarShadow*`。
 
 ---
 
@@ -161,54 +144,37 @@ AppPalette.marketTint(for: changePct)
 | `.plain` | 图标按钮/链接 | 无背景 |
 
 - `controlSize(.small)` → 紧凑模式（菜单栏/卡片内）
-- 文字字号 `.headline`（14pt）+ `.semibold`
-- Pressed 仅允许轻微缩放（当前 `0.98`）；hover 不上浮、不放大
-- 系统 `Button`、`Toggle`、`Picker` 跟随系统 Accent Color；自定义主操作继续使用 `brand`
+- 文字字号 `.headline`（13pt）+ `.semibold`
 
 ### 卡片
-- 背景：`AppPalette.card.opacity(0.72)` 或必要时 `cardStrong`
+- 背景：`AppPalette.cardStrong`（或 material）
 - 圆角：`cardRadius`（10）
 - 内边距：`spaceL`（16）或 `spaceM`（12，紧凑）
-- 描边：`hairline.opacity(strokeSubtle)`（0.35）
-- 阴影：普通内容卡片默认无；只给浮层或确有层级差的对象
+- 描边：`hairline.opacity(borderLight)`（0.32）
+- 阴影：`cardShadow()`
 
 ### 输入框
 - 圆角：`controlRadius`（8）
-- 字号：`.body`（13pt）
+- 字号：`.body`（12pt）
 - 焦点描边：`brand`
 - 背景：`surface`
 
 ### 侧边栏行
 - 圆角：`sidebarRowRadius`（9）
-- 选中态：`selectionFill` + brand rail（3pt 宽）+ 弱描边
-- hover：仅切换为 `cardHover`，`hoverLift` 固定为 0
-- 图标底板仅在选中态出现
-- 字号：`.headline`（14pt）
-- badge：`.caption`（10pt）+ `.bold` + brand 胶囊
-- 禁止 glow、位移和常驻悬浮阴影
+- 选中态：`selectionFill` + brand rail（3pt 宽）+ glow shadow
+- hover：`hoverLift`（1.2pt 上浮）+ `cardHover`
+- 字号：`.headline`（13pt）
+- badge：`.caption`（9pt）+ `.bold` + brand 胶囊
 
 ### 空状态
-- 标题：`.headline`（14pt）+ `.semibold`
-- 说明：`.subheadline`（12pt）+ `muted`
+- 标题：`.body`（12pt）+ `.bold`
+- 说明：`.footnote`（10pt）+ `muted`
 - 背景：`cardStrong`
 
 ### Badge / Tag
-- 字号：`.caption`（10pt）+ `.bold` + `design: .rounded`
+- 字号：`.caption`（9pt）+ `.bold` + `design: .rounded`
 - 内边距：`.horizontal(7)` + `.vertical(2)`
 - 形状：`Capsule()`
-
-### Toolbar
-
-- 页面标题、连接状态与刷新操作使用原生 SwiftUI `.toolbar`。
-- 不在内容区重复模拟标题栏或刷新栏。
-- 标准 sidebar toggle、交通灯、拖动、缩放、全屏与 Split View 行为必须保留。
-- 页面级状态文本可以与标题组合，但不能替代可访问的刷新按钮状态。
-
-### 渐进披露
-
-- AI 结论和可执行动作先出现，证据与触发条件使用 `DisclosureGroup`。
-- 完整运行日志默认收起；生成中自动展开，生成完成后自动收起。
-- 折叠标题显示数量、失败或异常状态，避免隐藏关键风险。
 
 ---
 
@@ -224,7 +190,7 @@ AppPalette.marketTint(for: changePct)
 | 设置 | 适配方式 |
 |---|---|
 | **Reduce Motion** | `SharedComponents` 统一读 `@Environment(\.accessibilityReduceMotion)`，true 时跳过动画 |
-| **Reduce Transparency** | `SidebarFloatingCompatModifier` 读 `@Environment(\.accessibilityReduceTransparency)`，true 时 material → `surface` 不透明 |
+| **Reduce Transparency** | `SidebarFloatingCompatModifier` + toolbar 读 `@Environment(\.accessibilityReduceTransparency)`，true 时 material → `surface` 不透明 |
 | **Bold Text** | `appFontAdaptive(isBoldText:)` 读 `@Environment(\.legibilityWeight)`，true 时升级字重到 `.bold` |
 | **Increase Contrast** | `AppPalette.borderOpacity(isIncreasedContrast:)` 读 `@Environment(\.colorSchemeContrast)`，true 时描边加深 |
 
@@ -254,6 +220,3 @@ AppPalette.marketTint(for: changePct)
 5. ❌ 固定色不加 adaptive — 所有颜色走 `adaptive(light:dark:)`
 6. ❌ 红绿灯遮挡 — 侧边栏顶部留 34pt 安全区
 7. ❌ 无 .contextMenu 的列表行 — 关键交互元素要有右键菜单
-8. ❌ 普通卡片使用 glow、hover lift 或多层黑色投影
-9. ❌ 在内容区重复实现系统 toolbar
-10. ❌ 将 AI 日志、依据和主结论默认同时展开

@@ -33,13 +33,14 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertTrue(cardSource.contains("PersonalAssetAddHoldingSheet()"))
     }
 
-    func testPortfolioSectionUsesMetricStripAndResponsiveDiagnosticCards() throws {
+    func testPortfolioSectionFillsWideSummaryAndDiagnosticCards() throws {
         let source = try String(contentsOf: portfolioSectionSourceURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("MetricStrip(items: portfolioSummaryItems"))
-        XCTAssertTrue(source.contains("private var portfolioSummaryItems: [MetricStripItem]"))
+        XCTAssertTrue(source.contains("portfolioSummaryWideColumns"))
+        XCTAssertTrue(source.contains("portfolioSummaryMediumColumns"))
         XCTAssertTrue(source.contains("portfolioDiagnosticWideColumns"))
         XCTAssertTrue(source.contains("portfolioDiagnosticMediumColumns"))
+        XCTAssertTrue(source.contains("LazyVGrid(columns: portfolioSummaryWideColumns"))
         XCTAssertTrue(source.contains("LazyVGrid(columns: portfolioDiagnosticWideColumns"))
         XCTAssertFalse(source.contains("LazyVGrid(columns: [GridItem(.adaptive(minimum: 220)"))
         XCTAssertFalse(source.contains("LazyVGrid(columns: [GridItem(.adaptive(minimum: 168)"))

@@ -11,9 +11,9 @@ final class UIEffectsTokenTests: XCTestCase {
     func testSelectionMetricsKeepSidebarReadable() {
         XCTAssertEqual(AppPalette.selectionRailWidth, 3, accuracy: 0.001)
         XCTAssertEqual(AppPalette.sidebarRowRadius, 9, accuracy: 0.001)
-        XCTAssertEqual(AppPalette.hoverLift, 0, accuracy: 0.001)
+        XCTAssertEqual(AppPalette.hoverLift, 1.2, accuracy: 0.001)
         XCTAssertEqual(AppPalette.selectionStrokeOpacity, 0.76, accuracy: 0.001)
-        XCTAssertEqual(AppPalette.selectionGlowOpacity, 0, accuracy: 0.001)
-        XCTAssertEqual(AppPalette.selectionGlowRadius, 0, accuracy: 0.001)
+        XCTAssertEqual(AppPalette.selectionGlowOpacity, 0.16, accuracy: 0.001)
+        XCTAssertEqual(AppPalette.selectionGlowRadius, 12, accuracy: 0.001)
     }
 }

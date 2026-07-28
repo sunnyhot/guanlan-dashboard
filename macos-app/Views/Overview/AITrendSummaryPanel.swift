@@ -4,6 +4,30 @@ struct AITrendSummaryPanel: View {
     let summary: TrendDashboardSummary
     let action: (TrendDashboardAction) -> Void
 
+    private func trendHorizonWideColumns(count: Int) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top), count: max(1, min(3, count)))
+    }
+
+    private func trendHorizonMediumColumns(count: Int) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top), count: max(1, min(2, count)))
+    }
+
+    private var trendHorizonCompactColumns: [GridItem] {
+        [GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top)]
+    }
+
+    private func trendSectorWideColumns(count: Int) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 220), spacing: 10, alignment: .top), count: max(1, min(4, count)))
+    }
+
+    private func trendSectorMediumColumns(count: Int) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 220), spacing: 10, alignment: .top), count: max(1, min(2, count)))
+    }
+
+    private var trendSectorCompactColumns: [GridItem] {
+        [GridItem(.flexible(minimum: 220), spacing: 10, alignment: .top)]
+    }
+
     var body: some View {
         SectionCard(title: "AI 趋势摘要", subtitle: subtitle, icon: "sparkles", trailing: {
             Spacer()
@@ -23,7 +47,7 @@ struct AITrendSummaryPanel: View {
                         Text(summary.detail)
                             .font(AppPalette.appFont(.subheadline))
                             .foregroundStyle(AppPalette.muted)
-                            .lineLimit(3)
+                            .lineLimit(4)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -32,16 +56,12 @@ struct AITrendSummaryPanel: View {
                 .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
 
                 if !summary.horizons.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(Array(summary.horizons.enumerated()), id: \.element.id) { index, horizon in
-                            AITrendHorizonRow(item: horizon)
-                            if index < summary.horizons.count - 1 {
-                                Divider()
-                                    .padding(.leading, AppPalette.spaceM)
-                            }
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(summary.horizons) { horizon in
+                            AITrendHorizonCard(item: horizon)
                         }
                     }
-                    .background(AppPalette.cardStrong.opacity(0.28), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if !summary.sectors.isEmpty {
@@ -49,21 +69,26 @@ struct AITrendSummaryPanel: View {
                         Text("板块观点")
                             .font(AppPalette.appFont(.body, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
-                        VStack(spacing: 0) {
-                            ForEach(Array(summary.sectors.prefix(3).enumerated()), id: \.element.id) { index, sector in
-                                AITrendSectorRow(item: sector)
-                                if index < min(3, summary.sectors.count) - 1 {
-                                    Divider()
-                                        .padding(.leading, AppPalette.spaceM)
+                        ViewThatFits(in: .horizontal) {
+                            LazyVGrid(columns: trendSectorWideColumns(count: summary.sectors.count), alignment: .leading, spacing: 10) {
+                                ForEach(summary.sectors) { sector in
+                                    AITrendSectorCard(item: sector)
+                                }
+                            }
+
+                            LazyVGrid(columns: trendSectorMediumColumns(count: summary.sectors.count), alignment: .leading, spacing: 10) {
+                                ForEach(summary.sectors) { sector in
+                                    AITrendSectorCard(item: sector)
+                                }
+                            }
+
+                            LazyVGrid(columns: trendSectorCompactColumns, alignment: .leading, spacing: 10) {
+                                ForEach(summary.sectors) { sector in
+                                    AITrendSectorCard(item: sector)
                                 }
                             }
                         }
-                        .background(AppPalette.cardStrong.opacity(0.28), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-                        if summary.sectors.count > 3 {
-                            Text("其余 \(summary.sectors.count - 3) 项请在完整报告中查看")
-                                .font(AppPalette.appFont(.caption))
-                                .foregroundStyle(AppPalette.muted)
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
 
@@ -92,7 +117,7 @@ struct AITrendSummaryPanel: View {
             summary.externalSignalText,
             summary.generatedAt.map { "生成 \($0)" }
         ].compactMap { $0 }
-        return parts.isEmpty ? "组合级 AI 判断与条件式复核入口" : parts.joined(separator: "  ")
+        return parts.isEmpty ? "组合级 AI 判断与条件式复核入口" : parts.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -121,68 +146,83 @@ struct AITrendSummaryPanel: View {
     }
 }
 
-private struct AITrendHorizonRow: View {
+private struct AITrendHorizonCard: View {
     let item: TrendDashboardHorizonItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppPalette.spaceM) {
-            Text(item.title)
-                .font(AppPalette.appFont(.body, weight: .bold))
-                .foregroundStyle(AppPalette.ink)
-                .frame(width: 38, alignment: .leading)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.rationale)
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
+                Circle()
+                    .fill(item.tone.color)
+                    .frame(width: 7, height: 7)
+                Text(item.title)
+                    .font(AppPalette.appFont(.body, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                Spacer(minLength: 4)
                 Text(item.directionText)
                     .font(AppPalette.appFont(.caption, weight: .bold))
                     .foregroundStyle(item.tone.color)
                     .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(item.tone.color.opacity(0.12), in: Capsule())
                 TrendConfidenceMeter(confidence: item.confidence)
             }
+            Text(item.rationale)
+                .font(AppPalette.appFont(.footnote))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, AppPalette.spaceM)
-        .padding(.vertical, 10)
+        .padding(11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppPalette.paper.opacity(0.72), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(item.tone.color.opacity(0.14), lineWidth: 1)
+        )
     }
 }
 
-private struct AITrendSectorRow: View {
+private struct AITrendSectorCard: View {
     let item: TrendDashboardSectorItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppPalette.spaceM) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: AppPalette.spaceS) {
-                    Text(item.name)
-                        .font(AppPalette.appFont(.body, weight: .bold))
-                        .foregroundStyle(AppPalette.ink)
-                        .lineLimit(1)
-                    Text(item.exposureText)
-                        .font(AppPalette.appFont(.caption, weight: .semibold))
-                        .foregroundStyle(AppPalette.info)
-                }
-                Text(item.rationale)
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
+                Circle()
+                    .fill(item.tone.color)
+                    .frame(width: 7, height: 7)
+                Text(item.name)
+                    .font(AppPalette.appFont(.body, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
                 Text(item.directionText)
                     .font(AppPalette.appFont(.caption, weight: .bold))
                     .foregroundStyle(item.tone.color)
                     .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(item.tone.color.opacity(0.12), in: Capsule())
                 TrendConfidenceMeter(confidence: item.confidence)
             }
+            Text(item.exposureText)
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+                .foregroundStyle(AppPalette.info)
+            Text(item.rationale)
+                .font(AppPalette.appFont(.footnote))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, AppPalette.spaceM)
-        .padding(.vertical, 10)
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(item.tone.color.opacity(0.14), lineWidth: 1)
+        )
     }
 }
 
