@@ -229,7 +229,7 @@ struct TrendDashboardSummary: Hashable {
                     directionText: item.direction.dashboardText,
                     confidenceText: "\(item.confidence.label)信心",
                     confidence: item.confidence,
-                    rationale: clipped(item.rationale, fallback: "暂无判断依据", maxLength: 72),
+                    rationale: normalized(item.rationale, fallback: "暂无判断依据"),
                     tone: item.direction.dashboardTone
                 )
             }
@@ -254,7 +254,7 @@ struct TrendDashboardSummary: Hashable {
                 directionText: sector.direction.dashboardText,
                 confidenceText: "\(sector.confidence.label)信心",
                 confidence: sector.confidence,
-                rationale: clipped(sector.rationale, fallback: "暂无板块依据", maxLength: 72),
+                rationale: normalized(sector.rationale, fallback: "暂无板块依据"),
                 tone: sector.direction.dashboardTone
             )
         }

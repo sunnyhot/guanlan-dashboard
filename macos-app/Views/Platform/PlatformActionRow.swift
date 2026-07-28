@@ -6,6 +6,7 @@ struct PlatformActionRow: View {
     let action: PlatformActionPayload
     var isSelected: Bool = false
     var isCompact: Bool = false
+    var showsCompactArticleLink: Bool = false
     var titlePrefix: String = ""
 
     private var displayTitleWithPrefix: String {
@@ -47,16 +48,25 @@ struct PlatformActionRow: View {
                                 .minimumScaleFactor(0.82)
                         }
                         Spacer(minLength: 8)
-                        Text(isBuy ? "买入" : "卖出")
-                            .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                            .foregroundStyle(sideColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(sideColor.opacity(0.14), in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(sideColor.opacity(0.22), lineWidth: 1)
-                            )
+                        VStack(alignment: .trailing, spacing: 3) {
+                            Text(isBuy ? "买入" : "卖出")
+                                .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                                .foregroundStyle(sideColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(sideColor.opacity(0.14), in: Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(sideColor.opacity(0.22), lineWidth: 1)
+                                )
+                            if showsCompactArticleLink,
+                               let article = action.articleUrl,
+                               let url = URL(string: article) {
+                                Link("打开平台原文", destination: url)
+                                    .font(AppPalette.appFont(.caption))
+                                    .foregroundStyle(AppPalette.brand)
+                            }
+                        }
                     }
 
                     HStack(spacing: 6) {

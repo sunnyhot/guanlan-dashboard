@@ -23,6 +23,14 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("let onDismiss: (() -> Void)?"))
     }
 
+    func testResponsiveCardHoverDoesNotExpandPastScrollBounds() throws {
+        let source = try source(at: "Views/SharedComponents.swift")
+
+        XCTAssertTrue(source.contains("configuration.isPressed ? 0.965 : 1"))
+        XCTAssertTrue(source.contains(".brightness(isHovering ? 0.025 : 0)"))
+        XCTAssertFalse(source.contains("isHovering ? 1.018"))
+    }
+
     func testVisibleActionsUseTheUnifiedAppButtonSystem() throws {
         let components = try source(at: "Views/SharedComponents.swift")
         let views = try sourceTree(at: "Views")
@@ -229,6 +237,13 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(managerWatch.contains("selectedPlatformActivityTab = .forum"))
         XCTAssertFalse(overview.contains("model.selectedSection = .forum"))
         XCTAssertFalse(managerWatch.contains("selectedSection = .forum"))
+    }
+
+    func testOverviewUsesCompactRecentPlatformActionCards() throws {
+        let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
+
+        XCTAssertTrue(overview.contains("isCompact: true"))
+        XCTAssertTrue(overview.contains("showsCompactArticleLink: true"))
     }
 
     func testQuitApplicationIsReachableFromMenuBarPopoverAndSettings() throws {

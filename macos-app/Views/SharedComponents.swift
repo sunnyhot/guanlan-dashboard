@@ -345,7 +345,8 @@ private struct PressResponsiveButtonLabel: View {
 
     var body: some View {
         configuration.label
-            .scaleEffect(accessibilityReduceMotion ? 1 : (configuration.isPressed ? 0.965 : (isHovering ? 1.018 : 1)))
+            .scaleEffect(accessibilityReduceMotion ? 1 : (configuration.isPressed ? 0.965 : 1))
+            .brightness(isHovering ? 0.025 : 0)
             .opacity(configuration.isPressed ? 0.84 : 1)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionFast, value: configuration.isPressed)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionStandard, value: isHovering)

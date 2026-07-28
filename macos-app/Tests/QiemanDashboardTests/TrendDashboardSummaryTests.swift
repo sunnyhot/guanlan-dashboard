@@ -111,6 +111,56 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertEqual(summary.detail, longDetail)
     }
 
+    func testGeneratedReportKeepsHorizonAndSectorRationalesComplete() {
+        let horizonRationale = "短期判断需要完整保留模型返回的依据，包括成交量、估值、行业轮动、资金流向和组合暴露，不能因为总览卡片使用紧凑布局就提前截断正文。"
+        let sectorRationale = "板块判断需要完整呈现模型给出的证据链，包括当前持仓、阶段涨跌、政策催化、盈利预期和潜在反向信号，避免省略号掩盖关键条件。"
+        let report = TrendAnalysisReport.fixture(
+            generatedAt: "2026-06-25 09:30:00",
+            externalSignalStatus: .available
+        )
+        .replacingAnalysis(
+            horizons: [
+                TrendHorizonView(
+                    horizon: .short,
+                    direction: .neutral,
+                    confidence: TrendConfidence(score: 62, label: "中"),
+                    rationale: horizonRationale,
+                    counterSignals: []
+                )
+            ],
+            sectors: [
+                TrendSectorView(
+                    id: "technology",
+                    name: "半导体与科技制造",
+                    exposureText: "组合穿透后制造业暴露 57.5%",
+                    direction: .neutral,
+                    confidence: TrendConfidence(score: 48, label: "低"),
+                    rationale: sectorRationale,
+                    evidenceIDs: [],
+                    counterSignals: []
+                )
+            ]
+        )
+
+        let summary = TrendDashboardSummary.make(
+            report: report,
+            trendStatus: EnhancementTrendStatus(
+                isProviderConfigured: true,
+                generationState: .succeeded,
+                lastGeneratedAt: report.generatedAt,
+                headline: report.portfolio.headline,
+                externalSignalStatus: report.externalSignalStatus,
+                isStale: false
+            ),
+            generationState: .succeeded,
+            lastError: "",
+            progressLogs: []
+        )
+
+        XCTAssertEqual(summary.horizons.first?.rationale, horizonRationale)
+        XCTAssertEqual(summary.sectors.first?.rationale, sectorRationale)
+    }
+
     func testStaleReportMarksRefreshAsPrimaryAction() {
         let report = TrendAnalysisReport.fixture(
             generatedAt: "2026-06-24 09:30:00",
@@ -415,6 +465,27 @@ final class TrendDashboardSummaryTests: XCTestCase {
 
 private extension TrendAnalysisReport {
     func replacingPortfolio(_ portfolio: TrendPortfolioSummary) -> TrendAnalysisReport {
+        TrendAnalysisReport(
+            id: id,
+            generatedAt: generatedAt,
+            dataAsOf: dataAsOf,
+            privacyMode: privacyMode,
+            externalSignalStatus: externalSignalStatus,
+            portfolio: portfolio,
+            horizons: horizons,
+            sectors: sectors,
+            keyAssets: keyAssets,
+            actions: actions,
+            evidence: evidence,
+            warnings: warnings,
+            disclaimer: disclaimer
+        )
+    }
+
+    func replacingAnalysis(
+        horizons: [TrendHorizonView],
+        sectors: [TrendSectorView]
+    ) -> TrendAnalysisReport {
         TrendAnalysisReport(
             id: id,
             generatedAt: generatedAt,

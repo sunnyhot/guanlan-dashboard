@@ -171,7 +171,7 @@ private struct AITrendHorizonCard: View {
             Text(item.rationale)
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
-                .lineLimit(4)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(11)
@@ -213,7 +213,7 @@ private struct AITrendSectorCard: View {
             Text(item.rationale)
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
-                .lineLimit(4)
+                .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(11)

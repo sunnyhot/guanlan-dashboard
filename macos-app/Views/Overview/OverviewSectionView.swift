@@ -53,7 +53,11 @@ struct OverviewSectionView: View {
                                 Button {
                                     openPlatform(action)
                                 } label: {
-                                    PlatformActionRow(action: action)
+                                    PlatformActionRow(
+                                        action: action,
+                                        isCompact: true,
+                                        showsCompactArticleLink: true
+                                    )
                                 }
                                 .buttonStyle(PressResponsiveButtonStyle())
                                 .help("打开平台调仓详情")
