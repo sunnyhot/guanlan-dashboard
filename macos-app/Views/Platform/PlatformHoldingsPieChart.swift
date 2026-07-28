@@ -6,52 +6,24 @@ import Charts
 struct PlatformHoldingsPieChart: View {
     let holdings: [HoldingItemPayload]
 
-    private var slices: [HoldingAllocationSlice] {
-        let grouped = Dictionary(grouping: holdings.filter { ($0.currentUnits ?? 0) > 0 }, by: categoryLabel)
-        var buckets = grouped.map { label, items in
-            HoldingAllocationBucket(
-                label: label,
-                units: items.compactMap(\.currentUnits).reduce(0, +),
-                assetCount: items.count
-            )
-        }
-        .filter { $0.units > 0 }
-        .sorted {
-            if $0.units != $1.units {
-                return $0.units > $1.units
-            }
-            return $0.label < $1.label
-        }
+    private var assetClassSlices: [HoldingAllocationSlice] {
+        slices(for: .assetClass)
+    }
 
-        if buckets.count > 6 {
-            let remainder = buckets.dropFirst(5).reduce(HoldingAllocationBucket(label: "其他", units: 0, assetCount: 0)) { partial, bucket in
-                HoldingAllocationBucket(
-                    label: partial.label,
-                    units: partial.units + bucket.units,
-                    assetCount: partial.assetCount + bucket.assetCount
-                )
-            }
-            buckets = Array(buckets.prefix(5)) + [remainder]
-        }
+    private var assetTypeSlices: [HoldingAllocationSlice] {
+        slices(for: .assetType)
+    }
 
-        let total = buckets.map(\.units).reduce(0, +)
-        return buckets.enumerated().map { index, bucket in
+    private func slices(for dimension: PlatformHoldingAllocationDimension) -> [HoldingAllocationSlice] {
+        PlatformHoldingAllocationBuilder.make(holdings: holdings, dimension: dimension).enumerated().map { index, allocation in
             HoldingAllocationSlice(
-                label: bucket.label,
-                units: bucket.units,
-                assetCount: bucket.assetCount,
-                ratio: total > 0 ? Double(bucket.units) / Double(total) : 0,
+                label: allocation.label,
+                value: allocation.value,
+                assetCount: allocation.assetCount,
+                ratio: allocation.ratio,
                 tint: allocationPalette[index % allocationPalette.count]
             )
         }
-    }
-
-    private var totalUnits: Int {
-        slices.map(\.units).reduce(0, +)
-    }
-
-    private var largestSlice: HoldingAllocationSlice? {
-        slices.first
     }
 
     private let allocationPalette: [Color] = [
@@ -65,13 +37,13 @@ struct PlatformHoldingsPieChart: View {
     ]
 
     var body: some View {
-        if !slices.isEmpty {
+        if !assetClassSlices.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.pie.fill")
                         .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.brand)
-                    Text("当前持仓分布")
+                    Text("持仓分布")
                         .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Spacer()
@@ -81,17 +53,16 @@ struct PlatformHoldingsPieChart: View {
                 }
 
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 18) {
-                        pieVisual
-                            .frame(width: 220, height: 176)
-                        legend
+                    HStack(alignment: .top, spacing: 12) {
+                        distributionPanel(title: "资产大类", slices: assetClassSlices)
+                            .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
+                        distributionPanel(title: "资产类型", slices: assetTypeSlices)
+                            .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
                     }
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        pieVisual
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 176)
-                        legend
+                    VStack(alignment: .leading, spacing: 10) {
+                        distributionPanel(title: "资产大类", slices: assetClassSlices)
+                        distributionPanel(title: "资产类型", slices: assetTypeSlices)
                     }
                 }
             }
@@ -104,11 +75,45 @@ struct PlatformHoldingsPieChart: View {
         }
     }
 
-    private var pieVisual: some View {
-        ZStack {
+    private func distributionPanel(title: String, slices: [HoldingAllocationSlice]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 14) {
+                    pieVisual(slices: slices)
+                        .frame(width: 172, height: 160)
+                    legend(slices: slices)
+                        .frame(minWidth: 180)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    pieVisual(slices: slices)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                    legend(slices: slices)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(AppPalette.cardStrong.opacity(0.55), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(AppPalette.line.opacity(0.28), lineWidth: 1)
+        )
+    }
+
+    private func pieVisual(slices: [HoldingAllocationSlice]) -> some View {
+        let totalValue = slices.map(\.value).reduce(0, +)
+        let largestSlice = slices.first
+
+        return ZStack {
             Chart(slices) { slice in
                 SectorMark(
-                    angle: .value("份数", slice.units),
+                    angle: .value("当前份数", slice.value),
                     innerRadius: .ratio(0.58),
                     angularInset: 1.2
                 )
@@ -119,8 +124,8 @@ struct PlatformHoldingsPieChart: View {
             .chartYAxis(.hidden)
 
             VStack(spacing: 1) {
-                Text("\(totalUnits)")
-                    .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
+                Text(unitsText(totalValue))
+                    .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(AppPalette.ink)
                 Text("当前份数")
@@ -137,7 +142,7 @@ struct PlatformHoldingsPieChart: View {
         }
     }
 
-    private var legend: some View {
+    private func legend(slices: [HoldingAllocationSlice]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(slices) { slice in
                 HStack(spacing: 8) {
@@ -158,7 +163,7 @@ struct PlatformHoldingsPieChart: View {
 
                     Spacer(minLength: 10)
 
-                    Text("\(slice.units) 份")
+                    Text("\(unitsText(slice.value)) 份")
                         .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
@@ -168,34 +173,124 @@ struct PlatformHoldingsPieChart: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func categoryLabel(for holding: HoldingItemPayload) -> String {
-        let largeClass = (holding.largeClass ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !largeClass.isEmpty {
-            return largeClass
-        }
-
-        let strategyType = (holding.strategyType ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if !strategyType.isEmpty {
-            return strategyType
-        }
-
-        return "未分类"
-    }
-
     private func percentText(_ value: Double) -> String {
         String(format: "%.1f%%", value * 100)
     }
+
+    private func unitsText(_ value: Double) -> String {
+        String(Int(value.rounded()))
+    }
 }
 
-private struct HoldingAllocationBucket {
+struct PlatformHoldingAllocation: Identifiable, Equatable {
     let label: String
-    let units: Int
+    let value: Double
     let assetCount: Int
+    let ratio: Double
+
+    var id: String { label }
+}
+
+enum PlatformHoldingAllocationDimension {
+    case assetClass
+    case assetType
+}
+
+enum PlatformHoldingAllocationBuilder {
+    static func make(
+        holdings: [HoldingItemPayload],
+        dimension: PlatformHoldingAllocationDimension = .assetClass
+    ) -> [PlatformHoldingAllocation] {
+        let valuedHoldings = holdings.compactMap { holding -> (HoldingItemPayload, Double)? in
+            guard let units = holding.currentUnits, units > 0 else { return nil }
+            let value = Double(units)
+            return (holding, value)
+        }
+        let grouped = Dictionary(grouping: valuedHoldings) { holding, _ in
+            allocationLabel(for: holding, dimension: dimension)
+        }
+        let buckets = grouped.map { label, entries in
+            (
+                label: label,
+                value: entries.map(\.1).reduce(0, +),
+                assetCount: entries.count
+            )
+        }
+        .filter { $0.value > 0 }
+        .sorted {
+            if $0.value != $1.value {
+                return $0.value > $1.value
+            }
+            return $0.label < $1.label
+        }
+
+        let total = buckets.map(\.value).reduce(0, +)
+        guard total > 0 else { return [] }
+        return buckets.map { bucket in
+            PlatformHoldingAllocation(
+                label: bucket.label,
+                value: bucket.value,
+                assetCount: bucket.assetCount,
+                ratio: bucket.value / total
+            )
+        }
+    }
+
+    private static func allocationLabel(
+        for holding: HoldingItemPayload,
+        dimension: PlatformHoldingAllocationDimension
+    ) -> String {
+        switch dimension {
+        case .assetClass:
+            return assetClassLabel(for: holding)
+        case .assetType:
+            return assetTypeLabel(for: holding)
+        }
+    }
+
+    private static func assetClassLabel(for holding: HoldingItemPayload) -> String {
+        let largeClass = (holding.largeClass ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return largeClass.isEmpty ? "未分类" : largeClass
+    }
+
+    private static func assetTypeLabel(for holding: HoldingItemPayload) -> String {
+        let searchableText = [
+            holding.largeClass,
+            holding.strategyType,
+            holding.label,
+            holding.fundName,
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+
+        if containsAny(["债券", "固收", "纯债", "信用债", "利率债", "可转债", "短债"], in: searchableText) {
+            return "债券"
+        }
+        if containsAny(["现金", "货币", "同业存单", "短融"], in: searchableText) {
+            return "现金及货币"
+        }
+        if containsAny(["商品", "黄金", "原油", "贵金属"], in: searchableText) {
+            return "商品"
+        }
+        if containsAny(["REIT", "不动产", "另类"], in: searchableText) {
+            return "另类资产"
+        }
+        if containsAny(["股票", "A股", "港股", "美股", "权益", "中概", "指数"], in: searchableText) {
+            return "股票"
+        }
+        return "其他"
+    }
+
+    private static func containsAny(_ keywords: [String], in value: String) -> Bool {
+        keywords.contains { value.localizedCaseInsensitiveContains($0) }
+    }
+
 }
 
 private struct HoldingAllocationSlice: Identifiable {
     let label: String
-    let units: Int
+    let value: Double
     let assetCount: Int
     let ratio: Double
     let tint: Color

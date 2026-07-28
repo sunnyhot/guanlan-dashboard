@@ -3,9 +3,9 @@ import XCTest
 
 final class PlatformActionPresentationTests: XCTestCase {
     func testWorkspaceListWidthStaysReadableAcrossWideWindows() {
-        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 900), 400)
-        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 1_600), 480)
-        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 2_400), 520)
+        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 900), 500)
+        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 1_600), 576)
+        XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 2_400), 680)
         XCTAssertEqual(PlatformWorkspaceLayout.actionListHeight, 430)
         XCTAssertEqual(PlatformWorkspaceLayout.adjustmentWorkspaceHeight, 520)
     }

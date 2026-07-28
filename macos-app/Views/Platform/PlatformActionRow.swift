@@ -7,6 +7,7 @@ struct PlatformActionRow: View {
     var isSelected: Bool = false
     var isCompact: Bool = false
     var showsCompactArticleLink: Bool = false
+    var showsFourColumnMetrics: Bool = false
     var titlePrefix: String = ""
 
     private var displayTitleWithPrefix: String {
@@ -33,9 +34,13 @@ struct PlatformActionRow: View {
 
             VStack(alignment: .leading, spacing: isCompact ? 6 : 6) {
                 if isCompact {
-                    ViewThatFits(in: .horizontal) {
-                        compactWideLayout
-                        compactStackedLayout
+                    if showsFourColumnMetrics {
+                        compactFourColumnLayout
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            compactWideLayout
+                            compactStackedLayout
+                        }
                     }
                 } else {
                     HStack {
@@ -128,40 +133,66 @@ struct PlatformActionRow: View {
 
     private var compactStackedLayout: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .center, spacing: 8) {
-                compactIdentity
-                Spacer(minLength: 8)
-                compactActions
-            }
+            compactHeader
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 112), spacing: 7, alignment: .leading)],
                 alignment: .leading,
                 spacing: 7
             ) {
-                compactMetricCell(
-                    title: "调仓日期",
-                    value: compactDateText(action.txnDate ?? action.createdAt),
-                    tint: AppPalette.muted
-                )
-                if action.isPercentBased {
-                    compactMetricCell(
-                        title: "仓位变化",
-                        value: QiemanAlfaClient.percentText(before: action.beforePercent, after: action.afterPercent),
-                        tint: AppPalette.ink,
-                        isEmphasized: true
-                    )
-                } else {
-                    compactMetricCell(title: "调仓估值", value: decimalText(action.tradeValuation), tint: AppPalette.ink)
-                    compactMetricCell(title: "当前估值", value: decimalText(action.currentValuation), tint: AppPalette.ink)
-                    compactMetricCell(
-                        title: "估值变化",
-                        value: percentText(action.valuationChangePct),
-                        tint: changeTint,
-                        isEmphasized: true
-                    )
-                }
+                compactMetricCells
             }
+        }
+    }
+
+    private var compactFourColumnLayout: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            compactHeader
+
+            LazyVGrid(
+                columns: Array(
+                    repeating: GridItem(.flexible(minimum: 0), spacing: 7, alignment: .leading),
+                    count: 4
+                ),
+                alignment: .leading,
+                spacing: 7
+            ) {
+                compactMetricCells
+            }
+        }
+    }
+
+    private var compactHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            compactIdentity
+            Spacer(minLength: 8)
+            compactActions
+        }
+    }
+
+    @ViewBuilder
+    private var compactMetricCells: some View {
+        compactMetricCell(
+            title: "调仓日期",
+            value: compactDateText(action.txnDate ?? action.createdAt),
+            tint: AppPalette.muted
+        )
+        if action.isPercentBased {
+            compactMetricCell(
+                title: "仓位变化",
+                value: QiemanAlfaClient.percentText(before: action.beforePercent, after: action.afterPercent),
+                tint: AppPalette.ink,
+                isEmphasized: true
+            )
+        } else {
+            compactMetricCell(title: "调仓估值", value: decimalText(action.tradeValuation), tint: AppPalette.ink)
+            compactMetricCell(title: "当前估值", value: decimalText(action.currentValuation), tint: AppPalette.ink)
+            compactMetricCell(
+                title: "估值变化",
+                value: percentText(action.valuationChangePct),
+                tint: changeTint,
+                isEmphasized: true
+            )
         }
     }
 

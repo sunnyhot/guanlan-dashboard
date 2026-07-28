@@ -27,14 +27,9 @@ struct PlatformActionDetailCard: View {
         return raw.count >= 10 ? String(raw.prefix(10)) : raw
     }
 
-    private var distinctComment: String? {
-        guard let comment = action.comment?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !comment.isEmpty,
-              comment != action.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        else {
-            return nil
-        }
-        return comment
+    private var actionDescriptionText: String? {
+        let comment = action.comment?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return comment.isEmpty ? nil : comment
     }
 
     private var sourceSummaryText: String? {
@@ -121,17 +116,26 @@ struct PlatformActionDetailCard: View {
                 }
             }
 
-            if distinctComment != nil || sourceSummaryText != nil || articleURL != nil {
-                Divider()
-                    .overlay(AppPalette.line.opacity(0.35))
-
-                if let comment = distinctComment {
-                    Text(comment)
+            if let actionDescriptionText {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("调仓说明")
+                        .font(AppPalette.appFont(.caption, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                    Text(actionDescriptionText)
                         .font(AppPalette.appFont(.body))
                         .foregroundStyle(AppPalette.ink)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(AppPalette.cardStrong.opacity(0.55), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+            }
+
+            if sourceSummaryText != nil || articleURL != nil {
+                Divider()
+                    .overlay(AppPalette.line.opacity(0.35))
 
                 HStack(spacing: 10) {
                     if let sourceSummaryText {

@@ -182,7 +182,34 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(detail.contains("detailMetric(\"净值\""))
         XCTAssertFalse(detail.contains("detailMetric(\"调仓单\""))
         XCTAssertTrue(detail.contains("sourceSummaryText"))
-        XCTAssertTrue(detail.contains("comment != action.displayTitle"))
+        XCTAssertTrue(detail.contains("actionDescriptionText"))
+        XCTAssertTrue(detail.contains("Text(\"调仓说明\")"))
+    }
+
+    func testPlatformAdjustmentListUsesWiderFourColumnCards() throws {
+        let platform = try source(at: "Views/PlatformSectionView.swift")
+        let actionRow = try source(at: "Views/Platform/PlatformActionRow.swift")
+
+        XCTAssertTrue(platform.contains("availableWidth * 0.36"))
+        XCTAssertTrue(platform.contains("showsFourColumnMetrics: !isCompact"))
+        XCTAssertTrue(actionRow.contains("showsFourColumnMetrics"))
+        XCTAssertTrue(actionRow.contains("compactFourColumnLayout"))
+        XCTAssertTrue(actionRow.contains("count: 4"))
+    }
+
+    func testPlatformHoldingsShowsAssetClassAndAssetTypeAllocationByUnits() throws {
+        let platform = try source(at: "Views/PlatformSectionView.swift")
+        let chart = try source(at: "Views/Platform/PlatformHoldingsPieChart.swift")
+
+        XCTAssertEqual(platform.components(separatedBy: "PlatformHoldingsPieChart(").count - 1, 1)
+        XCTAssertTrue(chart.contains("Text(\"持仓分布\")"))
+        XCTAssertTrue(chart.contains("Text(\"按当前份数\")"))
+        XCTAssertTrue(chart.contains("distributionPanel(title: \"资产大类\""))
+        XCTAssertTrue(chart.contains("distributionPanel(title: \"资产类型\""))
+        XCTAssertTrue(chart.contains("dimension: .assetType"))
+        XCTAssertTrue(chart.contains("holding.largeClass"))
+        XCTAssertTrue(chart.contains("holding.currentUnits"))
+        XCTAssertFalse(chart.contains("按持仓金额"))
     }
 
     func testAlfaPanelUsesThePlatformWorkspaceScrollAndWidthContext() throws {

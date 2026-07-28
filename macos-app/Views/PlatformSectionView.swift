@@ -58,13 +58,13 @@ struct PlatformActivitySectionView: View {
 }
 
 struct PlatformWorkspaceLayout {
-    static let compactThreshold: CGFloat = 900
+    static let compactThreshold: CGFloat = 1_050
     static let actionListHeight: CGFloat = 430
     static let adjustmentWorkspaceHeight: CGFloat = 520
     private static let forumListChromeHeight: CGFloat = 124
 
     static func listWidth(for availableWidth: CGFloat) -> CGFloat {
-        min(max(availableWidth * 0.30, 400), 520)
+        min(max(availableWidth * 0.36, 500), 680)
     }
 
     static func forumListHeight(for availableHeight: CGFloat) -> CGFloat {
@@ -449,7 +449,8 @@ struct PlatformSectionView: View {
                     PlatformActionRow(
                         action: action,
                         isSelected: model.selectedPlatformActionID == action.id,
-                        isCompact: true
+                        isCompact: true,
+                        showsFourColumnMetrics: !isCompact
                     )
                 }
                 .buttonStyle(PressResponsiveButtonStyle())
