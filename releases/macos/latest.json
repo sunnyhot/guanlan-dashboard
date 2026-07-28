@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.24/QiemanDashboard-3.9.24.zip",
-    "name" : "QiemanDashboard-3.9.24.zip",
-    "sha256" : "b9ce023b03103b1a8130b1eab33dd437a0d46a12f3b67a66bcbfad2262a63ce8",
-    "size" : 5777620
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.25/QiemanDashboard-3.9.25.zip",
+    "name" : "QiemanDashboard-3.9.25.zip",
+    "sha256" : "801eeff85a53dab1880129cca07a80971009bbbd9dbca5c39291e207685bae18",
+    "size" : 5794429
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.24/QiemanDashboard-3.9.24.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.25/QiemanDashboard-3.9.25.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.24.zip",
-      "size" : 5777620
+      "name" : "QiemanDashboard-3.9.25.zip",
+      "size" : 5794429
     }
   ],
-  "body" : "优化总览卡片与文字展示",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.24",
-  "name" : "QiemanDashboard v3.9.24",
-  "notes" : "优化总览卡片与文字展示",
+  "body" : "合并主理人动态并重构调仓卡片",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.25",
+  "name" : "QiemanDashboard v3.9.25",
+  "notes" : "合并主理人动态并重构调仓卡片",
   "published_at" : "",
-  "sha256" : "b9ce023b03103b1a8130b1eab33dd437a0d46a12f3b67a66bcbfad2262a63ce8",
-  "tag" : "v3.9.24",
-  "tag_name" : "v3.9.24",
-  "version" : "3.9.24"
+  "sha256" : "801eeff85a53dab1880129cca07a80971009bbbd9dbca5c39291e207685bae18",
+  "tag" : "v3.9.25",
+  "tag_name" : "v3.9.25",
+  "version" : "3.9.25"
 }
