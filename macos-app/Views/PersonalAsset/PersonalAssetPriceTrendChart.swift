@@ -127,11 +127,11 @@ struct PersonalAssetPriceTrendChart: View {
     private var chartIdentity: some View {
         HStack(spacing: 8) {
             Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.brand)
                 .accentIconStyle(tint: AppPalette.brand, size: 22)
             Text(priceTitle)
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(1)
         }
@@ -187,10 +187,10 @@ struct PersonalAssetPriceTrendChart: View {
     private func trendMetric(title: String, value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 9, weight: .medium))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .rounded))
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -264,7 +264,7 @@ struct PersonalAssetPriceTrendChart: View {
                 AxisValueLabel {
                     if let price = value.as(Double.self) {
                         Text(decimalText(price))
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(AppPalette.appFont(.caption, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -275,7 +275,7 @@ struct PersonalAssetPriceTrendChart: View {
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(AppPalette.line.opacity(0.14))
                 AxisValueLabel(format: .dateTime.month().day())
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(AppPalette.appFont(.caption, design: .monospaced))
                     .foregroundStyle(AppPalette.muted)
             }
         }
@@ -321,14 +321,14 @@ struct PersonalAssetPriceTrendChart: View {
                 let y = min(max(hoverLocation.y - height - 8, 0), geometry.size.height - height)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(hoveredPoint.dateText)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppPalette.appFont(.footnote, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("\(priceLabel) \(decimalText(hoveredPoint.price))")
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
                         .foregroundStyle(trendTint)
                     if let first = visiblePoints.first?.price, first > 0 {
                         Text("较区间起点 \(percentOptional((hoveredPoint.price / first - 1) * 100))")
-                            .font(.system(size: 9))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -356,7 +356,7 @@ struct PersonalAssetPriceTrendChart: View {
             Text("已加载 \(series.points.count) 个交易日")
                 .foregroundStyle(AppPalette.muted)
         }
-        .font(.system(size: 9, weight: .medium))
+        .font(AppPalette.appFont(.caption, weight: .medium))
     }
 
     private var loadingState: some View {
@@ -364,10 +364,10 @@ struct PersonalAssetPriceTrendChart: View {
             ProgressView()
                 .controlSize(.small)
             Text("正在加载历史走势…")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
             Text("首次打开可能需要几秒钟")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
         }
         .frame(maxWidth: .infinity, minHeight: 168)
@@ -376,13 +376,13 @@ struct PersonalAssetPriceTrendChart: View {
     private var emptyState: some View {
         VStack(spacing: 9) {
             Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 24))
+                .font(AppPalette.appFont(.largeTitle))
                 .foregroundStyle(AppPalette.muted)
             Text(loadError ?? "暂时没有可用走势")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
             Text("可以稍后重试，不影响当前持仓数据。")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
             Button("重新加载") {
                 loadGeneration += 1

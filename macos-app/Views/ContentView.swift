@@ -187,7 +187,7 @@ struct ContentView: View {
     private var toolbarTitleBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(model.selectedSection.rawValue)
-                .font(.system(size: 20, weight: legibilityWeight == .bold ? .bold : .bold))
+                .font(AppPalette.appFont(.title2, weight: .bold))
                 .foregroundStyle(colorSchemeContrast == .increased ? .primary : AppPalette.ink)
             HStack(spacing: AppPalette.spaceXS + 2) {
                 ToolbarBadge(
@@ -209,7 +209,7 @@ struct ContentView: View {
                 }
             } label: {
                 Label("侧边栏", systemImage: "sidebar.left")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
             }
             .buttonStyle(.appSecondary)
             .controlSize(.regular)
@@ -219,7 +219,7 @@ struct ContentView: View {
                 Task { try? await model.refreshLatest(persist: false) }
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
             }
             .buttonStyle(.appPrimary)
             .controlSize(.regular)
@@ -361,7 +361,7 @@ private struct SidebarSectionButton: View {
                     .frame(width: AppPalette.selectionRailWidth, height: 24)
 
                 Image(systemName: section.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
                     .foregroundStyle(activeTint)
                     .frame(width: 26, height: 26)
                     .background(
@@ -370,7 +370,7 @@ private struct SidebarSectionButton: View {
                     )
 
                 Text(section.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .font(AppPalette.appFont(.headline, weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(isSelected ? AppPalette.ink : activeTint)
                     .lineLimit(1)
 
@@ -378,7 +378,7 @@ private struct SidebarSectionButton: View {
 
                 if badgeCount > 0 {
                     Text("\(badgeCount)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -465,20 +465,20 @@ private struct AppUpdateSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(AppPalette.appFont(.largeTitle, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 48, height: 48)
                     .background(AppPalette.brandSoft, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
 
                 VStack(alignment: .leading, spacing: AppPalette.spaceS - 2) {
                     Text("发现新版本")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.positive)
                     Text(release.displayTitle)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(AppPalette.appFont(.largeTitle, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("当前 \(release.currentVersion) · 最新 \(release.version)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AppPalette.appFont(.body, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
 
@@ -501,7 +501,7 @@ private struct AppUpdateSheet: View {
 
                 VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                     Text("本次更新")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppPalette.appFont(.title3, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
 
                     ScrollView {
@@ -509,10 +509,10 @@ private struct AppUpdateSheet: View {
                             ForEach(Array(releaseNoteItems.enumerated()), id: \.offset) { _, item in
                                 HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
                                     Text("•")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(AppPalette.appFont(.headline, weight: .semibold))
                                         .foregroundStyle(AppPalette.muted)
                                     Text(item)
-                                        .font(.system(size: 13))
+                                        .font(AppPalette.appFont(.headline))
                                         .foregroundStyle(AppPalette.ink)
                                         .lineSpacing(AppPalette.spaceXS)
                                         .textSelection(.enabled)
@@ -540,7 +540,7 @@ private struct AppUpdateSheet: View {
                                 .controlSize(.small)
                         }
                         Text(installProgress.isEmpty ? "正在准备更新…" : installProgress)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(AppPalette.appFont(.body, weight: .medium))
                             .foregroundStyle(AppPalette.muted)
                     }
                     .padding(.horizontal, 2)

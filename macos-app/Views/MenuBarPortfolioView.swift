@@ -144,9 +144,9 @@ struct MenuBarPortfolioView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("持仓与关注")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(AppPalette.appFont(.title3, weight: .bold))
                 Text(refreshCaption)
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
             }
             Spacer()
@@ -211,13 +211,13 @@ struct MenuBarPortfolioView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "briefcase.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
                 Text("我的持仓")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text("\(model.userPortfolioSnapshot?.holdingCount ?? model.activePortfolioHoldingCount)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.muted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -292,13 +292,13 @@ struct MenuBarPortfolioView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.warning)
                 Text("我的关注")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text("\(rows.count)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.muted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -317,7 +317,7 @@ struct MenuBarPortfolioView: View {
                     Image(systemName: "star")
                         .foregroundStyle(AppPalette.muted)
                     Text("还没有关注标的，可在主界面的“我的关注”中添加。")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -343,13 +343,13 @@ private struct MenuBarEmptyState: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 28))
+                .font(AppPalette.appFont(.largeTitle))
                 .foregroundStyle(AppPalette.muted)
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(AppPalette.appFont(.title3, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
             Text(subtitle)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .multilineTextAlignment(.center)
         }
@@ -375,7 +375,7 @@ private struct MenuBarSummaryCard: View {
 
         VStack(alignment: .leading, spacing: 5) {
             Text(currencyText(personalSummary?.totalEffectiveHoldingAmount ?? snapshot.totalMarketValue))
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.title2, weight: .bold, design: .rounded))
                 .foregroundStyle(AppPalette.ink)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
@@ -404,12 +404,12 @@ private struct SummaryPill: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
             Spacer(minLength: 4)
             Text(value)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -456,17 +456,17 @@ private struct MenuBarHoldingRow: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.fundName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                     .help(row.fundName)
                 HStack(spacing: 4) {
                     Text(row.holding.normalizedFundCode)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                         .monospacedDigit()
                     Text("· \(quote.compactText)")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(AppPalette.appFont(.caption, weight: .medium))
                         .foregroundStyle(AppPalette.ink.opacity(0.76))
                         .monospacedDigit()
                         .lineLimit(1)
@@ -478,12 +478,12 @@ private struct MenuBarHoldingRow: View {
 
             VStack(alignment: .trailing, spacing: 1) {
                 Text(currencyOptional(row.marketValue, market: row.holding.detectedMarket))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.ink)
                     .monospacedDigit()
                     .lineLimit(1)
                 Text("\(unitsText(row.holding.units)) 份")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .monospacedDigit()
             }
@@ -491,12 +491,12 @@ private struct MenuBarHoldingRow: View {
 
             VStack(alignment: .trailing, spacing: 1) {
                 Text(dailyChangeCurrencyText(row.estimatedDailyChangeAmount, market: row.holding.detectedMarket))
-                    .font(.system(size: 11, weight: .bold))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold))
                     .foregroundStyle(dailyTint)
                     .monospacedDigit()
                     .lineLimit(1)
                 Text(changeCaption)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(dailyTint)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -563,12 +563,12 @@ private struct MenuBarWatchlistRow: View {
         HStack(alignment: .center, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.displayName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                     .help(row.displayName)
                 Text("\(row.item.normalizedCode) · \(row.item.marketLabel)")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -577,37 +577,37 @@ private struct MenuBarWatchlistRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(currentPriceText)
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.ink)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text("最新价")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
             }
             .frame(width: 86, alignment: .trailing)
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(percentOptional(row.dailyChangePct))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(dailyTint)
                     .monospacedDigit()
                     .lineLimit(1)
                 Text("今日")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
             }
             .frame(width: 58, alignment: .trailing)
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(percentOptional(row.changeSinceFollowPct))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(followTint)
                     .monospacedDigit()
                     .lineLimit(1)
                 Text("关注以来")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
             }
             .frame(width: 68, alignment: .trailing)
@@ -638,16 +638,16 @@ private struct HoldingMetricPill: View {
         HStack(spacing: 6) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 8, weight: .medium))
+                    .font(AppPalette.appFont(.caption2, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Text(amount)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .monospacedDigit()
                 Text(pct)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)

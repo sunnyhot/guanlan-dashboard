@@ -13,14 +13,14 @@ struct OnboardingView: View {
                         .fill(AppPalette.brand)
                         .frame(width: 64, height: 64)
                     Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 30, weight: .semibold))
+                        .font(AppPalette.appFont(.largeTitle, weight: .semibold))
                         .foregroundStyle(.white)
                 }
                 Text("且慢主理人看板")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(AppPalette.appFont(.largeTitle, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 Text("持仓 · 趋势 · 菜单栏 · 一站式")
-                    .font(.system(size: 12))
+                    .font(AppPalette.appFont(.body))
                     .foregroundStyle(AppPalette.muted)
             }
 
@@ -46,7 +46,7 @@ struct OnboardingView: View {
             // 快捷键
             VStack(spacing: 6) {
                 Text("快捷键")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(AppPalette.muted)
                 HStack(spacing: 12) {
                     OnboardingShortcutHint(key: "⌘1-6", label: "切换板块")
@@ -59,7 +59,7 @@ struct OnboardingView: View {
                 dismiss()
             } label: {
                 Text("开始使用")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppPalette.appFont(.title3, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
             }
@@ -84,15 +84,15 @@ private struct OnboardingFeatureRow: View {
                     .fill(AppPalette.brand.opacity(AppPalette.accentFill))
                     .frame(width: 32, height: 32)
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppPalette.appFont(.title3, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text(description)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -112,13 +112,13 @@ private struct OnboardingShortcutHint: View {
     var body: some View {
         VStack(spacing: 3) {
             Text(key)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                 .foregroundStyle(AppPalette.brand)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(AppPalette.brand.opacity(AppPalette.accentFill), in: RoundedRectangle(cornerRadius: 4))
             Text(label)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
         }
     }

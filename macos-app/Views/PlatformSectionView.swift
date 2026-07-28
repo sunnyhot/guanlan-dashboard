@@ -33,7 +33,7 @@ struct PlatformActivitySectionView: View {
                     }
                 } label: {
                     Label(tab.rawValue, systemImage: tab.systemImage)
-                        .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                        .font(AppPalette.appFont(.body, weight: isSelected ? .semibold : .medium))
                         .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
@@ -129,7 +129,7 @@ struct PlatformSectionView: View {
                     }
                 } label: {
                     Text(mode.label)
-                        .font(.system(size: 12, weight: viewMode == mode ? .semibold : .regular))
+                        .font(AppPalette.appFont(.body, weight: viewMode == mode ? .semibold : .regular))
                         .foregroundStyle(viewMode == mode ? AppPalette.brand : AppPalette.muted)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -223,7 +223,7 @@ struct PlatformSectionView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                         .foregroundStyle(AppPalette.brand)
                         .frame(width: 20, height: 20)
                         .background(AppPalette.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
@@ -233,12 +233,12 @@ struct PlatformSectionView: View {
                         )
 
                     Text("交易时间总览")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
 
                     if !model.monthlyPlatformSummary.isEmpty {
                         Text("\(model.monthlyPlatformSummary.count)月")
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
                             .foregroundStyle(AppPalette.muted)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -252,7 +252,7 @@ struct PlatformSectionView: View {
                     Spacer()
 
                     Image(systemName: isMonthlyExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppPalette.appFont(.caption, weight: .bold))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .padding(.horizontal, 14)
@@ -301,10 +301,10 @@ struct PlatformSectionView: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text("调仓动作")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text("\(totalCount)")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.muted)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -321,7 +321,7 @@ struct PlatformSectionView: View {
                         }
                     } label: {
                         Text("清除筛选")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(AppPalette.appFont(.caption, weight: .medium))
                             .foregroundStyle(AppPalette.brand)
                     }
                     .buttonStyle(.plain)
@@ -330,7 +330,7 @@ struct PlatformSectionView: View {
                 Spacer()
                 if isCompact {
                     Text("点一下自动跳到详情")
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
@@ -338,11 +338,11 @@ struct PlatformSectionView: View {
             if pageActions.isEmpty, totalCount == 0 {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("没有匹配的调仓动作")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                     if !model.filterState.searchText.isEmpty {
                         Text("试试换个关键词搜索")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -373,7 +373,7 @@ struct PlatformSectionView: View {
                         }
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(AppPalette.appFont(.footnote, weight: .bold))
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
@@ -389,7 +389,7 @@ struct PlatformSectionView: View {
                     .help("上一页")
 
                     Text("\(currentPage + 1) / \(totalPages)")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .rounded))
                         .foregroundStyle(AppPalette.muted)
 
                     Button {
@@ -398,7 +398,7 @@ struct PlatformSectionView: View {
                         }
                     } label: {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(AppPalette.appFont(.footnote, weight: .bold))
                             .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
@@ -458,12 +458,12 @@ struct PlatformSectionView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("调仓详情")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Spacer()
                 if let action = model.selectedPlatformAction {
                     Text(action.txnDate ?? action.createdAt ?? "未知时间")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
@@ -473,10 +473,10 @@ struct PlatformSectionView: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("还没有选中的调仓动作")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("从左侧动作列表里点一条，就会在这里展示调仓估值、当前估值和变化。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

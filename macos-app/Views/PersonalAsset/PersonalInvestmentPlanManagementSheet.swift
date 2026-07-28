@@ -27,14 +27,14 @@ struct PersonalInvestmentPlanManagementSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("管理定投计划")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -51,7 +51,7 @@ struct PersonalInvestmentPlanManagementSheet: View {
 
             if plans.isEmpty {
                 Text("这条资产当前没有定投计划。")
-                    .font(.system(size: 12))
+                    .font(AppPalette.appFont(.body))
                     .foregroundStyle(AppPalette.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
@@ -158,10 +158,10 @@ private struct PersonalInvestmentPlanManageRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(plan.planTypeLabel)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppPalette.appFont(.body, weight: .bold))
                             .foregroundStyle(plan.isDrawdownMode ? AppPalette.info : AppPalette.brand)
                         Text(plan.fundName)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(AppPalette.appFont(.headline, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                             .lineLimit(1)
                             .help(plan.fundName)
@@ -177,7 +177,7 @@ private struct PersonalInvestmentPlanManageRow: View {
                         Text(plan.scheduleText)
                         Text(plan.nextExecutionDate.isEmpty ? "无下次时间" : plan.nextExecutionDate)
                     }
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                 }
 
@@ -185,10 +185,10 @@ private struct PersonalInvestmentPlanManageRow: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(plan.amountRangeText)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                     Text(plan.cumulativeInvestedAmount.map(currencyText) ?? "累计 —")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
@@ -228,7 +228,7 @@ private struct PersonalInvestmentPlanManageRow: View {
                 }
                 .buttonStyle(.appDanger)
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(AppPalette.appFont(.body, weight: .semibold))
         }
         .padding(12)
         .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))

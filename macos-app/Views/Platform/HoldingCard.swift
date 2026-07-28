@@ -72,17 +72,17 @@ struct HoldingCard: View {
     private var identityBlock: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(holding.label ?? holding.fundName ?? "未命名标的")
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(1)
 
             Text("\(holding.fundCode ?? "无代码") · \(holding.largeClass ?? "未分类")")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
 
             Text("最近 \(holding.latestActionTitle ?? holding.latestAction ?? "未知动作") · \(holding.latestTime ?? "未知时间")")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted.opacity(0.88))
                 .lineLimit(1)
         }
@@ -105,13 +105,13 @@ struct HoldingCard: View {
     private var trailingSummary: some View {
         VStack(alignment: .trailing, spacing: 3) {
             Text("\(holding.currentUnits ?? 0) 份")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                 .foregroundStyle(AppPalette.ink)
                 .monospacedDigit()
                 .lineLimit(1)
 
             Text(holding.priceSourceLabel ?? holding.priceSource ?? "估值来源未知")
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
         }
@@ -142,12 +142,12 @@ private struct HoldingCardMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title)
-                .font(.system(size: 9, weight: .medium))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
 
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)

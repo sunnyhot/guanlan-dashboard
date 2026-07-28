@@ -22,19 +22,19 @@ extension EnhancementCenterView {
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(item.assetName)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 if let code = item.assetCode?.trimmingCharacters(in: .whitespacesAndNewlines), !code.isEmpty {
                     Text(code)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(AppPalette.appFont(.footnote, design: .monospaced))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer(minLength: 4)
                 Text(item.action.displayText)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(tint)
                 Text(item.status.displayText)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -43,7 +43,7 @@ extension EnhancementCenterView {
             }
 
             Text("\(item.action.displayText)：\(item.reason)")
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -54,13 +54,13 @@ extension EnhancementCenterView {
 
             if let until = item.snoozeUntil?.trimmingCharacters(in: .whitespacesAndNewlines), !until.isEmpty {
                 Text("暂缓至 \(until)")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("来源报告：\(item.sourceGeneratedAt)")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                 Spacer(minLength: 4)
@@ -93,7 +93,7 @@ extension EnhancementCenterView {
             Button("取消跟踪（删除）", role: .destructive) { model.removeTrackingItem(item.id) }
         } label: {
             Label("操作", systemImage: "ellipsis.circle")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
         }
         .menuStyle(.borderlessButton)
@@ -108,11 +108,11 @@ extension EnhancementCenterView {
         if !trimmed.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(tint)
                 ForEach(trimmed, id: \.self) { value in
                     Text("· \(value)")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }

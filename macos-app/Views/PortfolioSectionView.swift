@@ -61,7 +61,7 @@ struct PortfolioSectionView: View {
                             statusLineContent
                         }
                     }
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
 
                     PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
@@ -108,7 +108,7 @@ struct PortfolioSectionView: View {
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("还没有买入中记录。可以直接手动添加待确认买入、定投或转换。")
-                                    .font(.system(size: 12))
+                                    .font(AppPalette.appFont(.body))
                                     .foregroundStyle(AppPalette.muted)
                                 Button {
                                     isPresentingAddPendingTrade = true
@@ -159,10 +159,10 @@ struct PortfolioSectionView: View {
                                 if model.pausedInvestmentPlans.isEmpty && model.endedInvestmentPlans.isEmpty {
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text("当前还没有已暂停或已终止的计划明细。")
-                                            .font(.system(size: 11, weight: .medium))
+                                            .font(AppPalette.appFont(.subheadline, weight: .medium))
                                             .foregroundStyle(AppPalette.muted)
                                         Text("把计划状态改成「已暂停」或「已终止」后，这里会自动归档。")
-                                            .font(.system(size: 10))
+                                            .font(AppPalette.appFont(.footnote))
                                             .foregroundStyle(AppPalette.muted)
                                     }
                                     .padding(12)
@@ -173,7 +173,7 @@ struct PortfolioSectionView: View {
                         } else {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("还没有定投计划记录。可以直接手动添加计划档案。")
-                                    .font(.system(size: 12))
+                                    .font(AppPalette.appFont(.body))
                                     .foregroundStyle(AppPalette.muted)
                                 Button {
                                     isPresentingAddInvestmentPlan = true
@@ -352,7 +352,7 @@ struct PortfolioDiagnosticsPanel: View {
         SectionCard(title: "组合诊断", subtitle: summary.headline, icon: "stethoscope") {
             VStack(alignment: .leading, spacing: 12) {
                 Text(summary.headline)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(AppPalette.appFont(.title2, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -404,26 +404,26 @@ struct PortfolioDiagnosticTile: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
                 Image(systemName: iconName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(item.level.color)
                     .frame(width: 28, height: 28)
                     .background(item.level.color.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                     Text(item.level.label)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
                         .foregroundStyle(item.level.color)
                 }
 
                 Spacer(minLength: 4)
 
                 Text(item.metric)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                     .foregroundStyle(item.level.color)
                     .monospacedDigit()
                     .lineLimit(1)
@@ -431,7 +431,7 @@ struct PortfolioDiagnosticTile: View {
             }
 
             Text(item.detail)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -523,7 +523,7 @@ struct ProfitAttributionPanel: View {
 
                 if summary.entries.isEmpty {
                     Text("等待收益数据")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
@@ -549,17 +549,17 @@ struct ProfitAttributionPanel: View {
                                 isAttributionDetailExpanded ? "收起明细" : "查看全部明细",
                                 systemImage: "list.bullet"
                             )
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(AppPalette.appFont(.footnote, weight: .semibold))
                             .foregroundStyle(AppPalette.info)
 
                             Spacer()
 
                             Text("\(summary.entries.count) 项")
-                                .font(.system(size: 9, weight: .medium))
+                                .font(AppPalette.appFont(.caption, weight: .medium))
                                 .foregroundStyle(AppPalette.muted)
 
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(AppPalette.appFont(.caption, weight: .semibold))
                                 .foregroundStyle(AppPalette.muted)
                                 .rotationEffect(.degrees(isAttributionDetailExpanded ? 180 : 0))
                         }
@@ -654,10 +654,10 @@ struct ProfitAttributionDonutCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text("\(entries.count) 项")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(AppPalette.appFont(.caption, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Spacer()
             }
@@ -665,10 +665,10 @@ struct ProfitAttributionDonutCard: View {
             if entries.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.pie")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(AppPalette.appFont(.title2, weight: .semibold))
                         .foregroundStyle(tint.opacity(0.72))
                     Text(emptyMessage)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, minHeight: 142, alignment: .center)
@@ -690,13 +690,13 @@ struct ProfitAttributionDonutCard: View {
 
                         VStack(spacing: 2) {
                             Text(compactAttributionAmount(signedTotal))
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                                 .foregroundStyle(tint)
                                 .monospacedDigit()
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.72)
                             Text("合计")
-                                .font(.system(size: 8, weight: .medium))
+                                .font(AppPalette.appFont(.caption2, weight: .medium))
                                 .foregroundStyle(AppPalette.muted)
                         }
                         .frame(width: 72)
@@ -710,12 +710,12 @@ struct ProfitAttributionDonutCard: View {
                                     .fill(slice.color)
                                     .frame(width: 7, height: 7)
                                 Text(slice.title)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(AppPalette.appFont(.caption, weight: .medium))
                                     .foregroundStyle(AppPalette.ink.opacity(0.84))
                                     .lineLimit(1)
                                 Spacer(minLength: 4)
                                 Text(percentText(slice.amount))
-                                    .font(.system(size: 8, weight: .medium, design: .rounded))
+                                    .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
                                     .foregroundStyle(AppPalette.muted)
                                     .monospacedDigit()
                             }
@@ -758,11 +758,11 @@ struct ProfitAttributionMetric: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -785,7 +785,7 @@ struct ProfitAttributionEntryRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             Text(entry.kind.label)
-                .font(.system(size: 10, weight: .bold))
+                .font(AppPalette.appFont(.footnote, weight: .bold))
                 .foregroundStyle(entry.kind.color)
                 .frame(width: 36, height: 24)
                 .background(entry.kind.color.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
@@ -793,13 +793,13 @@ struct ProfitAttributionEntryRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(entry.title)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                     ToolbarBadge(title: entry.codeText, tint: AppPalette.info)
                 }
                 Text("市值 \(entry.marketValueText) · 影响 \(entry.impactShareText)")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
@@ -807,13 +807,13 @@ struct ProfitAttributionEntryRow: View {
 
             VStack(alignment: .trailing, spacing: 3) {
                 Text(entry.amountText)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.headline, weight: .bold, design: .rounded))
                     .foregroundStyle(entry.kind.color)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 Text(entry.rateText)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .medium, design: .rounded))
                     .foregroundStyle(entry.kind.color.opacity(0.86))
                     .monospacedDigit()
             }

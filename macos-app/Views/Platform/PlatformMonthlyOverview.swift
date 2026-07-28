@@ -55,7 +55,7 @@ struct PlatformMonthlyOverview: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 18))
+                    .font(AppPalette.appFont(.title))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 38, height: 38)
                     .background(AppPalette.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -66,21 +66,21 @@ struct PlatformMonthlyOverview: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("近 12 个月")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text(months.first.map { "\($0.month) 起" } ?? "暂无月份")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(totalCount)")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(AppPalette.ink)
                 Text("笔")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
             }
 
@@ -129,10 +129,10 @@ struct PlatformMonthlyOverview: View {
     private var chartLegend: some View {
         HStack(spacing: 12) {
             Label("买入", systemImage: "square.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.positive)
             Label("卖出", systemImage: "square.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.warning)
         }
     }
@@ -190,7 +190,7 @@ struct PlatformMonthlyOverview: View {
         .chartYAxis {
             AxisMarks(position: .leading) { _ in
                 AxisValueLabel()
-                    .font(.system(size: 9, design: .rounded))
+                    .font(AppPalette.appFont(.caption, design: .rounded))
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(AppPalette.line.opacity(0.30))
             }
@@ -202,7 +202,7 @@ struct PlatformMonthlyOverview: View {
                 if let month = value.as(String.self) {
                     AxisValueLabel {
                         Text(monthAxisLabel(month))
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(AppPalette.appFont(.caption, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -237,7 +237,7 @@ struct PlatformMonthlyOverview: View {
     private func tooltipContent(month m: PlatformMonthSummary) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(m.month)
-                .font(.system(size: 11, weight: .bold))
+                .font(AppPalette.appFont(.subheadline, weight: .bold))
                 .foregroundStyle(AppPalette.ink)
             HStack(spacing: 8) {
                 Text("买入 \(m.buyCount)")
@@ -245,9 +245,9 @@ struct PlatformMonthlyOverview: View {
                 Text("卖出 \(m.sellCount)")
                     .foregroundStyle(AppPalette.warning)
             }
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             Text("共 \(m.totalCount) 笔 · 活跃 \(m.activeDays) 天")
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
         }
         .padding(AppPalette.spaceS)
@@ -268,7 +268,7 @@ struct PlatformMonthlyOverview: View {
                 Text("\(value)")
                     .monospacedDigit()
             }
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             .foregroundStyle(AppPalette.muted)
 
             GeometryReader { proxy in

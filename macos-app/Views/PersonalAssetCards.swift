@@ -16,13 +16,13 @@ struct PersonalAssetOverviewCard: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.fundName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppPalette.appFont(.title3, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(2)
                     HStack(spacing: 6) {
                         if let fundCode = row.fundCode, !fundCode.isEmpty {
                             Text(fundCode)
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(AppPalette.appFont(.footnote, design: .monospaced))
                                 .foregroundStyle(AppPalette.muted)
                         }
                         if let marketLabel = row.rawHolding?.marketLabel ?? row.holdingRow?.holding.marketLabel ?? row.archivedHolding?.marketLabel {
@@ -38,16 +38,16 @@ struct PersonalAssetOverviewCard: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(currencyText(row.effectiveHoldingAmount))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title2, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text("总持仓")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                     if row.marketValue != nil {
                         Text(percentOptional(row.profitPct))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
                             .foregroundStyle(profitTint)
                             .lineLimit(1)
                     }
@@ -95,7 +95,7 @@ struct PersonalAssetOverviewCard: View {
                     Text("下次 \(nextExecutionDate)")
                 }
             }
-            .font(.system(size: 10))
+            .font(AppPalette.appFont(.footnote))
             .foregroundStyle(row.hasDrawdownPlan ? changeTint : AppPalette.muted)
             .lineLimit(1)
         }
@@ -128,7 +128,7 @@ struct PersonalAssetAddButtons: View {
                 Image(systemName: "plus")
                 Text("添加")
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .rotationEffect(.degrees(isShowingAddMenu ? 180 : 0))
             }
         }
@@ -137,7 +137,7 @@ struct PersonalAssetAddButtons: View {
         .popover(isPresented: $isShowingAddMenu, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("添加资产记录")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                     .padding(.horizontal, 10)
                     .padding(.top, 5)
@@ -187,7 +187,7 @@ struct PersonalAssetAddButtons: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .accentIconStyle(tint: AppPalette.brand, size: 28)
 
@@ -195,13 +195,13 @@ struct PersonalAssetAddButtons: View {
                     Text(title)
                         .foregroundStyle(AppPalette.ink)
                     Text(subtitle)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .foregroundStyle(AppPalette.muted)
             }
         }
@@ -230,18 +230,18 @@ struct PersonalPortfolioEmptyState: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "briefcase.fill")
-                .font(.system(size: 22, weight: .semibold))
+                .font(AppPalette.appFont(.largeTitle, weight: .semibold))
                 .foregroundStyle(AppPalette.brand)
                 .frame(width: 48, height: 48)
                 .background(AppPalette.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
 
             VStack(spacing: 6) {
                 Text("添加第一笔持仓")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(AppPalette.appFont(.title2, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
 
                 Text("输入基金或股票代码、份额和成本，系统会自动识别并汇总市值与收益。")
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
                     .multilineTextAlignment(.center)
             }
@@ -250,7 +250,7 @@ struct PersonalPortfolioEmptyState: View {
                 isPresentingAddHoldingSheet = true
             } label: {
                 Label("添加第一笔持仓", systemImage: "plus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
             }
             .buttonStyle(.appPrimary)
             .tint(AppPalette.brand)
@@ -290,14 +290,14 @@ struct PersonalAssetAddHoldingSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: codeResolution?.assetType == .stock ? "chart.line.uptrend.xyaxis" : "chart.pie")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(codeResolution?.assetType == .stock ? AppPalette.info : AppPalette.brand)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("添加持仓")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("填写代码、份额和成本，系统会按代码自动判断场外基金、场内基金或股票。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -362,10 +362,10 @@ struct PersonalAssetAddHoldingSheet: View {
     private var nameLookupStatus: some View {
         HStack(spacing: 8) {
             Image(systemName: nameStatusIcon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .foregroundStyle(nameStatusTint)
             Text(nameStatusText)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(nameStatusTint)
             Spacer()
         }
@@ -435,7 +435,7 @@ struct PersonalAssetAddHoldingSheet: View {
     private func addHoldingField(_ label: String, text: Binding<String>, placeholder: String, field: HoldingField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
@@ -500,14 +500,14 @@ struct PersonalAssetEditHoldingSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("编辑持仓")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(holdingMarketLabel)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -515,7 +515,7 @@ struct PersonalAssetEditHoldingSheet: View {
 
             if holding == nil {
                 Text("这条资产没有已持有记录。")
-                    .font(.system(size: 12))
+                    .font(AppPalette.appFont(.body))
                     .foregroundStyle(AppPalette.muted)
             } else {
                 VStack(alignment: .leading, spacing: 10) {
@@ -580,7 +580,7 @@ struct PersonalAssetEditHoldingSheet: View {
     private func editField(_ label: String, text: Binding<String>, placeholder: String, field: HoldingField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
@@ -633,14 +633,14 @@ struct PersonalAssetUnitAdjustmentSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: mode == .add ? "plus.circle" : "minus.circle")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(mode == .add ? AppPalette.positive : AppPalette.warning)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(mode == .add ? "添加份额" : "删除份额")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -657,11 +657,11 @@ struct PersonalAssetUnitAdjustmentSheet: View {
 
             if mode == .remove, let holdingUnits = row.holdingUnits {
                 Text("当前份额 \(unitsText(holdingUnits))。删除份额会按填写的单位净值扣减成本金额。")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             } else {
                 Text("添加份额会用填写的单位净值和现有成本加权重算成本价。")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
 
@@ -695,7 +695,7 @@ struct PersonalAssetUnitAdjustmentSheet: View {
     private func adjustmentField(_ label: String, text: Binding<String>, placeholder: String, field: AdjustmentField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
@@ -719,10 +719,10 @@ struct PlanArchiveGroup: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(tint)
                 Text("\(plans.count) 条")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
 
@@ -780,11 +780,11 @@ struct AssetMiniStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)

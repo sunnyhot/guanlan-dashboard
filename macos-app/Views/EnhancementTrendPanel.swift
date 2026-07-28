@@ -132,7 +132,7 @@ extension EnhancementCenterView {
     private func trendMarketSubsection<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceS) {
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
             content()
         }
@@ -164,19 +164,19 @@ extension EnhancementCenterView {
             HStack(spacing: 6) {
                 trendDirectionDot(outlook.direction)
                 Text(outlook.name)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 trendDirectionBadge(outlook.direction)
                 Spacer(minLength: 4)
                 trendConfidenceMeter(outlook.confidence)
                 Text(outlook.categoryDisplayName)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
             Text(outlook.rationale)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
@@ -218,10 +218,10 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                 Text(title)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
             }
             Rectangle()
@@ -247,7 +247,7 @@ extension EnhancementCenterView {
             }
 
             Text(report.portfolio.summary)
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
 
@@ -273,10 +273,10 @@ extension EnhancementCenterView {
     func trendMetaTag(_ title: String, _ value: String, tint: Color) -> some View {
         HStack(spacing: 4) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(tint)
         }
         .lineLimit(1)
@@ -287,7 +287,7 @@ extension EnhancementCenterView {
         if !statuses.isEmpty {
             VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                 Text("数据来源状态")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 210), spacing: AppPalette.spaceS)],
@@ -300,11 +300,11 @@ extension EnhancementCenterView {
                                 .frame(width: 7, height: 7)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(trendSourceName(status.source))
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                                     .foregroundStyle(AppPalette.ink)
                                 Text(status.asOf.map { "\(trendSourceStateText(status.status)) · \($0)" }
                                     ?? trendSourceStateText(status.status))
-                                    .font(.system(size: 9))
+                                    .font(AppPalette.appFont(.caption))
                                     .foregroundStyle(AppPalette.muted)
                                     .lineLimit(1)
                             }
@@ -386,14 +386,14 @@ extension EnhancementCenterView {
 
     func trendPortfolioHeadline(_ report: TrendAnalysisReport) -> some View {
         Text(report.portfolio.headline)
-            .font(.system(size: 16, weight: .bold))
+            .font(AppPalette.appFont(.title2, weight: .bold))
             .foregroundStyle(AppPalette.ink)
             .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
     }
 
     func trendRiskBadge(_ riskLevel: TrendRiskLevel) -> some View {
         Text(riskLevel.displayText)
-            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
             .foregroundStyle(riskLevel.tint)
             .lineLimit(1)
             .padding(.horizontal, 8)
@@ -415,14 +415,14 @@ extension EnhancementCenterView {
             HStack(spacing: 6) {
                 trendDirectionDot(horizon.direction)
                 Text(horizon.horizon.displayText)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 trendDirectionBadge(horizon.direction)
                 Spacer(minLength: 4)
                 trendConfidenceMeter(horizon.confidence)
             }
             Text(horizon.rationale)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             if !horizon.counterSignals.isEmpty {
@@ -448,7 +448,7 @@ extension EnhancementCenterView {
             HStack(spacing: 6) {
                 trendDirectionDot(sector.direction)
                 Text(sector.name)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 trendDirectionBadge(sector.direction)
@@ -457,7 +457,7 @@ extension EnhancementCenterView {
             }
             trendSectorExposure(sector.exposureText)
             Text(sector.rationale)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             if !sector.counterSignals.isEmpty {
@@ -477,11 +477,11 @@ extension EnhancementCenterView {
     func trendSectorExposure(_ exposureText: String) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "scope")
-                .font(.system(size: 9, weight: .semibold))
+                .font(AppPalette.appFont(.caption, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
                 .padding(.top, 2)
             Text(exposureText)
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -505,7 +505,7 @@ extension EnhancementCenterView {
 
     func trendDirectionBadge(_ direction: TrendDirection) -> some View {
         Text(direction.displayText)
-            .font(.system(size: 10, weight: .bold))
+            .font(AppPalette.appFont(.footnote, weight: .bold))
             .foregroundStyle(direction.tint)
             .lineLimit(1)
             .padding(.horizontal, 7)
@@ -517,10 +517,10 @@ extension EnhancementCenterView {
     func trendConfidencePill(_ confidence: TrendConfidence) -> some View {
         HStack(spacing: 3) {
             Text("置信")
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(confidence.label)
-                .font(.system(size: 10, weight: .bold))
+                .font(AppPalette.appFont(.footnote, weight: .bold))
                 .foregroundStyle(AppPalette.info)
         }
         .padding(.horizontal, 7)
@@ -535,11 +535,11 @@ extension EnhancementCenterView {
     func trendCounterSignalsRow(_ signals: [String]) -> some View {
         HStack(alignment: .top, spacing: 5) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 8))
+                .font(AppPalette.appFont(.caption2))
                 .foregroundStyle(AppPalette.warning)
                 .padding(.top, 1)
             Text("反证：\(signals.prefix(2).joined(separator: "；"))")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.warning)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
@@ -562,17 +562,17 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(asset.name)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 if let code = asset.code, !code.isEmpty {
                     Text(code)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold, design: .monospaced))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer(minLength: 4)
                 Text(asset.sector)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
                     .lineLimit(1)
                     .padding(.horizontal, 7)
@@ -580,11 +580,11 @@ extension EnhancementCenterView {
                     .background(AppPalette.info.opacity(AppPalette.accentSubtle), in: Capsule())
             }
             Text(asset.impactText)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.ink)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             Text(asset.rationale)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 .lineLimit(3)
@@ -628,13 +628,13 @@ extension EnhancementCenterView {
                 // 头部：图标盒 + 资产名/副标题 + 状态徽章
                 HStack(alignment: .top, spacing: AppPalette.spaceS) {
                     Image(systemName: tradeSignalActionIcon(item.action))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(tint)
                         .accentIconStyle(tint: tint, size: 30)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.assetName)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(AppPalette.appFont(.title3, weight: .bold))
                             .foregroundStyle(AppPalette.ink)
                             .lineLimit(1)
                         tradeSignalAssetSubtitle(item)
@@ -647,7 +647,7 @@ extension EnhancementCenterView {
                 // 操作区：操作胶囊 + 旧分析标记
                 HStack(spacing: AppPalette.spaceS) {
                     Text(item.action.displayText)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppPalette.appFont(.subheadline, weight: .bold))
                         .foregroundStyle(tint)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
@@ -656,7 +656,7 @@ extension EnhancementCenterView {
 
                     if item.isBasedOnStaleAnalysis {
                         Text("基于上次分析")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(AppPalette.appFont(.footnote, weight: .semibold))
                             .foregroundStyle(AppPalette.muted)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
@@ -665,10 +665,10 @@ extension EnhancementCenterView {
 
                     Spacer(minLength: AppPalette.spaceS)
                     Text("置信度")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                     Text("\(item.confidence.normalizedScore)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.info)
                 }
 
@@ -677,7 +677,7 @@ extension EnhancementCenterView {
 
                 // 原因说明
                 Text(item.reason)
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
 
@@ -707,7 +707,7 @@ extension EnhancementCenterView {
         if parts.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
             Text(parts.joined(separator: " · "))
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -717,7 +717,7 @@ extension EnhancementCenterView {
     func tradeSignalStatusBadge(_ item: TradeSignalItem) -> some View {
         let tint = trendSignalTint(for: item)
         return Text(item.status.displayText)
-            .font(.system(size: 10, weight: .bold))
+            .font(AppPalette.appFont(.footnote, weight: .bold))
             .foregroundStyle(tint)
             .lineLimit(1)
             .padding(.horizontal, 8)
@@ -754,10 +754,10 @@ extension EnhancementCenterView {
             }
             .frame(width: 6, height: 6)
             Text(title)
-                .font(.system(size: 10, weight: .bold))
+                .font(AppPalette.appFont(.footnote, weight: .bold))
                 .foregroundStyle(tint)
             Text(text)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
@@ -782,30 +782,30 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
                 Image(systemName: "link")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
                 Text(item.sourceName)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Text(item.publishedAt ?? item.retrievedAt)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
             if let urlText = item.url, let url = URL(string: urlText) {
                 Link(item.title, destination: url)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(item.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
             Text(item.summary)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }
@@ -825,15 +825,15 @@ extension EnhancementCenterView {
                 ForEach(report.warnings) { warning in
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 9))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.warning)
                             .padding(.top, 2)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(warning.title)
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                                 .foregroundStyle(AppPalette.ink)
                             Text(warning.detail)
-                                .font(.system(size: 10))
+                                .font(AppPalette.appFont(.footnote))
                                 .foregroundStyle(AppPalette.muted)
                                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                         }
@@ -841,7 +841,7 @@ extension EnhancementCenterView {
                 }
             }
             Text(report.disclaimer)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -852,10 +852,10 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: AppPalette.spaceS) {
             HStack(spacing: 7) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                 Text(title)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
             }
             content()
@@ -866,10 +866,10 @@ extension EnhancementCenterView {
     func trendFact(_ title: String, value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.headline, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -883,11 +883,11 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(confidence.label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 Spacer()
                 Text("\(confidence.normalizedScore)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.info)
             }
             ProgressView(value: Double(confidence.normalizedScore), total: 100)
@@ -912,10 +912,10 @@ extension EnhancementCenterView {
     func trendEmptyState(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 12, weight: .bold))
+                .font(AppPalette.appFont(.body, weight: .bold))
                 .foregroundStyle(AppPalette.ink)
             Text(detail)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
         }

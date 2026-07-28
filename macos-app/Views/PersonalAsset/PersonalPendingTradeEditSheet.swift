@@ -39,14 +39,14 @@ struct PersonalPendingTradeEditSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "clock.badge.exclamationmark")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(AppPalette.warning)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(trade == nil ? "添加买入中" : "修改买入中")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("记录待确认买入、定投或转换，后续可继续修改或删除。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -65,7 +65,7 @@ struct PersonalPendingTradeEditSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("备注")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 TextField("可留空", text: $noteText, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -145,7 +145,7 @@ struct PersonalPendingTradeEditSheet: View {
     private func formField(_ label: String, text: Binding<String>, placeholder: String, field: Field) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)

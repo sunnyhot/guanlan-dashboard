@@ -34,11 +34,11 @@ struct RadarStatChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -71,12 +71,12 @@ struct StrategyRadarTile: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(item.title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Text("\(item.score)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreTint)
                     .monospacedDigit()
             }
@@ -93,13 +93,13 @@ struct StrategyRadarTile: View {
             .frame(height: 6)
 
             Text(item.metric)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                 .foregroundStyle(scoreTint)
                 .monospacedDigit()
                 .lineLimit(1)
 
             Text(item.detail)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

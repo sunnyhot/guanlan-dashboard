@@ -79,10 +79,10 @@ struct ForumSectionView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Text("主理人发言")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("\(model.forumRecords.count)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.muted)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -90,7 +90,7 @@ struct ForumSectionView: View {
                     Spacer()
                     if isCompact {
                         Text("点一下直接看详情")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -120,7 +120,7 @@ struct ForumSectionView: View {
             if let post = model.selectedPost {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(post.titleText)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(AppPalette.appFont(.largeTitle, weight: .bold))
 
                     FlowLayout(spacing: 8) {
                         if let createdAt = post.createdAt, !createdAt.isEmpty {
@@ -144,7 +144,7 @@ struct ForumSectionView: View {
 
                     if let detail = post.detailUrl, let url = URL(string: detail) {
                         Link("打开原帖", destination: url)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     }
 
                     if model.currentSnapshotSupportsComments {

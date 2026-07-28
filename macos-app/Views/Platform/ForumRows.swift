@@ -6,10 +6,10 @@ struct ForumRecordRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(record.titleText)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
             Text(record.bodyText)
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(3)
             HStack(spacing: 8) {
@@ -23,7 +23,7 @@ struct ForumRecordRow: View {
                     Text(interaction)
                 }
             }
-            .font(.system(size: 10))
+            .font(AppPalette.appFont(.footnote))
             .foregroundStyle(AppPalette.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,13 +45,13 @@ struct ForumSelectableRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: isCompact ? 5 : 4) {
             Text(record.titleText)
-                .font(.system(size: isCompact ? 12 : 13, weight: .semibold))
+                .font(AppPalette.appFont(isCompact ? .body : .headline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(isCompact ? 1 : 2)
                 .help(record.titleText)
 
             Text(record.metaText ?? record.createdAt ?? "无附加信息")
-                .font(.system(size: isCompact ? 10 : 12))
+                .font(AppPalette.appFont(isCompact ? .footnote : .body))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
@@ -65,7 +65,7 @@ struct ForumSelectableRow: View {
                     Text(interaction)
                         .lineLimit(1)
                 }
-                .font(.system(size: isCompact ? 9 : 10))
+                .font(AppPalette.appFont(isCompact ? .caption : .footnote))
                 .foregroundStyle(.tertiary)
             }
         }

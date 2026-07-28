@@ -13,7 +13,7 @@ struct EnhancementCenterView: View {
                     HStack(spacing: 8) {
                         ShareLink(item: shareReportText()) {
                             Label("分享报告", systemImage: "square.and.arrow.up")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         }
                         .buttonStyle(.appSecondary)
                         .controlSize(.small)
@@ -61,7 +61,7 @@ struct EnhancementCenterView: View {
                 model.startTrendAnalysis(userInitiated: true)
             } label: {
                 Label(model.trendGenerationState == .generating ? "生成中…" : "立即分析", systemImage: "wand.and.stars")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
             }
             .buttonStyle(.appPrimary)
             .tint(AppPalette.brand)
@@ -80,9 +80,9 @@ struct EnhancementCenterView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: segment.systemImage)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppPalette.appFont(.title3, weight: .semibold))
                 Text(segment.rawValue)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
             }
             .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.ink)
             .padding(.horizontal, AppPalette.spaceL)

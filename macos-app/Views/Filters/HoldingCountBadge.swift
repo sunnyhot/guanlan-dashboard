@@ -5,7 +5,7 @@ struct HoldingCountBadge: View {
 
     var body: some View {
         Text("\(count) 持仓")
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             .foregroundStyle(AppPalette.brand)
             .padding(.horizontal, 9)
             .padding(.vertical, 4)

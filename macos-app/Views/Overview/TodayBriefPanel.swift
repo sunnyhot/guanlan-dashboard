@@ -45,16 +45,16 @@ struct TodayBriefPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .accentIconStyle(tint: AppPalette.brand, size: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("今日看点")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(AppPalette.appFont(.title3, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("资产摘要 + 今日事项")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -90,14 +90,14 @@ struct TodayBriefPanel: View {
             if items.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(AppPalette.appFont(.title, weight: .semibold))
                         .foregroundStyle(AppPalette.positive)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("今天暂无需要处理的事项")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(AppPalette.appFont(.headline, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                         Text("持仓、计划和最新记录刷新后会自动出现在这里")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -149,7 +149,7 @@ struct TodayBriefSummaryCard: View {
         Button(action: action) {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(item.tint)
                     .frame(width: 30, height: 30)
                     .background(item.tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -160,17 +160,17 @@ struct TodayBriefSummaryCard: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                     Text(item.value)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.70)
                     Text(item.detail)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(2)
                         .minimumScaleFactor(0.72)
@@ -178,7 +178,7 @@ struct TodayBriefSummaryCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(AppPalette.appFont(.caption, weight: .bold))
                     .foregroundStyle(item.tint)
             }
             .padding(12)
@@ -206,7 +206,7 @@ struct TodayBriefItemButton: View {
         Button(action: action) {
             HStack(alignment: .center, spacing: 12) {
                 Image(systemName: item.iconName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
                     .foregroundStyle(item.tone.overviewTint)
                     .frame(width: 32, height: 32)
                     .background(item.tone.overviewTint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -217,12 +217,12 @@ struct TodayBriefItemButton: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.78)
                     Text(item.detail)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -231,13 +231,13 @@ struct TodayBriefItemButton: View {
 
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(item.metric)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.headline, weight: .bold, design: .rounded))
                         .foregroundStyle(item.tone.overviewTint)
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.68)
                     Image(systemName: "arrow.up.right")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppPalette.appFont(.caption, weight: .bold))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(minWidth: 54, alignment: .trailing)

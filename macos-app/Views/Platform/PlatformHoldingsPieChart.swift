@@ -69,14 +69,14 @@ struct PlatformHoldingsPieChart: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "chart.pie.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.brand)
                     Text("当前持仓分布")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Spacer()
                     Text("按当前份数")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
 
@@ -120,15 +120,15 @@ struct PlatformHoldingsPieChart: View {
 
             VStack(spacing: 1) {
                 Text("\(totalUnits)")
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(AppPalette.ink)
                 Text("当前份数")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 if let largestSlice {
                     Text("最大 \(largestSlice.label)")
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted.opacity(0.9))
                         .lineLimit(1)
                 }
@@ -147,11 +147,11 @@ struct PlatformHoldingsPieChart: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(slice.label)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                             .lineLimit(1)
                         Text("\(slice.assetCount) 只 · \(percentText(slice.ratio))")
-                            .font(.system(size: 9))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
                             .lineLimit(1)
                     }
@@ -159,7 +159,7 @@ struct PlatformHoldingsPieChart: View {
                     Spacer(minLength: 10)
 
                     Text("\(slice.units) 份")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                 }

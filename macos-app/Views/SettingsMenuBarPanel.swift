@@ -131,7 +131,7 @@ extension SettingsSectionView {
         func capsuleBtn(text: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
             Button(action: action) {
                 Text(text)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(AppPalette.appFont(.caption, weight: .medium))
                     .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
                     .padding(.horizontal, 9)
                     .frame(minHeight: 28)
@@ -188,7 +188,7 @@ extension SettingsSectionView {
                                 model.updateMenuBarTickerAppearance { a in a.layoutMode = mode }
                             } label: {
                                 Image(systemName: mode.icon)
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(AppPalette.appFont(.caption, weight: .semibold))
                                     .foregroundStyle(appearance.layoutMode == mode ? AppPalette.onBrand : AppPalette.muted)
                                     .frame(width: 32, height: 28)
                                     .background(RoundedRectangle(cornerRadius: 4).fill(appearance.layoutMode == mode ? AppPalette.brand : AppPalette.card))
@@ -262,15 +262,15 @@ extension SettingsSectionView {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {
                 Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.info)
                     .frame(width: 24, height: 24)
                     .background(AppPalette.info.opacity(0.07), in: RoundedRectangle(cornerRadius: 4))
                 Text("轮播顺序")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text("拖拽或按钮排序")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
             FlowLayout(spacing: 6) {
@@ -303,7 +303,7 @@ extension SettingsSectionView {
                 moveCarouselSelection(selection, in: selections, offset: -1)
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -313,14 +313,14 @@ extension SettingsSectionView {
             .help("向前移动")
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(isSource ? AppPalette.muted : AppPalette.ink)
                 .lineLimit(1)
                 .padding(.horizontal, 4)
                 .padding(.vertical, 4)
                 .draggable(selection.id) {
                     Text(label)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
                         .foregroundStyle(AppPalette.onBrand)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -335,7 +335,7 @@ extension SettingsSectionView {
                 moveCarouselSelection(selection, in: selections, offset: 1)
             } label: {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -389,7 +389,7 @@ extension SettingsSectionView {
             VStack(alignment: .leading, spacing: 8) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("场外")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], alignment: .leading, spacing: 8) {
                         fundMarketToggle(.offExchangeDailyAmount, "场外涨跌额")
@@ -400,7 +400,7 @@ extension SettingsSectionView {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text("场内")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], alignment: .leading, spacing: 8) {
                         fundMarketToggle(.onExchangeDailyAmount, "场内涨跌额")
@@ -415,10 +415,10 @@ extension SettingsSectionView {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("基金分组")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("按场外基金、场内基金聚合涨跌与收益")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -431,7 +431,7 @@ extension SettingsSectionView {
     private func menuBarTickerSelectionToggle(isOn: Binding<Bool>, label: String) -> some View {
         Toggle(label, isOn: isOn)
             .toggleStyle(.checkbox)
-            .font(.system(size: 10, weight: .medium))
+            .font(AppPalette.appFont(.footnote, weight: .medium))
             .foregroundStyle(AppPalette.muted)
             .fixedSize()
     }
@@ -457,7 +457,7 @@ extension SettingsSectionView {
 
                 HStack(spacing: 10) {
                     Text(model.isRefreshingMarketIndices ? "大盘行情刷新中…" : "行情来自腾讯指数报价，开启任一项后自动刷新。")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button {
@@ -475,10 +475,10 @@ extension SettingsSectionView {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("大盘指数")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("按指数开启点位、涨跌点或涨跌率")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -491,7 +491,7 @@ extension SettingsSectionView {
     private func menuBarIndexGroupToggles(title: String, kinds: [MarketIndexKind]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 8)], alignment: .leading, spacing: 8) {
                 ForEach(kinds) { indexKind in
@@ -523,7 +523,7 @@ extension SettingsSectionView {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("当前菜单栏")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 ToolbarBadge(title: "已选 \(model.menuBarTickerConfiguredItemCount)", tint: AppPalette.info)
                 ToolbarBadge(title: "显示 \(entries.count)", tint: entries.isEmpty ? AppPalette.muted : AppPalette.positive)
@@ -535,7 +535,7 @@ extension SettingsSectionView {
 
             if entries.isEmpty {
                 Text(model.menuBarTickerSettings.isEnabled ? "当前选择项暂时没有可用数据。刷新持仓估值后会自动显示。" : "菜单栏数据展示已关闭。")
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -605,10 +605,10 @@ extension SettingsSectionView {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text(subtitle)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
 
@@ -628,11 +628,11 @@ extension SettingsSectionView {
         )) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(kind.label)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 Text(kind.detail)
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
@@ -659,10 +659,10 @@ extension SettingsSectionView {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("单个基金 / 股票")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("需要精确到单个标的时再展开，避免一次渲染过多配置项。")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -682,7 +682,7 @@ extension SettingsSectionView {
             if let snapshot = model.userPortfolioSnapshot, !snapshot.rows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("可为任意持仓选择涨跌、收益、现价或市值；菜单栏最终仍受最多显示项限制。")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                     LazyVStack(spacing: 8) {
                         ForEach(snapshot.rows) { row in
@@ -693,7 +693,7 @@ extension SettingsSectionView {
             } else {
                 HStack(spacing: 10) {
                     Text(model.hasPersonalPortfolio ? "还没有持仓估值结果，刷新后可选择单标的。" : "添加持仓后可选择单标的。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                     Spacer()
                     Button {
@@ -731,7 +731,7 @@ extension SettingsSectionView {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(row.fundName)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .help(row.fundName)
@@ -740,19 +740,19 @@ extension SettingsSectionView {
                     }
                 }
                 Text(row.holding.normalizedFundCode)
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(AppPalette.appFont(.footnote, design: .monospaced))
                     .foregroundStyle(AppPalette.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(quote.price.map(decimalText) ?? "—")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.ink)
                     .monospacedDigit()
                     .lineLimit(1)
                 Text(quote.label)
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
@@ -786,12 +786,12 @@ extension SettingsSectionView {
     private func menuBarStyleRow<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
         HStack(spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.info)
                 .frame(width: 24, height: 24)
                 .background(AppPalette.info.opacity(0.07), in: RoundedRectangle(cornerRadius: 4))
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
                 .frame(minWidth: 52, alignment: .leading)
             content()
@@ -804,7 +804,7 @@ extension SettingsSectionView {
         HStack(spacing: 3) {
             Button(action: decrement) {
                 Image(systemName: "minus")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .frame(width: 28, height: 28)
                     .background(RoundedRectangle(cornerRadius: 4).fill(AppPalette.card))
@@ -815,12 +815,12 @@ extension SettingsSectionView {
             .accessibilityLabel("减少\(label)")
             .help("减少\(label)")
             Text("\(value)")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppPalette.ink)
                 .frame(width: 22)
             Button(action: increment) {
                 Image(systemName: "plus")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .frame(width: 28, height: 28)
                     .background(RoundedRectangle(cornerRadius: 4).fill(AppPalette.card))

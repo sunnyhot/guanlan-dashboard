@@ -85,7 +85,7 @@ struct AlfaPlatformPanel: View {
             VStack(alignment: .leading, spacing: 6) {
                 if model.alfaPortfolios.isEmpty {
                     Text("投顾组合")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                 } else {
                     FlowLayout(spacing: 6) {
@@ -116,12 +116,12 @@ struct AlfaPlatformPanel: View {
             HStack(spacing: 6) {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 Text(portfolio.name)
                     .lineLimit(1)
             }
-            .font(.system(size: 11, weight: selected ? .semibold : .regular))
+            .font(AppPalette.appFont(.subheadline, weight: selected ? .semibold : .regular))
             .foregroundStyle(selected ? AppPalette.onBrand : AppPalette.ink)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -144,7 +144,7 @@ struct AlfaPlatformPanel: View {
                 showingAddSheet = true
             } label: {
                 Label("添加", systemImage: "plus.circle")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(AppPalette.brand)
@@ -154,7 +154,7 @@ struct AlfaPlatformPanel: View {
                     Task { await model.refreshAlfaPayload() }
                 } label: {
                     Label("刷新", systemImage: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AppPalette.muted)
@@ -173,7 +173,7 @@ struct AlfaPlatformPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
                     Text("\(actions.count) 条")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.muted)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -262,17 +262,17 @@ struct AlfaPlatformPanel: View {
         let totalPercent = holdings.reduce(0) { $0 + $1.percent }
         return HStack(spacing: 8) {
             Label(portfolio.author.isEmpty ? portfolio.poCode : portfolio.author, systemImage: "person.crop.circle")
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Spacer()
             Text("\(holdings.count) 只基金")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(AppPalette.info.opacity(0.10), in: Capsule())
             Text(String(format: "目标配置 %.2f%%", totalPercent * 100))
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppPalette.brand)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -306,7 +306,7 @@ struct AlfaPlatformPanel: View {
         HStack(spacing: 8) {
             ProgressView().controlSize(.small)
             Text("正在拉取投顾调仓…")
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
         }
         .frame(maxWidth: .infinity)
@@ -329,7 +329,7 @@ struct AlfaPlatformPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("添加投顾组合")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(AppPalette.appFont(.title3, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Spacer()
                 Button("完成") { showingAddSheet = false }
@@ -337,14 +337,14 @@ struct AlfaPlatformPanel: View {
             }
 
             Text("从且慢严选组合列表选择，或直接输入组合码（如 ZH157591）。")
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
 
             if model.isLoadingAlfaCatalog {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("加载组合列表…")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
             } else {
@@ -355,12 +355,12 @@ struct AlfaPlatformPanel: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("手动输入组合码")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 HStack(spacing: 8) {
                     TextField("如 ZH157591", text: $manualPoCode)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 12))
+                        .font(AppPalette.appFont(.body))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -386,7 +386,7 @@ struct AlfaPlatformPanel: View {
                 let sortedCategories = grouped.keys.sorted()
                 ForEach(sortedCategories, id: \.self) { category in
                     Text(category.isEmpty ? "其他" : category)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppPalette.appFont(.footnote, weight: .bold))
                         .foregroundStyle(AppPalette.muted)
                         .padding(.top, 6)
                     ForEach(grouped[category] ?? []) { item in
@@ -394,16 +394,16 @@ struct AlfaPlatformPanel: View {
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(AppPalette.appFont(.body, weight: .medium))
                                     .foregroundStyle(AppPalette.ink)
                                 Text("\(item.author) · \(item.poCode)")
-                                    .font(.system(size: 9))
+                                    .font(AppPalette.appFont(.caption))
                                     .foregroundStyle(AppPalette.muted)
                             }
                             Spacer()
                             if added {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(AppPalette.appFont(.footnote, weight: .bold))
                                     .foregroundStyle(AppPalette.muted)
                             } else {
                                 Button("添加") {

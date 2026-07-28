@@ -79,10 +79,10 @@ struct PersonalAssetBrowser: View {
             if presentation.visibleRows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("当前筛选下没有标的。")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("可以试试切换筛选条件，或者清空搜索词。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,11 +150,11 @@ struct PersonalAssetBrowser: View {
     private var browserSearchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField("搜索名称或代码", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .focused($isSearchFocused)
         }
         .padding(.horizontal, 10)
@@ -187,7 +187,7 @@ struct PersonalAssetBrowser: View {
             }
         } label: {
             Label("排序 \(sortOption.rawValue)", systemImage: "arrow.up.arrow.down")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -211,10 +211,10 @@ struct PersonalAssetBrowser: View {
             HStack(spacing: 5) {
                 Text(scope.rawValue)
                 Text("\(count)")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
                     .foregroundStyle(isSelected ? AppPalette.onBrand.opacity(0.88) : AppPalette.muted)
             }
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -266,16 +266,16 @@ struct PersonalAssetComparisonPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: "rectangle.split.3x1")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .accentIconStyle(tint: AppPalette.brand, size: 26)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("基金对比")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(AppPalette.appFont(.headline, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(summary.detail)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
@@ -286,7 +286,7 @@ struct PersonalAssetComparisonPanel: View {
 
                 Button(action: onClear) {
                     Image(systemName: "xmark.circle")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .frame(width: 28, height: 28)
                 }
@@ -328,7 +328,7 @@ struct PersonalAssetComparisonCard: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.76)
@@ -342,7 +342,7 @@ struct PersonalAssetComparisonCard: View {
 
                 Button(action: onRemove) {
                     Image(systemName: "minus.circle")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .frame(width: 28, height: 28)
                 }
@@ -386,11 +386,11 @@ struct PersonalAssetComparisonCard: View {
     private func comparisonMetric(title: String, value: String, tint: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title)
-                .font(.system(size: 9, weight: .medium))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .frame(width: 48, alignment: .leading)
             Text(value)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -475,7 +475,7 @@ struct PersonalAssetGroupedTable: View {
                     .frame(width: 3, height: 18)
 
                 Text(title)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(tint)
 
                 ToolbarBadge(title: "\(rows.count) 只", tint: tint)
@@ -483,12 +483,12 @@ struct PersonalAssetGroupedTable: View {
                 Spacer()
 
                 Text("市值 \(currencyText(stats.totalMarketValue))")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium, design: .monospaced))
                     .foregroundStyle(AppPalette.muted)
 
                 if let time = stats.latestTime {
                     Text("估值 \(time)")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted.opacity(0.7))
                 }
             }
@@ -685,7 +685,7 @@ struct PersonalAssetTable: View {
                     .frame(width: actionColWidth(isCompact: isCompact), alignment: .trailing)
             }
             .modifier(AssetTableContainerFillModifier(isCompact: isCompact, tableWidth: layout.tableWidth))
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             .foregroundStyle(AppPalette.muted)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

@@ -32,11 +32,11 @@ struct PlatformActionDetailCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(action.displayTitle)
-                            .font(.system(size: 18, weight: .bold))
+                            .font(AppPalette.appFont(.title, weight: .bold))
                             .foregroundStyle(AppPalette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(sideText)
-                            .font(.system(size: 11, weight: .bold))
+                            .font(AppPalette.appFont(.subheadline, weight: .bold))
                             .foregroundStyle(sideColor)
                             .padding(.horizontal, 9)
                             .padding(.vertical, 4)
@@ -48,7 +48,7 @@ struct PlatformActionDetailCard: View {
                     }
 
                     Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
-                        .font(.system(size: 12))
+                        .font(AppPalette.appFont(.body))
                         .foregroundStyle(AppPalette.muted)
                 }
 
@@ -56,7 +56,7 @@ struct PlatformActionDetailCard: View {
             }
 
             Label("调仓概览", systemImage: "rectangle.grid.2x2")
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
 
             LazyVGrid(
@@ -89,12 +89,12 @@ struct PlatformActionDetailCard: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Label("来源与记录", systemImage: "doc.text.magnifyingglass")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
 
                 if let comment = action.comment, !comment.isEmpty {
                     Text(comment)
-                        .font(.system(size: 12))
+                        .font(AppPalette.appFont(.body))
                         .foregroundStyle(AppPalette.ink)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -111,7 +111,7 @@ struct PlatformActionDetailCard: View {
                 if let article = action.articleUrl, let url = URL(string: article) {
                     Link(destination: url) {
                         Label("打开平台原文", systemImage: "arrow.up.right.square")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppPalette.appFont(.body, weight: .semibold))
                             .foregroundStyle(AppPalette.brand)
                     }
                 }
@@ -136,10 +136,10 @@ struct PlatformActionDetailCard: View {
     private func detailMetric(_ title: String, _ value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.title3, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -194,7 +194,7 @@ struct WrapLine: View {
     private var chips: some View {
         ForEach(items, id: \.self) { item in
             Text(item)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)

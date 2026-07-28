@@ -71,7 +71,7 @@ struct TrendSettingsPanel: View {
                     trendSecureField("API Key", text: trendProviderAPIKeyBinding, placeholder: "sk-...")
                     trendField("服务超时秒数", text: trendProviderTimeoutBinding, placeholder: "300")
                     Text("趋势 Agent 单轮生成最多 90 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行最多 300 秒。此处可设置更短的服务超时。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -79,7 +79,7 @@ struct TrendSettingsPanel: View {
                     SettingsGroupHeader(title: "联网搜索")
                     trendSecureField("Tavily API Key", text: tavilyAPIKeyBinding, placeholder: "tvly-...")
                     Text("用于搜索最新行业、宏观和政策信息。搜索查询只包含通用行业和政策关键词，不发送组合金额或个人信息。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -132,7 +132,7 @@ struct TrendSettingsPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: AppPalette.spaceS) {
                 Image(systemName: "bell.badge")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(model.tradeSignalSettings.enabled ? AppPalette.info : AppPalette.muted)
                     .accentIconStyle(
                         tint: model.tradeSignalSettings.enabled ? AppPalette.info : AppPalette.muted,
@@ -141,10 +141,10 @@ struct TrendSettingsPanel: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("AI 操作建议")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(model.tradeSignalSummary.headline)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
             }
@@ -177,7 +177,7 @@ struct TrendSettingsPanel: View {
                 HStack(spacing: AppPalette.spaceS) {
                     Slider(value: tradeSignalMinimumConfidenceBinding, in: 0...100, step: 5)
                     Text("\(model.tradeSignalSettings.minimumConfidence)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.info)
                         .frame(width: 34, alignment: .trailing)
                 }
@@ -201,14 +201,14 @@ struct TrendSettingsPanel: View {
             Toggle("沿用上次分析", isOn: tradeSignalUseStaleAnalysisBinding)
                 .toggleStyle(.switch)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(AppPalette.appFont(.subheadline, weight: .medium))
     }
 
     private var tradeSignalAssetPreferenceList: some View {
         trendLabeledControl("单标的偏好") {
             if model.personalAssetRows.isEmpty {
                 Text("暂无持仓标的可单独设置")
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
             } else {
                 VStack(spacing: AppPalette.spaceS) {
@@ -224,12 +224,12 @@ struct TrendSettingsPanel: View {
         HStack(alignment: .center, spacing: AppPalette.spaceS) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.fundName)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                     .help(row.fundName)
                 Text(row.fundCode ?? row.key)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .medium, design: .rounded))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
@@ -254,7 +254,7 @@ struct TrendSettingsPanel: View {
         trendLabeledControl(label) {
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .padding(.horizontal, 10)
                 .frame(height: 34)
                 .background(trendControlBackground, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -266,7 +266,7 @@ struct TrendSettingsPanel: View {
         trendLabeledControl(label) {
             SecureField(placeholder, text: text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .padding(.horizontal, 10)
                 .frame(height: 34)
                 .background(trendControlBackground, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -277,7 +277,7 @@ struct TrendSettingsPanel: View {
     private func trendLabeledControl<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)

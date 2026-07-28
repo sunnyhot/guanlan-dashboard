@@ -17,7 +17,7 @@ struct SettingsPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppPalette.appFont(.title2, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 36, height: 36)
                     .background(
@@ -26,10 +26,10 @@ struct SettingsPanel<Content: View>: View {
                     )
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(AppPalette.appFont(.title, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -85,17 +85,17 @@ struct SettingsCardGroup<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(tint)
                     .frame(width: 30, height: 30)
                     .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(AppPalette.appFont(.headline, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(subtitle)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
@@ -133,16 +133,16 @@ struct SettingsRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text(detail)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -151,7 +151,7 @@ struct SettingsRow: View {
             Spacer(minLength: 12)
 
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .semibold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -171,16 +171,16 @@ struct SettingsToggleRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text(detail)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -221,16 +221,16 @@ struct SettingsControlRow<Control: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: 11) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 24, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Text(detail)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -248,7 +248,7 @@ struct SettingsGroupHeader: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             .foregroundStyle(AppPalette.muted)
             .padding(.top, 14)
             .padding(.bottom, 4)

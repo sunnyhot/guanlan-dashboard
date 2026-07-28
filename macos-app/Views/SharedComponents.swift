@@ -55,7 +55,7 @@ struct SnapshotMiniBadge: View {
 
     var body: some View {
         Text(text.isEmpty ? "未标注" : text)
-            .font(.system(size: 9, weight: .semibold))
+            .font(AppPalette.appFont(.caption, weight: .semibold))
             .foregroundStyle(tint)
             .lineLimit(1)
             .padding(.horizontal, AppPalette.spaceS)
@@ -91,12 +91,12 @@ struct MetricCard: View {
         VStack(alignment: .leading, spacing: AppPalette.spaceXS + 2) {
             HStack(spacing: AppPalette.spaceS) {
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
                     .foregroundStyle(accent)
                     .accentIconStyle(tint: accent, size: 26)
 
                 Text(title)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
 
@@ -105,13 +105,13 @@ struct MetricCard: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.title2, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.68)
                     .foregroundStyle(valueTint)
                 Text(subtitle)
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -266,7 +266,7 @@ private struct AppActionButtonLabel: View {
 
     var body: some View {
         configuration.label
-            .font(.system(size: kind == .menuItem ? 11 : 10, weight: .semibold))
+            .font(AppPalette.appFont(kind == .menuItem ? .subheadline : .footnote, weight: .semibold))
             .foregroundStyle(foreground)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
@@ -317,7 +317,7 @@ struct FullRowDisclosureGroupStyle: DisclosureGroupStyle {
             } label: {
                 HStack(spacing: 7) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .frame(width: 10)
                         .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
@@ -466,17 +466,17 @@ struct SectionCard<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM - 2) {
             HStack(alignment: .top, spacing: AppPalette.spaceS) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .accentIconStyle(tint: AppPalette.brand, size: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -502,10 +502,10 @@ struct EmptySectionState: View {
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM - 2) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
             Text(subtitle)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
             Button(actionTitle, action: action)
@@ -527,10 +527,10 @@ struct StatChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -548,7 +548,7 @@ struct ToolbarBadge: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 10, weight: .medium))
+            .font(AppPalette.appFont(.footnote, weight: .medium))
             .foregroundStyle(tint)
             .padding(.horizontal, AppPalette.spaceS)
             .padding(.vertical, AppPalette.spaceXS)
@@ -587,7 +587,7 @@ struct ToastBar: View {
                 .fill(tint)
                 .frame(width: 3, height: 14)
             Text(text)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .foregroundStyle(AppPalette.ink)
                 .textSelection(.enabled)
@@ -599,7 +599,7 @@ struct ToastBar: View {
             if let onDismiss {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppPalette.appFont(.caption, weight: .bold))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
@@ -632,10 +632,10 @@ struct LabeledValue: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

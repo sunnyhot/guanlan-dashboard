@@ -15,9 +15,9 @@ struct PlatformSidePicker: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: filter.systemImage)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(AppPalette.appFont(.footnote, weight: .semibold))
                         Text(label(for: filter))
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     }
                     .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
                     .padding(.horizontal, 10)

@@ -19,7 +19,7 @@ struct TrendConfidenceMeter: View {
                 .fill(LinearGradient(colors: [base.opacity(0.7), base], startPoint: .leading, endPoint: .trailing))
                 .frame(width: fill, height: height)
             Text("置信度\(score)")
-                .font(.system(size: 8, weight: .bold))
+                .font(AppPalette.appFont(.caption2, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: width, height: height)
         }

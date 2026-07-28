@@ -82,9 +82,9 @@ struct PlatformFilterBar: View {
                     Image(systemName: filterState.sideFilter.systemImage)
                     Text(filterState.sideFilter.rawValue)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                 }
-                .font(.system(size: 12, weight: .medium))
+                .font(AppPalette.appFont(.body, weight: .medium))
                 .foregroundStyle(AppPalette.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)

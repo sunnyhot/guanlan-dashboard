@@ -71,14 +71,14 @@ struct PersonalAssetDetailSheet: View {
     private func header(_ summary: PersonalAssetDetailSummary) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: row.assetType == .stock ? "chart.line.uptrend.xyaxis" : "chart.pie")
-                .font(.system(size: 18, weight: .semibold))
+                .font(AppPalette.appFont(.title, weight: .semibold))
                 .foregroundStyle(row.assetType == .stock ? AppPalette.info : AppPalette.brand)
                 .frame(width: 44, height: 44)
                 .background((row.assetType == .stock ? AppPalette.info : AppPalette.brand).opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(summary.title)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(AppPalette.appFont(.title2, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -86,7 +86,7 @@ struct PersonalAssetDetailSheet: View {
                 HStack(spacing: 6) {
                     if let codeText = summary.codeText, !codeText.isEmpty {
                         Text(codeText)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(AppPalette.appFont(.footnote, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
@@ -103,7 +103,7 @@ struct PersonalAssetDetailSheet: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .trailing, spacing: 4) {
                     Text(summary.effectiveAmountText)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                         .monospacedDigit()
                         .lineLimit(1)
@@ -112,7 +112,7 @@ struct PersonalAssetDetailSheet: View {
                         row.holdingUnits.map { "总持仓 · \(unitsText($0)) 份" }
                             ?? "总持仓"
                     )
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                 }
@@ -121,7 +121,7 @@ struct PersonalAssetDetailSheet: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppPalette.appFont(.subheadline, weight: .bold))
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.appIcon)
@@ -159,17 +159,17 @@ struct PersonalAssetDetailSheet: View {
     private func detailMetric(_ metric: PersonalAssetDetailMetric) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(metric.title)
-                .font(.system(size: 9, weight: .medium))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(metric.value)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                 .foregroundStyle(metric.tone.color)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.64)
             if let detail = metric.detail, !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                 .minimumScaleFactor(0.70)
@@ -184,10 +184,10 @@ struct PersonalAssetDetailSheet: View {
             if items.isEmpty {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(AppPalette.appFont(.title3, weight: .semibold))
                         .foregroundStyle(AppPalette.positive)
                     Text("暂无买入中、进行中计划或归档提醒")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
@@ -202,16 +202,16 @@ struct PersonalAssetDetailSheet: View {
                                 .frame(width: 3, height: 34)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(item.title)
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(AppPalette.appFont(.body, weight: .semibold))
                                     .foregroundStyle(AppPalette.ink)
                                 Text(item.detail.isEmpty ? "暂无附加信息" : item.detail)
-                                    .font(.system(size: 10))
+                                    .font(AppPalette.appFont(.footnote))
                                     .foregroundStyle(AppPalette.muted)
                                     .lineLimit(2)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             Text(item.metric)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                                 .foregroundStyle(item.tone.color)
                                 .monospacedDigit()
                                 .lineLimit(1)
@@ -275,31 +275,31 @@ struct PersonalAssetDetailSheet: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("当前判断")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 HStack(spacing: 7) {
                     Text(
                         summary.primaryDirection.map(TrendPlainLanguage.direction)
                             ?? TrendPlainLanguage.actionLabel(summary.tradePlan.label)
                     )
-                        .font(.system(size: 15, weight: .bold))
+                        .font(AppPalette.appFont(.title3, weight: .bold))
                         .foregroundStyle(accent)
                     Text(TrendPlainLanguage.confidence(summary.primaryConfidence))
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
                 }
                 Text(TrendPlainLanguage.sentence(summary.impactText))
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Text("数据截至 \(summary.dataAsOf)")
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
         }
@@ -310,22 +310,22 @@ struct PersonalAssetDetailSheet: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             Label("操作建议", systemImage: "arrow.left.arrow.right.circle.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(accent)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(TrendPlainLanguage.actionLabel(plan.label))
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(accent)
                 Text("·")
                     .foregroundStyle(AppPalette.muted)
                 Text(TrendPlainLanguage.actionMethod(plan.method))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
             }
 
             Text(TrendPlainLanguage.sentence(plan.detail))
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.ink.opacity(0.82))
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -351,11 +351,11 @@ struct PersonalAssetDetailSheet: View {
     private func trendEvidenceBlock(_ summary: TrendAssetTagSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("判断依据", systemImage: "list.bullet.clipboard")
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.info)
 
             Text(trendEvidenceTitle(summary))
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.ink)
                 .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
@@ -363,7 +363,7 @@ struct PersonalAssetDetailSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(trendEvidenceDetails(summary), id: \.self) { detail in
                     Text(detail)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -412,7 +412,7 @@ struct PersonalAssetDetailSheet: View {
     private func trendConditionList(title: String, items: [String], tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 9, weight: .semibold))
+                .font(AppPalette.appFont(.caption, weight: .semibold))
                 .foregroundStyle(tint)
             ForEach(items, id: \.self) { item in
                 HStack(alignment: .top, spacing: 6) {
@@ -421,7 +421,7 @@ struct PersonalAssetDetailSheet: View {
                         .frame(width: 4, height: 4)
                         .padding(.top, 5)
                     Text(TrendPlainLanguage.sentence(item))
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.ink.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -433,17 +433,17 @@ struct PersonalAssetDetailSheet: View {
     private func trendInvalidationBlock(_ conditions: [String]) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "arrow.trianglehead.2.clockwise.rotate.90")
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .foregroundStyle(AppPalette.warning)
                 .frame(width: 28, height: 28)
                 .background(AppPalette.warning.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
 
             VStack(alignment: .leading, spacing: 7) {
                 Text("什么情况下改变判断")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.warning)
                 Text("出现以下任一情况，需要重新评估上面的结论。")
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: 240), spacing: 8)],
@@ -457,7 +457,7 @@ struct PersonalAssetDetailSheet: View {
                                 .frame(width: 4, height: 4)
                                 .padding(.top, 5)
                             Text(TrendPlainLanguage.sentence(condition))
-                                .font(.system(size: 10))
+                                .font(AppPalette.appFont(.footnote))
                                 .foregroundStyle(AppPalette.ink.opacity(0.78))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -495,10 +495,10 @@ struct PersonalAssetDetailSheet: View {
     private func compactFact(title: String, value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .semibold, design: .rounded))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
@@ -518,11 +518,11 @@ struct PersonalAssetDetailSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .accentIconStyle(tint: AppPalette.brand, size: 22)
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(AppPalette.appFont(.headline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 Spacer()
             }

@@ -8,20 +8,20 @@ struct CommentBlock: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(comment.userName ?? comment.brokerUserId ?? "未知用户")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text(comment.createdAt ?? "未知时间")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
                 Text("赞 \(comment.likeCount ?? 0)")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
             }
 
             Text(comment.content ?? "无内容")
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,10 +35,10 @@ struct CommentBlock: View {
                                 .frame(width: 2)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(reply.userName ?? reply.brokerUserId ?? "未知回复")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
                                     .foregroundStyle(AppPalette.ink)
                                 Text(reply.content ?? "无内容")
-                                    .font(.system(size: 11))
+                                    .font(AppPalette.appFont(.subheadline))
                                     .foregroundStyle(AppPalette.muted)
                             }
                         }
@@ -79,10 +79,10 @@ struct InvestmentPlanCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(plan.planTypeLabel)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppPalette.appFont(.body, weight: .bold))
                             .foregroundStyle(accent)
                         Text(plan.fundName)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(AppPalette.appFont(.headline, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                             .lineLimit(2)
                             .layoutPriority(1)
@@ -98,7 +98,7 @@ struct InvestmentPlanCard: View {
                             Text(fundCode)
                         }
                     }
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                 }
 
@@ -106,12 +106,12 @@ struct InvestmentPlanCard: View {
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(plan.amountRangeText)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text(plan.normalizedStatus)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(accent)
                         .lineLimit(1)
                 }
@@ -126,7 +126,7 @@ struct InvestmentPlanCard: View {
 
             if let note = plan.note, !note.isEmpty {
                 Text(note)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(5)
             }
@@ -187,17 +187,17 @@ struct PendingTradeCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
                         Text(trade.actionLabel)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(AppPalette.appFont(.body, weight: .bold))
                             .foregroundStyle(accent)
                         Text(trade.displayTitle)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(AppPalette.appFont(.headline, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                             .lineLimit(2)
                     }
 
                     if let codeText = trade.displayCodeText, !codeText.isEmpty {
                         Text(codeText)
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -206,12 +206,12 @@ struct PendingTradeCard: View {
 
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(trade.amountText)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                     Text(trade.status)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.brand)
                         .lineLimit(1)
                 }
@@ -224,7 +224,7 @@ struct PendingTradeCard: View {
                     Text(note)
                 }
             }
-            .font(.system(size: 10))
+            .font(AppPalette.appFont(.footnote))
             .foregroundStyle(AppPalette.muted)
 
             if onEdit != nil || onDelete != nil {

@@ -16,23 +16,23 @@ struct AlfaHoldingCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 9) {
                 Text(String(format: "%02d", rank))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 28, height: 28)
                     .background(AppPalette.brand.opacity(0.11), in: RoundedRectangle(cornerRadius: 7))
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(part.fundName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(2)
                     HStack(spacing: 5) {
                         Text(part.fundCode)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .font(AppPalette.appFont(.caption, weight: .medium, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                         if let variety = part.varietyName, !variety.isEmpty {
                             Text(variety)
-                                .font(.system(size: 9, weight: .medium))
+                                .font(AppPalette.appFont(.caption, weight: .medium))
                                 .foregroundStyle(AppPalette.info)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -45,10 +45,10 @@ struct AlfaHoldingCard: View {
 
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("目标占比")
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                     Text(part.percentText)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.ink)
                 }
             }
@@ -94,10 +94,10 @@ struct AlfaHoldingCard: View {
     ) -> some View {
         VStack(alignment: alignment, spacing: 2) {
             Text(title)
-                .font(.system(size: 8))
+                .font(AppPalette.appFont(.caption2))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .lineLimit(1)
         }

@@ -33,7 +33,7 @@ extension SettingsSectionView {
                     }
                     intervalMenu
                 }
-                .font(.system(size: 12))
+                .font(AppPalette.appFont(.body))
                 .padding(.vertical, 14)
 
                 SettingsDivider()
@@ -137,7 +137,7 @@ extension SettingsSectionView {
             }
         } label: {
             Label("频率：\(model.managerWatchSettings.intervalLabel)", systemImage: "timer")
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
@@ -153,7 +153,7 @@ extension SettingsSectionView {
     private func settingsField(_ label: String, text: Binding<String>, placeholder: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)

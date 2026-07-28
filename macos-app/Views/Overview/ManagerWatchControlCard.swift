@@ -100,7 +100,7 @@ struct ManagerWatchControlCard: View {
                     intervalMenu
                 }
             }
-            .font(.system(size: 12))
+            .font(AppPalette.appFont(.body))
 
             HStack(spacing: 10) {
                 Button("保存设置") {
@@ -132,17 +132,17 @@ struct ManagerWatchControlCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "bell.and.waves.left.and.right")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppPalette.appFont(.title2, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 34, height: 34)
                     .background(AppPalette.brandSoft, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("巡检状态")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text(model.managerWatchScopeText)
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
@@ -171,7 +171,7 @@ struct ManagerWatchControlCard: View {
                     ToolbarBadge(title: "关闭窗口后保留菜单栏", tint: AppPalette.info)
                 }
             }
-            .font(.system(size: 12))
+            .font(AppPalette.appFont(.body))
 
             if let error = model.managerWatchSettings.lastErrorMessage, !error.isEmpty {
                 HStack(spacing: 8) {
@@ -179,7 +179,7 @@ struct ManagerWatchControlCard: View {
                         .fill(AppPalette.warning)
                         .frame(width: 4)
                     Text(error)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.ink)
                 }
                 .padding(12)
@@ -211,7 +211,7 @@ struct ManagerWatchControlCard: View {
             }
         } label: {
             Label("频率：\(model.managerWatchSettings.intervalLabel)", systemImage: "timer")
-                .font(.system(size: 12, weight: .semibold))
+                .font(AppPalette.appFont(.body, weight: .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -227,7 +227,7 @@ struct ManagerWatchControlCard: View {
     private func compactField(_ label: String, text: Binding<String>, minWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField("", text: text)
                 .textFieldStyle(.plain)
@@ -252,10 +252,10 @@ struct ManagerWatchStatusTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.body, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppPalette.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)

@@ -35,20 +35,20 @@ struct PlatformActionRow: View {
                     HStack(alignment: .center, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(displayTitleWithPrefix)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(AppPalette.appFont(.body, weight: .semibold))
                                 .foregroundStyle(AppPalette.ink)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.82)
                                 .help(displayTitleWithPrefix)
                             Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
-                                .font(.system(size: 10))
+                                .font(AppPalette.appFont(.footnote))
                                 .foregroundStyle(AppPalette.muted)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.82)
                         }
                         Spacer(minLength: 8)
                         Text(isBuy ? "买入" : "卖出")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
                             .foregroundStyle(sideColor)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
@@ -73,16 +73,16 @@ struct PlatformActionRow: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(displayTitleWithPrefix)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(AppPalette.appFont(.headline, weight: .semibold))
                                 .foregroundStyle(AppPalette.ink)
                             Text("\(action.fundName ?? action.title ?? "未命名标的") · \(action.fundCode ?? "无代码")")
-                                .font(.system(size: 11))
+                                .font(AppPalette.appFont(.subheadline))
                                 .foregroundStyle(AppPalette.muted)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 4) {
                             Text(isBuy ? "买入" : "卖出")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(AppPalette.appFont(.subheadline, weight: .bold))
                                 .foregroundStyle(sideColor)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 4)
@@ -93,7 +93,7 @@ struct PlatformActionRow: View {
                                 )
                             if let article = action.articleUrl, let url = URL(string: article) {
                                 Link("打开平台原文", destination: url)
-                                    .font(.system(size: 10))
+                                    .font(AppPalette.appFont(.footnote))
                                     .foregroundStyle(AppPalette.brand)
                             }
                         }
@@ -152,10 +152,10 @@ struct PlatformActionRow: View {
     private func compactMetricPill(title: String, value: String, tint: Color, isEmphasized: Bool = false) -> some View {
         HStack(spacing: 5) {
             Text(title)
-                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .font(AppPalette.appFont(.caption, weight: .medium, design: .rounded))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: isEmphasized ? 11 : 10, weight: isEmphasized ? .bold : .semibold, design: .monospaced))
+                .font(AppPalette.appFont(isEmphasized ? .subheadline : .footnote, weight: isEmphasized ? .bold : .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)

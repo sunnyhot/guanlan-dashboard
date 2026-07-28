@@ -38,7 +38,7 @@ struct PersonalAssetTableRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Text(row.fundName)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
                         .help(row.fundName)
@@ -63,7 +63,7 @@ struct PersonalAssetTableRow: View {
                 HStack(spacing: 8) {
                     if let fundCode = row.fundCode, !fundCode.isEmpty {
                         Text(fundCode)
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(AppPalette.appFont(.footnote, design: .monospaced))
                     }
                     if row.pendingTradeCount > 0, let latest = row.pendingTrades.first?.occurredAt {
                         Text("最新待确认 \(latest)")
@@ -75,7 +75,7 @@ struct PersonalAssetTableRow: View {
                         Text("归档 \(archivedAt.prefix(10))")
                     }
                 }
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 if let trendSummary {
                     trendSignalBlock(trendSummary)
@@ -87,22 +87,22 @@ struct PersonalAssetTableRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(row.marketValue.map { currencyText($0, market: row.detectedMarket) } ?? "—")
-                    .font(.system(size: isCompact ? 11 : 12, weight: .semibold))
+                    .font(AppPalette.appFont(isCompact ? .subheadline : .body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 if isCompact {
                     // Compact: combine profit and today change on fewer lines
                     Text("收益 \(signedCurrencyText(row.profitAmount, market: row.detectedMarket)) · \(percentOptional(row.profitPct))")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(profitTint)
                     Text(dailyChangeLine(compact: true))
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(changeTint)
                 } else {
                     Text("总收益 \(signedCurrencyText(row.profitAmount, market: row.detectedMarket)) · \(percentOptional(row.profitPct))")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(profitTint)
                     Text(dailyChangeLine(compact: false))
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(changeTint)
                 }
             }
@@ -111,11 +111,11 @@ struct PersonalAssetTableRow: View {
             if !isCompact {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(unitsColumnValue)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     if let unitsColumnCaption {
                         Text(unitsColumnCaption)
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -124,25 +124,25 @@ struct PersonalAssetTableRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(row.usesMarketTradeColumns ? "现价" : "净值") \(row.currentPrice.map(decimalText) ?? "—")")
-                    .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
+                    .font(AppPalette.appFont(isCompact ? .footnote : .subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                 if let estimatePrice = row.currentEstimatePrice {
                     if isCompact {
                         Text("估\(decimalText(estimatePrice)) \(percentOptional(row.estimateChangePct))")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(changeTint)
                     } else {
                         Text("估值 \(decimalText(estimatePrice)) · \(percentOptional(row.estimateChangePct))")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(changeTint)
                     }
                 }
                 Text("成本 \(row.costPrice.map(decimalText) ?? "—")")
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                 if isCompact {
                     Text("份额 \(unitsColumnValue)")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
@@ -153,11 +153,11 @@ struct PersonalAssetTableRow: View {
                 Group {
                     if let changePct = row.estimateChangePct {
                         Text(String(format: "%+.2f%%", changePct))
-                            .font(.system(size: isCompact ? 12 : 14, weight: .bold, design: .rounded))
+                            .font(AppPalette.appFont(isCompact ? .body : .title3, weight: .bold, design: .rounded))
                             .foregroundStyle(AppPalette.marketTint(for: changePct))
                     } else {
                         Text("—")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppPalette.appFont(.body, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                     }
                 }
@@ -166,18 +166,18 @@ struct PersonalAssetTableRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if row.pendingTradeCount > 0 {
                         Text(row.pendingCashAmount > 0 ? currencyText(row.pendingCashAmount, market: row.detectedMarket) : "\(unitsText(row.pendingUnitAmount)) 份")
-                            .font(.system(size: isCompact ? 11 : 12, weight: .semibold))
+                            .font(AppPalette.appFont(isCompact ? .subheadline : .body, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                         Text("\(row.pendingTradeCount) 笔 · \(row.pendingTrades.first?.actionLabel ?? "待确认")")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     } else {
                         Text("—")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppPalette.appFont(.body, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                         if !isCompact {
                             Text("暂无")
-                                .font(.system(size: 10))
+                                .font(AppPalette.appFont(.footnote))
                                 .foregroundStyle(AppPalette.muted)
                         }
                     }
@@ -189,11 +189,11 @@ struct PersonalAssetTableRow: View {
                 Group {
                     if let changeAmt = row.estimateChangeAmount {
                         Text(signedCurrencyText(changeAmt, market: row.detectedMarket))
-                            .font(.system(size: isCompact ? 12 : 14, weight: .bold, design: .rounded))
+                            .font(AppPalette.appFont(isCompact ? .body : .title3, weight: .bold, design: .rounded))
                             .foregroundStyle(AppPalette.marketTint(for: changeAmt))
                     } else {
                         Text("—")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(AppPalette.appFont(.body, weight: .semibold))
                             .foregroundStyle(AppPalette.ink)
                     }
                 }
@@ -202,24 +202,24 @@ struct PersonalAssetTableRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                 if row.totalPlanCount > 0 {
                     Text("进行中 \(row.activePlanCount) · 暂停 \(row.pausedPlanCount) · 终止 \(row.endedPlanCount)")
-                        .font(.system(size: isCompact ? 10 : 11, weight: .semibold))
+                        .font(AppPalette.appFont(isCompact ? .footnote : .subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     if isCompact {
                         Text("累计 \(currencyText(row.totalCumulativePlanAmount, market: row.detectedMarket))")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     } else {
                         Text("下次估算 \(currencyText(row.estimatedNextPlanAmount, market: row.detectedMarket)) · 累计 \(currencyText(row.totalCumulativePlanAmount, market: row.detectedMarket))\(row.hasDrawdownPlan ? " · 涨跌幅 \(row.drawdownPlanCount)" : "")")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 } else {
                     Text("—")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     if !isCompact {
                         Text("暂无")
-                            .font(.system(size: 10))
+                            .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -233,7 +233,7 @@ struct PersonalAssetTableRow: View {
                     onToggleComparison?()
                 } label: {
                     Image(systemName: isSelectedForComparison ? "checkmark.square.fill" : "square.grid.2x2")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(isSelectedForComparison ? AppPalette.onBrand : AppPalette.brand)
                         .frame(width: 28, height: 28)
                         .background(isSelectedForComparison ? AppPalette.brand : AppPalette.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -248,7 +248,7 @@ struct PersonalAssetTableRow: View {
                     onOpenDetail?()
                 } label: {
                     Image(systemName: "sidebar.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.info)
                         .frame(width: 28, height: 28)
                         .background(AppPalette.info.opacity(0.08), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
@@ -358,14 +358,14 @@ struct PersonalAssetTableRow: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(AppPalette.appFont(.caption, weight: .bold))
                     .foregroundStyle((summary.primaryDirection?.assetTagTone ?? .brand).color)
                 Text(primaryTrendText(summary))
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle((summary.primaryDirection?.assetTagTone ?? .brand).color)
                     .lineLimit(1)
                 Text(summary.impactText)
-                    .font(.system(size: 10))
+                    .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
@@ -383,7 +383,7 @@ struct PersonalAssetTableRow: View {
                         .lineLimit(1)
                 }
             }
-            .font(.system(size: 9, weight: .medium))
+            .font(AppPalette.appFont(.caption, weight: .medium))
         }
     }
 
@@ -565,9 +565,9 @@ struct PersonalAssetTableRow: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "ellipsis.circle")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
             }
             .foregroundStyle(AppPalette.brand)
             .frame(width: 42, height: 28)

@@ -21,16 +21,16 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             HStack(spacing: AppPalette.spaceS) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(AppPalette.appFont(.title3, weight: .bold))
                     .foregroundStyle(AppPalette.onBrand)
                     .frame(width: 30, height: 30)
                     .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("下一小时买卖建议")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(AppPalette.appFont(.title3, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(model.nextHourGuidanceScheduleText)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer(minLength: AppPalette.spaceS)
@@ -42,7 +42,7 @@ extension EnhancementCenterView {
                         model.nextHourGuidanceGenerationState == .generating ? "生成中…" : "手动生成",
                         systemImage: "arrow.clockwise"
                     )
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 .buttonStyle(.appSecondary)
                 .disabled(
@@ -58,7 +58,7 @@ extension EnhancementCenterView {
                     "未配置 Tavily 联网搜索：Agent 仍会读取行情和基金穿透，但风控规则只允许输出持有。",
                     systemImage: "lock.trianglebadge.exclamationmark"
                 )
-                .font(.system(size: 9, weight: .medium))
+                .font(AppPalette.appFont(.caption, weight: .medium))
                 .foregroundStyle(AppPalette.warning)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -69,7 +69,7 @@ extension EnhancementCenterView {
                     ProgressView()
                         .controlSize(.small)
                     Text("正在刷新行情、穿透基金底层资产并搜索最新消息，再生成买入 / 卖出 / 持有建议…")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .padding(.vertical, AppPalette.spaceS)
@@ -81,7 +81,7 @@ extension EnhancementCenterView {
                 Text(model.trendSettings.provider.isConfigured
                      ? "将在下一个交易时段槽位自动生成；也可以随时手动触发。场外基金不会参与盘中逐小时研判，只在 14:50 或手动研判时纳入。"
                      : "配置 AI 模型后自动启用。生成成功会发送系统提醒，点击提醒可回到 AI 研判。")
-                    .font(.system(size: 11))
+                    .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,7 +90,7 @@ extension EnhancementCenterView {
 
             if !model.nextHourGuidanceError.isEmpty {
                 Label(model.nextHourGuidanceError, systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
                     .foregroundStyle(AppPalette.warning)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -126,13 +126,13 @@ extension EnhancementCenterView {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
                 Text(report.headline)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(AppPalette.appFont(.title3, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: AppPalette.spaceS)
                 Text(report.posture.displayName)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(nextHourPostureTint(report.posture))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -155,7 +155,7 @@ extension EnhancementCenterView {
             }
 
             Text(report.summary)
-                .font(.system(size: 11))
+                .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
@@ -169,11 +169,11 @@ extension EnhancementCenterView {
             if !report.riskChecks.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("执行前复核")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppPalette.appFont(.footnote, weight: .bold))
                         .foregroundStyle(AppPalette.warning)
                     ForEach(Array(report.riskChecks.enumerated()), id: \.offset) { _, item in
                         Label(item, systemImage: "checkmark.shield")
-                            .font(.system(size: 9))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
                             .lineSpacing(3)
                             .fixedSize(horizontal: false, vertical: true)
@@ -193,7 +193,7 @@ extension EnhancementCenterView {
                         trendSourceStatusList(report.sourceStatuses)
                         ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
-                                .font(.system(size: 9))
+                                .font(AppPalette.appFont(.caption))
                                 .foregroundStyle(AppPalette.warning)
                                 .lineSpacing(3)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -202,12 +202,12 @@ extension EnhancementCenterView {
                     }
                     .padding(.top, AppPalette.spaceS)
                 }
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .tint(AppPalette.info)
             }
 
             Text(report.disclaimer)
-                .font(.system(size: 8))
+                .font(AppPalette.appFont(.caption2))
                 .foregroundStyle(AppPalette.muted.opacity(0.85))
         }
     }
@@ -224,26 +224,26 @@ extension EnhancementCenterView {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(action.targetName)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(AppPalette.appFont(.subheadline, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(action.action.displayName)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppPalette.appFont(.caption, weight: .bold))
                         .foregroundStyle(tint)
                     Spacer(minLength: 4)
                     Text("置信度 \(action.confidence)")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(AppPalette.appFont(.caption2, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                     Text("依据 \(action.evidenceIDs.count)")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(AppPalette.appFont(.caption2, weight: .semibold))
                         .foregroundStyle(AppPalette.info)
                 }
                 Text(action.instruction)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(action.rationale)
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -267,10 +267,10 @@ extension EnhancementCenterView {
     private func nextHourCondition(_ title: String, _ text: String, tint: Color) -> some View {
         HStack(alignment: .top, spacing: 4) {
             Text(title)
-                .font(.system(size: 8, weight: .bold))
+                .font(AppPalette.appFont(.caption2, weight: .bold))
                 .foregroundStyle(tint)
             Text(text)
-                .font(.system(size: 8))
+                .font(AppPalette.appFont(.caption2))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -341,11 +341,11 @@ extension EnhancementCenterView {
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(action.title)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
                 Text(action.kind.displayText)
-                    .font(.system(size: 9, weight: .bold))
+                    .font(AppPalette.appFont(.caption, weight: .bold))
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .padding(.horizontal, 6)
@@ -358,7 +358,7 @@ extension EnhancementCenterView {
                     model.addTrackingItem(from: action, report: report)
                 } label: {
                     Label(tracked ? "已跟踪" : "加入跟踪", systemImage: tracked ? "checkmark.circle.fill" : "bell.badge")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 .buttonStyle(.appSecondary)
                 .tint(tint)
@@ -366,7 +366,7 @@ extension EnhancementCenterView {
             }
 
             Text(action.detail)
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
 
@@ -399,10 +399,10 @@ extension EnhancementCenterView {
         if !trimmed.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(tint)
                 Text(trimmed.joined(separator: "；"))
-                    .font(.system(size: 9))
+                    .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
             }
@@ -423,7 +423,7 @@ extension EnhancementCenterView {
                 }
                 .padding(.top, 6)
             }
-            .font(.system(size: 12, weight: .semibold))
+            .font(AppPalette.appFont(.body, weight: .semibold))
             .tint(AppPalette.info)
         }
     }

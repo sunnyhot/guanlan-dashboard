@@ -143,17 +143,17 @@ struct SettingsSectionView: View {
             HStack(alignment: .top, spacing: AppPalette.spaceM) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("设置中心")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(AppPalette.appFont(.title3, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("按功能快速切换，当前状态一目了然")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
 
                 Spacer(minLength: AppPalette.spaceM)
 
                 Text("\(SettingsFocus.allCases.count) 个分区")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppPalette.brand)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
@@ -289,7 +289,7 @@ private struct SettingsNavigationRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(AppPalette.appFont(.headline, weight: .semibold))
                 .foregroundStyle(isSelected ? AppPalette.brand : tint)
                 .frame(width: 32, height: 32)
                 .background(
@@ -300,10 +300,10 @@ private struct SettingsNavigationRow: View {
             VStack(alignment: .leading, spacing: 7) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(subtitle)
-                        .font(.system(size: 9))
+                        .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
@@ -313,7 +313,7 @@ private struct SettingsNavigationRow: View {
                         .fill(tint)
                         .frame(width: 5, height: 5)
                     Text(status)
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .font(AppPalette.appFont(.caption, weight: .semibold, design: .rounded))
                         .foregroundStyle(tint)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -327,7 +327,7 @@ private struct SettingsNavigationRow: View {
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
             }
         }

@@ -170,7 +170,7 @@ private struct PersonalWatchlistGroup: View {
                     .fill(tint)
                     .frame(width: 3, height: 18)
                 Text(category.displayName)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(tint)
                 ToolbarBadge(title: "\(rows.count) 只", tint: tint)
                 Spacer(minLength: 8)
@@ -183,7 +183,7 @@ private struct PersonalWatchlistGroup: View {
                         .foregroundStyle(AppPalette.marketLoss)
                 }
             }
-            .font(.system(size: 10, weight: .semibold))
+            .font(AppPalette.appFont(.footnote, weight: .semibold))
             .padding(.horizontal, AppPalette.spaceM)
             .padding(.vertical, 10)
             .background(tint.opacity(0.06))
@@ -258,15 +258,15 @@ private struct PersonalWatchlistListRow: View {
                     HStack(spacing: AppPalette.spaceL) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(row.displayName)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(AppPalette.appFont(.body, weight: .semibold))
                                 .foregroundStyle(AppPalette.ink)
                                 .lineLimit(1)
                             HStack(spacing: 6) {
                                 Text(row.item.normalizedCode)
-                                    .font(.system(size: 10, design: .monospaced))
+                                    .font(AppPalette.appFont(.footnote, design: .monospaced))
                                     .foregroundStyle(AppPalette.muted)
                                 Text(row.item.marketLabel)
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(AppPalette.appFont(.caption, weight: .medium))
                                     .foregroundStyle(tint)
                             }
                         }
@@ -313,7 +313,7 @@ private struct PersonalWatchlistListRow: View {
                         }
 
                         Image(systemName: isSelected ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(AppPalette.appFont(.footnote, weight: .bold))
                             .foregroundStyle(isSelected ? tint : AppPalette.muted)
                             .frame(width: disclosureWidth)
                     }
@@ -341,7 +341,7 @@ private struct PersonalWatchlistListRow: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: activeAlertCount > 0 ? "bell.fill" : "bell")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         if triggeredAlertCount > 0 {
                             Circle()
                                 .fill(AppPalette.warning)
@@ -390,11 +390,11 @@ private struct PersonalWatchlistListRow: View {
     private func watchlistValue(title: String, value: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .lineLimit(1)
             Text(value)
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
                 .foregroundStyle(tint)
                 .monospacedDigit()
                 .lineLimit(1)
@@ -424,7 +424,7 @@ private struct PersonalWatchlistSparkline: View {
     var body: some View {
         if points.isEmpty {
             Text("待记录")
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -534,7 +534,7 @@ private struct PersonalWatchlistDetailChart: View {
         VStack(alignment: .leading, spacing: AppPalette.spaceS) {
             HStack(spacing: AppPalette.spaceS) {
                 Label("价格走势", systemImage: "chart.xyaxis.line")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 Spacer(minLength: 8)
                 Picker("范围", selection: $range) {
@@ -550,13 +550,13 @@ private struct PersonalWatchlistDetailChart: View {
             if chartPoints.isEmpty {
                 VStack(spacing: AppPalette.spaceS) {
                     Image(systemName: "chart.xyaxis.line")
-                        .font(.system(size: 24))
+                        .font(AppPalette.appFont(.largeTitle))
                         .foregroundStyle(AppPalette.muted)
                     Text("等待首个有效行情")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     Text("刷新成功后会按交易日记录并绘制折线。")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 .frame(maxWidth: .infinity, minHeight: 128)
@@ -575,7 +575,7 @@ private struct PersonalWatchlistDetailChart: View {
                 Text("已记录 \(row.dailyPoints.count) 个交易日")
                     .foregroundStyle(AppPalette.muted)
             }
-            .font(.system(size: 9, weight: .medium))
+            .font(AppPalette.appFont(.caption, weight: .medium))
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -632,7 +632,7 @@ private struct PersonalWatchlistDetailChart: View {
                 AxisValueLabel {
                     if let price = value.as(Double.self) {
                         Text(watchlistAxisPrice(price))
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(AppPalette.appFont(.caption, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -643,7 +643,7 @@ private struct PersonalWatchlistDetailChart: View {
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(AppPalette.line.opacity(0.16))
                 AxisValueLabel(format: .dateTime.month().day())
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(AppPalette.appFont(.caption, design: .monospaced))
                     .foregroundStyle(AppPalette.muted)
             }
         }
@@ -688,14 +688,14 @@ private struct PersonalWatchlistDetailChart: View {
                 let y = min(max(hoverLocation.y - height - 8, 0), geometry.size.height - height)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(hoveredPoint.dateText)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(AppPalette.appFont(.footnote, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(watchlistPriceText(hoveredPoint.price, item: row.item))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
                         .foregroundStyle(changeTint)
                     if let baseline = row.record.baseline?.price, baseline > 0 {
                         Text("较关注价 \(percentOptional((hoveredPoint.price / baseline - 1) * 100))")
-                            .font(.system(size: 9))
+                            .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
                     }
                 }
@@ -747,21 +747,21 @@ private struct PersonalWatchlistAlertSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: row.record.hasActiveAlerts ? "bell.fill" : "bell")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(AppPalette.appFont(.title2, weight: .semibold))
                     .foregroundStyle(categoryTint)
                     .accentIconStyle(tint: categoryTint, size: 30)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("价格提醒")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("\(row.displayName) · \(row.item.normalizedCode) · \(row.item.marketLabel)")
-                        .font(.system(size: 10))
+                        .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
                 if let state = row.record.alertState, state.isTriggered {
                     Label("当前已触发", systemImage: "bell.badge.fill")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                         .foregroundStyle(AppPalette.warning)
                 }
             }
@@ -834,14 +834,14 @@ private struct PersonalWatchlistAlertSheet: View {
                     Text(warningMessage)
                     Spacer(minLength: 0)
                 }
-                .font(.system(size: 10))
+                .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.warning)
                 .padding(9)
                 .background(AppPalette.warning.opacity(0.09), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
             }
 
             Text("应用运行期间随行情自动检查。条件从未达到变为达到时通知一次；回到阈值另一侧后会重新待命。")
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
 
             HStack(spacing: 10) {
@@ -935,10 +935,10 @@ private struct PersonalWatchlistAlertSheet: View {
     private func alertMetric(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
             Text(value)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
                 .foregroundStyle(AppPalette.ink)
                 .monospacedDigit()
         }
@@ -949,10 +949,10 @@ private struct PersonalWatchlistAlertSheet: View {
     private func alertSectionHeader(_ title: String, detail: String) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(AppPalette.appFont(.subheadline, weight: .bold))
                 .foregroundStyle(AppPalette.ink)
             Text(detail)
-                .font(.system(size: 9))
+                .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
             Spacer()
         }
@@ -973,24 +973,24 @@ private struct PersonalWatchlistAlertSheet: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(enabled.wrappedValue ? tint : AppPalette.muted)
                 .frame(width: 15)
             Text(title)
-                .font(.system(size: 11, weight: .semibold))
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
                 .foregroundStyle(enabled.wrappedValue ? AppPalette.ink : AppPalette.muted)
                 .frame(width: 86, alignment: .leading)
             Spacer(minLength: 8)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11, design: .monospaced))
+                .font(AppPalette.appFont(.subheadline, design: .monospaced))
                 .multilineTextAlignment(.trailing)
                 .inputFieldStyle()
                 .frame(width: 142)
                 .disabled(!enabled.wrappedValue)
                 .opacity(enabled.wrappedValue ? 1 : 0.5)
             Text(unit)
-                .font(.system(size: 10, weight: .medium))
+                .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
                 .frame(width: 34, alignment: .leading)
         }
@@ -1081,14 +1081,14 @@ struct PersonalWatchlistAddSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: category == .stock ? "chart.line.uptrend.xyaxis" : "star.circle")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(categoryTint)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("添加关注")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("选择标的类型并输入代码。加入时会读取当前有效价格，作为之后对比的固定起点。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -1103,11 +1103,11 @@ struct PersonalWatchlistAddSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("代码")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
                 TextField(codePlaceholder, text: $codeText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(AppPalette.appFont(.body, design: .monospaced))
                     .focused($isCodeFocused)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 9)
@@ -1178,7 +1178,7 @@ struct PersonalWatchlistAddSheet: View {
                     Text(resolution.displayName ?? "未查到名称，将按代码保存")
                         .fontWeight(.semibold)
                     Text("\(category.displayName) · \(resolution.code)")
-                        .font(.system(size: 9, design: .monospaced))
+                        .font(AppPalette.appFont(.caption, design: .monospaced))
                 }
             } else if codeText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Image(systemName: "info.circle")
@@ -1189,7 +1189,7 @@ struct PersonalWatchlistAddSheet: View {
             }
             Spacer()
         }
-        .font(.system(size: 11))
+        .font(AppPalette.appFont(.subheadline))
         .foregroundStyle(resolution == nil ? AppPalette.muted : categoryTint)
         .padding(.horizontal, 10)
         .padding(.vertical, AppPalette.spaceS)

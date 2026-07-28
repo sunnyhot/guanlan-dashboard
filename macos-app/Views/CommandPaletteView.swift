@@ -12,17 +12,17 @@ struct CommandPaletteView: View {
             // 搜索栏
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(AppPalette.appFont(.headline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 TextField("搜索操作或跳转…", text: $searchText)
-                    .font(.system(size: 14))
+                    .font(AppPalette.appFont(.title3))
                     .textFieldStyle(.plain)
                     .focused($isSearchFocused)
                     .onSubmit { performFirst() }
                 if !searchText.isEmpty {
                     Button { searchText = "" } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12))
+                            .font(AppPalette.appFont(.body))
                             .foregroundStyle(AppPalette.muted)
                     }
                     .buttonStyle(.plain)
@@ -43,16 +43,16 @@ struct CommandPaletteView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(AppPalette.appFont(.headline, weight: .medium))
                                     .foregroundStyle(AppPalette.brand)
                                     .frame(width: 20)
                                 Text(item.title)
-                                    .font(.system(size: 13))
+                                    .font(AppPalette.appFont(.headline))
                                     .foregroundStyle(AppPalette.ink)
                                 Spacer()
                                 if let shortcut = item.shortcut {
                                     Text(shortcut)
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                                         .foregroundStyle(AppPalette.muted)
                                 }
                             }

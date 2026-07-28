@@ -26,14 +26,14 @@ struct PersonalInvestmentPlanAddSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("添加计划档案")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text("手动补录定投、智能定投或涨跌幅计划，保存后可继续修改状态。")
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -53,7 +53,7 @@ struct PersonalInvestmentPlanAddSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("状态")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Picker("状态", selection: $status) {
                     ForEach(PersonalInvestmentPlanStatusOption.allCases) { option in
@@ -67,7 +67,7 @@ struct PersonalInvestmentPlanAddSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("备注")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 TextField("可留空", text: $noteText, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -132,7 +132,7 @@ struct PersonalInvestmentPlanAddSheet: View {
     private func planField(_ label: String, text: Binding<String>, placeholder: String, field: PersonalInvestmentPlanFormField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)
@@ -204,14 +204,14 @@ struct PersonalInvestmentPlanEditSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "square.and.pencil")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(AppPalette.appFont(.title, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("编辑定投计划")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(AppPalette.appFont(.title2, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(plan.fundCode.map { "\(plan.fundName)（\($0)）" } ?? plan.fundName)
-                        .font(.system(size: 11))
+                        .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                 }
                 Spacer()
@@ -231,7 +231,7 @@ struct PersonalInvestmentPlanEditSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("状态")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 Picker("状态", selection: $status) {
                     ForEach(PersonalInvestmentPlanStatusOption.allCases) { option in
@@ -245,7 +245,7 @@ struct PersonalInvestmentPlanEditSheet: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("备注")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AppPalette.appFont(.subheadline, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                 TextField("可留空", text: $noteText, axis: .vertical)
                     .textFieldStyle(.plain)
@@ -311,7 +311,7 @@ struct PersonalInvestmentPlanEditSheet: View {
     private func planField(_ label: String, text: Binding<String>, placeholder: String, field: PersonalInvestmentPlanFormField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             TextField(placeholder, text: text)
                 .textFieldStyle(.plain)

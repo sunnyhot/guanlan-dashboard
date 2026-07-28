@@ -61,7 +61,7 @@ struct TrendLiveLogPanel: View {
                         .tint(stateTint)
                 } else {
                     Image(systemName: stateIcon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(AppPalette.appFont(.headline, weight: .semibold))
                         .foregroundStyle(stateTint)
                 }
             }
@@ -69,17 +69,17 @@ struct TrendLiveLogPanel: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
                     Text("AI 分析实时日志")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(stateText)
-                        .font(.system(size: 9, weight: .bold))
+                        .font(AppPalette.appFont(.caption, weight: .bold))
                         .foregroundStyle(stateTint)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 2)
                         .background(stateTint.opacity(AppPalette.accentFill), in: Capsule())
                 }
                 Text(latestLog?.message ?? "正在准备分析")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
@@ -87,7 +87,7 @@ struct TrendLiveLogPanel: View {
             Spacer(minLength: AppPalette.spaceS)
 
             Text("\(model.trendProgressLogs.count) 条")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                 .foregroundStyle(AppPalette.muted)
 
             if model.trendGenerationState == .generating {
@@ -95,7 +95,7 @@ struct TrendLiveLogPanel: View {
                     model.cancelTrendAnalysis()
                 } label: {
                     Label("取消", systemImage: "xmark.circle")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 .buttonStyle(.appSecondary)
                 .controlSize(.small)
@@ -175,10 +175,10 @@ struct TrendLiveLogPanel: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(logTime(entry.timestamp))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(AppPalette.appFont(.caption, weight: .semibold, design: .monospaced))
                         .foregroundStyle(AppPalette.muted)
                     Text(entry.message)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(isError ? AppPalette.danger : AppPalette.ink)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -193,7 +193,7 @@ struct TrendLiveLogPanel: View {
                             .frame(width: 2.5)
                             .padding(.vertical, 2)
                         Text(detail)
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(AppPalette.appFont(.caption, design: .monospaced))
                             .foregroundStyle(isError ? AppPalette.danger : AppPalette.muted)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -223,7 +223,7 @@ struct TrendLiveLogPanel: View {
                 .stroke(tint.opacity(0.35), lineWidth: 1)
                 .frame(width: 20, height: 20)
             Image(systemName: semanticIcon(for: message))
-                .font(.system(size: 9, weight: .bold))
+                .font(AppPalette.appFont(.caption, weight: .bold))
                 .foregroundStyle(tint)
         }
     }
@@ -235,7 +235,7 @@ struct TrendLiveLogPanel: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.muted)
                 .frame(width: 25, height: 25)
                 .background(AppPalette.controlFill, in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
