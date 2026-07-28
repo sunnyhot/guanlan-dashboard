@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.23/QiemanDashboard-3.9.23.zip",
-    "name" : "QiemanDashboard-3.9.23.zip",
-    "sha256" : "b12389ac6298c6c673ea1e700340ba68df69ff90763fb2e32f9a1cbd5f7f2928",
-    "size" : 5776869
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.24/QiemanDashboard-3.9.24.zip",
+    "name" : "QiemanDashboard-3.9.24.zip",
+    "sha256" : "b9ce023b03103b1a8130b1eab33dd437a0d46a12f3b67a66bcbfad2262a63ce8",
+    "size" : 5777620
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.23/QiemanDashboard-3.9.23.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.24/QiemanDashboard-3.9.24.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.23.zip",
-      "size" : 5776869
+      "name" : "QiemanDashboard-3.9.24.zip",
+      "size" : 5777620
     }
   ],
-  "body" : "恢复看板原有视觉与交互体验",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.23",
-  "name" : "QiemanDashboard v3.9.23",
-  "notes" : "恢复看板原有视觉与交互体验",
+  "body" : "优化总览卡片与文字展示",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.24",
+  "name" : "QiemanDashboard v3.9.24",
+  "notes" : "优化总览卡片与文字展示",
   "published_at" : "",
-  "sha256" : "b12389ac6298c6c673ea1e700340ba68df69ff90763fb2e32f9a1cbd5f7f2928",
-  "tag" : "v3.9.23",
-  "tag_name" : "v3.9.23",
-  "version" : "3.9.23"
+  "sha256" : "b9ce023b03103b1a8130b1eab33dd437a0d46a12f3b67a66bcbfad2262a63ce8",
+  "tag" : "v3.9.24",
+  "tag_name" : "v3.9.24",
+  "version" : "3.9.24"
 }
