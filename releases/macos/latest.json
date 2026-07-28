@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.20/QiemanDashboard-3.9.20.zip",
-    "name" : "QiemanDashboard-3.9.20.zip",
-    "sha256" : "27aa599fe115343bb4e6751215b978255b317b205b82ff4d1495622b797d5350",
-    "size" : 5748333
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.21/QiemanDashboard-3.9.21.zip",
+    "name" : "QiemanDashboard-3.9.21.zip",
+    "sha256" : "cbb57ff04d9982b7eefbbf41467cdc6d295866b5cc981abb84bab38b83293624",
+    "size" : 5776876
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.20/QiemanDashboard-3.9.20.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.21/QiemanDashboard-3.9.21.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.20.zip",
-      "size" : 5748333
+      "name" : "QiemanDashboard-3.9.21.zip",
+      "size" : 5776876
     }
   ],
-  "body" : "Apple HIG 合规改进 P0+P1+P2",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.20",
-  "name" : "QiemanDashboard v3.9.20",
-  "notes" : "Apple HIG 合规改进 P0+P1+P2",
+  "body" : "设计系统规范文档 + 字体全量迁移到 AppFontSize token",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.21",
+  "name" : "QiemanDashboard v3.9.21",
+  "notes" : "设计系统规范文档 + 字体全量迁移到 AppFontSize token",
   "published_at" : "",
-  "sha256" : "27aa599fe115343bb4e6751215b978255b317b205b82ff4d1495622b797d5350",
-  "tag" : "v3.9.20",
-  "tag_name" : "v3.9.20",
-  "version" : "3.9.20"
+  "sha256" : "cbb57ff04d9982b7eefbbf41467cdc6d295866b5cc981abb84bab38b83293624",
+  "tag" : "v3.9.21",
+  "tag_name" : "v3.9.21",
+  "version" : "3.9.21"
 }
