@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.22/QiemanDashboard-3.9.22.zip",
-    "name" : "QiemanDashboard-3.9.22.zip",
-    "sha256" : "1c434d017c2aaaa124a999a08e9cf1f4a27f88871dd5522eab52fa6698c05dc0",
-    "size" : 5760189
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.23/QiemanDashboard-3.9.23.zip",
+    "name" : "QiemanDashboard-3.9.23.zip",
+    "sha256" : "b12389ac6298c6c673ea1e700340ba68df69ff90763fb2e32f9a1cbd5f7f2928",
+    "size" : 5776869
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.22/QiemanDashboard-3.9.22.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.23/QiemanDashboard-3.9.23.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.22.zip",
-      "size" : 5760189
+      "name" : "QiemanDashboard-3.9.23.zip",
+      "size" : 5776869
     }
   ],
-  "body" : "优化看板视觉层级与阅读体验",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.22",
-  "name" : "QiemanDashboard v3.9.22",
-  "notes" : "优化看板视觉层级与阅读体验",
+  "body" : "恢复看板原有视觉与交互体验",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.23",
+  "name" : "QiemanDashboard v3.9.23",
+  "notes" : "恢复看板原有视觉与交互体验",
   "published_at" : "",
-  "sha256" : "1c434d017c2aaaa124a999a08e9cf1f4a27f88871dd5522eab52fa6698c05dc0",
-  "tag" : "v3.9.22",
-  "tag_name" : "v3.9.22",
-  "version" : "3.9.22"
+  "sha256" : "b12389ac6298c6c673ea1e700340ba68df69ff90763fb2e32f9a1cbd5f7f2928",
+  "tag" : "v3.9.23",
+  "tag_name" : "v3.9.23",
+  "version" : "3.9.23"
 }
