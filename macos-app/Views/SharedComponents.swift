@@ -282,16 +282,15 @@ private struct AppActionButtonLabel: View {
                     .stroke(stroke, lineWidth: 1)
             )
             .shadow(
-                color: kind == .primary && isInteractive ? AppPalette.brand.opacity(0.18) : .clear,
-                radius: 8,
-                y: 3
+                color: kind == .primary && isInteractive ? AppPalette.brand.opacity(0.10) : .clear,
+                radius: 5,
+                y: 2
             )
             .scaleEffect(
                 accessibilityReduceMotion
                     ? 1
-                    : (configuration.isPressed ? 0.97 : 1)
+                    : (configuration.isPressed ? 0.98 : 1)
             )
-            .offset(y: accessibilityReduceMotion || !isInteractive ? 0 : -0.5)
             .opacity(isEnabled ? (configuration.isPressed ? 0.86 : 1) : 0.46)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionFast, value: configuration.isPressed)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionStandard, value: isHovering)
@@ -341,17 +340,12 @@ struct FullRowDisclosureGroupStyle: DisclosureGroupStyle {
 private struct PressResponsiveButtonLabel: View {
     let configuration: PressResponsiveButtonStyle.Configuration
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @State private var isHovering = false
 
     var body: some View {
         configuration.label
-            .scaleEffect(accessibilityReduceMotion ? 1 : (configuration.isPressed ? 0.965 : (isHovering ? 1.018 : 1)))
+            .scaleEffect(accessibilityReduceMotion ? 1 : (configuration.isPressed ? 0.98 : 1))
             .opacity(configuration.isPressed ? 0.84 : 1)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionFast, value: configuration.isPressed)
-            .animation(accessibilityReduceMotion ? nil : AppPalette.motionStandard, value: isHovering)
-            .onHover { hovering in
-                isHovering = hovering
-            }
     }
 }
 
@@ -364,7 +358,7 @@ struct InteractiveSurfaceModifier: ViewModifier {
     var selectedFill: Color?
     var strokeOpacity: Double = 0.34
     var activeStrokeOpacity: Double = 0.58
-    var lift: CGFloat = 1
+    var lift: CGFloat = 0
     var allowsHoverFeedback = true
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
@@ -398,28 +392,12 @@ struct InteractiveSurfaceModifier: ViewModifier {
         return AppPalette.line.opacity(strokeOpacity)
     }
 
-    private var glowOpacity: Double {
-        if isSelected {
-            return AppPalette.selectionGlowOpacity
-        }
-        if allowsHoverFeedback && isHovering {
-            return AppPalette.selectionGlowOpacity * 0.58
-        }
-        return 0
-    }
-
     func body(content: Content) -> some View {
         content
             .background(surfaceFill, in: RoundedRectangle(cornerRadius: radius))
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
                     .stroke(surfaceStroke, lineWidth: isActive ? 1.15 : 1)
-            )
-            .shadow(
-                color: tint.opacity(glowOpacity),
-                radius: isActive ? AppPalette.selectionGlowRadius : 0,
-                x: 0,
-                y: isActive ? 4 : 0
             )
             .offset(y: -effectiveLift)
             .animation(accessibilityReduceMotion ? nil : AppPalette.motionStandard, value: isHovering)
@@ -486,10 +464,8 @@ struct SectionCard<Trailing: View, Content: View>: View {
             content
         }
         .padding(14)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-        .clipShape(RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-        .panelStroke()
-        .sectionShadow()
+        .background(AppPalette.card.opacity(0.72), in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
+        .panelStroke(opacity: AppPalette.strokeSubtle)
     }
 }
 
@@ -537,8 +513,109 @@ struct StatChip: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, AppPalette.spaceS)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-        .cardStroke(opacity: 0.40)
+        .background(AppPalette.cardStrong.opacity(0.28), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+    }
+}
+
+struct MetricStripItem: Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String?
+    let tint: Color
+
+    init(
+        id: String,
+        title: String,
+        value: String,
+        detail: String? = nil,
+        tint: Color = AppPalette.ink
+    ) {
+        self.id = id
+        self.title = title
+        self.value = value
+        self.detail = detail
+        self.tint = tint
+    }
+}
+
+/// Dense, aligned metrics without wrapping every value in another card.
+struct MetricStrip: View {
+    let items: [MetricStripItem]
+    var minimumCellWidth: CGFloat = 120
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 0) {
+                metricCells(useDividers: true)
+            }
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: minimumCellWidth), spacing: 0, alignment: .top)],
+                alignment: .leading,
+                spacing: AppPalette.spaceS
+            ) {
+                metricCells(useDividers: false)
+            }
+        }
+        .padding(.vertical, AppPalette.spaceXS)
+    }
+
+    @ViewBuilder
+    private func metricCells(useDividers: Bool) -> some View {
+        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            if useDividers, index > 0 {
+                Divider()
+                    .frame(height: 42)
+                    .padding(.top, AppPalette.spaceXS)
+            }
+            MetricStripCell(item: item)
+        }
+    }
+}
+
+private struct MetricStripCell: View {
+    let item: MetricStripItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(item.title)
+                .font(AppPalette.appFont(.footnote, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(1)
+            Text(item.value)
+                .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
+                .foregroundStyle(item.tint)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+            if let detail = item.detail, !detail.isEmpty {
+                Text(detail)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AppPalette.spaceM)
+        .padding(.vertical, AppPalette.spaceXS)
+    }
+}
+
+/// A centered reading column for AI reports and other long-form operational text.
+struct ReadingPanel<Content: View>: View {
+    let maxWidth: CGFloat
+    let content: Content
+
+    init(maxWidth: CGFloat = 820, @ViewBuilder content: () -> Content) {
+        self.maxWidth = maxWidth
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .frame(maxWidth: maxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 

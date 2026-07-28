@@ -30,9 +30,6 @@ enum PersonalAssetSortOption: String, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.legibilityWeight) private var legibilityWeight
-    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @AppStorage("qieman.dashboard.hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -55,6 +52,24 @@ struct ContentView: View {
         }
         .frame(minWidth: 860, idealWidth: 1200, minHeight: 600)
         .buttonStyle(.appSecondary)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                toolbarIdentity
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { try? await model.refreshLatest(persist: false) }
+                } label: {
+                    Label(
+                        model.isRefreshing ? "刷新中" : "刷新",
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isRefreshing || (!model.hasLiveService && !model.canRefreshWithoutLiveService))
+                .help(model.isRefreshing ? "正在刷新数据" : "刷新当前数据")
+            }
+        }
         .preferredColorScheme(model.appearance.colorScheme)
         .respectsReducedMotion()
         .onReceive(NotificationCenter.default.publisher(for: .qiemanToggleSidebar)) { _ in
@@ -131,100 +146,26 @@ struct ContentView: View {
 
     private var mainContent: some View {
         VStack(spacing: 0) {
-            toolbar
             notifications
             detailPanel
         }
     }
 
-    private var toolbar: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: AppPalette.spaceM) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: AppPalette.spaceL) {
-                        toolbarTitleBlock
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                toggleMainWindowZoom()
-                            }
-                        Spacer(minLength: AppPalette.spaceM)
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                toggleMainWindowZoom()
-                            }
-                        toolbarActionRow
-                    }
-
-                    VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-                        toolbarTitleBlock
-                            .contentShape(Rectangle())
-                            .onTapGesture(count: 2) {
-                                toggleMainWindowZoom()
-                            }
-                        toolbarActionRow
-                    }
-                }
-            }
-            .padding(.horizontal, AppPalette.toolbarPaddingH)
-            .padding(.top, AppPalette.toolbarPaddingTop)
-            .padding(.bottom, AppPalette.toolbarPaddingBottom)
-            .background(
-                Group {
-                    if reduceTransparency {
-                        AppPalette.surface
-                    } else {
-                        MaterialPanel(material: .windowBackground, blendingMode: .withinWindow)
-                            .opacity(AppPalette.bgToolbar)
-                    }
-                }
-            )
-
-            Divider()
-        }
-    }
-
-
-    private var toolbarTitleBlock: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var toolbarIdentity: some View {
+        HStack(spacing: AppPalette.spaceS) {
             Text(model.selectedSection.rawValue)
-                .font(AppPalette.appFont(.title2, weight: .bold))
-                .foregroundStyle(colorSchemeContrast == .increased ? .primary : AppPalette.ink)
-            HStack(spacing: AppPalette.spaceXS + 2) {
-                ToolbarBadge(
-                    title: model.liveModeLabel,
-                    tint: model.hasLiveService ? AppPalette.brand : AppPalette.muted
-                )
-            }
+                .font(AppPalette.appFont(.headline, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+            Text(model.liveModeLabel)
+                .font(AppPalette.appFont(.caption, weight: .medium))
+                .foregroundStyle(model.hasLiveService ? AppPalette.brand : AppPalette.muted)
         }
-    }
-
-    private var toolbarActionRow: some View {
-        HStack(spacing: 10) {
-            Button {
-                withAnimation(AppPalette.motionStandard) {
-                    switch columnVisibility {
-                    case .all: columnVisibility = .detailOnly
-                    default: columnVisibility = .all
-                    }
-                }
-            } label: {
-                Label("侧边栏", systemImage: "sidebar.left")
-                    .font(AppPalette.appFont(.headline, weight: .semibold))
-            }
-            .buttonStyle(.appSecondary)
-            .controlSize(.regular)
-            .help("显示/隐藏侧边栏")
-
-            Button {
-                Task { try? await model.refreshLatest(persist: false) }
-            } label: {
-                Label("刷新", systemImage: "arrow.clockwise")
-                    .font(AppPalette.appFont(.headline, weight: .semibold))
-            }
-            .buttonStyle(.appPrimary)
-            .controlSize(.regular)
-            .disabled(model.isRefreshing || (!model.hasLiveService && !model.canRefreshWithoutLiveService))
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            toggleMainWindowZoom()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(model.selectedSection.rawValue)，数据连接：\(model.liveModeLabel)")
     }
 
 
@@ -365,7 +306,7 @@ private struct SidebarSectionButton: View {
                     .foregroundStyle(activeTint)
                     .frame(width: 26, height: 26)
                     .background(
-                        (isSelected ? AppPalette.brand.opacity(0.13) : activeTint.opacity(isHovering ? 0.08 : 0.05)),
+                        isSelected ? AppPalette.brand.opacity(0.12) : Color.clear,
                         in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
                     )
 
@@ -379,7 +320,7 @@ private struct SidebarSectionButton: View {
                 if badgeCount > 0 {
                     Text("\(badgeCount)")
                         .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(AppPalette.onBrand)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(AppPalette.brand, in: Capsule())
@@ -393,13 +334,6 @@ private struct SidebarSectionButton: View {
                 RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius)
                     .stroke(strokeColor, lineWidth: 1)
             )
-            .shadow(
-                color: AppPalette.selectionGlow.opacity(isSelected ? AppPalette.selectionGlowOpacity : 0),
-                radius: isSelected ? AppPalette.selectionGlowRadius : 0,
-                x: 0,
-                y: isSelected ? 4 : 0
-            )
-            .offset(y: isHovering && !isSelected ? -AppPalette.hoverLift : 0)
             .contentShape(RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius))
         }
         .buttonStyle(.plain)
@@ -581,17 +515,12 @@ private struct AppUpdateSheet: View {
 
 // MARK: - Sidebar Floating Compatibility Modifier
 
-/// Applies a floating visual effect to the sidebar on all macOS versions.
-/// Uses a translucent material background, rounded corners, padding, and
-/// a subtle shadow to create the "hovering" look.
+/// Keeps the sidebar on a native material surface while respecting Reduce Transparency.
 struct SidebarFloatingCompatModifier: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
         content
-            .padding(.vertical, AppPalette.spaceS)
-            .padding(.leading, AppPalette.spaceS)
-            .padding(.trailing, AppPalette.spaceXS)
             .background(
                 Group {
                     if reduceTransparency {
@@ -603,8 +532,6 @@ struct SidebarFloatingCompatModifier: ViewModifier {
                     }
                 }
             )
-            .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-            .shadow(color: AppPalette.sidebarShadowColor, radius: AppPalette.sidebarShadowRadius, x: AppPalette.sidebarShadowX, y: 0)
     }
 }
 

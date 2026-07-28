@@ -189,7 +189,7 @@ struct TodayBriefSummaryCard: View {
                 hoverFill: AppPalette.cardHover,
                 strokeOpacity: 0.16,
                 activeStrokeOpacity: 0.36,
-                lift: 0.6
+                lift: 0
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())
@@ -250,7 +250,7 @@ struct TodayBriefItemButton: View {
                 hoverFill: AppPalette.cardHover,
                 strokeOpacity: 0.18,
                 activeStrokeOpacity: 0.40,
-                lift: 0.8
+                lift: 0
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())

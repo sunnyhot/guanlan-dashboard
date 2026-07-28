@@ -34,7 +34,7 @@ enum AppPalette {
 
     // MARK: - Shadow Tokens
 
-    static func cardShadow(opacity: Double = 0.18, radius: CGFloat = 12, y: CGFloat = 4) -> some View {
+    static func cardShadow(opacity: Double = 0.08, radius: CGFloat = 8, y: CGFloat = 2) -> some View {
         Color.clear.shadow(color: .black.opacity(opacity), radius: radius, x: 0, y: y)
     }
 
@@ -73,27 +73,29 @@ enum AppPalette {
         .interactiveSpring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08)
     }
 
-    static let hoverLift: CGFloat = 1.2
+    /// Operational rows communicate hover through fill and stroke, not vertical movement.
+    static let hoverLift: CGFloat = 0
     static let selectionStrokeOpacity: Double = 0.76
-    static let selectionGlowOpacity: Double = 0.16
-    static let selectionGlowRadius: CGFloat = 12
+    /// Selection uses a rail, fill and stroke. Glow is intentionally disabled.
+    static let selectionGlowOpacity: Double = 0
+    static let selectionGlowRadius: CGFloat = 0
     static let selectionRailWidth: CGFloat = 3
     static let sidebarRowRadius: CGFloat = 9
 
     // MARK: - Typography Tokens
 
-    /// 语义字号阶梯，对应全仓 .font(.system(size:)) 的实际分布（89% 集中在 8-13pt）。
+    /// 语义字号阶梯。正文与操作信息从 11pt 起，9-10pt 仅用于图表与元数据。
     enum AppFontSize: CGFloat {
-        case caption2 = 8
-        case caption = 9
-        case footnote = 10
-        case subheadline = 11
-        case body = 12
-        case headline = 13
-        case title3 = 14
-        case title2 = 16
-        case title = 18
-        case largeTitle = 22
+        case caption2 = 9
+        case caption = 10
+        case footnote = 11
+        case subheadline = 12
+        case body = 13
+        case headline = 14
+        case title3 = 15
+        case title2 = 17
+        case title = 20
+        case largeTitle = 24
     }
 
     /// 统一字体构造入口，替代散落的 .font(.system(size: N, weight: W))。
@@ -310,9 +312,9 @@ enum AppPalette {
     // MARK: - Shadow Presets
 
     /// Shadow for section-level cards (SectionCard).
-    static let sectionShadowColor: Color = .black.opacity(0.18)
-    static let sectionShadowRadius: CGFloat = 12
-    static let sectionShadowY: CGFloat = 4
+    static let sectionShadowColor: Color = .clear
+    static let sectionShadowRadius: CGFloat = 0
+    static let sectionShadowY: CGFloat = 0
 
     /// Shadow for panel-level containers (SettingsPanel).
     static let panelShadowColor: Color = .black.opacity(0.05)

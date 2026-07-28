@@ -7,7 +7,7 @@ import SwiftUI
 /// 运行结束后保留本次记录，便于复制或定位日志文件。
 struct TrendLiveLogPanel: View {
     @EnvironmentObject private var model: AppModel
-    @State private var isExpanded = true
+    @State private var isExpanded = false
     @State private var isDismissed = false
 
     private let bottomAnchor = "trend-live-log-bottom"
@@ -29,14 +29,16 @@ struct TrendLiveLogPanel: View {
                     RoundedRectangle(cornerRadius: AppPalette.cardRadius)
                         .stroke(stateTint.opacity(0.32), lineWidth: 1)
                 )
-                .shadow(color: stateTint.opacity(0.08), radius: 12, x: 0, y: 5)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .onChange(of: model.trendGenerationState) { _, state in
-            guard state == .generating else { return }
-            isDismissed = false
-            isExpanded = true
+            if state == .generating {
+                isDismissed = false
+                isExpanded = true
+            } else {
+                isExpanded = false
+            }
         }
     }
 

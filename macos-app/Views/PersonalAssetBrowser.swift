@@ -227,7 +227,7 @@ struct PersonalAssetBrowser: View {
                     selectedFill: AppPalette.brand,
                     strokeOpacity: 0.42,
                     activeStrokeOpacity: 0.44,
-                    lift: 0.6
+                    lift: 0
                 )
         }
         .buttonStyle(PressResponsiveButtonStyle())

@@ -44,19 +44,6 @@ struct SettingsPanel<Content: View>: View {
                 .padding(16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            AppPalette.panelBackground.opacity(AppPalette.bgSettings),
-            in: RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.hairline.opacity(AppPalette.strokeSubtle), lineWidth: 1)
-        )
-        .shadow(
-            color: AppPalette.panelShadowColor,
-            radius: AppPalette.panelShadowRadius,
-            y: AppPalette.panelShadowY
-        )
     }
 }
 
@@ -113,7 +100,7 @@ struct SettingsCardGroup<Content: View>: View {
                 .padding(.bottom, 4)
         }
         .background(
-            AppPalette.cardStrong.opacity(0.62),
+            AppPalette.card.opacity(0.48),
             in: RoundedRectangle(cornerRadius: AppPalette.cardRadius)
         )
         .overlay(

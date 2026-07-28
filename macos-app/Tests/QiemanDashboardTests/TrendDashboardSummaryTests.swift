@@ -227,9 +227,9 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(source.contains("OverviewAssetTypeSummary"))
         XCTAssertFalse(source.contains("assetTypeSummary"))
         XCTAssertTrue(source.contains("todayBriefWideColumns"))
-        XCTAssertTrue(source.contains("trendHorizonWideColumns"))
-        XCTAssertTrue(source.contains("trendSectorWideColumns"))
-        XCTAssertTrue(source.contains(".lineLimit(4)"))
+        XCTAssertTrue(source.contains("AITrendHorizonRow"))
+        XCTAssertTrue(source.contains("AITrendSectorRow"))
+        XCTAssertTrue(source.contains("summary.sectors.prefix(3)"))
         XCTAssertTrue(source.contains(".lineLimit(3)"))
     }
 

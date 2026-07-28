@@ -190,20 +190,7 @@ struct SettingsSectionView: View {
                 }
             }
         }
-        .padding(16)
-        .background(
-            AppPalette.panelBackground.opacity(0.56),
-            in: RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.hairline.opacity(AppPalette.borderFaint), lineWidth: 1)
-        )
-        .shadow(
-            color: AppPalette.panelShadowColor,
-            radius: AppPalette.panelShadowRadius,
-            y: AppPalette.panelShadowY
-        )
+        .padding(AppPalette.spaceXS)
     }
 
     private func settingsNavigationButton(
@@ -293,7 +280,7 @@ private struct SettingsNavigationRow: View {
                 .foregroundStyle(isSelected ? AppPalette.brand : tint)
                 .frame(width: 32, height: 32)
                 .background(
-                    (isSelected ? AppPalette.brandSoft : tint.opacity(0.09)),
+                    isSelected ? AppPalette.brandSoft : Color.clear,
                     in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
                 )
 
@@ -308,19 +295,11 @@ private struct SettingsNavigationRow: View {
                         .lineLimit(1)
                 }
 
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 5, height: 5)
-                    Text(status)
-                        .font(AppPalette.appFont(.caption, weight: .semibold, design: .rounded))
-                        .foregroundStyle(tint)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(tint.opacity(0.08), in: Capsule())
+                Text(status)
+                    .font(AppPalette.appFont(.caption, weight: .semibold, design: .rounded))
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
 
             Spacer(minLength: 0)
@@ -337,8 +316,8 @@ private struct SettingsNavigationRow: View {
             RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius)
                 .fill(
                     isSelected
-                        ? AppPalette.selectionFill.opacity(0.82)
-                        : (isHovering ? AppPalette.cardHover.opacity(0.72) : AppPalette.card.opacity(0.54))
+                        ? AppPalette.selectionFill.opacity(0.62)
+                        : (isHovering ? AppPalette.cardHover.opacity(0.50) : Color.clear)
                 )
         )
         .overlay(
@@ -349,11 +328,6 @@ private struct SettingsNavigationRow: View {
                         : AppPalette.hairline.opacity(AppPalette.borderFaint),
                     lineWidth: 1
                 )
-        )
-        .shadow(
-            color: isSelected ? AppPalette.selectionGlow.opacity(0.10) : .clear,
-            radius: 8,
-            y: 2
         )
         .contentShape(RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius))
         .onHover { hovering in
