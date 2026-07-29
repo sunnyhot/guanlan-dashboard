@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.1/QiemanDashboard-3.11.1.zip",
-    "name" : "QiemanDashboard-3.11.1.zip",
-    "sha256" : "aa5f364574eac5df80c3f2e16e35f5ac2ca638a86f903fba42ddb8fb1b283478",
-    "size" : 6064719
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.2/QiemanDashboard-3.11.2.zip",
+    "name" : "QiemanDashboard-3.11.2.zip",
+    "sha256" : "4af3df2d57072c0c8a0d00684ba45150c8ee2483f3d658ed2a4a7649cd5b1a09",
+    "size" : 5964713
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.1/QiemanDashboard-3.11.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.2/QiemanDashboard-3.11.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.11.1.zip",
-      "size" : 6064719
+      "name" : "QiemanDashboard-3.11.2.zip",
+      "size" : 5964713
     }
   ],
-  "body" : "平台调仓月度视图改为完整历史折线图 + 布局重构",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.11.1",
-  "name" : "QiemanDashboard v3.11.1",
-  "notes" : "平台调仓月度视图改为完整历史折线图 + 布局重构",
+  "body" : "清理失效功能并统一 AI 跟踪入口",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.11.2",
+  "name" : "QiemanDashboard v3.11.2",
+  "notes" : "清理失效功能并统一 AI 跟踪入口",
   "published_at" : "",
-  "sha256" : "aa5f364574eac5df80c3f2e16e35f5ac2ca638a86f903fba42ddb8fb1b283478",
-  "tag" : "v3.11.1",
-  "tag_name" : "v3.11.1",
-  "version" : "3.11.1"
+  "sha256" : "4af3df2d57072c0c8a0d00684ba45150c8ee2483f3d658ed2a4a7649cd5b1a09",
+  "tag" : "v3.11.2",
+  "tag_name" : "v3.11.2",
+  "version" : "3.11.2"
 }
