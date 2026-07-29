@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.5/QiemanDashboard-3.10.5.zip",
-    "name" : "QiemanDashboard-3.10.5.zip",
-    "sha256" : "23c9df3a63487c30fc670f0b0575a8dce01c2d43544ae7685bf81c7336f57e4a",
-    "size" : 6048188
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.0/QiemanDashboard-3.11.0.zip",
+    "name" : "QiemanDashboard-3.11.0.zip",
+    "sha256" : "6827f3590824aba283ec8ff4680895c272c9b1347352d2ecbe55fe7cdacb4ccd",
+    "size" : 6053534
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.5/QiemanDashboard-3.10.5.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.0/QiemanDashboard-3.11.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.10.5.zip",
-      "size" : 6048188
+      "name" : "QiemanDashboard-3.11.0.zip",
+      "size" : 6053534
     }
   ],
-  "body" : "修复基金模糊搜索——天天基金端点从 FundSearchPageJson 改为 FundSearchAPI + 股票搜索响应结构适配",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.10.5",
-  "name" : "QiemanDashboard v3.10.5",
-  "notes" : "修复基金模糊搜索——天天基金端点从 FundSearchPageJson 改为 FundSearchAPI + 股票搜索响应结构适配",
+  "body" : "build(cli): 补充 QiemanText / QiemanPlatformNativeClientSupport 到 CLI 编译列表\n平台客户端抽工具层 + 统一响应解析 + Trend 目录整理",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.11.0",
+  "name" : "QiemanDashboard v3.11.0",
+  "notes" : "build(cli): 补充 QiemanText / QiemanPlatformNativeClientSupport 到 CLI 编译列表\n平台客户端抽工具层 + 统一响应解析 + Trend 目录整理",
   "published_at" : "",
-  "sha256" : "23c9df3a63487c30fc670f0b0575a8dce01c2d43544ae7685bf81c7336f57e4a",
-  "tag" : "v3.10.5",
-  "tag_name" : "v3.10.5",
-  "version" : "3.10.5"
+  "sha256" : "6827f3590824aba283ec8ff4680895c272c9b1347352d2ecbe55fe7cdacb4ccd",
+  "tag" : "v3.11.0",
+  "tag_name" : "v3.11.0",
+  "version" : "3.11.0"
 }
