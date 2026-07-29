@@ -10,8 +10,6 @@ struct FundSearchClient: Sendable {
     }
 
     /// 搜索基金和股票，返回合并去重的结果列表。
-    /// - Parameter keyword: 搜索关键词（名称、拼音、代码均可）
-    /// - Returns: 搜索结果，最多 10 条
     func search(_ keyword: String) async -> [FundSearchResult] {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 1 else { return [] }
@@ -28,10 +26,11 @@ struct FundSearchClient: Sendable {
         return Array(merged.prefix(10))
     }
 
-    // MARK: - 场外基金搜索
+    // MARK: - 场外基金搜索（天天基金 FundSearchAPI.ashx）
 
     private func searchFunds(_ keyword: String) async -> [FundSearchResult] {
-        guard let url = URL(string: "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchPageJson.ashx?m=1&key=\(Self.urlEncode(keyword))&pageindex=0&pagesize=8") else {
+        let encoded = Self.urlEncode(keyword)
+        guard let url = URL(string: "https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?callback=&m=1&key=\(encoded)") else {
             return []
         }
         var request = URLRequest(url: url)
@@ -50,24 +49,26 @@ struct FundSearchClient: Sendable {
         }
 
         return datas.compactMap { (item: [String: Any]) -> FundSearchResult? in
-            let code = item["CODE"] as? String ?? item["SYMBOL"] as? String
-            let name = item["NAME"] as? String ?? (item["FundBaseInfo"] as? [String: Any])?["SHORTNAME"] as? String
-            let fundType = (item["FundBaseInfo"] as? [String: Any])?["FTYPE"] as? String
-            guard let code, let name else { return nil }
+            guard let code = item["CODE"] as? String,
+                  let name = item["NAME"] as? String else { return nil }
+            let fundBaseInfo = item["FundBaseInfo"] as? [String: Any]
+            let fundType = fundBaseInfo?["FTYPE"] as? String
+            let shortName = fundBaseInfo?["SHORTNAME"] as? String
             return FundSearchResult(
                 code: code,
-                name: name,
-                displayName: "\(name)（\(code)）",
+                name: shortName ?? name,
+                displayName: "\(shortName ?? name)（\(code)）",
                 category: Self.fundCategoryLabel(fundType),
                 assetType: .fund
             )
         }
     }
 
-    // MARK: - 股票/ETF 搜索
+    // MARK: - 股票/ETF 搜索（东方财富 searchapi）
 
     private func searchStocks(_ keyword: String) async -> [FundSearchResult] {
-        guard let url = URL(string: "https://searchapi.eastmoney.com/api/suggest/get?input=\(Self.urlEncode(keyword))&type=14") else {
+        let encoded = Self.urlEncode(keyword)
+        guard let url = URL(string: "https://searchapi.eastmoney.com/api/suggest/get?input=\(encoded)&type=14") else {
             return []
         }
         var request = URLRequest(url: url)
@@ -81,44 +82,35 @@ struct FundSearchClient: Sendable {
         }
 
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let table = json["QuotationCodeTable"] as? [[String: Any]] else {
+              let qct = json["QuotationCodeTable"] as? [String: Any],
+              let table = qct["Data"] as? [[String: Any]] else {
             return []
         }
 
         return table.compactMap { (item: [String: Any]) -> FundSearchResult? in
             guard let code = item["Code"] as? String,
-                  let name = item["Name"] as? String else {
-                return nil
-            }
+                  let name = item["Name"] as? String,
+                  code.count == 5 || code.count == 6 else { return nil }
+
             let mktNum = item["MktNum"] as? String ?? ""
-            let assetType: PersonalAssetType
+            let securityType = item["SecurityTypeName"] as? String ?? ""
             let category: String
 
-            // MktNum: "1"=沪A, "0"=深A, "116"=港股, "105"=美股, ETF 带在 type 里
-            let type = item["Type"] as? String ?? ""
-            if type.contains("ETF") || type.contains("LOF") || code.hasPrefix("5") && mktNum == "1" || code.hasPrefix("1") && mktNum == "0" {
-                assetType = .fund
-                category = "场内基金"
-            } else if mktNum == "116" || mktNum == "0116" {
-                assetType = .stock
+            // MktNum: "1"=沪A, "0"=深A, "116"=港股, "105"=美股
+            if mktNum == "116" || mktNum == "0116" {
                 category = "港股"
             } else if mktNum == "105" || mktNum == "0105" || mktNum == "71" {
-                assetType = .stock
                 category = "美股"
             } else {
-                assetType = .stock
-                category = mktNum == "1" ? "沪A" : "深A"
+                category = securityType.isEmpty ? "A股" : securityType
             }
-
-            // 只保留 6 位代码的股票/基金结果
-            guard code.count == 5 || code.count == 6 else { return nil }
 
             return FundSearchResult(
                 code: code,
                 name: name,
                 displayName: "\(name)（\(code)）",
                 category: category,
-                assetType: assetType
+                assetType: .stock
             )
         }
     }
