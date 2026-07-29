@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.1/QiemanDashboard-3.10.1.zip",
-    "name" : "QiemanDashboard-3.10.1.zip",
-    "sha256" : "40f1362b3363faa221fa7b068c6cc8db11acd10190d42b62a9fdff3570df6d25",
-    "size" : 6008211
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.2/QiemanDashboard-3.10.2.zip",
+    "name" : "QiemanDashboard-3.10.2.zip",
+    "sha256" : "4eb25ea4d91cbee69820a75cfca8db2556f07782f6ec203bb12488b9ba2762ce",
+    "size" : 6015183
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.1/QiemanDashboard-3.10.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.2/QiemanDashboard-3.10.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.10.1.zip",
-      "size" : 6008211
+      "name" : "QiemanDashboard-3.10.2.zip",
+      "size" : 6015183
     }
   ],
-  "body" : "证据详情从 Popover 改为 Sheet",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.10.1",
-  "name" : "QiemanDashboard v3.10.1",
-  "notes" : "证据详情从 Popover 改为 Sheet",
+  "body" : "持仓板块视图优化 + 回归测试更新",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.10.2",
+  "name" : "QiemanDashboard v3.10.2",
+  "notes" : "持仓板块视图优化 + 回归测试更新",
   "published_at" : "",
-  "sha256" : "40f1362b3363faa221fa7b068c6cc8db11acd10190d42b62a9fdff3570df6d25",
-  "tag" : "v3.10.1",
-  "tag_name" : "v3.10.1",
-  "version" : "3.10.1"
+  "sha256" : "4eb25ea4d91cbee69820a75cfca8db2556f07782f6ec203bb12488b9ba2762ce",
+  "tag" : "v3.10.2",
+  "tag_name" : "v3.10.2",
+  "version" : "3.10.2"
 }
