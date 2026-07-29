@@ -38,32 +38,17 @@ struct PlatformHoldingsPieChart: View {
 
     var body: some View {
         if !assetClassSlices.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "chart.pie.fill")
-                        .font(AppPalette.appFont(.body, weight: .semibold))
-                        .foregroundStyle(AppPalette.brand)
-                    Text("持仓分布")
-                        .font(AppPalette.appFont(.body, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
-                    Spacer()
-                    Text("按当前份数")
-                        .font(AppPalette.appFont(.footnote))
-                        .foregroundStyle(AppPalette.muted)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    distributionPanel(title: "资产大类", slices: assetClassSlices)
+                        .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
+                    distributionPanel(title: "资产类型", slices: assetTypeSlices)
+                        .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
                 }
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        distributionPanel(title: "资产大类", slices: assetClassSlices)
-                            .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
-                        distributionPanel(title: "资产类型", slices: assetTypeSlices)
-                            .frame(minWidth: 360, maxWidth: .infinity, alignment: .topLeading)
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        distributionPanel(title: "资产大类", slices: assetClassSlices)
-                        distributionPanel(title: "资产类型", slices: assetTypeSlices)
-                    }
+                VStack(alignment: .leading, spacing: 10) {
+                    distributionPanel(title: "资产大类", slices: assetClassSlices)
+                    distributionPanel(title: "资产类型", slices: assetTypeSlices)
                 }
             }
             .padding(14)

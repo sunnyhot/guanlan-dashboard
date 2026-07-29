@@ -7,50 +7,46 @@ struct StrategyRadarPanel: View {
 
     var body: some View {
         SectionCard(title: "主理人策略雷达", subtitle: summary.headline, icon: "radar") {
-            VStack(alignment: .leading, spacing: 12) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)], spacing: 10) {
-                    RadarStatChip(title: "调仓动作", value: "\(summary.actionCount)", tint: AppPalette.brand)
-                    RadarStatChip(title: "买入", value: "\(summary.buyCount)", tint: AppPalette.positive)
-                    RadarStatChip(title: "卖出", value: "\(summary.sellCount)", tint: AppPalette.warning)
-                    RadarStatChip(title: "策略标签", value: "\(summary.strategyTypeCount)", tint: AppPalette.info)
-                    RadarStatChip(title: "持仓覆盖", value: "\(summary.holdingCount)", tint: AppPalette.accentWarm)
-                }
+            ViewThatFits(in: .horizontal) {
+                radarStrip
+                    .frame(minWidth: 740)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 10)], spacing: 10) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(minimum: 180), spacing: 0, alignment: .top),
+                        GridItem(.flexible(minimum: 180), spacing: 0, alignment: .top)
+                    ],
+                    alignment: .leading,
+                    spacing: 0
+                ) {
                     ForEach(summary.items) { item in
                         StrategyRadarTile(item: item)
                     }
                 }
+                .radarGroupSurface()
+
+                VStack(spacing: 0) {
+                    ForEach(summary.items) { item in
+                        StrategyRadarTile(item: item)
+                    }
+                }
+                .radarGroupSurface()
             }
         }
     }
-}
 
-struct RadarStatChip: View {
-    let title: String
-    let value: String
-    let tint: Color
+    private var radarStrip: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(summary.items) { item in
+                StrategyRadarTile(item: item)
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AppPalette.appFont(.footnote, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-                .lineLimit(1)
-            Text(value)
-                .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-                .lineLimit(1)
+                if item.id != summary.items.last?.id {
+                    Divider()
+                        .padding(.vertical, AppPalette.spaceS)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(AppPalette.cardStrong.opacity(0.70), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                .stroke(tint.opacity(0.14), lineWidth: 1)
-        )
+        .radarGroupSurface()
     }
 }
 
@@ -68,49 +64,59 @@ struct StrategyRadarTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+            HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
                 Text(item.title)
                     .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                 Spacer(minLength: 0)
                 Text("\(item.score)")
-                    .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreTint)
                     .monospacedDigit()
             }
 
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(AppPalette.line.opacity(0.30))
-                    Capsule()
-                        .fill(scoreTint.opacity(0.86))
-                        .frame(width: max(4, proxy.size.width * CGFloat(item.score) / 100))
-                }
+            HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
+                Text(item.metric)
+                    .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
+                    .foregroundStyle(scoreTint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+
+                Text(item.detail)
+                    .font(AppPalette.appFont(.footnote))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
             }
-            .frame(height: 6)
 
-            Text(item.metric)
-                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
-                .foregroundStyle(scoreTint)
-                .monospacedDigit()
-                .lineLimit(1)
-
-            Text(item.detail)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            ProgressView(value: Double(item.score), total: 100)
+                .progressViewStyle(.linear)
+                .tint(scoreTint)
+                .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
-        .padding(12)
-        .staticSurface(
-            tint: scoreTint,
-            fill: AppPalette.cardStrong.opacity(0.64),
-            strokeOpacity: 0.16,
-            activeStrokeOpacity: 0.30
+        .frame(maxWidth: .infinity, minHeight: 74, alignment: .topLeading)
+        .padding(.horizontal, AppPalette.spaceM)
+        .padding(.vertical, AppPalette.spaceS + 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.title)
+        .accessibilityValue("\(item.metric)，\(item.detail)，\(item.score) 分")
+    }
+}
+
+private extension View {
+    func radarGroupSurface() -> some View {
+        background(
+            AppPalette.cardStrong.opacity(0.58),
+            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+                .stroke(AppPalette.line.opacity(AppPalette.borderLight), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.controlRadius))
     }
 }

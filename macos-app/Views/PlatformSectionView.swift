@@ -153,7 +153,7 @@ struct PlatformSectionView: View {
             StrategyRadarPanel(summary: model.strategyRadarSummary)
         }
 
-        if !model.monthlyPlatformSummary.isEmpty || !model.platformHoldings.isEmpty {
+        if !model.monthlyPlatformSummary.isEmpty {
             collapsibleMonthlySection
         }
 
@@ -192,7 +192,21 @@ struct PlatformSectionView: View {
             }
         }
 
-        SectionCard(title: "当前持仓", subtitle: "保留原项目的数据口径", icon: "bag") {
+        currentHoldingsSection
+    }
+
+    // MARK: - Current Holdings
+
+    @State private var isHoldingDetailsExpanded = false
+
+    private var currentHoldingsSection: some View {
+        SectionCard(
+            title: "当前持仓",
+            subtitle: model.platformHoldings.isEmpty
+                ? "等待平台持仓数据"
+                : "\(model.platformHoldings.count) 只 · 按当前份数统计",
+            icon: "bag"
+        ) {
             if model.platformHoldings.isEmpty {
                 EmptySectionState(
                     title: "当前没有平台持仓",
@@ -202,11 +216,60 @@ struct PlatformSectionView: View {
                     Task { try? await model.refreshLatest(persist: false) }
                 }
             } else {
-                LazyVStack(spacing: 6) {
-                    ForEach(model.platformHoldings) { holding in
-                        HoldingCard(holding: holding)
+                VStack(alignment: .leading, spacing: 10) {
+                    PlatformHoldingsPieChart(holdings: model.platformHoldings)
+
+                    Button {
+                        withAnimation(AppPalette.motionSection) {
+                            isHoldingDetailsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Label(
+                                isHoldingDetailsExpanded ? "收起持仓详情" : "展开持仓详情",
+                                systemImage: "list.bullet.rectangle"
+                            )
+                            .font(AppPalette.appFont(.footnote, weight: .semibold))
+                            .foregroundStyle(AppPalette.info)
+
+                            Spacer()
+
+                            Text("\(model.platformHoldings.count) 只")
+                                .font(AppPalette.appFont(.caption, weight: .medium))
+                                .foregroundStyle(AppPalette.muted)
+
+                            Image(systemName: "chevron.down")
+                                .font(AppPalette.appFont(.caption, weight: .semibold))
+                                .foregroundStyle(AppPalette.muted)
+                                .rotationEffect(.degrees(isHoldingDetailsExpanded ? 180 : 0))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        AppPalette.cardStrong.opacity(0.42),
+                        in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+                    )
+                    .accessibilityLabel("持仓详情")
+                    .accessibilityValue(
+                        isHoldingDetailsExpanded
+                            ? "已展开，共 \(model.platformHoldings.count) 只"
+                            : "已收起，共 \(model.platformHoldings.count) 只"
+                    )
+
+                    if isHoldingDetailsExpanded {
+                        LazyVStack(spacing: 6) {
+                            ForEach(model.platformHoldings) { holding in
+                                HoldingCard(holding: holding)
+                            }
+                        }
+                        .clipped()
+                        .transition(.opacity)
                     }
                 }
+                .respectsReducedMotion()
             }
         }
     }
@@ -263,23 +326,7 @@ struct PlatformSectionView: View {
             .buttonStyle(.plain)
 
             if isMonthlyExpanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    if model.monthlyPlatformSummary.isEmpty {
-                        EmptySectionState(
-                            title: "还没有平台调仓数据",
-                            subtitle: "右上角点「刷新」后会重新直拉平台调仓。",
-                            actionTitle: "立即刷新"
-                        ) {
-                            Task { try? await model.refreshLatest(persist: false) }
-                        }
-                    } else {
-                        PlatformMonthlyOverview(months: model.monthlyPlatformSummary)
-                    }
-
-                    if !model.platformHoldings.isEmpty {
-                        PlatformHoldingsPieChart(holdings: model.platformHoldings)
-                    }
-                }
+                PlatformMonthlyOverview(months: model.monthlyPlatformSummary)
                 .padding(12)
                 .background(AppPalette.card)
             }
