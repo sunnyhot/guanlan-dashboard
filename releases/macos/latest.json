@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.28/QiemanDashboard-3.9.28.zip",
-    "name" : "QiemanDashboard-3.9.28.zip",
-    "sha256" : "248c3aca12ded020a62f9988c142a1df87fda112f414f75cafded985d0b57e15",
-    "size" : 5809009
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.29/QiemanDashboard-3.9.29.zip",
+    "name" : "QiemanDashboard-3.9.29.zip",
+    "sha256" : "1d4937bd16d683c032cbe99ead8a99c17ad97859c4bbc1d58c6029aded5c116a",
+    "size" : 5944593
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.28/QiemanDashboard-3.9.28.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.9.29/QiemanDashboard-3.9.29.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.9.28.zip",
-      "size" : 5809009
+      "name" : "QiemanDashboard-3.9.29.zip",
+      "size" : 5944593
     }
   ],
-  "body" : "平台动态与持仓饼图样式优化 + 持仓配置测试",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.28",
-  "name" : "QiemanDashboard v3.9.28",
-  "notes" : "平台动态与持仓饼图样式优化 + 持仓配置测试",
+  "body" : "同步最新界面源码断言\n接入官方数据源与 Alpha Vantage 研究",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.9.29",
+  "name" : "QiemanDashboard v3.9.29",
+  "notes" : "同步最新界面源码断言\n接入官方数据源与 Alpha Vantage 研究",
   "published_at" : "",
-  "sha256" : "248c3aca12ded020a62f9988c142a1df87fda112f414f75cafded985d0b57e15",
-  "tag" : "v3.9.28",
-  "tag_name" : "v3.9.28",
-  "version" : "3.9.28"
+  "sha256" : "1d4937bd16d683c032cbe99ead8a99c17ad97859c4bbc1d58c6029aded5c116a",
+  "tag" : "v3.9.29",
+  "tag_name" : "v3.9.29",
+  "version" : "3.9.29"
 }
