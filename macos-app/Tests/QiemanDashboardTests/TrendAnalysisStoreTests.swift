@@ -328,6 +328,18 @@ extension TrendAnalysisReport {
                     counterSignals: ["若主要板块长期盈利下修，长期判断需要降级。"]
                 )
             ],
+            marketOutlook: [
+                TrendMarketOutlook(
+                    id: "market-environment",
+                    name: "市场环境",
+                    category: "index",
+                    direction: .uncertain,
+                    confidence: TrendConfidence(score: 40, label: "低"),
+                    rationale: "当前市场信号仍需进一步确认。",
+                    evidenceIDs: [],
+                    counterSignals: ["若主要指数趋势改变则重新评估。"]
+                )
+            ],
             sectors: [],
             keyAssets: [],
             actions: [],
@@ -398,7 +410,19 @@ extension TrendAnalysisReport {
                     claimEvidence: claimEvidence
                 )
             },
-            marketOutlook: marketOutlook,
+            marketOutlook: marketOutlook.map {
+                TrendMarketOutlook(
+                    id: $0.id,
+                    name: $0.name,
+                    category: $0.category,
+                    direction: $0.direction,
+                    confidence: $0.confidence.appNormalized,
+                    rationale: $0.rationale,
+                    evidenceIDs: [evidenceID],
+                    counterSignals: $0.counterSignals,
+                    claimEvidence: claimEvidence
+                )
+            },
             sectors: sectors,
             opportunities: opportunities,
             keyAssets: keyAssets,

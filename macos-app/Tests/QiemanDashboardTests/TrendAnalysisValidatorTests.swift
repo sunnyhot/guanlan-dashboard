@@ -139,6 +139,17 @@ final class TrendAnalysisValidatorTests: XCTestCase {
         XCTAssertTrue(result.messages.contains { $0.contains("非投资建议") })
     }
 
+    func testRejectsEmptyMarketView() {
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-06-22 12:00:00", externalSignalStatus: .partial)
+            .replacingMarketView(marketOutlook: [], sectors: [])
+
+        let result = TrendAnalysisValidator().validate(report)
+
+        XCTAssertFalse(result.isValid)
+        XCTAssertTrue(result.messages.contains { $0.contains("市场视图不能为空") })
+    }
+
     func testRejectsMissingExpectedHeldFundAssetTrend() {
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-06-22 12:00:00", externalSignalStatus: .available)
@@ -178,6 +189,33 @@ final class TrendAnalysisValidatorTests: XCTestCase {
 }
 
 private extension TrendAnalysisReport {
+    func replacingMarketView(
+        marketOutlook: [TrendMarketOutlook],
+        sectors: [TrendSectorView]
+    ) -> TrendAnalysisReport {
+        TrendAnalysisReport(
+            id: id,
+            generatedAt: generatedAt,
+            dataAsOf: dataAsOf,
+            privacyMode: privacyMode,
+            externalSignalStatus: externalSignalStatus,
+            portfolio: portfolio,
+            horizons: horizons,
+            marketOutlook: marketOutlook,
+            sectors: sectors,
+            opportunities: opportunities,
+            keyAssets: keyAssets,
+            assetTrends: assetTrends,
+            actions: actions,
+            evidence: evidence,
+            warnings: warnings,
+            disclaimer: disclaimer,
+            schemaVersion: schemaVersion,
+            disposition: disposition,
+            sourceStatuses: sourceStatuses
+        )
+    }
+
     func replacingHorizons(_ horizons: [TrendHorizonView]) -> TrendAnalysisReport {
         TrendAnalysisReport(
             id: id,

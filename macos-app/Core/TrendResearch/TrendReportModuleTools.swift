@@ -93,6 +93,11 @@ actor TrendReportDraftStore {
     }
 
     func storeMarket(_ module: TrendReportMarketModule) throws {
+        guard !module.marketOutlook.isEmpty || !module.sectors.isEmpty else {
+            throw TrendReportDraftError.invalidModule(
+                "市场与板块模块不能为空；marketOutlook 和 sectors 至少提交一项。"
+            )
+        }
         let marketNames = Set(module.marketOutlook.map {
             $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
         })
@@ -309,7 +314,7 @@ struct SubmitTrendOverviewModuleTool: TrendResearchTool {
 
 struct SubmitTrendMarketModuleTool: TrendResearchTool {
     let name = TrendReportModuleToolName.market
-    let description = "提交报告第 2 模块：大盘/大类资产、行业板块和机会。指数只放 marketOutlook，行业只放 sectors。"
+    let description = "提交报告第 2 模块：大盘/大类资产、行业板块和机会。指数只放 marketOutlook，行业只放 sectors；两者不能同时为空。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [

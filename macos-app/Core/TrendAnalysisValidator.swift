@@ -73,6 +73,10 @@ struct TrendAnalysisValidator {
             messages.append("privacyMode 必须与本次分析快照一致（\(expectedPrivacyMode.rawValue)）。")
         }
 
+        if report.marketOutlook.isEmpty && report.sectors.isEmpty {
+            messages.append("市场视图不能为空：marketOutlook 和 sectors 至少需要一项判断。")
+        }
+
         // marketOutlook（大盘/大类资产）与 sectors（行业板块）互斥：不得出现同名主题。
         let marketNames = Set(report.marketOutlook.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
         let sectorNames = Set(report.sectors.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })

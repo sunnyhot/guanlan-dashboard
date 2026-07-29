@@ -25,7 +25,7 @@ final class TrendReportModuleToolsTests: XCTestCase {
 
         try await store.storeMarket(
             TrendReportMarketModule(
-                marketOutlook: [],
+                marketOutlook: [makeMarketOutlook()],
                 sectors: [],
                 opportunities: []
             )
@@ -67,6 +67,23 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertEqual(assembled?.assetTrends.compactMap(\.code), codes)
     }
 
+    func testDraftRejectsEmptyMarketView() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: [])
+
+        do {
+            try await store.storeMarket(
+                TrendReportMarketModule(
+                    marketOutlook: [],
+                    sectors: [],
+                    opportunities: []
+                )
+            )
+            XCTFail("Expected empty market view rejection")
+        } catch let error as TrendReportDraftError {
+            XCTAssertTrue(error.localizedDescription.contains("至少提交一项"))
+        }
+    }
+
     func testDraftRejectsOversizedAssetBatch() async throws {
         let codes = (1...6).map { String(format: "%06d", $0) }
         let store = TrendReportDraftStore(expectedFundCodes: codes)
@@ -93,6 +110,19 @@ final class TrendReportModuleToolsTests: XCTestCase {
             horizons: [],
             rationale: "基于当前持仓与行情观察。",
             counterSignals: ["若行情方向变化则重新评估。"]
+        )
+    }
+
+    private func makeMarketOutlook() -> TrendMarketOutlook {
+        TrendMarketOutlook(
+            id: "market-environment",
+            name: "市场环境",
+            category: "index",
+            direction: .uncertain,
+            confidence: TrendConfidence(score: 40, label: "低"),
+            rationale: "当前市场信号仍需进一步确认。",
+            evidenceIDs: [],
+            counterSignals: ["若主要指数趋势改变则重新评估。"]
         )
     }
 

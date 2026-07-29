@@ -152,6 +152,12 @@ extension EnhancementCenterView {
                     trendSectorGrid(report.sectors, columns: columns)
                 }
             }
+            if report.marketOutlook.isEmpty && report.sectors.isEmpty {
+                trendEmptyState(
+                    "本次报告未生成市场判断",
+                    detail: "这是一份不完整的旧报告。请重新运行「立即分析」；新报告会在保存前拦截空的市场视图。"
+                )
+            }
         }
     }
 
@@ -160,34 +166,65 @@ extension EnhancementCenterView {
     }
 
     func trendMarketOutlookCard(_ outlook: TrendMarketOutlook) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                trendDirectionDot(outlook.direction)
-                Text(outlook.name)
-                    .font(AppPalette.appFont(.body, weight: .bold))
-                    .foregroundStyle(AppPalette.ink)
-                    .lineLimit(1)
-                trendDirectionBadge(outlook.direction)
-                Spacer(minLength: 4)
-                trendConfidenceMeter(outlook.confidence)
-                Text(outlook.categoryDisplayName)
-                    .font(AppPalette.appFont(.caption, weight: .semibold))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
-            }
-            Text(outlook.rationale)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .staticSurface(
-            tint: outlook.direction.tint,
-            fill: AppPalette.cardStrong,
-            strokeOpacity: 0.18,
-            activeStrokeOpacity: 0.40
+        let cardID = "market:\(outlook.id)"
+        let evidenceDetail = trendEvidenceDetail(
+            claimEvidence: outlook.claimEvidence,
+            referencedEvidenceIDs: outlook.evidenceIDs
         )
+        return Button {
+            selectedTrendEvidenceCardID = cardID
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    trendDirectionDot(outlook.direction)
+                    Text(outlook.name)
+                        .font(AppPalette.appFont(.body, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                        .lineLimit(1)
+                    trendDirectionBadge(outlook.direction)
+                    Spacer(minLength: 4)
+                    trendConfidenceMeter(outlook.confidence)
+                    Text(outlook.categoryDisplayName)
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
+                }
+                Text(outlook.rationale)
+                    .font(AppPalette.appFont(.footnote))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                trendEvidenceDisclosureFooter(count: evidenceDetail.items.count)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+            .staticSurface(
+                tint: outlook.direction.tint,
+                fill: AppPalette.cardStrong,
+                strokeOpacity: 0.18,
+                activeStrokeOpacity: 0.40
+            )
+        }
+        .buttonStyle(PressResponsiveButtonStyle())
+        .popover(
+            isPresented: trendEvidencePopoverBinding(for: cardID),
+            arrowEdge: .bottom
+        ) {
+            TrendEvidenceDetailPopover(
+                subjectTitle: outlook.name,
+                rationale: outlook.rationale,
+                dataAsOf: model.trendReport?.dataAsOf ?? "",
+                detail: evidenceDetail
+            )
+        }
+        .contextMenu {
+            Button("查看 Agent 判断依据") {
+                selectedTrendEvidenceCardID = cardID
+            }
+        }
+        .help("查看 \(outlook.name) 的 Agent 判断依据")
+        .accessibilityLabel("\(outlook.name)，查看 Agent 判断依据")
+        .accessibilityHint("打开该市场判断引用的行情、披露和联网研究数据")
     }
 
     /// 市场视图共用三列定义：周期判断与板块判断沿同一列线对齐，
@@ -446,33 +483,104 @@ extension EnhancementCenterView {
     }
 
     func trendSectorCard(_ sector: TrendSectorView) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                trendDirectionDot(sector.direction)
-                Text(sector.name)
-                    .font(AppPalette.appFont(.body, weight: .bold))
-                    .foregroundStyle(AppPalette.ink)
-                    .lineLimit(1)
-                trendDirectionBadge(sector.direction)
-                Spacer(minLength: 4)
-                trendConfidenceMeter(sector.confidence)
+        let cardID = "sector:\(sector.id)"
+        let evidenceDetail = trendEvidenceDetail(
+            claimEvidence: sector.claimEvidence,
+            referencedEvidenceIDs: sector.evidenceIDs
+        )
+        return Button {
+            selectedTrendEvidenceCardID = cardID
+        } label: {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    trendDirectionDot(sector.direction)
+                    Text(sector.name)
+                        .font(AppPalette.appFont(.body, weight: .bold))
+                        .foregroundStyle(AppPalette.ink)
+                        .lineLimit(1)
+                    trendDirectionBadge(sector.direction)
+                    Spacer(minLength: 4)
+                    trendConfidenceMeter(sector.confidence)
+                }
+                trendSectorExposure(sector.exposureText)
+                Text(sector.rationale)
+                    .font(AppPalette.appFont(.footnote))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+                if !sector.counterSignals.isEmpty {
+                    trendCounterSignalsRow(sector.counterSignals)
+                }
+                trendEvidenceDisclosureFooter(count: evidenceDetail.items.count)
             }
-            trendSectorExposure(sector.exposureText)
-            Text(sector.rationale)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-            if !sector.counterSignals.isEmpty {
-                trendCounterSignalsRow(sector.counterSignals)
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+            .staticSurface(
+                tint: sector.direction.tint,
+                fill: AppPalette.cardStrong,
+                strokeOpacity: 0.18,
+                activeStrokeOpacity: 0.40
+            )
+        }
+        .buttonStyle(PressResponsiveButtonStyle())
+        .popover(
+            isPresented: trendEvidencePopoverBinding(for: cardID),
+            arrowEdge: .bottom
+        ) {
+            TrendEvidenceDetailPopover(
+                subjectTitle: sector.name,
+                rationale: sector.rationale,
+                dataAsOf: model.trendReport?.dataAsOf ?? "",
+                detail: evidenceDetail
+            )
+        }
+        .contextMenu {
+            Button("查看 Agent 判断依据") {
+                selectedTrendEvidenceCardID = cardID
             }
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .staticSurface(
-            tint: sector.direction.tint,
-            fill: AppPalette.cardStrong,
-            strokeOpacity: 0.18,
-            activeStrokeOpacity: 0.40
+        .help("查看 \(sector.name) 的 Agent 判断依据")
+        .accessibilityLabel("\(sector.name)，查看 Agent 判断依据")
+        .accessibilityHint("打开该板块判断引用的行情、披露和联网研究数据")
+    }
+
+    private func trendEvidenceDetail(
+        claimEvidence: TrendClaimEvidence,
+        referencedEvidenceIDs: [String]
+    ) -> TrendEvidenceDetailModel {
+        TrendEvidenceDetailModel(
+            claimEvidence: claimEvidence,
+            referencedEvidenceIDs: referencedEvidenceIDs,
+            evidenceLedger: model.trendReport?.evidence ?? []
+        )
+    }
+
+    private func trendEvidenceDisclosureFooter(count: Int) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+            Text("查看 Agent 判断依据")
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+            Spacer(minLength: 4)
+            Text(count > 0 ? "\(count) 条" : "暂无直接证据")
+                .font(AppPalette.appFont(.caption2))
+            Image(systemName: "chevron.right")
+                .font(AppPalette.appFont(.caption2, weight: .bold))
+        }
+        .foregroundStyle(AppPalette.info)
+        .padding(.top, 2)
+    }
+
+    private func trendEvidencePopoverBinding(for cardID: String) -> Binding<Bool> {
+        Binding(
+            get: { selectedTrendEvidenceCardID == cardID },
+            set: { isPresented in
+                if isPresented {
+                    selectedTrendEvidenceCardID = cardID
+                } else if selectedTrendEvidenceCardID == cardID {
+                    selectedTrendEvidenceCardID = nil
+                }
+            }
         )
     }
 

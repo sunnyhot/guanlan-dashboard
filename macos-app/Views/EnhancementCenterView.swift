@@ -4,6 +4,7 @@ struct EnhancementCenterView: View {
     @EnvironmentObject var model: AppModel
     @State var trendAutoAnalysisTimesDraft = ""
     @State var isTrendConfigurationExpanded = false
+    @State var selectedTrendEvidenceCardID: String?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {

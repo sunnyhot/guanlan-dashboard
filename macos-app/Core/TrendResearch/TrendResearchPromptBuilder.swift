@@ -105,6 +105,7 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - Alpha Vantage 证据引用 vendor:alphavantage:*；它可支持 ETF 结构、财报日历和历史日线统计，但不得描述为监管、交易所或发行人官方披露，也不得冒充实时行情。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
 - marketOutlook 与 sectors 互斥：同一主题只能出现在其中一个数组。指数/大类资产（沪深300、黄金、债券、原油…）只放 marketOutlook；行业板块（消费、科技、医药、新能源…）只放 sectors。不要在两边写同一个主题（例如「消费」不能同时出现在两个数组里）。
+- marketOutlook 与 sectors 不能同时为空；即使证据不足，也要基于已读取的数据给出至少一项 uncertain 判断并说明证据边界。
 - keyAssets 与 actions 建议各不超过 5 条。
 - confidence.score 必须在 0~100。
 - 基金穿透数据按「基金在组合中的权重 × 底层披露权重」计算。sectors 应优先使用穿透后的行业暴露，组合集中度应识别多只基金重复持有的同一证券。

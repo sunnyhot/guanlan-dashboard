@@ -346,6 +346,10 @@ final class TrendDashboardSummaryTests: XCTestCase {
             contentsOf: rootURL.appendingPathComponent("Views/EnhancementTrendPanel.swift"),
             encoding: .utf8
         )
+        let evidencePopoverSource = try String(
+            contentsOf: rootURL.appendingPathComponent("Views/TrendEvidenceDetailPopover.swift"),
+            encoding: .utf8
+        )
 
         // 分段状态由 AppModel 持有（selectedWorkbenchSegment 迁至 EnhancementState，支持通知深链直达）
         XCTAssertTrue(centerSource.contains("model.selectedWorkbenchSegment"))
@@ -400,15 +404,27 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(trendSource.contains("trendBlock(\"行动候选\""))
         XCTAssertFalse(trendSource.contains("trendBlock(\"证据来源\""))
         XCTAssertFalse(trendSource.contains("trendBlock(\"边界与提示\""))
-        // 报告卡片只承载信息，不用悬停抬升制造可点击错觉；统一复用静态表面与描边。
+        // 普通报告卡片仍复用静态表面；市场/板块卡片通过原生 Button + popover
+        // 明确提供 Agent 判断依据，并保留键盘、VoiceOver 与 Esc 关闭能力。
         XCTAssertTrue(trendSource.contains(".staticSurface("))
         XCTAssertTrue(trendSource.contains("activeStrokeOpacity"))
         XCTAssertFalse(trendSource.contains("hoverFill: AppPalette.cardHover"))
         XCTAssertFalse(trendSource.contains("lift:"))
+        XCTAssertTrue(trendSource.contains("trendEvidenceDisclosureFooter"))
+        XCTAssertTrue(trendSource.contains("trendEvidencePopoverBinding"))
+        XCTAssertTrue(trendSource.contains("TrendEvidenceDetailPopover("))
+        XCTAssertTrue(trendSource.contains(".buttonStyle(PressResponsiveButtonStyle())"))
+        XCTAssertTrue(trendSource.contains(".accessibilityHint("))
+        XCTAssertTrue(evidencePopoverSource.contains("Agent 判断依据"))
+        XCTAssertTrue(evidencePopoverSource.contains("支持证据"))
+        XCTAssertTrue(evidencePopoverSource.contains("反向证据"))
+        XCTAssertTrue(evidencePopoverSource.contains("背景数据"))
+        XCTAssertTrue(evidencePopoverSource.contains("item.summary"))
         // 市场视图：周期与板块共用统一三列定义，消除宽屏空列与高矮不齐
         XCTAssertTrue(trendSource.contains("marketCardColumns"))
         XCTAssertTrue(trendSource.contains("columns: columns"))
         XCTAssertFalse(trendSource.contains(".adaptive(minimum: 200)"))
+        XCTAssertTrue(trendSource.contains("本次报告未生成市场判断"))
         XCTAssertTrue(trendSource.contains("Text(outlook.categoryDisplayName)"))
         XCTAssertFalse(trendSource.contains("Text(outlook.category)"))
         // 组合暴露从拥挤的标题行移到独立信息区，允许多行完整展示。
