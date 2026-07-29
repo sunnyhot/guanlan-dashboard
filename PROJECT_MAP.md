@@ -36,7 +36,7 @@ There is no Python Web dashboard, localhost HTTP service, Python crawler, OCR, i
 | `macos-app/Core/QiemanCommandLine.swift` | CLI commands and JSON contracts |
 | `macos-app/CLI/main.swift` | CLI process entry |
 | `macos-app/Core/ApplicationDataController.swift` | App data directory management |
-| `macos-app/Views/Overview/` | 总览子视图（OverviewSectionView / TodayBriefPanel / AITrendSummaryPanel / ManagerWatchControlCard） |
+| `macos-app/Views/Overview/` | 总览子视图（OverviewSectionView / TodayBriefPanel / AITrendSummaryPanel） |
 | `macos-app/Views/Platform/` | 平台子视图（ForumRows / PlatformActionRow / StrategyRadarPanel / PlatformActionDetailCard / HoldingCard / PlatformHoldingsPieChart / PlatformMonthlyOverview） |
 | `macos-app/Views/` | SwiftUI views |
 | `macos-app/Tests/QiemanDashboardTests/` | XCTest suite（含 CLIContractSnapshotTests） |

@@ -130,6 +130,15 @@ final class PlatformActionPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.pageActions.map(\.id), ["action-20", "action-21", "action-22"])
     }
 
+    private func source(at relativePath: String) throws -> String {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: sourceURL, encoding: .utf8)
+    }
+
     private func action(
         id: String,
         side: String,

@@ -138,7 +138,7 @@ extension AppModel {
         return true
     }
 
-    // MARK: - 标的匹配（复用 TradeSignalSummary 的匹配思路）
+    // MARK: - 标的匹配
 
     private static func matchedRow(
         for action: TrendActionCandidate,

@@ -9,6 +9,66 @@ enum TrendDashboardTone: Hashable {
     case muted
 }
 
+struct EnhancementTrendStatus: Hashable {
+    let isProviderConfigured: Bool
+    let generationState: TrendGenerationState
+    let lastGeneratedAt: String?
+    let headline: String
+    let externalSignalStatus: TrendExternalSignalStatus?
+    let isStale: Bool
+
+    var valueText: String {
+        if !isProviderConfigured {
+            return "未配置"
+        }
+        switch generationState {
+        case .generating:
+            return "生成中"
+        case .failed:
+            return "失败"
+        case .rejected:
+            return "已拦截"
+        case .idle, .succeeded:
+            if lastGeneratedAt == nil {
+                return "未生成"
+            }
+            return isStale ? "待更新" : "已生成"
+        }
+    }
+
+    var detailText: String {
+        var parts = [headline]
+        if let externalSignalStatus {
+            parts.append("外部信号 \(externalSignalStatus.rawValue)")
+        }
+        if let lastGeneratedAt {
+            parts.append(lastGeneratedAt)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var severity: TrendDashboardTone {
+        if !isProviderConfigured {
+            return .warning
+        }
+        switch generationState {
+        case .generating:
+            return .info
+        case .failed:
+            return .danger
+        case .rejected:
+            return .warning
+        case .idle:
+            return lastGeneratedAt == nil ? .info : (isStale ? .warning : .positive)
+        case .succeeded:
+            if isStale {
+                return .warning
+            }
+            return externalSignalStatus == .unavailable ? .info : .positive
+        }
+    }
+}
+
 enum TrendDashboardStatus: Hashable {
     case unconfigured
     case empty

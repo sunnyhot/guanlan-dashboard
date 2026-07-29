@@ -15,9 +15,7 @@ final class PortfolioState: ObservableObject {
     @Published var personalWatchlistSnapshot: PersonalWatchlistSnapshot?
     @Published var isRefreshingPersonalWatchlist = false
     @Published var pendingTrades: [PersonalPendingTrade] = []
-    @Published var pendingTradesDraft = ""
     @Published var investmentPlans: [PersonalInvestmentPlan] = []
-    @Published var investmentPlansDraft = ""
     @Published var marketIndexQuotes: [MarketIndexKind: MarketIndexQuote] = [:]
     @Published var isRefreshingMarketIndices = false
 
@@ -101,7 +99,6 @@ final class UIState: ObservableObject {
     @Published var appearance: AppAppearance = AppAppearance.load() { didSet { appearance.save() } }
     @Published var showAdvancedParams = false
     @Published var launchAtLoginEnabled = false
-    @Published var portfolioDraft = ""
 }
 
 // MARK: - UpdateState
@@ -125,13 +122,8 @@ final class UpdateState: ObservableObject {
 
 @MainActor
 final class EnhancementState: ObservableObject {
-    @Published var selectedTab: EnhancementCenterTab = .trend
-    @Published var lastMonthlyReportExport: MonthlyReportExportMetadata?
     @Published var managerWatchTimelineEvents: [ManagerWatchTimelineEvent] = []
-    @Published var activeImportPreviewSession: ImportPreviewSession?
-    @Published var importUndoSnapshot: ImportUndoSnapshot?
     @Published var portfolioInsightSnapshots: [PortfolioInsightSnapshot] = []
-    @Published var pendingOverwriteReportURL: URL?
     @Published var trendReport: TrendAnalysisReport?
     @Published var trendSettings: TrendAnalysisSettings = .default
     @Published var trendGenerationState: TrendGenerationState = .idle
@@ -145,28 +137,10 @@ final class EnhancementState: ObservableObject {
     @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
     @Published var nextHourGuidanceError = ""
-    @Published var tradeSignalSettings: TradeSignalSettings = .default
-    @Published var tradeSignalNotificationState = TradeSignalNotificationState()
     @Published var selectedWorkbenchSegment: WorkbenchSegment = .today
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
     @Published var isPresentingCommandPalette = false
-}
-
-enum EnhancementCenterTab: String, CaseIterable, Identifiable {
-    case review = "复盘"
-    case watch = "巡检"
-    case importPreview = "录入"
-    case insight = "洞察"
-    case trend = "趋势"
-
-    var id: String { rawValue }
-
-    static let workbenchTabs: [EnhancementCenterTab] = [.trend]
-
-    var isVisibleInWorkbench: Bool {
-        Self.workbenchTabs.contains(self)
-    }
 }
 
 /// 「AI 研判」内部分段（原 config/report/signals 重构为 today/tracking）

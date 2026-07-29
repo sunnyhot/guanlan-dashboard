@@ -3,33 +3,6 @@ import Foundation
 // MARK: - Investment Plan CRUD
 
 extension AppModel {
-    func saveInvestmentPlansFromDraft(mode: PersonalDataSaveMode = .merge) {
-        guard let investmentPlanFileURL else {
-            errorMessage = "应用数据目录还没准备好，暂时无法保存定投计划。"
-            return
-        }
-        do {
-            let importedPlans = try importedInvestmentPlans(from: investmentPlansDraft)
-            let nextPlans: [PersonalInvestmentPlan]
-            switch mode {
-            case .merge:
-                nextPlans = investmentPlansStore.merging(importedPlans, into: investmentPlans).sorted(by: sortInvestmentPlans)
-            case .replace:
-                nextPlans = importedPlans.sorted(by: sortInvestmentPlans)
-            }
-
-            investmentPlans = nextPlans
-            investmentPlansDraft = ""
-            clearInvestmentPlanCaches()
-            rebuildAssetRows()
-            try investmentPlansStore.save(nextPlans, to: investmentPlanFileURL)
-            invalidateLatestImportUndo()
-            noticeMessage = "已\(mode.actionText)保存 \(importedPlans.count) 条定投计划。"
-            Task { await applyPersonalAssetAutomation() }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
 
     func updateInvestmentPlansStatus(_ row: PersonalAssetAggregateRow, status: String, activeOnly: Bool = false, archivedOnly: Bool = false) {
         let targetIDs = Set(row.plans.filter { plan in
@@ -74,7 +47,6 @@ extension AppModel {
             clearInvestmentPlanCaches()
             rebuildAssetRows()
             try investmentPlansStore.save(investmentPlans, to: investmentPlanFileURL)
-            invalidateLatestImportUndo()
             let itemText = row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName
             noticeMessage = "已将 \(itemText) 的 \(targetIDs.count) 条计划调整为\(status)。"
         } catch {
@@ -102,7 +74,6 @@ extension AppModel {
             clearInvestmentPlanCaches()
             rebuildAssetRows()
             try investmentPlansStore.save(investmentPlans, to: investmentPlanFileURL)
-            invalidateLatestImportUndo()
             let itemText = existingPlan.fundCode.map { "\(existingPlan.fundName)（\($0)）" } ?? existingPlan.fundName
             noticeMessage = "已将 \(itemText) 的计划调整为\(normalizedStatus)。"
             Task { await applyPersonalAssetAutomation() }
@@ -152,7 +123,6 @@ extension AppModel {
             clearInvestmentPlanCaches()
             rebuildAssetRows()
             try investmentPlansStore.save(investmentPlans, to: investmentPlanFileURL)
-            invalidateLatestImportUndo()
             let itemText = plan.fundCode.map { "\(plan.fundName)（\($0)）" } ?? plan.fundName
             noticeMessage = "已添加 \(itemText) 的定投计划。"
             Task { await applyPersonalAssetAutomation() }
@@ -210,7 +180,6 @@ extension AppModel {
             clearInvestmentPlanCaches()
             rebuildAssetRows()
             try investmentPlansStore.save(investmentPlans, to: investmentPlanFileURL)
-            invalidateLatestImportUndo()
 
             let itemText = plan.fundCode.map { "\(plan.fundName)（\($0)）" } ?? plan.fundName
             noticeMessage = "已更新 \(itemText) 的定投计划。"
@@ -242,7 +211,6 @@ extension AppModel {
             } else {
                 try investmentPlansStore.save(investmentPlans, to: investmentPlanFileURL)
             }
-            invalidateLatestImportUndo()
             let itemText = existingPlan.fundCode.map { "\(existingPlan.fundName)（\($0)）" } ?? existingPlan.fundName
             noticeMessage = "已删除 \(itemText) 的定投计划。"
             Task { await applyPersonalAssetAutomation() }
@@ -269,7 +237,6 @@ extension AppModel {
                 .sorted(by: sortInvestmentPlans)
             clearInvestmentPlanCaches()
             rebuildAssetRows()
-            investmentPlansDraft = ""
         } catch {
             errorMessage = error.localizedDescription
         }

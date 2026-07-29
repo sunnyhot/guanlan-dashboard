@@ -378,7 +378,6 @@ extension AppModel {
 
     func openWorkbenchTrend(targetID: String? = nil) {
         selectedSection = .enhancement
-        selectedEnhancementTab = .trend
         if let targetID {
             if targetID == "trade-signals" {
                 // 旧深链：打开跟踪清单

@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension EnhancementCenterView {
-    /// 跟踪清单：只展示用户从今日研判主动加入的跟踪项（数据源 trendTrackingItems，不再用 tradeSignalSummary）
+    /// 跟踪清单：只展示用户从今日研判主动加入的跟踪项
     var trackingContent: some View {
         Group {
             if model.trendTrackingItems.isEmpty {

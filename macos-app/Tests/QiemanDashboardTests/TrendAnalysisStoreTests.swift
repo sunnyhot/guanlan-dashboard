@@ -220,7 +220,14 @@ final class TrendAnalysisStoreTests: XCTestCase {
             generatedAt: "2026-06-22 12:00:00",
             externalSignalStatus: .partial
         )
-        let data = try JSONEncoder().encode(report)
+        let encoded = try JSONEncoder().encode(report)
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "marketOutlook")
+        legacyObject.removeValue(forKey: "opportunities")
+        legacyObject.removeValue(forKey: "assetTrends")
+        let data = try JSONSerialization.data(withJSONObject: legacyObject)
 
         let decoded = try JSONDecoder().decode(TrendAnalysisReport.self, from: data)
 

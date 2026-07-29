@@ -4,45 +4,6 @@ import Foundation
 
 extension AppModel {
 
-    func savePortfolioFromDraft(mode: PersonalDataSaveMode = .merge) {
-        guard let portfolioFileURL else {
-            errorMessage = "应用数据目录还没准备好，暂时无法保存持仓。"
-            return
-        }
-        do {
-            let importedHoldings = try importedPortfolioHoldings(from: portfolioDraft)
-            let nextHoldings: [UserPortfolioHolding]
-            switch mode {
-            case .merge:
-                nextHoldings = portfolioStore.merging(importedHoldings, into: userPortfolioHoldings)
-            case .replace:
-                nextHoldings = importedHoldings
-            }
-
-            userPortfolioHoldings = nextHoldings
-            userPortfolioSnapshot = nil
-            rebuildAssetRows()
-            try portfolioStore.save(nextHoldings, to: portfolioFileURL)
-            invalidateLatestImportUndo()
-            portfolioDraft = ""
-
-            let savedCount = importedHoldings.count
-            let modeText = mode.actionText
-            noticeMessage = "已\(modeText)保存 \(savedCount) 条个人持仓，正在按代码补全名称。"
-            Task {
-                let resolvedCount = await resolveAndPersistPortfolioNames()
-                try? await refreshUserPortfolio(updateNotice: false)
-                if resolvedCount > 0 {
-                    noticeMessage = "已\(modeText)保存 \(savedCount) 条个人持仓，并通过代码补全 \(resolvedCount) 个名称。"
-                } else {
-                    noticeMessage = "已\(modeText)保存 \(savedCount) 条个人持仓。"
-                }
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     func clearPortfolio() {
         guard let portfolioFileURL else { return }
         do {
@@ -50,8 +11,6 @@ extension AppModel {
             userPortfolioHoldings = []
             userPortfolioSnapshot = nil
             rebuildAssetRows()
-            portfolioDraft = ""
-            invalidateLatestImportUndo()
             noticeMessage = "已清空个人持仓。"
         } catch {
             errorMessage = error.localizedDescription
@@ -132,7 +91,6 @@ extension AppModel {
             }
 
             rebuildAssetRows()
-            invalidateLatestImportUndo()
             let itemText = row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName
             noticeMessage = "已删除 \(itemText) 的\(deletedParts.joined(separator: "、"))记录。"
 
@@ -204,7 +162,6 @@ extension AppModel {
             userPortfolioSnapshot = nil
             rebuildAssetRows()
             try portfolioStore.save(nextHoldings, to: portfolioFileURL)
-            invalidateLatestImportUndo()
 
             let itemText = row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName
             noticeMessage = isArchived ? "已归档 \(itemText) 的持仓记录。" : "已恢复 \(itemText) 的持仓记录。"
@@ -300,7 +257,6 @@ extension AppModel {
             userPortfolioSnapshot = nil
             rebuildAssetRows()
             try portfolioStore.save(nextHoldings, to: portfolioFileURL)
-            invalidateLatestImportUndo()
 
             let itemText = normalizedOptionalName(displayNameText) ?? row.fundName
             noticeMessage = "已更新 \(itemText)（\(fundCode)）的持仓明细。"
@@ -390,7 +346,6 @@ extension AppModel {
             userPortfolioSnapshot = nil
             rebuildAssetRows()
             try portfolioStore.save(nextHoldings, to: portfolioFileURL)
-            invalidateLatestImportUndo()
 
             let nameText = normalizedDisplayName.map { "\($0)（\(fundCode)）" } ?? fundCode
             let typeText = assetType == .stock
@@ -573,7 +528,6 @@ extension AppModel {
             } else {
                 try portfolioStore.save(nextHoldings, to: portfolioFileURL)
             }
-            invalidateLatestImportUndo()
 
             let itemText = row.fundCode.map { "\(row.fundName)（\($0)）" } ?? row.fundName
             let actionText = mode == .add ? "添加" : "删除"
@@ -610,7 +564,6 @@ extension AppModel {
             let holdings = try portfolioStore.load(from: portfolioFileURL)
             userPortfolioHoldings = holdings
             rebuildAssetRows()
-            portfolioDraft = ""
         } catch {
             errorMessage = error.localizedDescription
         }

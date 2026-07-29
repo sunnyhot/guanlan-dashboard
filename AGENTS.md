@@ -7,7 +7,7 @@ macOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资平台�
 - Swift 原生客户端抓取且慢平台数据，SwiftUI 前端渲染
 - 支持 App 内手工维护持仓、自动更新、菜单栏小组件
 - 支持今日简报、主理人动态摘要、数据新鲜度、基金详情抽屉
-- 支持持仓分析：组合诊断、基金对比、提醒中心、收益归因、计划模拟、月报 Markdown 导出
+- 支持持仓分析：组合诊断、基金对比、收益归因
 - 支持平台分析：主理人策略雷达、交易时间总览、平台持仓概览
 - 支持 alfa 投顾组合调仓与持仓（晓磊「基金全磊打」等），平台板块「长赢调仓/投顾组合」切换，多组合汇总展示 + chip 筛选 + 当前持仓（目标配置占比）+ 组合目录选择/手动添加
 - 中国股市惯例：红色涨、绿色跌
@@ -78,19 +78,16 @@ macOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资平台�
 | `Core/PersonalAssetDetailSummary.swift` | 177 | 基金详情抽屉摘要 |
 | `Core/PortfolioDiagnostics.swift` | 231 | 组合诊断：集中度、待确认、计划、波动、估值覆盖 |
 | `Core/PersonalAssetComparison.swift` | 113 | 基金对比摘要 |
-| `Core/PortfolioReminder.swift` | 135 | 持仓提醒中心 |
 | `Core/ProfitAttribution.swift` | 145 | 收益归因 |
-| `Core/PlanSimulation.swift` | 88 | 计划模拟（不依赖历史净值接口） |
-| `Core/MonthlyReport.swift` | 130 | 月报 Markdown 生成 |
 | `Core/StrategyRadar.swift` | 173 | 主理人策略雷达 |
 | `Core/MenuBarTicker/` | 989 | 菜单栏小组件（Entries/Settings/Kind/Types） |
 
 #### Views/ 视图（约 36 个 Swift 文件，约 11000 行）
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `Views/Overview/` | 1003 (4 文件) | 总览：OverviewSectionView / TodayBriefPanel / AITrendSummaryPanel / ManagerWatchControlCard |
+| `Views/Overview/` | 3 文件 | 总览：OverviewSectionView / TodayBriefPanel / AITrendSummaryPanel |
 | `Views/Platform/` | 1193 (9 文件) | 平台子视图：ForumRows / PlatformActionRow / StrategyRadarPanel / PlatformActionDetailCard / HoldingCard / PlatformHoldingsPieChart / PlatformMonthlyOverview / AlfaPlatformPanel / AlfaHoldingCard |
-| `Views/PortfolioSectionView.swift` | 817 | 持仓首页、分析面板、月报导出 |
+| `Views/PortfolioSectionView.swift` | 持仓首页、组合诊断、收益归因 |
 | `Views/PersonalAssetBrowser.swift` | 680 | 个人资产浏览器、搜索/筛选/排序/基金对比 |
 | `Views/QiemanLoginView.swift` | 778 | 登录视图 |
 | `Views/SettingsMenuBarPanel.swift` | 760 | 菜单栏设置面板 |
@@ -112,7 +109,7 @@ macOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资平台�
 |---|---|---|
 | `Design/AppPalette.swift` | 74 | 设计系统：颜色/字体/间距 |
 | `Support/ValueFormatting.swift` | 80 | 数值格式化工具 |
-| `Tests/` | 17 个 Swift 文件 / 约 1600 行 | XCTest：更新、窗口 zoom、开机自启、排序、简报、洞察、诊断、对比、提醒、收益归因、计划模拟、月报、策略雷达、alfa 投顾客户端 |
+| `Tests/` | XCTest | 更新、窗口、排序、简报、诊断、收益归因、策略雷达、AI 研判、alfa 投顾客户端等 |
 
 ### scripts/（287 行）
 | 文件 | 行数 | 职责 |
@@ -158,11 +155,11 @@ QiemanDashboardApp (@main)
        ├─ Views/
        │    ├─ ContentView → Overview/Portfolio/Platform/Forum/Settings 五板块
        │    ├─ OverviewSectionView (总览、今日简报、主理人摘要)
-       │    ├─ PortfolioSectionView (持仓分析、月报导出)
+       │    ├─ PortfolioSectionView (持仓分析)
        │    ├─ PersonalAssetBrowser (资产浏览器、基金对比)
        │    ├─ PlatformSectionView (平台调仓、策略雷达)
        │    └─ SettingsSectionView (设置面板)
-       ├─ Insight Cores (TodayBrief / DashboardInsight / PortfolioDiagnostics / ProfitAttribution / PlanSimulation / StrategyRadar)
+       ├─ Insight Cores (TodayBrief / DashboardInsight / PortfolioDiagnostics / ProfitAttribution / StrategyRadar)
        ├─ MenuBarTicker (菜单栏小组件)
        └─ Stores (持仓/计划/交易/关注/快照, 各独立 Store)
 ```
@@ -178,8 +175,8 @@ QiemanDashboardApp (@main)
 5. **自动更新** — GitHub Release + latest.json，AppSelfUpdater 处理下载安装
 6. **数据持久化** — SQLite/JSON 文件混合，通过各 Store 类管理
 7. **AppModel 拆分** — 核心状态在 AppModel.swift，子功能拆到 AppModel/ 子目录
-8. **分析模块纯派生** — 今日简报、组合诊断、收益归因、计划模拟、策略雷达优先基于本地已聚合数据计算，不在 View 内写业务计算
-9. **月报导出** — `MonthlyReportSummary` 生成 Markdown，当前 UI 复制到系统剪贴板；后续文件保存可复用同一 Markdown
+8. **分析模块纯派生** — 今日简报、组合诊断、收益归因、策略雷达优先基于本地已聚合数据计算，不在 View 内写业务计算
+9. **AI 行动跟踪单一路径** — 今日研判行动候选由用户主动加入跟踪清单；旧 TradeSignal 设置/通知链已删除
 10. **Release notes** — GitHub Actions 从 tag 间 commit 标题生成更新内容；面向用户的提交标题要清晰、可读
 
 ## 已知坑点
@@ -193,12 +190,11 @@ QiemanDashboardApp (@main)
 7. **updates-watch 状态文件用字面 snake_case CodingKeys** — `CLIWatchState` 的磁盘格式不走 `convertToSnakeCase`，避免迁移期键名漂移
 8. **CLI 契约 null-vs-zero 语义** — `valuation` 命令的 `current_valuation`/`change_pct` 用 `NullDouble` 包装，nil 输出 `null`（不是 0 也不是缺键）；改动时务必同步 `CLIContractSnapshotTests.testNullDoublePreservesNullVsZero`
 9. **且慢 API 非公开** — 随时可能变更需维护
-10. **计划模拟不等于真实回测** — 当前 `PlanSimulationSummary` 不拉历史净值，只模拟未来计划投入
-11. **alfa GraphQL query 必须完整原版** — `QiemanAlfaClient.adjustmentQuery` 是 HAR 抓包的字节级原文，服务端做 query 完整性校验：精简字段（即使删除 `preferences`/`dicts` 等 `@include(if:false)` 不会查询的片段）会被 `GRAPHQL_VALIDATION_FAILED` 拒绝。改 query 字段前务必先用真实请求验证
-12. **alfa 签名纯时间戳驱动** — `x-sign = ts + SHA256(floor(1.01*ts))[:32]`，不绑定请求体/路径，无需登录态；`x-request-id` 前缀按客户端区分（社区/长赢用 `albus.`，alfa 用 `zeus.`）。统一在 `QiemanRequestSigning`
-13. **alfa 调仓是百分比语义 + 多组合汇总** — 投顾组合（如晓磊 SI000192）调仓按持仓比例（`beforePercent`/`afterPercent`），与长赢的份数（`tradeUnit`）不同。拍平映射在 `QiemanAlfaClient.flattenAdjustments`，side 由 before/after 推导；`PlatformActionPayload.isPercentBased` 控制 UI 分支渲染。面板默认并发抓取所有已添加组合调仓并合并（`fetchAllAlfaPayloads`），按 `sourcePoCode` 字段 chip 筛选；`PlatformActionRow.titlePrefix` 注入来源组合名前缀。**alfa 持仓不能从调仓反推**（无份数/净值），需单独调 `PoFundComposition` GraphQL query（`fetchAlfaComposition`），返回百分比口径的 `AlfaHoldingPart`（占比+净值+日涨跌），UI 用 `AlfaHoldingCard`（非长赢的 `HoldingCard`）
-14. **雪球（望京博格/螺丝钉）不可行** — 阿里云 WAF JS 挑战，纯原生客户端无法执行 JS 获取 token，所有 API 返回 400016/403。本项目架构上不接入雪球
-15. **社区动态筛选面板已移除** — 原 filterMode（主理人订阅/精确参数）双模式切换及配套的 awesome-list 抓取基础设施（fetchManagerIndex/fetchMultiGroupSnapshot/ManagerSummary）已全部删除。论坛/平台板块不再有筛选 UI，论坛默认抓长赢同路人（prodCode=LONG_WIN → groupId 43），由 `QueryFormState` 默认值驱动，展示串「长赢指数投资计划主理人·长赢同路人」由数据动态拼出
+10. **alfa GraphQL query 必须完整原版** — `QiemanAlfaClient.adjustmentQuery` 是 HAR 抓包的字节级原文，服务端做 query 完整性校验：精简字段（即使删除 `preferences`/`dicts` 等 `@include(if:false)` 不会查询的片段）会被 `GRAPHQL_VALIDATION_FAILED` 拒绝。改 query 字段前务必先用真实请求验证
+11. **alfa 签名纯时间戳驱动** — `x-sign = ts + SHA256(floor(1.01*ts))[:32]`，不绑定请求体/路径，无需登录态；`x-request-id` 前缀按客户端区分（社区/长赢用 `albus.`，alfa 用 `zeus.`）。统一在 `QiemanRequestSigning`
+12. **alfa 调仓是百分比语义 + 多组合汇总** — 投顾组合（如晓磊 SI000192）调仓按持仓比例（`beforePercent`/`afterPercent`），与长赢的份数（`tradeUnit`）不同。拍平映射在 `QiemanAlfaClient.flattenAdjustments`，side 由 before/after 推导；`PlatformActionPayload.isPercentBased` 控制 UI 分支渲染。面板默认并发抓取所有已添加组合调仓并合并（`fetchAllAlfaPayloads`），按 `sourcePoCode` 字段 chip 筛选；`PlatformActionRow.titlePrefix` 注入来源组合名前缀。**alfa 持仓不能从调仓反推**（无份数/净值），需单独调 `PoFundComposition` GraphQL query（`fetchAlfaComposition`），返回百分比口径的 `AlfaHoldingPart`（占比+净值+日涨跌），UI 用 `AlfaHoldingCard`（非长赢的 `HoldingCard`）
+13. **雪球（望京博格/螺丝钉）不可行** — 阿里云 WAF JS 挑战，纯原生客户端无法执行 JS 获取 token，所有 API 返回 400016/403。本项目架构上不接入雪球
+14. **社区动态筛选面板已移除** — 原 filterMode（主理人订阅/精确参数）双模式切换及配套的 awesome-list 抓取基础设施（fetchManagerIndex/fetchMultiGroupSnapshot/ManagerSummary）已全部删除。论坛/平台板块不再有筛选 UI，论坛默认抓长赢同路人（prodCode=LONG_WIN → groupId 43），由 `QueryFormState` 默认值驱动，展示串「长赢指数投资计划主理人·长赢同路人」由数据动态拼出
 
 ## Agent 工作指南
 

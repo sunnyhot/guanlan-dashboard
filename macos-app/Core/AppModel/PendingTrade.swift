@@ -4,34 +4,6 @@ import Foundation
 
 extension AppModel {
 
-    func savePendingTradesFromDraft(mode: PersonalDataSaveMode = .merge) {
-        guard let pendingTradeFileURL else {
-            errorMessage = "应用数据目录还没准备好，暂时无法保存买入中记录。"
-            return
-        }
-        do {
-            let importedTrades = try importedPendingTrades(from: pendingTradesDraft)
-            let nextTrades: [PersonalPendingTrade]
-            switch mode {
-            case .merge:
-                nextTrades = pendingTradesStore.merging(importedTrades, into: pendingTrades)
-            case .replace:
-                nextTrades = importedTrades.sorted { $0.occurredAt > $1.occurredAt }
-            }
-
-            pendingTrades = nextTrades
-            pendingTradesDraft = ""
-            clearPendingTradeCaches()
-            rebuildAssetRows()
-            try pendingTradesStore.save(nextTrades, to: pendingTradeFileURL)
-            invalidateLatestImportUndo()
-            noticeMessage = "已\(mode.actionText)保存 \(importedTrades.count) 条买入中记录。"
-            Task { await applyPersonalAssetAutomation() }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     @discardableResult
     func addPendingTrade(
         occurredAt: String,
@@ -69,7 +41,6 @@ extension AppModel {
             clearPendingTradeCaches()
             rebuildAssetRows()
             try pendingTradesStore.save(pendingTrades, to: pendingTradeFileURL)
-            invalidateLatestImportUndo()
             noticeMessage = "已添加 \(trade.displayTitle) 的买入中记录。"
             Task { await applyPersonalAssetAutomation() }
             return true
@@ -121,7 +92,6 @@ extension AppModel {
             clearPendingTradeCaches()
             rebuildAssetRows()
             try pendingTradesStore.save(pendingTrades, to: pendingTradeFileURL)
-            invalidateLatestImportUndo()
             noticeMessage = "已更新 \(trade.displayTitle) 的买入中记录。"
             Task { await applyPersonalAssetAutomation() }
             return true
@@ -150,7 +120,6 @@ extension AppModel {
             } else {
                 try pendingTradesStore.save(pendingTrades, to: pendingTradeFileURL)
             }
-            invalidateLatestImportUndo()
             noticeMessage = "已删除 \(existingTrade.displayTitle) 的买入中记录。"
             Task { await applyPersonalAssetAutomation() }
         } catch {
@@ -176,7 +145,6 @@ extension AppModel {
                 .sorted { $0.occurredAt > $1.occurredAt }
             clearPendingTradeCaches()
             rebuildAssetRows()
-            pendingTradesDraft = ""
         } catch {
             errorMessage = error.localizedDescription
         }

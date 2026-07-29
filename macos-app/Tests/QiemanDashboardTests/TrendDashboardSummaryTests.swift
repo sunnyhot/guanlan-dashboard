@@ -255,7 +255,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
 
         XCTAssertTrue(source.contains("AITrendSummaryPanel("))
         XCTAssertTrue(source.contains("summary: model.trendDashboardSummary"))
-        XCTAssertTrue(source.contains("model.selectedEnhancementTab = .trend"))
+        XCTAssertFalse(source.contains("selectedEnhancementTab"))
         XCTAssertTrue(source.contains("model.startTrendAnalysis(userInitiated: true)"))
     }
 
@@ -319,9 +319,6 @@ final class TrendDashboardSummaryTests: XCTestCase {
             encoding: .utf8
         )
 
-        XCTAssertTrue(trendSource.contains("trendReportBalancedLayout"))
-        XCTAssertTrue(trendSource.contains("trendReportSectionGrid"))
-        XCTAssertTrue(trendSource.contains("trendReportWideColumns"))
         XCTAssertFalse(trendSource.contains("trendProgressSummaryCard"))
         XCTAssertFalse(contentSource.contains("TrendLiveLogPanel()"))
         XCTAssertTrue(centerSource.contains("TrendLiveLogPanel()"))
@@ -370,21 +367,12 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(centerSource.contains("workbenchSegmentButton"))
         XCTAssertFalse(centerSource.contains("interactiveSurface"))
 
-        // 分析设置已迁至设置页；趋势面板只保留报告与信号内容
+        // 分析设置已迁至设置页；趋势面板只保留今日研判复用的报告组件
         XCTAssertFalse(trendSource.contains("var configSegment"))
-        XCTAssertTrue(trendSource.contains("var reportSegment"))
-        XCTAssertTrue(trendSource.contains("var signalsSegment"))
-        // AI 操作建议从报告网格移出，独立成段
+        XCTAssertFalse(trendSource.contains("var reportSegment"))
+        XCTAssertFalse(trendSource.contains("var signalsSegment"))
+        XCTAssertFalse(trendSource.contains("TradeSignal"))
         XCTAssertFalse(trendSource.contains("SectionCard(title: \"趋势\""))
-        // 信号卡片重做：左侧状态色条 + 图标盒 + 状态徽章 + 置信度进度条 + 圆点条件
-        XCTAssertTrue(trendSource.contains("tradeSignalStatusBadge"))
-        XCTAssertTrue(trendSource.contains("tradeSignalActionIcon"))
-        XCTAssertTrue(trendSource.contains("tradeSignalConditionLine"))
-        XCTAssertTrue(trendSource.contains("tradeSignalAssetSubtitle"))
-        XCTAssertTrue(trendSource.contains("AppPalette.accentGlow(tint)"))
-        XCTAssertTrue(trendSource.contains("trendConfidenceBar(item.confidence)"))
-        // 旧版平铺胶囊（裸文字置信度）已替换为带框徽章 + 进度条
-        XCTAssertFalse(trendSource.contains("置信度 \\(item.confidence.normalizedScore)"))
         // 趋势报告：整页重构为三分区聚拢骨架（市场视图/重点标的/核验）
         XCTAssertTrue(trendSource.contains("marketSection"))
         XCTAssertTrue(trendSource.contains("actionSection"))
@@ -479,7 +467,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertTrue(trendSettingsSource.contains("model.checkTrendAIConnection()"))
         XCTAssertFalse(trendSettingsSource.contains("DisclosureGroup(isExpanded: $isTrendConfigurationExpanded)"))
         XCTAssertFalse(trendPanelSource.contains("trendConfigurationPanel"))
-        XCTAssertTrue(trendPanelSource.contains("设置 > AI 研判"))
+        XCTAssertFalse(trendPanelSource.contains("trendConfigurationPanel"))
     }
 }
 

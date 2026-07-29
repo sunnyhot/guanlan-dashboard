@@ -45,16 +45,8 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("user-investment-plans.json", isDirectory: false)
     }
 
-    var monthlyReportExportMetadataURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("monthly-report-export.json", isDirectory: false)
-    }
-
     var managerWatchTimelineFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("manager-watch-timeline.json", isDirectory: false)
-    }
-
-    var importUndoSnapshotFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("latest-import-undo.json", isDirectory: false)
     }
 
     var portfolioInsightSnapshotsFileURL: URL? {
@@ -79,14 +71,6 @@ extension AppModel {
 
     var nextHourGuidanceFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("next-hour-guidance.json", isDirectory: false)
-    }
-
-    var tradeSignalSettingsFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trade-signal-settings.json", isDirectory: false)
-    }
-
-    var tradeSignalNotificationStateFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trade-signal-notification-state.json", isDirectory: false)
     }
 
     var trendTrackingItemsFileURL: URL? {

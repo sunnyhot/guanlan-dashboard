@@ -30,7 +30,6 @@ struct EnhancementCenterView: View {
             .scrollIndicators(.hidden)
         }
         .onAppear {
-            normalizeSelectedTab()
             normalizeDefaultSegment()
         }
         .sheet(item: $selectedTrendEvidenceDetail) { selection in
@@ -94,9 +93,4 @@ struct EnhancementCenterView: View {
         }
     }
 
-    private func normalizeSelectedTab() {
-        if !model.selectedEnhancementTab.isVisibleInWorkbench {
-            model.selectedEnhancementTab = .trend
-        }
-    }
 }

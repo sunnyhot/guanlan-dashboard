@@ -9,7 +9,7 @@ struct TrendSettingsPanel: View {
     var body: some View {
         SettingsPanel(
             title: "AI 研判",
-            subtitle: "配置模型连接、官方数据、结构化行情补充、联网搜索、每日自动分析与操作建议偏好",
+            subtitle: "配置模型连接、官方数据、结构化行情补充、联网搜索与每日自动分析",
             icon: "sparkles"
         ) {
             configurationContent
@@ -49,11 +49,6 @@ struct TrendSettingsPanel: View {
                     trendField("每日时间", text: trendAutoAnalysisTimesBinding, placeholder: "09:30, 14:30")
                         .disabled(!model.trendSettings.dailyAutoAnalysisEnabled)
                         .opacity(model.trendSettings.dailyAutoAnalysisEnabled ? 1 : 0.55)
-
-                    SettingsDivider()
-                    SettingsGroupHeader(title: "操作建议")
-
-                    tradeSignalPreferenceControls
 
                     SettingsDivider()
                     SettingsGroupHeader(title: "模型连接")
@@ -167,128 +162,6 @@ struct TrendSettingsPanel: View {
                         .padding(.top, 12)
                 }
             }
-    }
-
-    private var tradeSignalPreferenceControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: AppPalette.spaceS) {
-                Image(systemName: "bell.badge")
-                    .font(AppPalette.appFont(.body, weight: .semibold))
-                    .foregroundStyle(model.tradeSignalSettings.enabled ? AppPalette.info : AppPalette.muted)
-                    .accentIconStyle(
-                        tint: model.tradeSignalSettings.enabled ? AppPalette.info : AppPalette.muted,
-                        size: 28
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("AI 操作建议")
-                        .font(AppPalette.appFont(.body, weight: .bold))
-                        .foregroundStyle(AppPalette.ink)
-                    Text(model.tradeSignalSummary.headline)
-                        .font(AppPalette.appFont(.footnote))
-                        .foregroundStyle(AppPalette.muted)
-                }
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: AppPalette.spaceM) {
-                    tradeSignalToggles
-                }
-
-                VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                    tradeSignalToggles
-                }
-            }
-
-            Picker("风险偏好", selection: tradeSignalRiskPreferenceBinding) {
-                ForEach(TradeSignalRiskPreference.allCases) { preference in
-                    Text(preference.displayText).tag(preference)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Picker("观察周期", selection: tradeSignalHorizonPreferenceBinding) {
-                ForEach(TradeSignalHorizonPreference.allCases) { horizon in
-                    Text(horizon.displayText).tag(horizon)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            trendLabeledControl("最低置信度") {
-                HStack(spacing: AppPalette.spaceS) {
-                    Slider(value: tradeSignalMinimumConfidenceBinding, in: 0...100, step: 5)
-                    Text("\(model.tradeSignalSettings.minimumConfidence)")
-                        .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppPalette.info)
-                        .frame(width: 34, alignment: .trailing)
-                }
-            }
-
-            tradeSignalAssetPreferenceList
-        }
-        .padding(.vertical, 8)
-    }
-
-    private var tradeSignalToggles: some View {
-        Group {
-            Toggle("启用观察", isOn: tradeSignalEnabledBinding)
-                .toggleStyle(.switch)
-            Toggle("本地通知", isOn: tradeSignalLocalNotificationsBinding)
-                .toggleStyle(.switch)
-            Toggle("关注买入", isOn: tradeSignalAllowBuyBinding)
-                .toggleStyle(.switch)
-            Toggle("关注卖出", isOn: tradeSignalAllowSellBinding)
-                .toggleStyle(.switch)
-            Toggle("沿用上次分析", isOn: tradeSignalUseStaleAnalysisBinding)
-                .toggleStyle(.switch)
-        }
-        .font(AppPalette.appFont(.subheadline, weight: .medium))
-    }
-
-    private var tradeSignalAssetPreferenceList: some View {
-        trendLabeledControl("单标的偏好") {
-            if model.personalAssetRows.isEmpty {
-                Text("暂无持仓标的可单独设置")
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-            } else {
-                VStack(spacing: AppPalette.spaceS) {
-                    ForEach(model.personalAssetRows.prefix(8), id: \.key) { row in
-                        tradeSignalAssetPreferenceRow(row)
-                    }
-                }
-            }
-        }
-    }
-
-    private func tradeSignalAssetPreferenceRow(_ row: PersonalAssetAggregateRow) -> some View {
-        HStack(alignment: .center, spacing: AppPalette.spaceS) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(row.fundName)
-                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
-                    .foregroundStyle(AppPalette.ink)
-                    .lineLimit(1)
-                    .help(row.fundName)
-                Text(row.fundCode ?? row.key)
-                    .font(AppPalette.appFont(.footnote, weight: .medium, design: .rounded))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: AppPalette.spaceS)
-
-            Picker("\(row.fundName)观察模式", selection: tradeSignalAssetModeBinding(for: row)) {
-                ForEach(TradeSignalAssetPreferenceMode.allCases) { mode in
-                    Text(mode.displayText).tag(mode)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .frame(width: 128)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(AppPalette.cardStrong.opacity(0.72), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
     }
 
     private func trendField(_ label: String, text: Binding<String>, placeholder: String) -> some View {
@@ -455,107 +328,10 @@ struct TrendSettingsPanel: View {
         )
     }
 
-    private var tradeSignalEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { model.tradeSignalSettings.enabled },
-            set: { isEnabled in updateTradeSignalSettings { $0.enabled = isEnabled } }
-        )
-    }
-
-    private var tradeSignalLocalNotificationsBinding: Binding<Bool> {
-        Binding(
-            get: { model.tradeSignalSettings.localNotificationsEnabled },
-            set: { isEnabled in updateTradeSignalSettings { $0.localNotificationsEnabled = isEnabled } }
-        )
-    }
-
-    private var tradeSignalAllowBuyBinding: Binding<Bool> {
-        Binding(
-            get: { model.tradeSignalSettings.allowBuySignals },
-            set: { isEnabled in updateTradeSignalSettings { $0.allowBuySignals = isEnabled } }
-        )
-    }
-
-    private var tradeSignalAllowSellBinding: Binding<Bool> {
-        Binding(
-            get: { model.tradeSignalSettings.allowSellSignals },
-            set: { isEnabled in updateTradeSignalSettings { $0.allowSellSignals = isEnabled } }
-        )
-    }
-
-    private var tradeSignalUseStaleAnalysisBinding: Binding<Bool> {
-        Binding(
-            get: { model.tradeSignalSettings.useStaleAnalysis },
-            set: { isEnabled in updateTradeSignalSettings { $0.useStaleAnalysis = isEnabled } }
-        )
-    }
-
-    private var tradeSignalRiskPreferenceBinding: Binding<TradeSignalRiskPreference> {
-        Binding(
-            get: { model.tradeSignalSettings.riskPreference },
-            set: { preference in updateTradeSignalSettings { $0.riskPreference = preference } }
-        )
-    }
-
-    private var tradeSignalHorizonPreferenceBinding: Binding<TradeSignalHorizonPreference> {
-        Binding(
-            get: { model.tradeSignalSettings.primaryHorizon },
-            set: { horizon in updateTradeSignalSettings { $0.primaryHorizon = horizon } }
-        )
-    }
-
-    private var tradeSignalMinimumConfidenceBinding: Binding<Double> {
-        Binding(
-            get: { Double(model.tradeSignalSettings.minimumConfidence) },
-            set: { value in updateTradeSignalSettings { $0.minimumConfidence = Int(value.rounded()) } }
-        )
-    }
-
-    private func tradeSignalAssetModeBinding(for row: PersonalAssetAggregateRow) -> Binding<TradeSignalAssetPreferenceMode> {
-        Binding(
-            get: {
-                model.tradeSignalSettings.assetPreferences.first { $0.assetKey == row.key }?.mode ?? .followGlobal
-            },
-            set: { mode in
-                updateTradeSignalSettings { settings in
-                    updateTradeSignalAssetMode(mode, assetKey: row.key, settings: &settings)
-                }
-            }
-        )
-    }
-
     private func saveTrendSettingsFromDraft() {
         model.trendSettings.updateDailyAutoAnalysisTimes(from: trendAutoAnalysisTimesDraft)
         trendAutoAnalysisTimesDraft = model.trendSettings.dailyAutoAnalysisTimesText
         model.saveTrendAnalysisSettings()
-        model.saveTradeSignalSettings()
-    }
-
-    private func updateTradeSignalSettings(_ update: (inout TradeSignalSettings) -> Void) {
-        var settings = model.tradeSignalSettings
-        update(&settings)
-        model.tradeSignalSettings = settings
-        model.saveTradeSignalSettings()
-    }
-
-    private func updateTradeSignalAssetMode(
-        _ mode: TradeSignalAssetPreferenceMode,
-        assetKey: String,
-        settings: inout TradeSignalSettings
-    ) {
-        if let index = settings.assetPreferences.firstIndex(where: { $0.assetKey == assetKey }) {
-            if mode == .followGlobal {
-                settings.assetPreferences.remove(at: index)
-            } else {
-                settings.assetPreferences[index].mode = mode
-            }
-        } else if mode != .followGlobal {
-            settings.assetPreferences.append(TradeSignalAssetPreference(assetKey: assetKey, mode: mode))
-        }
-
-        settings.assetPreferences.sort {
-            $0.assetKey.localizedStandardCompare($1.assetKey) == .orderedAscending
-        }
     }
 
     private var trendConnectionTint: Color {
@@ -576,7 +352,7 @@ struct TrendSettingsPanel: View {
     }
 }
 
-extension EnhancementPresentationSeverity {
+extension TrendDashboardTone {
     var settingsTint: Color {
         switch self {
         case .brand:
@@ -589,7 +365,7 @@ extension EnhancementPresentationSeverity {
             return AppPalette.warning
         case .danger:
             return AppPalette.danger
-        case .neutral:
+        case .muted:
             return AppPalette.muted
         }
     }

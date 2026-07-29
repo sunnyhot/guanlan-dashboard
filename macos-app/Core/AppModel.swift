@@ -195,19 +195,9 @@ final class AppModel: ObservableObject {
         set { portfolioState.pendingTrades = newValue }
     }
 
-    var pendingTradesDraft: String {
-        get { portfolioState.pendingTradesDraft }
-        set { portfolioState.pendingTradesDraft = newValue }
-    }
-
     var investmentPlans: [PersonalInvestmentPlan] {
         get { portfolioState.investmentPlans }
         set { portfolioState.investmentPlans = newValue }
-    }
-
-    var investmentPlansDraft: String {
-        get { portfolioState.investmentPlansDraft }
-        set { portfolioState.investmentPlansDraft = newValue }
     }
 
     var marketIndexQuotes: [MarketIndexKind: MarketIndexQuote] {
@@ -298,11 +288,6 @@ final class AppModel: ObservableObject {
         set { uiState.launchAtLoginEnabled = newValue }
     }
 
-    var portfolioDraft: String {
-        get { uiState.portfolioDraft }
-        set { uiState.portfolioDraft = newValue }
-    }
-
     // UpdateState proxies
     var isCheckingForUpdates: Bool {
         get { updateState.isCheckingForUpdates }
@@ -340,39 +325,14 @@ final class AppModel: ObservableObject {
     }
 
     // EnhancementState proxies
-    var selectedEnhancementTab: EnhancementCenterTab {
-        get { enhancementState.selectedTab }
-        set { enhancementState.selectedTab = newValue }
-    }
-
-    var lastMonthlyReportExport: MonthlyReportExportMetadata? {
-        get { enhancementState.lastMonthlyReportExport }
-        set { enhancementState.lastMonthlyReportExport = newValue }
-    }
-
     var managerWatchTimelineEvents: [ManagerWatchTimelineEvent] {
         get { enhancementState.managerWatchTimelineEvents }
         set { enhancementState.managerWatchTimelineEvents = newValue }
     }
 
-    var activeImportPreviewSession: ImportPreviewSession? {
-        get { enhancementState.activeImportPreviewSession }
-        set { enhancementState.activeImportPreviewSession = newValue }
-    }
-
-    var importUndoSnapshot: ImportUndoSnapshot? {
-        get { enhancementState.importUndoSnapshot }
-        set { enhancementState.importUndoSnapshot = newValue }
-    }
-
     var portfolioInsightSnapshots: [PortfolioInsightSnapshot] {
         get { enhancementState.portfolioInsightSnapshots }
         set { enhancementState.portfolioInsightSnapshots = newValue }
-    }
-
-    var pendingOverwriteReportURL: URL? {
-        get { enhancementState.pendingOverwriteReportURL }
-        set { enhancementState.pendingOverwriteReportURL = newValue }
     }
 
     var trendReport: TrendAnalysisReport? {
@@ -442,16 +402,6 @@ final class AppModel: ObservableObject {
     var nextHourGuidanceError: String {
         get { enhancementState.nextHourGuidanceError }
         set { enhancementState.nextHourGuidanceError = newValue }
-    }
-
-    var tradeSignalSettings: TradeSignalSettings {
-        get { enhancementState.tradeSignalSettings }
-        set { enhancementState.tradeSignalSettings = newValue }
-    }
-
-    var tradeSignalNotificationState: TradeSignalNotificationState {
-        get { enhancementState.tradeSignalNotificationState }
-        set { enhancementState.tradeSignalNotificationState = newValue }
     }
 
     var selectedWorkbenchSegment: WorkbenchSegment {

@@ -194,7 +194,6 @@ struct OverviewSectionView: View {
             model.startTrendAnalysis(userInitiated: true)
         case .openReport:
             withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
-                model.selectedEnhancementTab = .trend
                 model.selectedSection = .enhancement
             }
         case .wait:
