@@ -3,8 +3,28 @@ import SwiftUI
 
 // MARK: - Personal Portfolio
 
+private enum PortfolioContentTab: String, CaseIterable, Identifiable {
+    case assets = "资产全貌总表"
+    case activity = "买入中与计划中"
+    case watchlist = "关注"
+
+    var id: Self { self }
+
+    var systemImage: String {
+        switch self {
+        case .assets:
+            return "tablecells"
+        case .activity:
+            return "clock.badge.exclamationmark"
+        case .watchlist:
+            return "star"
+        }
+    }
+}
+
 struct PortfolioSectionView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var selectedTab: PortfolioContentTab = .assets
     @State private var isPresentingAddPendingTrade = false
     @State private var editingPendingTrade: PersonalPendingTrade?
     @State private var deletingPendingTrade: PersonalPendingTrade?
@@ -35,165 +55,14 @@ struct PortfolioSectionView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 14) {
-                if hasAnyPersonalData {
-                    ViewThatFits(in: .horizontal) {
-                        LazyVGrid(columns: portfolioSummaryWideColumns, alignment: .leading, spacing: 12) {
-                            portfolioSummaryMetricCards
-                        }
+        VStack(spacing: 0) {
+            portfolioTabPicker
+            Divider()
 
-                        LazyVGrid(columns: portfolioSummaryMediumColumns, alignment: .leading, spacing: 12) {
-                            portfolioSummaryMetricCards
-                        }
-
-                        LazyVGrid(columns: portfolioSummaryCompactColumns, alignment: .leading, spacing: 12) {
-                            portfolioSummaryMetricCards
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) {
-                            statusLineContent
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            statusLineContent
-                        }
-                    }
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-
-                    PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
-                    ProfitAttributionPanel(summary: model.profitAttributionSummary)
-
-                    SectionCard(title: "资产全貌总表", subtitle: "把「已持有 + 待确认 + 计划档案」聚合到同一行", icon: "tablecells", trailing: {
-                        PersonalAssetAddButtons()
-                    }) {
-                        PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)
-                    }
-
-                    PersonalWatchlistPanel()
-
-                    SectionCard(title: "买入中", subtitle: "待确认交易单独展示，不并入已成交持仓收益", icon: "clock.badge.exclamationmark", trailing: {
-                        Spacer()
-                        Button {
-                            isPresentingAddPendingTrade = true
-                        } label: {
-                            Label("添加买入中", systemImage: "plus.circle")
-                        }
-                        .buttonStyle(.appSecondary)
-                        .controlSize(.small)
-                    }) {
-                        if let summary = model.pendingTradeSummary, !model.pendingTrades.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
-                                    StatChip(title: "待确认金额", value: currencyText(summary.totalCashAmount))
-                                    StatChip(title: "现金单", value: "\(summary.cashTradeCount)")
-                                    if summary.unitTradeCount > 0 {
-                                        StatChip(title: "份额单", value: "\(summary.unitTradeCount)")
-                                    }
-                                }
-
-                                VStack(spacing: 10) {
-                                    ForEach(model.pendingTrades) { trade in
-                                        PendingTradeCard(
-                                            trade: trade,
-                                            onEdit: { editingPendingTrade = trade },
-                                            onDelete: { deletingPendingTrade = trade }
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("还没有买入中记录。可以直接手动添加待确认买入、定投或转换。")
-                                    .font(AppPalette.appFont(.body))
-                                    .foregroundStyle(AppPalette.muted)
-                                Button {
-                                    isPresentingAddPendingTrade = true
-                                } label: {
-                                    Label("添加买入中", systemImage: "plus.circle")
-                                }
-                                .buttonStyle(.appPrimary)
-                                .tint(AppPalette.warning)
-                                .controlSize(.small)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-                        }
-                    }
-
-                    SectionCard(title: "计划档案", subtitle: "按进行中、已暂停、已终止完整归档", icon: "calendar.badge.clock", trailing: {
-                        Spacer()
-                        Button {
-                            isPresentingAddInvestmentPlan = true
-                        } label: {
-                            Label("添加计划", systemImage: "plus.circle")
-                        }
-                        .buttonStyle(.appSecondary)
-                        .controlSize(.small)
-                        .keyboardShortcut("n", modifiers: .command)
-                    }) {
-                        if let summary = model.investmentPlanSummary, !model.investmentPlans.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
-                                    StatChip(title: "累计投入", value: currencyText(summary.totalCumulativeInvestedAmount))
-                                    StatChip(title: "最近执行", value: summary.nextExecutionDate ?? "—")
-                                    StatChip(title: "计划状态", value: "进行中 \(summary.activePlanCount) · 暂停 \(summary.pausedPlanCount) · 终止 \(summary.endedPlanCount) · 总数 \(summary.planCount)")
-                                }
-
-                                if !model.activeInvestmentPlans.isEmpty {
-                                    PlanArchiveGroup(title: "进行中", tint: AppPalette.positive, plans: model.activeInvestmentPlans)
-                                }
-
-                                if !model.pausedInvestmentPlans.isEmpty {
-                                    PlanArchiveGroup(title: "已暂停", tint: AppPalette.warning, plans: model.pausedInvestmentPlans)
-                                }
-
-                                if !model.endedInvestmentPlans.isEmpty {
-                                    PlanArchiveGroup(title: "已终止", tint: AppPalette.muted, plans: model.endedInvestmentPlans)
-                                }
-
-                                if model.pausedInvestmentPlans.isEmpty && model.endedInvestmentPlans.isEmpty {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("当前还没有已暂停或已终止的计划明细。")
-                                            .font(AppPalette.appFont(.subheadline, weight: .medium))
-                                            .foregroundStyle(AppPalette.muted)
-                                        Text("把计划状态改成「已暂停」或「已终止」后，这里会自动归档。")
-                                            .font(AppPalette.appFont(.footnote))
-                                            .foregroundStyle(AppPalette.muted)
-                                    }
-                                    .padding(12)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-                                }
-                            }
-                        } else {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("还没有定投计划记录。可以直接手动添加计划档案。")
-                                    .font(AppPalette.appFont(.body))
-                                    .foregroundStyle(AppPalette.muted)
-                                Button {
-                                    isPresentingAddInvestmentPlan = true
-                                } label: {
-                                    Label("添加计划", systemImage: "plus.circle")
-                                }
-                                .buttonStyle(.appPrimary)
-                                .tint(AppPalette.info)
-                                .controlSize(.small)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-                        }
-                    }
-                } else {
-                    PersonalPortfolioEmptyState()
-                }
+            ScrollView(.vertical, showsIndicators: false) {
+                selectedTabContent
+                    .padding(14)
             }
-            .padding(14)
         }
         .sheet(isPresented: $isPresentingAddPendingTrade) {
             PersonalPendingTradeEditSheet()
@@ -216,6 +85,205 @@ struct PortfolioSectionView: View {
             }
         } message: {
             Text(deletePendingConfirmationMessage)
+        }
+    }
+
+    private var portfolioTabPicker: some View {
+        Picker("持仓内容", selection: $selectedTab) {
+            ForEach(PortfolioContentTab.allCases) { tab in
+                Label(tab.rawValue, systemImage: tab.systemImage)
+                    .tag(tab)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 620)
+        .padding(.horizontal, AppPalette.contentPadding)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(AppPalette.card.opacity(0.45))
+        .accessibilityLabel("我的持仓内容")
+    }
+
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        switch selectedTab {
+        case .assets:
+            assetOverviewContent
+        case .activity:
+            pendingAndPlanContent
+        case .watchlist:
+            PersonalWatchlistPanel()
+        }
+    }
+
+    @ViewBuilder
+    private var assetOverviewContent: some View {
+        if hasAnyPersonalData {
+            VStack(alignment: .leading, spacing: 14) {
+                ViewThatFits(in: .horizontal) {
+                    LazyVGrid(columns: portfolioSummaryWideColumns, alignment: .leading, spacing: 12) {
+                        portfolioSummaryMetricCards
+                    }
+
+                    LazyVGrid(columns: portfolioSummaryMediumColumns, alignment: .leading, spacing: 12) {
+                        portfolioSummaryMetricCards
+                    }
+
+                    LazyVGrid(columns: portfolioSummaryCompactColumns, alignment: .leading, spacing: 12) {
+                        portfolioSummaryMetricCards
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        statusLineContent
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        statusLineContent
+                    }
+                }
+                .font(AppPalette.appFont(.subheadline))
+                .foregroundStyle(AppPalette.muted)
+
+                PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
+                ProfitAttributionPanel(summary: model.profitAttributionSummary)
+
+                SectionCard(title: "资产全貌总表", subtitle: "把「已持有 + 待确认 + 计划档案」聚合到同一行", icon: "tablecells", trailing: {
+                    PersonalAssetAddButtons()
+                }) {
+                    PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)
+                }
+            }
+        } else {
+            PersonalPortfolioEmptyState()
+        }
+    }
+
+    private var pendingAndPlanContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            pendingTradesSection
+            investmentPlansSection
+        }
+    }
+
+    private var pendingTradesSection: some View {
+        SectionCard(title: "买入中", subtitle: "待确认交易单独展示，不并入已成交持仓收益", icon: "clock.badge.exclamationmark", trailing: {
+            Spacer()
+            Button {
+                isPresentingAddPendingTrade = true
+            } label: {
+                Label("添加买入中", systemImage: "plus.circle")
+            }
+            .buttonStyle(.appSecondary)
+            .controlSize(.small)
+        }) {
+            if let summary = model.pendingTradeSummary, !model.pendingTrades.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                        StatChip(title: "待确认金额", value: currencyText(summary.totalCashAmount))
+                        StatChip(title: "现金单", value: "\(summary.cashTradeCount)")
+                        if summary.unitTradeCount > 0 {
+                            StatChip(title: "份额单", value: "\(summary.unitTradeCount)")
+                        }
+                    }
+
+                    VStack(spacing: 10) {
+                        ForEach(model.pendingTrades) { trade in
+                            PendingTradeCard(
+                                trade: trade,
+                                onEdit: { editingPendingTrade = trade },
+                                onDelete: { deletingPendingTrade = trade }
+                            )
+                        }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("还没有买入中记录。可以直接手动添加待确认买入、定投或转换。")
+                        .font(AppPalette.appFont(.body))
+                        .foregroundStyle(AppPalette.muted)
+                    Button {
+                        isPresentingAddPendingTrade = true
+                    } label: {
+                        Label("添加买入中", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.appPrimary)
+                    .tint(AppPalette.warning)
+                    .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+            }
+        }
+    }
+
+    private var investmentPlansSection: some View {
+        SectionCard(title: "计划档案", subtitle: "按进行中、已暂停、已终止完整归档", icon: "calendar.badge.clock", trailing: {
+            Spacer()
+            Button {
+                isPresentingAddInvestmentPlan = true
+            } label: {
+                Label("添加计划", systemImage: "plus.circle")
+            }
+            .buttonStyle(.appSecondary)
+            .controlSize(.small)
+            .keyboardShortcut("n", modifiers: .command)
+        }) {
+            if let summary = model.investmentPlanSummary, !model.investmentPlans.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                        StatChip(title: "累计投入", value: currencyText(summary.totalCumulativeInvestedAmount))
+                        StatChip(title: "最近执行", value: summary.nextExecutionDate ?? "—")
+                        StatChip(title: "计划状态", value: "进行中 \(summary.activePlanCount) · 暂停 \(summary.pausedPlanCount) · 终止 \(summary.endedPlanCount) · 总数 \(summary.planCount)")
+                    }
+
+                    if !model.activeInvestmentPlans.isEmpty {
+                        PlanArchiveGroup(title: "进行中", tint: AppPalette.positive, plans: model.activeInvestmentPlans)
+                    }
+
+                    if !model.pausedInvestmentPlans.isEmpty {
+                        PlanArchiveGroup(title: "已暂停", tint: AppPalette.warning, plans: model.pausedInvestmentPlans)
+                    }
+
+                    if !model.endedInvestmentPlans.isEmpty {
+                        PlanArchiveGroup(title: "已终止", tint: AppPalette.muted, plans: model.endedInvestmentPlans)
+                    }
+
+                    if model.pausedInvestmentPlans.isEmpty && model.endedInvestmentPlans.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("当前还没有已暂停或已终止的计划明细。")
+                                .font(AppPalette.appFont(.subheadline, weight: .medium))
+                                .foregroundStyle(AppPalette.muted)
+                            Text("把计划状态改成「已暂停」或「已终止」后，这里会自动归档。")
+                                .font(AppPalette.appFont(.footnote))
+                                .foregroundStyle(AppPalette.muted)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("还没有定投计划记录。可以直接手动添加计划档案。")
+                        .font(AppPalette.appFont(.body))
+                        .foregroundStyle(AppPalette.muted)
+                    Button {
+                        isPresentingAddInvestmentPlan = true
+                    } label: {
+                        Label("添加计划", systemImage: "plus.circle")
+                    }
+                    .buttonStyle(.appPrimary)
+                    .tint(AppPalette.info)
+                    .controlSize(.small)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+            }
         }
     }
 

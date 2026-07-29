@@ -114,6 +114,21 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertFalse(browserSource.contains("PersonalAssetAddButtons()"))
     }
 
+    func testPortfolioContentIsSeparatedIntoThreeSegmentedTabs() throws {
+        let source = try String(contentsOf: portfolioSectionSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(source.contains("case assets = \"资产全貌总表\""))
+        XCTAssertTrue(source.contains("case activity = \"买入中与计划中\""))
+        XCTAssertTrue(source.contains("case watchlist = \"关注\""))
+        XCTAssertTrue(source.contains("Picker(\"持仓内容\", selection: $selectedTab)"))
+        XCTAssertTrue(source.contains(".labelsHidden()"))
+        XCTAssertTrue(source.contains(".pickerStyle(.segmented)"))
+        XCTAssertTrue(source.contains("case .assets:\n            assetOverviewContent"))
+        XCTAssertTrue(source.contains("case .activity:\n            pendingAndPlanContent"))
+        XCTAssertTrue(source.contains("case .watchlist:\n            PersonalWatchlistPanel()"))
+        XCTAssertTrue(source.contains("pendingTradesSection\n            investmentPlansSection"))
+    }
+
     func testDrawdownFilterUsesPlainLanguageLabel() {
         XCTAssertEqual(PersonalAssetFilterScope.drawdownMode.rawValue, "涨跌幅计划")
     }
