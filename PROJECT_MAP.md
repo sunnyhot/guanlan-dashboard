@@ -28,7 +28,7 @@ There is no Python Web dashboard, localhost HTTP service, Python crawler, OCR, i
 | `macos-app/QiemanDashboardApp.swift` | App entry |
 | `macos-app/Core/AppModel.swift` | Main state container |
 | `macos-app/Core/QiemanNativeClient.swift` | Qieman community native client |
-| `macos-app/Core/QiemanPlatformNativeClient.swift` | Platform, quote and valuation native client (大类保留) |
+| `macos-app/Core/QiemanPlatformNativeClient.swift` | Platform, quote and valuation native client（HTTP/签名/解析/时间格式化工具层见 QiemanPlatformNativeClientSupport.swift） |
 | `macos-app/Core/Platform/` | 外移的平台层类型：NativePlatformError / QiemanPlatformCache / PlatformActionAssetBuckets / NativePlatformDTOs |
 | `macos-app/Core/Models/` | 共享领域模型，按域拆 9 个文件（AppEnums / Query / ManagerWatchSettings / SnapshotPayloads / PlatformPayloads / PersonalAsset / UserPortfolio / PersonalTrade / PersonalPlan） |
 | `macos-app/Core/CLI/Contract.swift` | CLI 契约基础设施：snake_case encoder/decoder、NullDouble 包装 |
@@ -52,7 +52,7 @@ There is no Python Web dashboard, localhost HTTP service, Python crawler, OCR, i
 cd macos-app && swift test
 bash scripts/build_qieman_cli.sh
 scripts/qieman version
-APP_VERSION=3.2.3 bash scripts/build_macos_app.sh
+APP_VERSION=3.10.4 bash scripts/build_macos_app.sh
 ```
 
 ## Contracts

@@ -10,89 +10,50 @@ macOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资平台�
 
 **技术栈**: SwiftUI + AppKit + Foundation (macOS 14+) | SPM 测试/校验 + swiftc 打包
 **数据通道**: Swift 原生 API 直连；Agent 技能调用原生 `qieman-cli`
-**当前发布版本**: v3.2.0（GitHub Release + `releases/macos/latest.json`）
+**当前发布版本**: v3.10.4（GitHub Release + `releases/macos/latest.json`）
 
 ## 目录结构与行数
 
 ### 原生命令行
 `macos-app/Core/QiemanCommandLine.swift` 提供登录、动态、评论、调仓、持仓、估值和巡检命令；`scripts/qieman` 为启动器。
 
-### macos-app/ — SwiftUI 原生 App（58 个 Swift 文件，21426 行）
+### macos-app/ — SwiftUI 原生 App（258 个 Swift 文件，~69000 行）
+
+> 行数随开发持续变动，以下按模块给出职责地图；精确行数用 `wc -l` 查询。
 
 #### 入口与配置
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `QiemanDashboardApp.swift` | 359 | App 入口 @main |
-| `Package.swift` | 19 | SPM 配置（极简） |
+- `QiemanDashboardApp.swift`（~870 行）— App 入口 @main
+- `Package.swift` — SPM 配置：executableTarget path=`.`，递归收集所有 `.swift`；`Tests/`、`CLI/` 排除。同 target 内移动文件无需改 import / Package.swift
 
-#### Core/ 核心逻辑（~8700 行）
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `Core/Models.swift` | 1644 | 数据模型：基金、持仓、净值、交易记录等 |
-| `Core/QiemanPlatformNativeClient.swift` | 1460 | 且慢平台原生客户端（最大 API 客户端） |
-| `Core/QiemanNativeClient.swift` | 1103 | 且慢原生 API 客户端 |
-| `Core/AppModel.swift` | 283 | **核心状态容器**：@MainActor ObservableObject |
-| `Core/AppModel/PortfolioCRUD.swift` | 612 | 持仓 CRUD 操作 |
-| `Core/AppModel/Validation.swift` | 432 | 数据验证 |
-| `Core/AppModel/AssetAggregation.swift` | 354 | 资产汇总计算 |
-| `Core/AppModel/ManagerWatch.swift` | 326 | 主理人关注 |
-| `Core/AppModel/InvestmentPlan.swift` | 264 | 投资计划模型 |
-| `Core/AppModel/Auth.swift` | 238 | 认证逻辑 |
-| `Core/AppModel/Import.swift` | 234 | 导入逻辑 |
-| `Core/AppModel/PendingTrade.swift` | 176 | 待处理交易 |
-| `Core/AppModel/PortfolioRefresh.swift` | 144 | 持仓刷新 |
-| `Core/AppModel/DataDirectory.swift` | 82 | 数据目录管理 |
-| `Core/AppModel/ComputedProperties.swift` | 192 | 计算属性 |
-| `Core/AppModel/Update.swift` | 99 | 更新逻辑 |
-| `Core/ApplicationDataController.swift` | 本地数据目录与 Cookie 路径管理 |
-| `Core/AppSelfUpdater.swift` | 357 | App 自动更新（GitHub Release） |
-| `Core/AppUpdateChecker.swift` | 210 | 更新检查 |
-| `Core/NativeSnapshotStore.swift` | 365 | 数据快照持久化 |
-| `Core/UserPortfolioStore.swift` | 353 | 用户持仓存储 |
-| `Core/InvestmentPlansStore.swift` | 180 | 投资计划存储 |
-| `Core/PendingTradesStore.swift` | 169 | 待处理交易存储 |
-| `Core/PersonalAssetAutomation.swift` | 444 | 个人资产自动化 |
-| `Core/PersonalAssetSorting.swift` | 88 | 资产排序 |
-| `Core/ManagerWatchStore.swift` | 23 | 主理人关注存储 |
-| `Core/DashboardAPI.swift` | 105 | Dashboard API 客户端 |
-| `Core/QiemanCookieManager.swift` | 148 | Cookie 管理（且慢登录态） |
-| `Core/LocalNotificationManager.swift` | 65 | 本地通知 |
-| `Core/MenuBarTicker/` | 989 | 菜单栏小组件（Entries/Settings/Kind/Types） |
+#### Core/ 核心逻辑（按子目录组织）
+- `Core/AppModel/`（23 文件）— 核心状态容器 `AppModel` 的功能拆分：PortfolioCRUD、TrendAnalysis、ManagerWatch、NextHourGuidanceController、EnhancementCenter、Validation、Auth 等
+- `Core/Models/` — 数据模型（已从单一 `Models.swift` 拆分）：基金、持仓、净值、交易记录、快照等
+- `Core/QiemanPlatformNativeClient.swift`（~1770 行）— 且慢平台原生客户端：持仓/动态/关注列表抓取 + 基金估值/股票行情多源回退；HTTP/签名/解析/时间格式化等通用工具层已抽到 `Core/QiemanPlatformNativeClientSupport.swift`
+- `Core/QiemanNativeClient.swift`（~650 行）— 且慢原生 API 客户端（论坛动态/评论）
+- `Core/Alfa/QiemanAlfaClient.swift` — 且慢 Alfa 客户端
+- `Core/Trend/`（11 文件）— 趋势分析：模型/存储/校验/摘要/上下文/标签（TrendAnalysis*、TrendTracking*、TrendDashboardSummary 等）
+- `Core/TrendResearch/`（23 文件）— AI 趋势研究子系统：TrendResearchAgent + 工具集（AlphaVantage / SEC 官方源 / Tavily / OpenAI 兼容客户端）
+- `Core/Platform/` — 平台板块专用模型与展示
+- `Core/MenuBarTicker/` — 菜单栏小组件（Entries/Settings/Kind/Types）
+- `Core/Filters/`、`Core/CLI/` — 筛选器与命令行支持
+- 其他 Core 散文件：`NextHourGuidance`、`FundLookThrough`、`FundSearchClient`、`PersonalWatchlistStore`、`TradeSignal*`、`MonthlyReport*`、`AppSelfUpdater`、`NativeSnapshotStore`、`QiemanRequestSigning`（请求签名共享层）、`QiemanText`（响应文本归一化共享层）等
 
-#### Views/ 视图（~7300 行）
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `Views/PersonalAssetBrowser.swift` | 1572 | **最大视图**：个人资产浏览器 |
-| `Views/PlatformComponents.swift` | 970 | 平台专用组件 |
-| `Views/OverviewSectionView.swift` | 804 | 总览板块 |
-| `Views/QiemanLoginView.swift` | 778 | 登录视图 |
-| `Views/SettingsMenuBarPanel.swift` | 760 | 菜单栏设置面板 |
-| `Views/PersonalAssetCards.swift` | 629 | 资产卡片组件 |
-| `Views/ContentView.swift` | 565 | 主内容视图 |
-| `Views/PlatformSectionView.swift` | 452 | 平台板块 |
-| `Views/MenuBarPortfolioView.swift` | 362 | 菜单栏持仓小组件 |
-| `Views/ForumComponents.swift` | 252 | 论坛组件 |
-| `Views/SharedComponents.swift` | 300 | 通用 UI 组件 |
-| `Views/PortfolioSectionView.swift` | 287 | 持仓板块 |
-| `Views/ForumSectionView.swift` | 219 | 论坛板块 |
-| `Views/SettingsSectionView.swift` | 218 | 设置主视图 |
-| `Views/SettingsComponents.swift` | 231 | 设置通用组件 |
-| `Views/SettingsWatchPanel.swift` | 182 | 关注设置面板 |
-| `Views/SettingsAccountPanel.swift` | 133 | 账户设置面板 |
-| `Views/SettingsAppPanel.swift` | 79 | 应用设置面板 |
+#### Views/ 视图
+- 主板块：`ContentView` → Overview / Portfolio / Platform / Forum
+- `PersonalAssetBrowser.swift` + `Views/PersonalAsset/` — 个人资产浏览器（已拆出子目录：表格行/详情/价格趋势/投资计划/待交易）
+- `EnhancementTrendPanel` / `EnhancementCenterView` / `TrendComponents` — 增强/趋势视图
+- `SettingsSectionView` + 各 Settings 面板、`SharedComponents`、`PlatformComponents`、`CommandPaletteView`
 
 #### 其他
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `Design/AppPalette.swift` | 74 | 设计系统：颜色/字体/间距 |
-| `Support/ValueFormatting.swift` | 80 | 数值格式化工具 |
-| `Tests/` | 224 | 测试（DownloadProgressTests + PersonalAssetSortingTests） |
+- `Design/AppPalette.swift` — 设计系统：颜色（红涨绿跌）/字体/间距
+- `Support/ValueFormatting.swift` — 数值格式化工具
+- `Tests/QiemanDashboardTests/`（40+ 测试文件）— 覆盖客户端、展示、排序、月报、趋势研究、菜单栏等
 
-### scripts/（287 行）
-| 文件 | 行数 | 职责 |
-|---|---|---|
-| `scripts/render_macos_icon.swift` | 151 | App 图标生成 |
-| `scripts/build_macos_app.sh` | 136 | Swift 编译构建脚本 |
+### scripts/
+| 文件 | 职责 |
+|---|---|
+| `scripts/render_macos_icon.swift` | App 图标生成 |
+| `scripts/build_macos_app.sh` | Swift 编译构建脚本（递归 find 收集 macos-app 下所有 .swift） |
 
 ### releases/
 | 文件 | 职责 |
@@ -106,7 +67,7 @@ Agent 技能层（qieman-manager-dashboard、qieman-alpha-signals、project-map�
 
 ```bash
 # 构建 macOS App
-APP_VERSION=3.2.0 bash scripts/build_macos_app.sh  # → dist/macos-app/QiemanDashboard.app
+APP_VERSION=3.10.4 bash scripts/build_macos_app.sh  # → dist/macos-app/QiemanDashboard.app
 
 # 运行
 open dist/macos-app/QiemanDashboard.app
@@ -115,7 +76,10 @@ open dist/macos-app/QiemanDashboard.app
 bash scripts/build_qieman_cli.sh
 scripts/qieman version
 
-# 运行测试
+# 编译校验主模块（本机无 Xcode 时 swift test 跑不了 XCTest，用 swift build 把关）
+cd macos-app && swift build
+
+# 运行测试（需 Xcode）
 swift test  # 在 macos-app/ 目录下
 ```
 
@@ -128,10 +92,10 @@ QiemanDashboardApp (@main)
   └─ AppModel (@MainActor ObservableObject, @EnvironmentObject)
        ├─ ApplicationDataController (本地数据目录)
        ├─ QiemanNativeClient (且慢 API 直连, 主路径)
-       ├─ QiemanPlatformNativeClient (平台 API)
+       ├─ QiemanPlatformNativeClient (平台 API + 行情多源回退)
        ├─ Views/
        │    ├─ ContentView → Overview/Portfolio/Platform/Forum 四板块
-       │    ├─ PersonalAssetBrowser (资产浏览器, 1572 行)
+       │    ├─ PersonalAssetBrowser (资产浏览器)
        │    └─ SettingsSectionView (设置面板)
        ├─ MenuBarTicker (菜单栏小组件)
        └─ Stores (持仓/计划/交易/关注/快照, 各独立 Store)
@@ -142,20 +106,20 @@ QiemanDashboardApp (@main)
 ## 关键约定
 
 1. **@MainActor + ObservableObject** — AppModel 是单一状态容器，所有 View 通过 @EnvironmentObject 访问
-2. **中国股市惯例** — 红涨绿跌，所有涨跌颜色用 AppPalette 统一
+2. **中国股市惯例** — 红涨绿跌，所有涨跌颜色用 AppPalette 统一（Views 层无硬编码颜色）
 3. **纯 Swift 运行时** — 不依赖 Python、本地 HTTP 服务、OCR 或表格导入
 4. **Cookie 认证** — 且慢登录态通过 QiemanCookieManager 管理，当前保存为本地受权限保护的 `qieman.cookie` 文件；后续可迁移 Keychain
 5. **自动更新** — GitHub Release + latest.json，AppSelfUpdater 处理下载安装
 6. **数据持久化** — SQLite/JSON 文件混合，通过各 Store 类管理
 7. **AppModel 拆分** — 核心状态在 AppModel.swift，子功能拆到 AppModel/ 子目录
+8. **共享工具层** — 请求签名走 `QiemanRequestSigning`，JSON 文本归一化走 `QiemanText`；`QiemanPlatformNativeClient` 的 HTTP/解析工具在 `+Support.swift` extension。新增客户端优先复用这些共享层，避免重复实现
 
 ## 已知坑点
 
-1. **PersonalAssetBrowser.swift 较大** — 修改需避免顺手重排无关 UI
-2. **QiemanPlatformNativeClient.swift 较大** — 且慢 API 和行情回退逻辑集中
-3. **Models.swift 较大** — 数据模型集中在一个文件
-4. **CLI JSON 契约** — Agent 消费 snake_case 字段，修改需补契约测试
-5. **且慢 API 非公开** — 随时可能变更需维护
+1. **QiemanPlatformNativeClient.swift 较大**（~1770 行）— 且慢 API 与行情多源回退逻辑集中；通用工具层已拆到 `QiemanPlatformNativeClientSupport.swift`，剩余基金估值 / 股票行情块如需可继续按数据源拆 extension
+2. **CLI JSON 契约** — Agent 消费 snake_case 字段，修改需补契约测试
+3. **且慢 API 非公开** — 随时可能变更需维护
+4. **本机无 Xcode** — XCTest 跑不了，重构后用 `swift build` 把关主模块；纯文件移动 / extension 抽取不改运行时行为，相对安全
 
 ## Agent 工作指南
 

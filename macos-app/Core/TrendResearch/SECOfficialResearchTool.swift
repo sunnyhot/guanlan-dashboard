@@ -667,8 +667,3 @@ extension TrendResearchSnapshot {
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
-    }
-}

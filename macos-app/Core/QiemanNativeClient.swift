@@ -512,16 +512,16 @@ final class QiemanNativeClient {
         }
 
         let createdAt = normalizedString(post["created_at"])
-        if let sinceKey = dateKey(since), let createdKey = dateKey(createdAt), createdKey < sinceKey {
+        if let sinceKey = parseDateKey(since), let createdKey = parseDateKey(createdAt), createdKey < sinceKey {
             return false
         }
-        if let untilKey = dateKey(until), let createdKey = dateKey(createdAt), createdKey > untilKey {
+        if let untilKey = parseDateKey(until), let createdKey = parseDateKey(createdAt), createdKey > untilKey {
             return false
         }
         return true
     }
 
-    private func dateKey(_ value: String) -> Int? {
+    private func parseDateKey(_ value: String) -> Int? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let text = trimmed.count >= 10 ? String(trimmed.prefix(10)) : trimmed
@@ -590,12 +590,7 @@ final class QiemanNativeClient {
     }
 
     private func normalizedString(_ value: Any?) -> String {
-        guard let value else { return "" }
-        if value is NSNull { return "" }
-        return String(describing: value)
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        QiemanText.normalizedString(value)
     }
 
     private func nonEmptyOrNil(_ value: Any?) -> String? {

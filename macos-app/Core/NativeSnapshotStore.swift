@@ -332,8 +332,7 @@ struct NativeSnapshotStore {
     }
 
     private func normalizedString(_ value: Any?) -> String {
-        guard let value else { return "" }
-        return String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+        QiemanText.normalizedString(value)
     }
 
     private func optionalString(_ value: Any?) -> String? {

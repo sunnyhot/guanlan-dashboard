@@ -393,9 +393,7 @@ final class QiemanAlfaClient {
     // MARK: - 工具
 
     static func normalizedString(_ value: Any?) -> String {
-        guard let value else { return "" }
-        if value is NSNull { return "" }
-        return String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+        QiemanText.normalizedString(value)
     }
 
     static func intValue(_ value: Any?) -> Int? {
