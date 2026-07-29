@@ -53,6 +53,7 @@ struct PlatformSectionView: View {
     @EnvironmentObject private var model: AppModel
     private let detailAnchor = "platform-detail-panel"
     @State private var viewMode: PlatformViewMode = .longWin
+    @State private var isAdjustmentDetailsExpanded = false
 
     enum PlatformViewMode: String, CaseIterable {
         case longWin
@@ -128,46 +129,106 @@ struct PlatformSectionView: View {
             StrategyRadarPanel(summary: model.strategyRadarSummary)
         }
 
-        if !model.monthlyPlatformSummary.isEmpty {
-            collapsibleMonthlySection
-        }
-
         SectionCard(
             title: "调仓浏览",
-            subtitle: isCompact ? "点列表会直接跳到详情" : "左边选动作，右边看详情",
-            icon: "square.split.2x1"
+            subtitle: model.monthlyPlatformSummary.isEmpty
+                ? (isCompact ? "点列表会直接跳到详情" : "左边选动作，右边看详情")
+                : "\(model.monthlyPlatformSummary.count) 个月 · 完整历史走势与调仓明细",
+            icon: "chart.xyaxis.line"
         ) {
-            if model.hasPlatformActions {
-                if isCompact {
-                    VStack(alignment: .leading, spacing: 8) {
-                        platformListPanel(isCompact: true, scrollProxy: scrollProxy)
-                        platformDetailPanel(isCompact: true)
-                            .id(detailAnchor)
+            VStack(alignment: .leading, spacing: 12) {
+                if !model.monthlyPlatformSummary.isEmpty {
+                    PlatformMonthlyOverview(months: model.monthlyPlatformSummary)
+                }
+
+                if model.hasPlatformActions {
+                    Button {
+                        withAnimation(AppPalette.motionSection) {
+                            isAdjustmentDetailsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Label("调仓明细", systemImage: "list.bullet.rectangle")
+                                .font(AppPalette.appFont(.body, weight: .semibold))
+                                .foregroundStyle(AppPalette.ink)
+
+                            Text("\(model.platformActionPresentation.filteredActions.count)")
+                                .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
+                                .foregroundStyle(AppPalette.muted)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(AppPalette.cardStrong, in: Capsule())
+
+                            Spacer()
+
+                            Text(isAdjustmentDetailsExpanded ? "收起" : "展开")
+                                .font(AppPalette.appFont(.footnote, weight: .medium))
+                                .foregroundStyle(AppPalette.muted)
+
+                            Image(systemName: "chevron.down")
+                                .font(AppPalette.appFont(.caption, weight: .bold))
+                                .foregroundStyle(AppPalette.muted)
+                                .rotationEffect(.degrees(isAdjustmentDetailsExpanded ? 180 : 0))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .background(AppPalette.cardStrong.opacity(0.48), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+                    .overlay(
+                        AppPalette.borderOverlay(radius: AppPalette.controlRadius, opacity: AppPalette.borderSubtle)
+                    )
+                    .accessibilityLabel("调仓明细")
+                    .accessibilityValue(isAdjustmentDetailsExpanded ? "已展开" : "已收起")
+
+                    if isAdjustmentDetailsExpanded {
+                        adjustmentWorkspace(
+                            isCompact: isCompact,
+                            availableWidth: availableWidth,
+                            scrollProxy: scrollProxy
+                        )
+                        .transition(.opacity)
                     }
                 } else {
-                    HStack(alignment: .top, spacing: 10) {
-                        platformListPanel(isCompact: false, scrollProxy: scrollProxy)
-                            .frame(
-                                width: PlatformWorkspaceLayout.listWidth(for: availableWidth),
-                                alignment: .top
-                            )
-
-                        platformDetailPanel(isCompact: false)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    EmptySectionState(
+                        title: "平台调仓暂时为空",
+                        subtitle: "我已经把平台和论坛改成了独立刷新。现在点一次刷新，就算其中一项失败，另一项也会照常显示。",
+                        actionTitle: "刷新调仓"
+                    ) {
+                        Task { try? await model.refreshLatest(persist: false) }
                     }
-                }
-            } else {
-                EmptySectionState(
-                    title: "平台调仓暂时为空",
-                    subtitle: "我已经把平台和论坛改成了独立刷新。现在点一次刷新，就算其中一项失败，另一项也会照常显示。",
-                    actionTitle: "刷新调仓"
-                ) {
-                    Task { try? await model.refreshLatest(persist: false) }
                 }
             }
         }
 
         currentHoldingsSection
+    }
+
+    @ViewBuilder
+    private func adjustmentWorkspace(
+        isCompact: Bool,
+        availableWidth: CGFloat,
+        scrollProxy: ScrollViewProxy
+    ) -> some View {
+        if isCompact {
+            VStack(alignment: .leading, spacing: 8) {
+                platformListPanel(isCompact: true, scrollProxy: scrollProxy)
+                platformDetailPanel(isCompact: true)
+                    .id(detailAnchor)
+            }
+        } else {
+            HStack(alignment: .top, spacing: 10) {
+                platformListPanel(isCompact: false, scrollProxy: scrollProxy)
+                    .frame(
+                        width: PlatformWorkspaceLayout.listWidth(for: availableWidth),
+                        alignment: .top
+                    )
+
+                platformDetailPanel(isCompact: false)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
     }
 
     // MARK: - Current Holdings
@@ -247,69 +308,6 @@ struct PlatformSectionView: View {
                 .respectsReducedMotion()
             }
         }
-    }
-
-    // MARK: - Collapsible Monthly Section
-
-    @State private var isMonthlyExpanded = false
-
-    private var collapsibleMonthlySection: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(AppPalette.motionSlow) {
-                    isMonthlyExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar")
-                        .font(AppPalette.appFont(.footnote, weight: .semibold))
-                        .foregroundStyle(AppPalette.brand)
-                        .frame(width: 20, height: 20)
-                        .background(AppPalette.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppPalette.badgeRadius)
-                                .stroke(AppPalette.brand.opacity(AppPalette.borderFaint), lineWidth: 1)
-                        )
-
-                    Text("交易时间总览")
-                        .font(AppPalette.appFont(.body, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
-
-                    if !model.monthlyPlatformSummary.isEmpty {
-                        Text("\(model.monthlyPlatformSummary.count)月")
-                            .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppPalette.muted)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppPalette.cardStrong, in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(AppPalette.line.opacity(0.35), lineWidth: 1)
-                            )
-                    }
-
-                    Spacer()
-
-                    Image(systemName: isMonthlyExpanded ? "chevron.up" : "chevron.down")
-                        .font(AppPalette.appFont(.caption, weight: .bold))
-                        .foregroundStyle(AppPalette.muted)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(AppPalette.card)
-            }
-            .buttonStyle(.plain)
-
-            if isMonthlyExpanded {
-                PlatformMonthlyOverview(months: model.monthlyPlatformSummary)
-                .padding(12)
-                .background(AppPalette.card)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-        .overlay(
-            AppPalette.borderOverlay(radius: AppPalette.panelRadius, opacity: AppPalette.borderStrong)
-        )
     }
 
     // MARK: - List Panel
@@ -513,7 +511,6 @@ struct PlatformSectionView: View {
         .frame(
             maxWidth: .infinity,
             minHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
-            maxHeight: isCompact ? nil : PlatformWorkspaceLayout.adjustmentWorkspaceHeight,
             alignment: .topLeading
         )
         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))

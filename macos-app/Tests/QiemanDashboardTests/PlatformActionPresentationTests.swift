@@ -2,6 +2,67 @@ import XCTest
 @testable import QiemanDashboard
 
 final class PlatformActionPresentationTests: XCTestCase {
+    @MainActor
+    func testMonthlySummaryIncludesCompleteHistoryAndFillsInactiveMonths() {
+        let model = AppModel()
+        let actions = [
+            action(
+                id: "history-buy",
+                side: "buy",
+                fundName: "宽基",
+                fundCode: "000300",
+                title: "买入宽基",
+                txnDate: "2023-01-06"
+            ),
+            action(
+                id: "history-sell",
+                side: "sell",
+                fundName: "宽基",
+                fundCode: "000300",
+                title: "卖出宽基",
+                txnDate: "2024-03-08"
+            ),
+        ]
+        model.platformPayload = PlatformPayload(
+            supported: true,
+            prodCode: "LONG_WIN",
+            count: actions.count,
+            buyCount: 1,
+            sellCount: 1,
+            adjustmentCount: actions.count,
+            latest: actions.last,
+            actions: actions,
+            holdings: nil,
+            timeline: nil,
+            error: nil
+        )
+        model._cachedMonthlyPlatformSummary = nil
+
+        let summary = model.monthlyPlatformSummary
+
+        XCTAssertEqual(summary.count, 15)
+        XCTAssertEqual(summary.first?.month, "2023-01")
+        XCTAssertEqual(summary.last?.month, "2024-03")
+        XCTAssertEqual(summary.first?.buyCount, 1)
+        XCTAssertEqual(summary.last?.sellCount, 1)
+        XCTAssertEqual(summary.first(where: { $0.month == "2023-02" })?.totalCount, 0)
+    }
+
+    func testAdjustmentHistoryIsMergedIntoExpandedBrowserAsLineChart() throws {
+        let platform = try source(at: "Views/PlatformSectionView.swift")
+        let overview = try source(at: "Views/Platform/PlatformMonthlyOverview.swift")
+
+        XCTAssertFalse(platform.contains("交易时间总览"))
+        XCTAssertFalse(platform.contains("isMonthlyExpanded"))
+        XCTAssertTrue(platform.contains("PlatformMonthlyOverview(months: model.monthlyPlatformSummary)"))
+        XCTAssertTrue(platform.contains("@State private var isAdjustmentDetailsExpanded = false"))
+        XCTAssertTrue(platform.contains("Label(\"调仓明细\", systemImage: \"list.bullet.rectangle\")"))
+        XCTAssertTrue(overview.contains("Text(\"完整历史\")"))
+        XCTAssertTrue(overview.contains("LineMark("))
+        XCTAssertFalse(overview.contains("BarMark("))
+        XCTAssertFalse(overview.contains("近 12 个月"))
+    }
+
     func testWorkspaceListWidthStaysReadableAcrossWideWindows() {
         XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 900), 500)
         XCTAssertEqual(PlatformWorkspaceLayout.listWidth(for: 1_600), 576)
@@ -74,7 +135,8 @@ final class PlatformActionPresentationTests: XCTestCase {
         side: String,
         fundName: String,
         fundCode: String,
-        title: String
+        title: String,
+        txnDate: String? = nil
     ) -> PlatformActionPayload {
         PlatformActionPayload(
             actionKey: id,
@@ -89,7 +151,7 @@ final class PlatformActionPresentationTests: XCTestCase {
             tradeUnit: nil,
             postPlanUnit: nil,
             createdAt: nil,
-            txnDate: nil,
+            txnDate: txnDate,
             createdTs: nil,
             txnTs: nil,
             articleUrl: nil,

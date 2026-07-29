@@ -21,6 +21,7 @@ extension AppModel {
             guard rawDate.count >= 10 else { continue }
             guard let direction = platformActionDirection(action) else { continue }
             let month = String(rawDate.prefix(7))
+            guard monthIndex(month) != nil else { continue }
             let day = String(rawDate.prefix(10))
             var bucket = buckets[month] ?? (0, 0, [])
             if direction == .buy {
@@ -32,12 +33,15 @@ extension AppModel {
             buckets[month] = bucket
         }
 
-        guard let latestMonth = buckets.keys.max() else {
+        let monthIndices = buckets.keys.compactMap(monthIndex)
+        guard let firstMonthIndex = monthIndices.min(),
+              let latestMonthIndex = monthIndices.max() else {
             _cachedMonthlyPlatformSummary = []
             return []
         }
 
-        let result = recentMonthKeys(endingAt: latestMonth, count: 12).map { month in
+        let result = (firstMonthIndex...latestMonthIndex).compactMap { index -> PlatformMonthSummary? in
+            guard let month = monthKey(from: index) else { return nil }
             let bucket = buckets[month] ?? (0, 0, [])
             return PlatformMonthSummary(
                 month: month,
@@ -49,13 +53,6 @@ extension AppModel {
         }
         _cachedMonthlyPlatformSummary = result
         return result
-    }
-
-    func recentMonthKeys(endingAt latestMonth: String, count: Int) -> [String] {
-        guard let latestIndex = monthIndex(latestMonth) else { return [] }
-        return (0..<count).compactMap { offset in
-            monthKey(from: latestIndex - (count - 1 - offset))
-        }
     }
 
     func monthIndex(_ month: String) -> Int? {

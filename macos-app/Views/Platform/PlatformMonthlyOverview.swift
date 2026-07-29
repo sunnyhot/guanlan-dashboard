@@ -36,6 +36,23 @@ struct PlatformMonthlyOverview: View {
         return String(format: "%.1f", Double(totalCount) / Double(months.count))
     }
 
+    private var historyRangeText: String {
+        guard let first = months.first?.month, let last = months.last?.month else {
+            return "暂无月份"
+        }
+        return first == last ? first : "\(first) — \(last)"
+    }
+
+    private var axisMonths: [String] {
+        guard months.count > 12 else { return months.map(\.month) }
+        let step = Int(ceil(Double(months.count) / 10.0))
+        var values = stride(from: 0, to: months.count, by: step).map { months[$0].month }
+        if let last = months.last?.month, values.last != last {
+            values.append(last)
+        }
+        return values
+    }
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
@@ -54,7 +71,7 @@ struct PlatformMonthlyOverview: View {
     private var summaryPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "calendar.badge.clock")
+                Image(systemName: "chart.xyaxis.line")
                     .font(AppPalette.appFont(.title))
                     .foregroundStyle(AppPalette.brand)
                     .frame(width: 38, height: 38)
@@ -65,10 +82,10 @@ struct PlatformMonthlyOverview: View {
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("近 12 个月")
+                    Text("完整历史")
                         .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
-                    Text(months.first.map { "\($0.month) 起" } ?? "暂无月份")
+                    Text(historyRangeText)
                         .font(AppPalette.appFont(.footnote))
                         .foregroundStyle(AppPalette.muted)
                 }
@@ -128,10 +145,10 @@ struct PlatformMonthlyOverview: View {
 
     private var chartLegend: some View {
         HStack(spacing: 12) {
-            Label("买入", systemImage: "square.fill")
+            Label("买入", systemImage: "line.diagonal")
                 .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.positive)
-            Label("卖出", systemImage: "square.fill")
+            Label("卖出", systemImage: "line.diagonal")
                 .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.warning)
         }
@@ -140,19 +157,33 @@ struct PlatformMonthlyOverview: View {
     private var chartBody: some View {
         Chart {
             ForEach(months) { month in
-                BarMark(
+                LineMark(
                     x: .value("月", month.month),
-                    y: .value("买入", month.buyCount)
+                    y: .value("买入", month.buyCount),
+                    series: .value("类型", "买入")
                 )
                 .foregroundStyle(AppPalette.positive)
-                .position(by: .value("类型", "买入"))
+                .lineStyle(StrokeStyle(lineWidth: 2))
+                .interpolationMethod(.linear)
+                .symbol {
+                    Circle()
+                        .fill(AppPalette.positive)
+                        .frame(width: 5, height: 5)
+                }
 
-                BarMark(
+                LineMark(
                     x: .value("月", month.month),
-                    y: .value("卖出", month.sellCount)
+                    y: .value("卖出", month.sellCount),
+                    series: .value("类型", "卖出")
                 )
                 .foregroundStyle(AppPalette.warning)
-                .position(by: .value("类型", "卖出"))
+                .lineStyle(StrokeStyle(lineWidth: 2))
+                .interpolationMethod(.linear)
+                .symbol {
+                    Circle()
+                        .fill(AppPalette.warning)
+                        .frame(width: 5, height: 5)
+                }
             }
 
             if let selectedMonth {
@@ -161,6 +192,7 @@ struct PlatformMonthlyOverview: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
             }
         }
+        .accessibilityLabel("完整历史调仓折线图")
         .chartOverlay { proxy in
             GeometryReader { geo in
                 Rectangle()
@@ -196,7 +228,7 @@ struct PlatformMonthlyOverview: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: months.map(\.month)) { value in
+            AxisMarks(values: axisMonths) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
                     .foregroundStyle(AppPalette.line.opacity(0.18))
                 if let month = value.as(String.self) {
