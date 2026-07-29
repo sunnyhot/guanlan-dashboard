@@ -50,6 +50,27 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(views.contains(".buttonStyle(.borderless)"))
     }
 
+    func testPrimaryModuleTabsUseOneSharedVisualSystem() throws {
+        let components = try source(at: "Views/SharedComponents.swift")
+        let portfolio = try source(at: "Views/PortfolioSectionView.swift")
+        let platform = try source(at: "Views/PlatformSectionView.swift")
+        let enhancement = try source(at: "Views/EnhancementCenterView.swift")
+
+        XCTAssertTrue(components.contains("struct ModuleTabBar<"))
+        XCTAssertTrue(components.contains("private func moduleTabButton"))
+        XCTAssertTrue(components.contains("selectedFill: AppPalette.brand"))
+        XCTAssertTrue(components.contains("fill: AppPalette.cardStrong"))
+        XCTAssertTrue(components.contains("hoverFill: AppPalette.cardHover"))
+
+        XCTAssertTrue(portfolio.contains("ModuleTabBar("))
+        XCTAssertTrue(platform.contains("ModuleTabBar("))
+        XCTAssertTrue(enhancement.contains("ModuleTabBar("))
+
+        XCTAssertFalse(portfolio.contains(".pickerStyle(.segmented)"))
+        XCTAssertFalse(platform.contains("isSelected ? AppPalette.brand : AppPalette.cardStrong"))
+        XCTAssertFalse(enhancement.contains("workbenchSegmentButton"))
+    }
+
     func testAssetAddControlUsesACustomPopoverInsteadOfTheSystemMenu() throws {
         let source = try source(at: "Views/PersonalAssetCards.swift")
         let addStart = try XCTUnwrap(source.range(of: "struct PersonalAssetAddButtons"))

@@ -4,18 +4,18 @@ import SwiftUI
 // MARK: - Personal Portfolio
 
 private enum PortfolioContentTab: String, CaseIterable, Identifiable {
-    case assets = "资产全貌总表"
-    case activity = "买入中与计划中"
+    case analysis = "组合分析"
+    case assets = "资产明细"
     case watchlist = "关注"
 
     var id: Self { self }
 
     var systemImage: String {
         switch self {
+        case .analysis:
+            return "chart.pie"
         case .assets:
             return "tablecells"
-        case .activity:
-            return "clock.badge.exclamationmark"
         case .watchlist:
             return "star"
         }
@@ -24,7 +24,7 @@ private enum PortfolioContentTab: String, CaseIterable, Identifiable {
 
 struct PortfolioSectionView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selectedTab: PortfolioContentTab = .assets
+    @State private var selectedTab: PortfolioContentTab = .analysis
     @State private var isPresentingAddPendingTrade = false
     @State private var editingPendingTrade: PersonalPendingTrade?
     @State private var deletingPendingTrade: PersonalPendingTrade?
@@ -56,8 +56,7 @@ struct PortfolioSectionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            portfolioTabPicker
-            Divider()
+            portfolioTabBar
 
             ScrollView(.vertical, showsIndicators: false) {
                 selectedTabContent
@@ -88,37 +87,29 @@ struct PortfolioSectionView: View {
         }
     }
 
-    private var portfolioTabPicker: some View {
-        Picker("持仓内容", selection: $selectedTab) {
-            ForEach(PortfolioContentTab.allCases) { tab in
-                Label(tab.rawValue, systemImage: tab.systemImage)
-                    .tag(tab)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 620)
-        .padding(.horizontal, AppPalette.contentPadding)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(AppPalette.card.opacity(0.45))
-        .accessibilityLabel("我的持仓内容")
+    private var portfolioTabBar: some View {
+        ModuleTabBar(
+            items: PortfolioContentTab.allCases,
+            selection: $selectedTab,
+            title: { $0.rawValue },
+            systemImage: { $0.systemImage }
+        )
     }
 
     @ViewBuilder
     private var selectedTabContent: some View {
         switch selectedTab {
+        case .analysis:
+            portfolioAnalysisContent
         case .assets:
-            assetOverviewContent
-        case .activity:
-            pendingAndPlanContent
+            personalAssetsContent
         case .watchlist:
             PersonalWatchlistPanel()
         }
     }
 
     @ViewBuilder
-    private var assetOverviewContent: some View {
+    private var portfolioAnalysisContent: some View {
         if hasAnyPersonalData {
             VStack(alignment: .leading, spacing: 14) {
                 ViewThatFits(in: .horizontal) {
@@ -149,20 +140,20 @@ struct PortfolioSectionView: View {
 
                 PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
                 ProfitAttributionPanel(summary: model.profitAttributionSummary)
-
-                SectionCard(title: "资产全貌总表", subtitle: "把「已持有 + 待确认 + 计划档案」聚合到同一行", icon: "tablecells", trailing: {
-                    PersonalAssetAddButtons()
-                }) {
-                    PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)
-                }
             }
         } else {
             PersonalPortfolioEmptyState()
         }
     }
 
-    private var pendingAndPlanContent: some View {
+    private var personalAssetsContent: some View {
         VStack(alignment: .leading, spacing: 14) {
+            SectionCard(title: "资产全貌总表", subtitle: "把「已持有 + 待确认 + 计划档案」聚合到同一行", icon: "tablecells", trailing: {
+                PersonalAssetAddButtons()
+            }) {
+                PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)
+            }
+
             pendingTradesSection
             investmentPlansSection
         }

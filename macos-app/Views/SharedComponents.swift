@@ -68,6 +68,96 @@ struct SnapshotMiniBadge: View {
     }
 }
 
+struct ModuleTabBar<Item: Identifiable & Hashable, TrailingContent: View>: View {
+    let items: [Item]
+    @Binding var selection: Item
+    let title: (Item) -> String
+    let systemImage: (Item) -> String
+    private let trailingContent: () -> TrailingContent
+
+    init(
+        items: [Item],
+        selection: Binding<Item>,
+        title: @escaping (Item) -> String,
+        systemImage: @escaping (Item) -> String,
+        @ViewBuilder trailingContent: @escaping () -> TrailingContent
+    ) {
+        self.items = items
+        self._selection = selection
+        self.title = title
+        self.systemImage = systemImage
+        self.trailingContent = trailingContent
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: AppPalette.spaceS) {
+                ForEach(items) { item in
+                    moduleTabButton(item)
+                }
+
+                Spacer(minLength: AppPalette.spaceS)
+                trailingContent()
+            }
+            .padding(.horizontal, AppPalette.contentPadding)
+            .padding(.vertical, 10)
+            .background(AppPalette.card.opacity(0.45))
+
+            Divider()
+        }
+    }
+
+    private func moduleTabButton(_ item: Item) -> some View {
+        let isSelected = selection == item
+
+        return Button {
+            guard !isSelected else { return }
+            withAnimation(AppPalette.motionSection) {
+                selection = item
+            }
+        } label: {
+            Label(title(item), systemImage: systemImage(item))
+                .font(AppPalette.appFont(.body, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .interactiveSurface(
+                    isSelected: isSelected,
+                    tint: AppPalette.brand,
+                    radius: AppPalette.controlRadius,
+                    fill: AppPalette.cardStrong,
+                    hoverFill: AppPalette.cardHover,
+                    selectedFill: AppPalette.brand,
+                    strokeOpacity: 0.45,
+                    activeStrokeOpacity: AppPalette.selectionStrokeOpacity,
+                    lift: 0
+                )
+        }
+        .buttonStyle(PressResponsiveButtonStyle())
+        .contentShape(RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+        .accessibilityLabel(title(item))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+extension ModuleTabBar where TrailingContent == EmptyView {
+    init(
+        items: [Item],
+        selection: Binding<Item>,
+        title: @escaping (Item) -> String,
+        systemImage: @escaping (Item) -> String
+    ) {
+        self.init(
+            items: items,
+            selection: selection,
+            title: title,
+            systemImage: systemImage,
+            trailingContent: { EmptyView() }
+        )
+    }
+}
+
 // MARK: - Shared Components
 
 struct MetricCard: View {

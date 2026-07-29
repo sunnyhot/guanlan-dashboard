@@ -364,10 +364,11 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(centerSource.contains("dashboardHeader"))
         XCTAssertFalse(centerSource.contains("runtimeChip"))
         XCTAssertFalse(centerSource.contains("headerTitleBlock"))
-        // 分段按钮使用大号交互样式，不再是原生窄条 segmented Picker
+        // 三个主模块统一复用 ModuleTabBar，不再由 AI 工作台维护独立的大号按钮样式
         XCTAssertFalse(centerSource.contains(".pickerStyle(.segmented)"))
-        XCTAssertTrue(centerSource.contains("workbenchSegmentButton"))
-        XCTAssertTrue(centerSource.contains("interactiveSurface"))
+        XCTAssertTrue(centerSource.contains("ModuleTabBar("))
+        XCTAssertFalse(centerSource.contains("workbenchSegmentButton"))
+        XCTAssertFalse(centerSource.contains("interactiveSurface"))
 
         // 分析设置已迁至设置页；趋势面板只保留报告与信号内容
         XCTAssertFalse(trendSource.contains("var configSegment"))

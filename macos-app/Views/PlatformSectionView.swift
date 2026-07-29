@@ -6,7 +6,6 @@ struct PlatformActivitySectionView: View {
     var body: some View {
         VStack(spacing: 0) {
             activityTabBar
-            Divider()
 
             switch model.selectedPlatformActivityTab {
             case .adjustments:
@@ -24,36 +23,12 @@ struct PlatformActivitySectionView: View {
     }
 
     private var activityTabBar: some View {
-        HStack(spacing: 8) {
-            ForEach(PlatformActivityTab.allCases) { tab in
-                let isSelected = model.selectedPlatformActivityTab == tab
-                Button {
-                    withAnimation(AppPalette.motionSection) {
-                        model.selectedPlatformActivityTab = tab
-                    }
-                } label: {
-                    Label(tab.rawValue, systemImage: tab.systemImage)
-                        .font(AppPalette.appFont(.body, weight: isSelected ? .semibold : .medium))
-                        .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(
-                            isSelected ? AppPalette.brand : AppPalette.cardStrong,
-                            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                                .stroke(isSelected ? AppPalette.brand : AppPalette.line.opacity(0.45), lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
-            }
-            Spacer()
-        }
-        .padding(.horizontal, AppPalette.contentPadding)
-        .padding(.vertical, 10)
-        .background(AppPalette.card.opacity(0.45))
+        ModuleTabBar(
+            items: PlatformActivityTab.allCases,
+            selection: $model.selectedPlatformActivityTab,
+            title: { $0.rawValue },
+            systemImage: { $0.systemImage }
+        )
     }
 }
 
