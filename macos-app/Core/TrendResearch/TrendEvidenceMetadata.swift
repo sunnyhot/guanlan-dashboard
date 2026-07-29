@@ -6,9 +6,20 @@ enum TrendEvidenceSourceKind: String, Codable, Hashable, Sendable {
     case fundDisclosure
     case platformSignal
     case managerSignal
+    case officialFiling
+    case officialFinancial
+    case licensedMarketData
     case webSearch
     case derived
     case unknown
+
+    var isOfficialPrimary: Bool {
+        self == .officialFiling || self == .officialFinancial
+    }
+
+    var isExternalResearch: Bool {
+        isOfficialPrimary || self == .licensedMarketData || self == .webSearch
+    }
 }
 
 enum TrendEvidenceSourceTier: String, Codable, Hashable, Sendable {

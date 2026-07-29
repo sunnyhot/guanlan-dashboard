@@ -340,9 +340,108 @@ struct TavilySearchSettings: Codable, Hashable, Sendable {
     }
 }
 
+struct OfficialSourceSettings: Codable, Hashable, Sendable {
+    var enabled: Bool
+    var secContactEmail: String
+
+    static let empty = OfficialSourceSettings(
+        enabled: true,
+        secContactEmail: ""
+    )
+
+    var isSECConfigured: Bool {
+        let email = secContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return enabled
+            && email.contains("@")
+            && email.contains(".")
+            && !email.contains(" ")
+    }
+
+    var secUserAgent: String {
+        let contact = secContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "QiemanDashboard/4.0 \(contact)"
+    }
+
+    init(enabled: Bool = true, secContactEmail: String) {
+        self.enabled = enabled
+        self.secContactEmail = secContactEmail
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        secContactEmail = try container.decodeIfPresent(
+            String.self,
+            forKey: .secContactEmail
+        ) ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case secContactEmail
+    }
+}
+
+struct AlphaVantageSettings: Codable, Hashable, Sendable {
+    var enabled: Bool
+    var apiKey: String
+    var dailyRequestLimit: Int
+
+    static let freeDailyRequestLimit = 25
+    static let empty = AlphaVantageSettings(
+        enabled: false,
+        apiKey: "",
+        dailyRequestLimit: freeDailyRequestLimit
+    )
+
+    var isConfigured: Bool {
+        enabled && !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var normalizedDailyRequestLimit: Int {
+        min(10_000, max(1, dailyRequestLimit))
+    }
+
+    var redactedAPIKey: String {
+        TrendAIProviderSettings.mask(apiKey)
+    }
+
+    init(
+        enabled: Bool = false,
+        apiKey: String,
+        dailyRequestLimit: Int = freeDailyRequestLimit
+    ) {
+        self.enabled = enabled
+        self.apiKey = apiKey
+        self.dailyRequestLimit = min(10_000, max(1, dailyRequestLimit))
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
+        dailyRequestLimit = min(
+            10_000,
+            max(
+                1,
+                try container.decodeIfPresent(Int.self, forKey: .dailyRequestLimit)
+                    ?? Self.freeDailyRequestLimit
+            )
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled
+        case apiKey
+        case dailyRequestLimit
+    }
+}
+
 struct TrendAnalysisSettings: Codable, Hashable {
     var provider: TrendAIProviderSettings
     var webSearch: TavilySearchSettings
+    var officialSources: OfficialSourceSettings
+    var alphaVantage: AlphaVantageSettings
     var defaultPrivacyMode: TrendPrivacyMode
     var dailyAutoAnalysisEnabled: Bool
     var dailyAutoAnalysisTimes: [String]
@@ -352,6 +451,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
         webSearch: .empty,
+        officialSources: .empty,
+        alphaVantage: .empty,
         defaultPrivacyMode: .sanitized,
         dailyAutoAnalysisEnabled: false,
         dailyAutoAnalysisTimes: TrendAutoAnalysisSchedule.default.timeStrings,
@@ -362,6 +463,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
     init(
         provider: TrendAIProviderSettings,
         webSearch: TavilySearchSettings = .empty,
+        officialSources: OfficialSourceSettings = .empty,
+        alphaVantage: AlphaVantageSettings = .empty,
         defaultPrivacyMode: TrendPrivacyMode,
         dailyAutoAnalysisEnabled: Bool,
         dailyAutoAnalysisTimes: [String] = TrendAutoAnalysisSchedule.default.timeStrings,
@@ -370,6 +473,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
     ) {
         self.provider = provider
         self.webSearch = webSearch
+        self.officialSources = officialSources
+        self.alphaVantage = alphaVantage
         self.defaultPrivacyMode = defaultPrivacyMode
         self.dailyAutoAnalysisEnabled = dailyAutoAnalysisEnabled
         self.dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(timeStrings: dailyAutoAnalysisTimes).timeStrings
@@ -381,6 +486,14 @@ struct TrendAnalysisSettings: Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         provider = try container.decodeIfPresent(TrendAIProviderSettings.self, forKey: .provider) ?? .empty
         webSearch = try container.decodeIfPresent(TavilySearchSettings.self, forKey: .webSearch) ?? .empty
+        officialSources = try container.decodeIfPresent(
+            OfficialSourceSettings.self,
+            forKey: .officialSources
+        ) ?? .empty
+        alphaVantage = try container.decodeIfPresent(
+            AlphaVantageSettings.self,
+            forKey: .alphaVantage
+        ) ?? .empty
         defaultPrivacyMode = try container.decodeIfPresent(TrendPrivacyMode.self, forKey: .defaultPrivacyMode) ?? .sanitized
         dailyAutoAnalysisEnabled = try container.decodeIfPresent(Bool.self, forKey: .dailyAutoAnalysisEnabled) ?? false
         if let times = try container.decodeIfPresent([String].self, forKey: .dailyAutoAnalysisTimes) {
@@ -398,6 +511,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(provider, forKey: .provider)
         try container.encode(webSearch, forKey: .webSearch)
+        try container.encode(officialSources, forKey: .officialSources)
+        try container.encode(alphaVantage, forKey: .alphaVantage)
         try container.encode(defaultPrivacyMode, forKey: .defaultPrivacyMode)
         try container.encode(dailyAutoAnalysisEnabled, forKey: .dailyAutoAnalysisEnabled)
         try container.encode(dailyAutoAnalysisTimes, forKey: .dailyAutoAnalysisTimes)
@@ -408,6 +523,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
     private enum CodingKeys: String, CodingKey {
         case provider
         case webSearch
+        case officialSources
+        case alphaVantage
         case defaultPrivacyMode
         case dailyAutoAnalysisEnabled
         case dailyAutoAnalysisTimes

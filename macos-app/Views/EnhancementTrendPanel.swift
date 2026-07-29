@@ -353,6 +353,8 @@ extension EnhancementCenterView {
         case .qiemanAdjustment: return "且慢调仓"
         case .alfaAdjustment: return "Alfa 调仓"
         case .managerWatch: return "主理人巡检"
+        case .officialSource: return "官方数据"
+        case .alphaVantage: return "Alpha Vantage"
         case .webSearch: return "联网搜索"
         }
     }

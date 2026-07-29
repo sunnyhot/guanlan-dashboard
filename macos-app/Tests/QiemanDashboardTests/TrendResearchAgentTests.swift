@@ -250,7 +250,7 @@ final class TrendResearchAgentTests: XCTestCase {
 
         _ = try await agent.run(snapshot: snapshot, settings: settings) { _ in }
 
-        XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [90, 90, 90, 90])
+        XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [180, 180, 180, 180])
     }
 
     func testTimedOutSubmissionAutomaticallyConvergesAndRetries() async throws {
@@ -329,6 +329,74 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(firstData["count"] as? Int, 1)
         XCTAssertEqual(secondData["count"] as? Int, 0)
         XCTAssertEqual(harness.duplicateWebEvidenceCount, 1)
+    }
+
+    func testHarnessRequiresOfficialSourceAttemptBeforeSubmission() {
+        var harness = TrendResearchHarnessState(
+            snapshot: makeEmptySnapshot(),
+            officialSourceRequired: true
+        )
+        let overview = TrendResearchToolResult.content(
+            TrendResearchToolEnvelope.success(["portfolio": [:]])
+        )
+        _ = harness.process(toolName: "get_portfolio_overview", result: overview)
+
+        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertTrue(
+            harness.nextStepHint(
+                webSearchConfigured: false,
+                remainingWebSearches: 0
+            ).contains("official_sec_research")
+        )
+
+        let failedOfficialQuery = TrendResearchToolResult.content(
+            TrendResearchToolEnvelope.error(
+                code: "official_sec_failed",
+                message: "测试失败"
+            ),
+            isError: true
+        )
+        _ = harness.process(
+            toolName: "official_sec_research",
+            result: failedOfficialQuery
+        )
+
+        XCTAssertTrue(harness.officialSourceAttempted)
+        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: false))
+    }
+
+    func testHarnessRequiresAlphaVantageAttemptBeforeSubmission() {
+        var harness = TrendResearchHarnessState(
+            snapshot: makeEmptySnapshot(),
+            alphaVantageRequired: true
+        )
+        let overview = TrendResearchToolResult.content(
+            TrendResearchToolEnvelope.success(["portfolio": [:]])
+        )
+        _ = harness.process(toolName: "get_portfolio_overview", result: overview)
+
+        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertTrue(
+            harness.nextStepHint(
+                webSearchConfigured: false,
+                remainingWebSearches: 0
+            ).contains("alpha_vantage_research")
+        )
+
+        let failedVendorQuery = TrendResearchToolResult.content(
+            TrendResearchToolEnvelope.error(
+                code: "alpha_vantage_failed",
+                message: "测试失败"
+            ),
+            isError: true
+        )
+        _ = harness.process(
+            toolName: "alpha_vantage_research",
+            result: failedVendorQuery
+        )
+
+        XCTAssertEqual(harness.alphaVantageAttempts, 1)
+        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: false))
     }
 
     func testTurnLimitExceeded() async throws {

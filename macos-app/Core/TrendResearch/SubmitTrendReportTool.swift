@@ -68,6 +68,8 @@ struct SubmitTrendReportTool: TrendResearchTool {
         let sourceStatuses = await Self.normalizedSourceStatuses(
             snapshot: snapshot,
             ledger: context.evidenceLedger,
+            officialSourceConfigured: context.officialSourceSettings.isSECConfigured,
+            alphaVantageConfigured: context.alphaVantageSettings.isConfigured,
             webSearchConfigured: context.webSearchSettings.isConfigured
         )
         let insufficientReasons = Self.insufficientEvidenceReasons(
@@ -223,7 +225,11 @@ struct SubmitTrendReportTool: TrendResearchTool {
     }
 
     private static func externalSignalStatus(for evidence: [TrendEvidence]) -> TrendExternalSignalStatus {
-        if evidence.contains(where: { $0.id.hasPrefix("web:tavily:") }) {
+        if evidence.contains(where: {
+            $0.metadata.sourceKind.isExternalResearch
+                || $0.id.hasPrefix("official:sec:")
+                || $0.id.hasPrefix("web:tavily:")
+        }) {
             return .available
         }
         if evidence.contains(where: { $0.id.hasPrefix("market:") }) {
@@ -235,13 +241,78 @@ struct SubmitTrendReportTool: TrendResearchTool {
     private static func normalizedSourceStatuses(
         snapshot: TrendResearchSnapshot,
         ledger: TrendEvidenceLedger,
+        officialSourceConfigured: Bool,
+        alphaVantageConfigured: Bool,
         webSearchConfigured: Bool
     ) async -> [TrendSourceStatus] {
         var bySource = Dictionary(
             snapshot.sourceStatuses.map { ($0.source, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        let webEvidence = await ledger.allEvidence().filter {
+        let allEvidence = await ledger.allEvidence()
+        let officialEvidence = allEvidence.filter {
+            $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
+        }
+        let eligibleOfficialTargets = snapshot.eligibleSECResearchTickers
+        if eligibleOfficialTargets.isEmpty {
+            bySource[.officialSource] = TrendSourceStatus(
+                source: .officialSource,
+                status: .notRequested,
+                receivedAt: snapshot.createdAt,
+                detail: "当前快照没有可映射到 SEC 的美国股票代码。"
+            )
+        } else if officialSourceConfigured {
+            bySource[.officialSource] = TrendSourceStatus(
+                source: .officialSource,
+                status: officialEvidence.isEmpty ? .failed : .success,
+                asOf: officialEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
+                receivedAt: officialEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
+                errorCode: officialEvidence.isEmpty ? "no_usable_official_evidence" : nil,
+                itemCount: officialEvidence.count,
+                detail: officialEvidence.isEmpty
+                    ? "SEC 官方源已尝试，但没有形成可用、可引用的证据。"
+                    : nil
+            )
+        } else {
+            bySource[.officialSource] = TrendSourceStatus(
+                source: .officialSource,
+                status: .notConfigured,
+                receivedAt: snapshot.createdAt,
+                detail: "SEC 官方源需要启用并填写联系邮箱。"
+            )
+        }
+        let alphaEvidence = allEvidence.filter {
+            $0.metadata.sourceKind == .licensedMarketData
+                || $0.id.hasPrefix("vendor:alphavantage:")
+        }
+        if snapshot.eligibleAlphaVantageSymbols.isEmpty {
+            bySource[.alphaVantage] = TrendSourceStatus(
+                source: .alphaVantage,
+                status: .notRequested,
+                receivedAt: snapshot.createdAt,
+                detail: "当前快照没有可映射到 Alpha Vantage 的股票或 ETF 代码。"
+            )
+        } else if alphaVantageConfigured {
+            bySource[.alphaVantage] = TrendSourceStatus(
+                source: .alphaVantage,
+                status: alphaEvidence.isEmpty ? .failed : .success,
+                asOf: alphaEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
+                receivedAt: alphaEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
+                errorCode: alphaEvidence.isEmpty ? "no_usable_alpha_vantage_evidence" : nil,
+                itemCount: alphaEvidence.count,
+                detail: alphaEvidence.isEmpty
+                    ? "Alpha Vantage 已尝试，但没有形成可用、可引用的结构化证据。"
+                    : nil
+            )
+        } else {
+            bySource[.alphaVantage] = TrendSourceStatus(
+                source: .alphaVantage,
+                status: .notConfigured,
+                receivedAt: snapshot.createdAt,
+                detail: "未启用或未填写 Alpha Vantage API Key。"
+            )
+        }
+        let webEvidence = allEvidence.filter {
             $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
         }
         if webSearchConfigured {
@@ -287,7 +358,8 @@ struct SubmitTrendReportTool: TrendResearchTool {
         }
         let hasResearchEvidence = evidence.contains {
             switch $0.metadata.sourceKind {
-            case .marketQuote, .fundDisclosure, .platformSignal, .managerSignal, .webSearch:
+            case .marketQuote, .fundDisclosure, .platformSignal, .managerSignal,
+                 .officialFiling, .officialFinancial, .licensedMarketData, .webSearch:
                 return true
             case .portfolioSnapshot, .derived, .unknown:
                 return false

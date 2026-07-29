@@ -13,6 +13,8 @@ protocol TrendResearchAgentProtocol: Sendable {
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
         webSearchSettings: TavilySearchSettings,
+        officialSourceSettings: OfficialSourceSettings,
+        alphaVantageSettings: AlphaVantageSettings,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport
 }
@@ -186,6 +188,8 @@ struct TrendResearchAgent: Sendable {
     /// 运行时强制：submit 前必须先调用的工具。
     static let overviewToolName = "get_portfolio_overview"
     static let lookThroughToolName = "get_fund_lookthrough"
+    static let officialSourceToolName = "official_sec_research"
+    static let alphaVantageToolName = "alpha_vantage_research"
     static let webSearchToolName = "web_search"
     static let submitToolName = "submit_trend_report"
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
@@ -194,10 +198,20 @@ struct TrendResearchAgent: Sendable {
         client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         webSearchCache: TrendWebSearchResponseCache = TrendWebSearchResponseCache(),
+        officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
+        officialSourceCache: SECOfficialSourceCache = .shared,
+        alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
+        alphaVantageCache: AlphaVantageResponseCache = .shared,
         policy: TrendResearchRunPolicy = .init()
     ) {
         self.client = client
-        self.registry = TrendResearchToolRegistry(webSearchClient: webSearchClient)
+        self.registry = TrendResearchToolRegistry(
+            webSearchClient: webSearchClient,
+            officialSourceClient: officialSourceClient,
+            officialSourceCache: officialSourceCache,
+            alphaVantageClient: alphaVantageClient,
+            alphaVantageCache: alphaVantageCache
+        )
         self.promptBuilder = TrendResearchPromptBuilder()
         self.webSearchCache = webSearchCache
         self.policy = policy
@@ -207,6 +221,8 @@ struct TrendResearchAgent: Sendable {
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
         webSearchSettings: TavilySearchSettings = .empty,
+        officialSourceSettings: OfficialSourceSettings = .empty,
+        alphaVantageSettings: AlphaVantageSettings = .empty,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport {
         guard settings.isConfigured else {
@@ -217,7 +233,15 @@ struct TrendResearchAgent: Sendable {
         let reportDraftStore = TrendReportDraftStore(
             expectedFundCodes: snapshot.expectedFundCodes
         )
-        var messages = promptBuilder.initialMessages(snapshot: snapshot)
+        let officialSourceRequired = officialSourceSettings.isSECConfigured
+            && !snapshot.eligibleSECResearchTickers.isEmpty
+        let alphaVantageRequired = alphaVantageSettings.isConfigured
+            && !snapshot.eligibleAlphaVantageSymbols.isEmpty
+        var messages = promptBuilder.initialMessages(
+            snapshot: snapshot,
+            officialSourceConfigured: officialSourceRequired,
+            alphaVantageConfigured: alphaVantageRequired
+        )
 
         var turnCount = 0
         var toolCallCount = 0
@@ -227,7 +251,11 @@ struct TrendResearchAgent: Sendable {
         var executedBySignature: [String: TrendResearchToolResult] = [:]
         var toolCallAudits: [TrendAgentToolCallAudit] = []
         var webSearchUnavailableResult: TrendResearchToolResult?
-        var harnessState = TrendResearchHarnessState(snapshot: snapshot)
+        var harnessState = TrendResearchHarnessState(
+            snapshot: snapshot,
+            officialSourceRequired: officialSourceRequired,
+            alphaVantageRequired: alphaVantageRequired
+        )
         var submissionMode = false
         var consecutiveRequestTimeoutRecoveries = 0
         var didWarnPreferredWebSearches = false
@@ -301,8 +329,16 @@ struct TrendResearchAgent: Sendable {
                     }
                     if toolName == Self.webSearchToolName {
                         return webSearchSettings.isConfigured
+                            && (!officialSourceRequired || harnessState.officialSourceAttempted)
                             && webStatusBeforeRequest.remainingNetworkSearches > 0
                             && webSearchUnavailableResult == nil
+                    }
+                    if toolName == Self.officialSourceToolName {
+                        return officialSourceRequired
+                    }
+                    if toolName == Self.alphaVantageToolName {
+                        return alphaVantageRequired
+                            && (!officialSourceRequired || harnessState.officialSourceAttempted)
                     }
                     return true
                 }
@@ -417,10 +453,18 @@ struct TrendResearchAgent: Sendable {
                     let missingWebSearch = isSubmit
                         && webSearchSettings.isConfigured
                         && harnessState.webSearchAttempts == 0
+                    let missingOfficialSource = isSubmit
+                        && officialSourceRequired
+                        && !harnessState.officialSourceAttempted
+                    let missingAlphaVantage = isSubmit
+                        && alphaVantageRequired
+                        && harnessState.alphaVantageAttempts == 0
                     let missingRequiredTool = unexpectedTool
                         || missingOverview
                         || missingAssets
                         || missingLookThrough
+                        || missingOfficialSource
+                        || missingAlphaVantage
                         || missingWebSearch
 
                     var rawToolResult: TrendResearchToolResult
@@ -456,6 +500,24 @@ struct TrendResearchAgent: Sendable {
                             isError: true
                         )
                         await eventHandler(.modelCorrection(message: "报告提交被延后：必须先读取基金底层资产穿透结果。"))
+                    } else if missingOfficialSource {
+                        rawToolResult = .content(
+                            TrendResearchToolEnvelope.error(
+                                code: "missing_required_tool",
+                                message: "组合包含可由 SEC 识别的美股暴露，提交报告前必须先调用 official_sec_research 查询官方申报。"
+                            ),
+                            isError: true
+                        )
+                        await eventHandler(.modelCorrection(message: "报告提交被延后：必须先查询 SEC 官方数据。"))
+                    } else if missingAlphaVantage {
+                        rawToolResult = .content(
+                            TrendResearchToolEnvelope.error(
+                                code: "missing_required_tool",
+                                message: "已配置 Alpha Vantage 且存在可研究标的；提交前必须至少调用一次 alpha_vantage_research 获取最相关的结构化补充。"
+                            ),
+                            isError: true
+                        )
+                        await eventHandler(.modelCorrection(message: "报告提交被延后：必须先完成一次 Alpha Vantage 结构化研究。"))
                     } else if missingWebSearch {
                         rawToolResult = .content(TrendResearchToolEnvelope.error(code: "missing_required_tool", message: "已配置 Tavily，提交报告前必须至少调用一次 web_search 获取最新行业或政策信息。"), isError: true)
                         await eventHandler(.modelCorrection(message: "报告提交被延后：已配置 Tavily，必须先完成一次联网搜索。"))
@@ -483,6 +545,8 @@ struct TrendResearchAgent: Sendable {
                             evidenceLedger: ledger,
                             webSearchSettings: webSearchSettings,
                             webSearchGovernor: webSearchGovernor,
+                            officialSourceSettings: officialSourceSettings,
+                            alphaVantageSettings: alphaVantageSettings,
                             reportDraftStore: reportDraftStore
                         )
                         context.invalidSubmissionBudget = policy.maxInvalidSubmissions
@@ -583,6 +647,8 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
+                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
+                        alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
@@ -599,6 +665,8 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
+                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
+                        alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
@@ -615,6 +683,8 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
+                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
+                        alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,

@@ -140,7 +140,7 @@ final class FundLookThroughTests: XCTestCase {
         XCTAssertEqual(manufacturing.portfolioWeightPct, 38, accuracy: 0.0001)
         let stock = try XCTUnwrap(result.assetClasses.first { $0.name == "股票" })
         XCTAssertEqual(stock.portfolioWeightPct, 72, accuracy: 0.0001)
-        XCTAssertTrue(result.warnings.contains { $0.contains("不是实时完整持仓") })
+        XCTAssertTrue(result.warnings.contains { $0.contains("并非实时完整持仓") })
     }
 
     func testCalculatorReportsMissingAndStaleDisclosure() throws {

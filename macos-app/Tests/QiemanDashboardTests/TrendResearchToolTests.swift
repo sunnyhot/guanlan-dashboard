@@ -312,11 +312,11 @@ final class TrendResearchToolTests: XCTestCase {
 
     // MARK: - Validator 增强
 
-    func testValidatorRejectsAvailableStatusWithoutTavilyEvidence() {
+    func testValidatorRejectsAvailableStatusWithoutExternalResearchEvidence() {
         let report = TrendAnalysisReport.fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available)
         let result = TrendAnalysisValidator().validate(report)
         XCTAssertFalse(result.isValid)
-        XCTAssertTrue(result.messages.contains { $0.contains("Tavily") })
+        XCTAssertTrue(result.messages.contains { $0.contains("官方源或联网搜索") })
     }
 
     func testValidatorRejectsFabricatedEvidenceID() throws {

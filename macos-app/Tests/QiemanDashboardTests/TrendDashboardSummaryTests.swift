@@ -256,7 +256,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertTrue(source.contains("AITrendSummaryPanel("))
         XCTAssertTrue(source.contains("summary: model.trendDashboardSummary"))
         XCTAssertTrue(source.contains("model.selectedEnhancementTab = .trend"))
-        XCTAssertTrue(source.contains("await model.generateTrendAnalysis(userInitiated: true)"))
+        XCTAssertTrue(source.contains("model.startTrendAnalysis(userInitiated: true)"))
     }
 
     func testOverviewSourceMergesSummaryIntoTodayBrief() throws {

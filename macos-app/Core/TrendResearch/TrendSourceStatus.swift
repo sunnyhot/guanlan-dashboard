@@ -8,6 +8,8 @@ enum TrendDataSource: String, Codable, Hashable, Sendable, CaseIterable {
     case qiemanAdjustment
     case alfaAdjustment
     case managerWatch
+    case officialSource
+    case alphaVantage
     case webSearch
 }
 

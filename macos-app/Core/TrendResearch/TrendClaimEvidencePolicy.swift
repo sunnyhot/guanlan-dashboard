@@ -125,7 +125,9 @@ struct TrendClaimEvidencePolicy {
             }
             let hasResearchEvidence = supportingEvidence.contains {
                 switch $0.metadata.sourceKind {
-                case .fundDisclosure, .platformSignal, .managerSignal, .webSearch, .marketQuote:
+                case .fundDisclosure, .platformSignal, .managerSignal,
+                     .officialFiling, .officialFinancial, .licensedMarketData,
+                     .webSearch, .marketQuote:
                     return true
                 case .portfolioSnapshot, .derived, .unknown:
                     return false
@@ -195,13 +197,16 @@ struct TrendClaimEvidencePolicy {
             messages.append("\(targetName) 的买卖动作必须引用目标标的本地行情或净值事实")
         }
 
-        let webEvidence = selectedEvidence.filter {
-            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
+        let externalEventEvidence = selectedEvidence.filter {
+            $0.metadata.sourceKind == .webSearch
+                || $0.metadata.sourceKind == .officialFiling
+                || $0.id.hasPrefix("official:sec:filing:")
+                || $0.id.hasPrefix("web:tavily:")
         }
-        if Set(webEvidence.map(\.id)).count < 2 {
-            messages.append("\(targetName) 的买卖动作必须引用至少两个最新网页证据")
+        if Set(externalEventEvidence.map(\.id)).count < 2 {
+            messages.append("\(targetName) 的买卖动作必须引用至少两个最新外部事件证据")
         }
-        let eligiblePublishers = Set(webEvidence.compactMap { item -> String? in
+        let eligiblePublishers = Set(externalEventEvidence.compactMap { item -> String? in
             guard [.primary, .authoritative, .secondary].contains(item.metadata.sourceTier),
                   let publisher = item.metadata.publisherKey,
                   publisher != "unknown" else {
@@ -210,9 +215,14 @@ struct TrendClaimEvidencePolicy {
             return publisher
         })
         if eligiblePublishers.count < 2 {
-            messages.append("\(targetName) 的买卖动作必须引用两个独立且已识别来源的最新网页证据")
+            messages.append("\(targetName) 的买卖动作必须引用两个独立且已识别来源的最新外部事件证据")
         }
-        let hasAssociatedWebEvidence = webEvidence.contains { evidence in
+        if !externalEventEvidence.contains(where: {
+            $0.metadata.sourceTier == .primary || $0.metadata.sourceTier == .authoritative
+        }) {
+            messages.append("\(targetName) 的买卖动作必须至少引用一个官方或权威来源")
+        }
+        let hasAssociatedExternalEvidence = externalEventEvidence.contains { evidence in
             if evidence.metadata.isAssociated(
                 entityCode: targetCode,
                 entityName: targetName
@@ -233,8 +243,8 @@ struct TrendClaimEvidencePolicy {
                 evidence.metadata.isAssociated(sectorKey: $0)
             }
         }
-        if !hasAssociatedWebEvidence {
-            messages.append("\(targetName) 的网页证据正文未匹配标的、底层证券或行业；research_target 不能代替正文关联")
+        if !hasAssociatedExternalEvidence {
+            messages.append("\(targetName) 的外部证据正文未匹配标的、底层证券或行业；research_target 不能代替正文关联")
         }
 
         if requiresFundDisclosure {

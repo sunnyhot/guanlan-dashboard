@@ -7,18 +7,32 @@ import Foundation
 struct TrendResearchHarnessState: Sendable {
     private let requiredAssetIDs: Set<String>
     private let lookThroughRequired: Bool
+    private let officialSourceRequired: Bool
+    private let alphaVantageRequired: Bool
     private(set) var overviewRead = false
     private(set) var assetIDsRead: Set<String> = []
     private(set) var lookThroughRead = false
     private(set) var marketSnapshotRead = false
+    private(set) var officialSourceAttempts = 0
+    private(set) var successfulOfficialSourceQueries = 0
+    private(set) var seenOfficialEvidenceIDs: Set<String> = []
+    private(set) var alphaVantageAttempts = 0
+    private(set) var successfulAlphaVantageQueries = 0
+    private(set) var seenAlphaVantageEvidenceIDs: Set<String> = []
     private(set) var webSearchAttempts = 0
     private(set) var successfulWebSearches = 0
     private(set) var seenWebEvidenceIDs: Set<String> = []
     private(set) var duplicateWebEvidenceCount = 0
 
-    init(snapshot: TrendResearchSnapshot) {
+    init(
+        snapshot: TrendResearchSnapshot,
+        officialSourceRequired: Bool = false,
+        alphaVantageRequired: Bool = false
+    ) {
         requiredAssetIDs = Set(snapshot.assets.map(\.id))
         lookThroughRequired = snapshot.lookThrough != nil
+        self.officialSourceRequired = officialSourceRequired
+        self.alphaVantageRequired = alphaVantageRequired
     }
 
     var requiredAssetCount: Int {
@@ -41,6 +55,10 @@ struct TrendResearchHarnessState: Sendable {
         !lookThroughRequired || lookThroughRead
     }
 
+    var officialSourceAttempted: Bool {
+        officialSourceAttempts > 0
+    }
+
     func readyForSubmission(
         webSearchConfigured: Bool,
         allowInsufficientWebEvidence: Bool = false
@@ -48,6 +66,8 @@ struct TrendResearchHarnessState: Sendable {
         overviewRead
             && assetCoverageComplete
             && lookThroughCoverageComplete
+            && (!officialSourceRequired || officialSourceAttempted)
+            && (!alphaVantageRequired || alphaVantageAttempts > 0)
             && (
                 !webSearchConfigured
                     || successfulWebSearches > 0
@@ -60,6 +80,32 @@ struct TrendResearchHarnessState: Sendable {
         result: TrendResearchToolResult
     ) -> TrendResearchToolResult {
         var processed = result
+        if toolName == TrendResearchAgent.officialSourceToolName {
+            officialSourceAttempts += 1
+            if !result.isError,
+               let envelope = Self.jsonObject(result.contentJSON) {
+                let evidenceIDs = envelope["evidence_ids"] as? [String] ?? []
+                let newIDs = evidenceIDs.filter {
+                    seenOfficialEvidenceIDs.insert($0).inserted
+                }
+                if !newIDs.isEmpty {
+                    successfulOfficialSourceQueries += 1
+                }
+            }
+        }
+        if toolName == TrendResearchAgent.alphaVantageToolName {
+            alphaVantageAttempts += 1
+            if !result.isError,
+               let envelope = Self.jsonObject(result.contentJSON) {
+                let evidenceIDs = envelope["evidence_ids"] as? [String] ?? []
+                let newIDs = evidenceIDs.filter {
+                    seenAlphaVantageEvidenceIDs.insert($0).inserted
+                }
+                if !newIDs.isEmpty {
+                    successfulAlphaVantageQueries += 1
+                }
+            }
+        }
         if toolName == TrendResearchAgent.webSearchToolName {
             webSearchAttempts += 1
             if !result.isError {
@@ -121,6 +167,14 @@ struct TrendResearchHarnessState: Sendable {
             "fund_look_through_required": lookThroughRequired,
             "fund_look_through_read": lookThroughRead,
             "market_snapshot_read": marketSnapshotRead,
+            "official_source_required": officialSourceRequired,
+            "official_source_attempts": officialSourceAttempts,
+            "successful_official_source_queries": successfulOfficialSourceQueries,
+            "official_evidence_count": seenOfficialEvidenceIDs.count,
+            "alpha_vantage_required": alphaVantageRequired,
+            "alpha_vantage_attempts": alphaVantageAttempts,
+            "successful_alpha_vantage_queries": successfulAlphaVantageQueries,
+            "alpha_vantage_evidence_count": seenAlphaVantageEvidenceIDs.count,
             "web_search_attempts": webSearchAttempts,
             "successful_web_searches": successfulWebSearches,
             "web_evidence_count": seenWebEvidenceIDs.count,
@@ -162,6 +216,17 @@ struct TrendResearchHarnessState: Sendable {
         }
         if lookThroughRequired, !lookThroughRead {
             return "调用 get_fund_lookthrough 读取基金底层资产、披露日期与未知仓位。"
+        }
+        if officialSourceRequired, !officialSourceAttempted {
+            return "先调用 official_sec_research 查询组合相关美股或底层美股的 SEC 官方申报；官方源完成或明确失败后，才使用网页搜索补缺。"
+        }
+        if alphaVantageRequired, alphaVantageAttempts == 0 {
+            if !officialSourceRequired,
+               webSearchConfigured,
+               successfulWebSearches == 0 {
+                return "中国标的先调用 web_search 并限定交易所、监管机构或政府官方域名；取得一手证据后，再用 alpha_vantage_research 补充结构化行情。"
+            }
+            return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方源，不得覆盖 SEC 等一手证据。"
         }
         if webSearchConfigured, successfulWebSearches == 0 {
             if remainingWebSearches == 0 {

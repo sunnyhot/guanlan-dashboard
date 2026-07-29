@@ -59,6 +59,10 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertFalse(settings.provider.isConfigured)
         XCTAssertEqual(settings.provider.timeoutSeconds, 300)
         XCTAssertFalse(settings.webSearch.isConfigured)
+        XCTAssertTrue(settings.officialSources.enabled)
+        XCTAssertFalse(settings.officialSources.isSECConfigured)
+        XCTAssertFalse(settings.alphaVantage.enabled)
+        XCTAssertEqual(settings.alphaVantage.dailyRequestLimit, 25)
         XCTAssertEqual(settings.defaultPrivacyMode, .sanitized)
         XCTAssertFalse(settings.dailyAutoAnalysisEnabled)
         XCTAssertEqual(settings.dailyAutoAnalysisTimes, ["09:30", "14:30"])
@@ -76,6 +80,15 @@ final class TrendAnalysisStoreTests: XCTestCase {
                 timeoutSeconds: 180
             ),
             webSearch: TavilySearchSettings(apiKey: "tvly-test-secret"),
+            officialSources: OfficialSourceSettings(
+                enabled: true,
+                secContactEmail: "research@example.com"
+            ),
+            alphaVantage: AlphaVantageSettings(
+                enabled: true,
+                apiKey: "alpha-test-secret",
+                dailyRequestLimit: 25
+            ),
             defaultPrivacyMode: .fullDetail,
             dailyAutoAnalysisEnabled: true,
             dailyAutoAnalysisTimes: ["15:10", "09:30"],
@@ -92,6 +105,11 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.apiKey, "sk-test-secret")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 180)
         XCTAssertEqual(loaded.webSearch.apiKey, "tvly-test-secret")
+        XCTAssertTrue(loaded.officialSources.isSECConfigured)
+        XCTAssertEqual(loaded.officialSources.secContactEmail, "research@example.com")
+        XCTAssertTrue(loaded.alphaVantage.isConfigured)
+        XCTAssertEqual(loaded.alphaVantage.apiKey, "alpha-test-secret")
+        XCTAssertEqual(loaded.alphaVantage.dailyRequestLimit, 25)
         XCTAssertEqual(loaded.defaultPrivacyMode, settings.defaultPrivacyMode)
         XCTAssertEqual(loaded.dailyAutoAnalysisEnabled, settings.dailyAutoAnalysisEnabled)
         XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["09:30", "15:10"])
@@ -124,6 +142,9 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.providerName, "智谱")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 60)
         XCTAssertFalse(loaded.webSearch.isConfigured)
+        XCTAssertTrue(loaded.officialSources.enabled)
+        XCTAssertFalse(loaded.officialSources.isSECConfigured)
+        XCTAssertFalse(loaded.alphaVantage.isConfigured)
         XCTAssertEqual(loaded.defaultPrivacyMode, .fullDetail)
         XCTAssertTrue(loaded.dailyAutoAnalysisEnabled)
         XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["09:30", "14:30"])

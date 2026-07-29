@@ -34,12 +34,16 @@ struct TrendAnalysisValidator {
         if !report.disclaimer.contains("非投资建议") {
             messages.append("缺少明确的非投资建议声明。")
         }
-        let hasTavilyEvidence = report.evidence.contains { $0.id.hasPrefix("web:tavily:") }
-        if report.externalSignalStatus == .available && !hasTavilyEvidence {
-            messages.append("externalSignalStatus 为 available 时必须引用本次 Tavily 搜索产生的 web:tavily:* 证据。")
+        let hasExternalResearchEvidence = report.evidence.contains {
+            $0.metadata.sourceKind.isExternalResearch
+                || $0.id.hasPrefix("official:sec:")
+                || $0.id.hasPrefix("web:tavily:")
         }
-        if report.externalSignalStatus != .available && hasTavilyEvidence {
-            messages.append("报告已经引用 Tavily 网页证据，externalSignalStatus 应为 available。")
+        if report.externalSignalStatus == .available && !hasExternalResearchEvidence {
+            messages.append("externalSignalStatus 为 available 时必须引用本次官方源或联网搜索产生的外部证据。")
+        }
+        if report.externalSignalStatus != .available && hasExternalResearchEvidence {
+            messages.append("报告已经引用官方源或联网搜索证据，externalSignalStatus 应为 available。")
         }
 
         // 证据账本解析：sectors/marketOutlook/opportunities 引用的 evidenceID 必须都在 report.evidence 中。

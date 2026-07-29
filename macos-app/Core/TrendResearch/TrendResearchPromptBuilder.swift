@@ -7,11 +7,30 @@ import Foundation
 // 要求先调用 get_portfolio_overview。不在初始 user prompt 里内嵌整份持仓 JSON。
 
 struct TrendResearchPromptBuilder: Sendable {
-    func initialMessages(snapshot: TrendResearchSnapshot) -> [AgentChatMessage] {
-        [systemMessage(snapshot: snapshot), userMessage(snapshot: snapshot)]
+    func initialMessages(
+        snapshot: TrendResearchSnapshot,
+        officialSourceConfigured: Bool = false,
+        alphaVantageConfigured: Bool = false
+    ) -> [AgentChatMessage] {
+        [
+            systemMessage(
+                snapshot: snapshot,
+                officialSourceConfigured: officialSourceConfigured,
+                alphaVantageConfigured: alphaVantageConfigured
+            ),
+            userMessage(
+                snapshot: snapshot,
+                officialSourceConfigured: officialSourceConfigured,
+                alphaVantageConfigured: alphaVantageConfigured
+            )
+        ]
     }
 
-    private func systemMessage(snapshot: TrendResearchSnapshot) -> AgentChatMessage {
+    private func systemMessage(
+        snapshot: TrendResearchSnapshot,
+        officialSourceConfigured: Bool,
+        alphaVantageConfigured: Bool
+    ) -> AgentChatMessage {
         let privacyRule = snapshot.privacyMode == .sanitized
             ? "当前为脱敏摘要模式：工具返回的金额字段为空，只能基于仓位比例、收益率和估值涨跌分析，不要编造金额。"
             : "当前为完整明细模式：工具会返回金额字段，可用于分析。"
@@ -21,6 +40,12 @@ struct TrendResearchPromptBuilder: Sendable {
         } else {
             lookThroughRule = "本次快照没有可用的基金穿透数据：必须明确披露缺口，不得根据基金名称臆测完整底层持仓。"
         }
+        let officialSourceRule = officialSourceConfigured
+            ? "本次组合存在 SEC 可识别的直接或底层美股：必须先调用 official_sec_research 查询近期官方申报；SEC 结果只证明申报或财务事实，不得仅凭表单类型判断利好/利空。完成官方查询后，才用 web_search 补充新闻、政策原文或市场解释。"
+            : "本次没有已配置且可匹配的 SEC 官方研究目标。中国政策和监管研究使用 web_search 时，应优先限定 gov.cn、pbc.gov.cn、csrc.gov.cn、sse.com.cn、szse.cn、bse.cn、cninfo.com.cn 等官方域名；官方结果不足后再扩展到权威媒体。"
+        let alphaVantageRule = alphaVantageConfigured
+            ? "本次存在 Alpha Vantage 可识别标的：在官方源之后至少调用一次 alpha_vantage_research。ETF 优先 etfProfile，个股事件优先 earningsCalendar，趋势缺口优先 dailyAnalytics；不要重复调用供应商技术指标接口，收益、均线、波动率和回撤已由 App 本地计算。"
+            : "本次未配置 Alpha Vantage 或没有可识别标的，不调用 alpha_vantage_research。"
 
         let text = """
 你是且慢（Qieman）组合的趋势研究分析师，基于 App 提供的只读快照工具做结构化研究，最后按 App 开放的顺序分模块提交报告。你的输出不是投资建议。
@@ -30,8 +55,10 @@ struct TrendResearchPromptBuilder: Sendable {
 2. get_portfolio_assets：分页读取全部资产明细，必须读完全部页面或用 codes 覆盖全部持有基金。
 3. get_fund_lookthrough：读取基金公开定期报告的底层股票/债券、行业、资产类别、重叠持仓、披露日期、覆盖率与未知仓位。本次快照包含穿透数据时为必调工具。
 4. get_market_snapshot：读取大盘指数与基金估值行情（可选）。
-5. web_search：通过 Tavily 搜索最新行业、宏观和政策信息。每次必须填写与当前快照匹配的 research_target；它表示查询意图，不代表结果一定支持该方向。已配置时至少取得一次非空、未重复的有效搜索，并优先使用最近一周或一个月的权威来源；查询中不得包含组合名称、个人信息或金额。
-6. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
+5. official_sec_research：直接查询 SEC EDGAR 官方 Submissions 和 XBRL Company Facts。只用于当前直接持仓或基金穿透出的美股；有可识别标的且已配置时为必调，并且优先于 web_search。
+6. alpha_vantage_research：第三方结构化市场数据补充。只能研究当前直接持仓或基金穿透标的；它不是官方一手来源。已配置且有可识别标的时至少调用一次。美股先查 SEC；中国标的先用 web_search 限定交易所、监管机构或政府官方域名，再用它补充结构化行情。
+7. web_search：通过 Tavily 补充最新行业、宏观、政策和事件信息。每次必须填写与当前快照匹配的 research_target；政策/监管检索先用 include_domains 限定官方域名，SEC 已覆盖的事实不得再用二手网页替代。已配置时至少取得一次非空、未重复的有效搜索；查询中不得包含组合名称、个人信息或金额。
+8. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
    - submit_trend_overview_module：组合总判断 + short/medium/long 三周期。
    - submit_trend_market_module：大盘/大类资产 + 行业板块 + 机会。
    - submit_trend_asset_batch：已持有基金趋势，每批最多 \(TrendReportDraftStore.assetBatchSize) 只；根据工具返回的 remaining_fund_codes 继续分批。
@@ -41,6 +68,8 @@ struct TrendResearchPromptBuilder: Sendable {
 - 搜索前先检查已有网页证据，避免只改写措辞的重复查询；只有存在明确行业、政策或宏观证据缺口时才继续搜索。
 - web_searches_remaining 是真实 Tavily 请求余额，缓存命中不消耗该余额。
 - fund_look_through_required=true 时，必须等 fund_look_through_read=true 后再提交。
+- official_source_required=true 时，必须先完成 official_sec_research；即使官方查询为空或失败，也要保留该缺口，再用网页搜索补充，不得伪造官方结论。
+- alpha_vantage_required=true 时，在官方源之后调用 alpha_vantage_research；其证据 ID 以 vendor:alphavantage: 开头，只能作为供应商结构化补充。
 - ready_for_submission=true 且证据足够时应及时提交，不要为了耗尽预算继续调用工具。
 - ready_for_submission=true 后立即停止新增搜索。下一轮只会提供当前需要的一个分模块提交工具，必须只提交该模块。
 
@@ -72,6 +101,8 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - counterEvidenceIDs 用于真实反证，contextEvidenceIDs 只表示背景事实，不能拿上下文证据冒充方向支持。
 - watch/waitForConfirmation/observeInBatches 属于 informational；pausePlan/rebalanceReview/considerIncrease/considerReduce 属于 allocationReview。所有行动都必须填写 targetName、引用对应本地持仓/净值/行情事实并提供触发和失效条件；allocationReview 还必须有与理由匹配的结构或外部证据和仓位边界。
 - 最新行业、宏观和政策判断必须引用 web_search 返回的 web:tavily:* evidence id；不要把模型记忆当作最新事实。
+- SEC 申报和财务事实优先引用 official:sec:* evidence id；网页摘要不能替代已有官方证据。officialFiling 只证明提交了什么表单及其结构化项目，若未读取正文，不得推断事件方向。
+- Alpha Vantage 证据引用 vendor:alphavantage:*；它可支持 ETF 结构、财报日历和历史日线统计，但不得描述为监管、交易所或发行人官方披露，也不得冒充实时行情。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
 - marketOutlook 与 sectors 互斥：同一主题只能出现在其中一个数组。指数/大类资产（沪深300、黄金、债券、原油…）只放 marketOutlook；行业板块（消费、科技、医药、新能源…）只放 sectors。不要在两边写同一个主题（例如「消费」不能同时出现在两个数组里）。
 - keyAssets 与 actions 建议各不超过 5 条。
@@ -86,30 +117,53 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 
 \(privacyRule)
 \(lookThroughRule)
+\(officialSourceRule)
+\(alphaVantageRule)
 """
         return AgentChatMessage(role: .system, content: text)
     }
 
-    private func userMessage(snapshot: TrendResearchSnapshot) -> AgentChatMessage {
-        AgentChatMessage(role: .user, content: userMessageText(snapshot: snapshot))
+    private func userMessage(
+        snapshot: TrendResearchSnapshot,
+        officialSourceConfigured: Bool,
+        alphaVantageConfigured: Bool
+    ) -> AgentChatMessage {
+        AgentChatMessage(
+            role: .user,
+            content: userMessageText(
+                snapshot: snapshot,
+                officialSourceConfigured: officialSourceConfigured,
+                alphaVantageConfigured: alphaVantageConfigured
+            )
+        )
     }
 
-    private func userMessageText(snapshot: TrendResearchSnapshot) -> String {
+    private func userMessageText(
+        snapshot: TrendResearchSnapshot,
+        officialSourceConfigured: Bool,
+        alphaVantageConfigured: Bool
+    ) -> String {
         let warnings = snapshot.sourceWarnings.isEmpty
             ? ""
             : "\n来源警告：\n- " + snapshot.sourceWarnings.joined(separator: "\n- ")
         let lookThrough = snapshot.lookThrough.map {
             "\n基金穿透：已准备；覆盖 \($0.coveredFundCount)/\($0.expectedFundCount) 只基金，必须调用 get_fund_lookthrough。"
         } ?? "\n基金穿透：当前无可用快照。"
+        let official = officialSourceConfigured
+            ? "\nSEC 官方研究标的：\(snapshot.eligibleSECResearchTickers.joined(separator: "、"))；先查官方申报，再做网页补缺。"
+            : "\nSEC 官方研究：本次未配置或没有可识别标的。"
+        let alphaVantage = alphaVantageConfigured
+            ? "\nAlpha Vantage 结构化标的：\(snapshot.eligibleAlphaVantageSymbols.joined(separator: "、"))；官方源之后选择最相关的一项补充。"
+            : "\nAlpha Vantage：本次未配置或没有可识别标的。"
         return """
 本次研究目标：基于当前组合快照，给出短中长期趋势、板块与机会观点、每只持有基金的趋势，以及少量可执行的行动候选。
 
 隐私模式：\(snapshot.privacyMode.rawValue)
 快照 ID：\(snapshot.runID.uuidString)
 资产数量：\(snapshot.portfolio.assetCount)
-数据截止时间：\(snapshot.dataAsOf)\(lookThrough)\(warnings)
+数据截止时间：\(snapshot.dataAsOf)\(lookThrough)\(official)\(alphaVantage)\(warnings)
 
-请先调用 get_portfolio_overview 取得基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough；如 Tavily 已配置，使用 web_search 检索最新行业与政策信息。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
+请先调用 get_portfolio_overview 取得基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough。美股先查 SEC；中国标的先用 web_search 限定交易所、监管机构或政府官方域名；随后已配置 Alpha Vantage 时选择一项最相关的结构化补充，最后再用普通网页搜索补足新闻与市场解释。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
 """
     }
 }

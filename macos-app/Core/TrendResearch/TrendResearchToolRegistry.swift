@@ -1,6 +1,6 @@
 import Foundation
 
-// 工具注册表：组合概览、持仓、市场快照、Tavily 网页搜索和报告提交。
+// 工具注册表：组合概览、持仓、市场快照、SEC 官方源、Alpha Vantage、Tavily 和报告提交。
 //
 // submit_trend_report 见 SubmitTrendReportTool.swift。
 
@@ -8,12 +8,26 @@ struct TrendResearchToolRegistry: Sendable {
     let tools: [String: any TrendResearchTool]
     let definitions: [AgentToolDefinition]
 
-    init(webSearchClient: any TavilySearchClientProtocol = TavilySearchClient()) {
+    init(
+        webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
+        officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
+        officialSourceCache: SECOfficialSourceCache = .shared,
+        alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
+        alphaVantageCache: AlphaVantageResponseCache = .shared
+    ) {
         let all: [any TrendResearchTool] = [
             PortfolioOverviewTool(),
             PortfolioAssetsTool(),
             FundLookThroughTool(),
             MarketSnapshotTool(),
+            SECOfficialResearchTool(
+                client: officialSourceClient,
+                cache: officialSourceCache
+            ),
+            AlphaVantageResearchTool(
+                client: alphaVantageClient,
+                cache: alphaVantageCache
+            ),
             TavilyWebSearchTool(client: webSearchClient),
             SubmitTrendOverviewModuleTool(),
             SubmitTrendMarketModuleTool(),

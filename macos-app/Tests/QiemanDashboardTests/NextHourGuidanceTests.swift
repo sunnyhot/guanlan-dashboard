@@ -230,7 +230,11 @@ final class NextHourGuidanceTests: XCTestCase {
                     currentPrice: 4.2,
                     quoteTime: "2026-07-27 10:14:00",
                     quoteSource: "测试行情",
-                    quoteIsFresh: true,
+                    quoteAssessment: TrendSourceFreshnessPolicy.assess(
+                        quoteType: .lastTrade,
+                        asOf: "2026-07-27 10:14:00",
+                        receivedAt: "2026-07-27 10:15:00"
+                    ),
                     profitPct: 3.1,
                     estimateChangePct: -0.4,
                     pendingTradeCount: 0,

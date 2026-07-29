@@ -150,7 +150,8 @@ extension AppModel {
                 context: context,
                 researchSnapshot: researchSnapshot,
                 settings: provider,
-                webSearchSettings: trendSettings.webSearch
+                webSearchSettings: trendSettings.webSearch,
+                officialSourceSettings: trendSettings.officialSources
             )
             saveTrendAgentRunArtifact(
                 TrendAgentRunArtifact.makeNextHour(

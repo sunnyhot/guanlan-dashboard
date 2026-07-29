@@ -216,6 +216,8 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
         webSearchSettings: TavilySearchSettings = .empty,
+        officialSourceSettings: OfficialSourceSettings = .empty,
+        alphaVantageSettings: AlphaVantageSettings = .empty,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport {
         lock.lock()

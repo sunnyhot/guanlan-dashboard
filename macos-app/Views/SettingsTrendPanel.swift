@@ -9,7 +9,7 @@ struct TrendSettingsPanel: View {
     var body: some View {
         SettingsPanel(
             title: "AI 研判",
-            subtitle: "配置模型连接、Tavily 联网搜索、每日自动分析与操作建议偏好",
+            subtitle: "配置模型连接、官方数据、结构化行情补充、联网搜索、每日自动分析与操作建议偏好",
             icon: "sparkles"
         ) {
             configurationContent
@@ -70,15 +70,56 @@ struct TrendSettingsPanel: View {
                     trendField("模型", text: trendProviderModelBinding, placeholder: "glm-5.2")
                     trendSecureField("API Key", text: trendProviderAPIKeyBinding, placeholder: "sk-...")
                     trendField("服务超时秒数", text: trendProviderTimeoutBinding, placeholder: "300")
-                    Text("趋势 Agent 单轮生成最多 90 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行最多 300 秒。此处可设置更短的服务超时。")
+                    Text("趋势 Agent 单轮生成最多 180 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行使用扩展研究预算。此处可设置更短的服务超时。")
                         .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
 
                     SettingsDivider()
-                    SettingsGroupHeader(title: "联网搜索")
+                    SettingsGroupHeader(title: "官方数据源")
+                    Toggle("启用 SEC 官方披露", isOn: officialSourcesEnabledBinding)
+                        .toggleStyle(.switch)
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
+                    trendField(
+                        "SEC 联系邮箱",
+                        text: secContactEmailBinding,
+                        placeholder: "name@example.com"
+                    )
+                    .disabled(!model.trendSettings.officialSources.enabled)
+                    .opacity(model.trendSettings.officialSources.enabled ? 1 : 0.55)
+                    Text("SEC 接口免费且不需要 API Key。邮箱只用于按 SEC 要求组成请求 User-Agent，不会发送持仓和个人资产；有美股或基金底层美股时，Agent 会先查 SEC 披露。")
+                        .font(AppPalette.appFont(.subheadline))
+                        .foregroundStyle(AppPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    SettingsDivider()
+                    SettingsGroupHeader(title: "结构化市场数据")
+                    Toggle("启用 Alpha Vantage", isOn: alphaVantageEnabledBinding)
+                        .toggleStyle(.switch)
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
+                    trendSecureField(
+                        "Alpha Vantage API Key",
+                        text: alphaVantageAPIKeyBinding,
+                        placeholder: "个人 API Key"
+                    )
+                    .disabled(!model.trendSettings.alphaVantage.enabled)
+                    .opacity(model.trendSettings.alphaVantage.enabled ? 1 : 0.55)
+                    trendField(
+                        "每日联网额度",
+                        text: alphaVantageDailyLimitBinding,
+                        placeholder: "25"
+                    )
+                    .disabled(!model.trendSettings.alphaVantage.enabled)
+                    .opacity(model.trendSettings.alphaVantage.enabled ? 1 : 0.55)
+                    Text("用于 ETF 持仓、财报日历和日线统计；属于第三方供应商数据，优先级低于 SEC/交易所等官方源。默认按免费额度 25 次/日限制，缓存命中不计数；API Key 由每位用户自行配置，不会随 App 分发。")
+                        .font(AppPalette.appFont(.subheadline))
+                        .foregroundStyle(AppPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    SettingsDivider()
+                    SettingsGroupHeader(title: "联网补充搜索")
                     trendSecureField("Tavily API Key", text: tavilyAPIKeyBinding, placeholder: "tvly-...")
-                    Text("用于搜索最新行业、宏观和政策信息。搜索查询只包含通用行业和政策关键词，不发送组合金额或个人信息。")
+                    Text("在官方源无法覆盖新闻、宏观或政策信息时补充检索。搜索查询只包含通用行业和政策关键词，不发送组合金额或个人信息。")
                         .font(AppPalette.appFont(.subheadline))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -336,6 +377,50 @@ struct TrendSettingsPanel: View {
         Binding(
             get: { model.trendSettings.webSearch.apiKey },
             set: { model.trendSettings.webSearch.apiKey = $0 }
+        )
+    }
+
+    private var officialSourcesEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.trendSettings.officialSources.enabled },
+            set: { model.trendSettings.officialSources.enabled = $0 }
+        )
+    }
+
+    private var alphaVantageEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.trendSettings.alphaVantage.enabled },
+            set: { model.trendSettings.alphaVantage.enabled = $0 }
+        )
+    }
+
+    private var alphaVantageAPIKeyBinding: Binding<String> {
+        Binding(
+            get: { model.trendSettings.alphaVantage.apiKey },
+            set: { model.trendSettings.alphaVantage.apiKey = $0 }
+        )
+    }
+
+    private var alphaVantageDailyLimitBinding: Binding<String> {
+        Binding(
+            get: {
+                String(model.trendSettings.alphaVantage.normalizedDailyRequestLimit)
+            },
+            set: { rawValue in
+                if let limit = Int(rawValue), limit > 0 {
+                    model.trendSettings.alphaVantage.dailyRequestLimit = min(
+                        10_000,
+                        limit
+                    )
+                }
+            }
+        )
+    }
+
+    private var secContactEmailBinding: Binding<String> {
+        Binding(
+            get: { model.trendSettings.officialSources.secContactEmail },
+            set: { model.trendSettings.officialSources.secContactEmail = $0 }
         )
     }
 

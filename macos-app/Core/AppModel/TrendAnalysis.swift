@@ -165,7 +165,7 @@ extension AppModel {
         }
         appendTrendProgress(
             "\(triggerText)已启动",
-            detail: "模型：\(provider.model)；隐私：\(trendPrivacyMode.rawValue)；Tavily：\(trendSettings.webSearch.isConfigured ? "已配置" : "未配置")",
+            detail: "模型：\(provider.model)；隐私：\(trendPrivacyMode.rawValue)；SEC：\(trendSettings.officialSources.isSECConfigured ? "已配置" : "未配置")；Alpha Vantage：\(trendSettings.alphaVantage.isConfigured ? "已配置" : "未配置")；Tavily：\(trendSettings.webSearch.isConfigured ? "已配置" : "未配置")",
             level: .activity
         )
 
@@ -267,10 +267,16 @@ extension AppModel {
             additionalSourceWarnings: lookThroughWarnings,
             sourceStatuses: marketSourceStatuses + [fundDisclosureStatus]
         )
+        let officialText = trendSettings.officialSources.isSECConfigured
+            ? "SEC 官方源已配置"
+            : "SEC 官方源未配置"
         let searchText = trendSettings.webSearch.isConfigured ? "Tavily 联网搜索已配置" : "未配置联网搜索"
+        let alphaText = trendSettings.alphaVantage.isConfigured
+            ? "Alpha Vantage 已配置"
+            : "Alpha Vantage 未配置"
         appendTrendProgress(
             "分析快照已冻结",
-            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(searchText)；隐私 \(snapshot.privacyMode.rawValue)",
+            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(officialText)；\(alphaText)；\(searchText)；隐私 \(snapshot.privacyMode.rawValue)",
             level: .success
         )
 
@@ -285,6 +291,8 @@ extension AppModel {
                 snapshot: snapshot,
                 settings: provider,
                 webSearchSettings: trendSettings.webSearch,
+                officialSourceSettings: trendSettings.officialSources,
+                alphaVantageSettings: trendSettings.alphaVantage,
                 eventHandler: { [weak self] event in
                     if case .auditArtifactReady(let artifact) = event {
                         self?.saveTrendAgentRunArtifact(
@@ -367,12 +375,28 @@ extension AppModel {
             receivedAt: generatedAt
         ) + [
             TrendSourceStatus(
+                source: .officialSource,
+                status: trendSettings.officialSources.isSECConfigured ? .notRequested : .notConfigured,
+                receivedAt: generatedAt,
+                detail: trendSettings.officialSources.isSECConfigured
+                    ? "等待 Agent 优先查询 SEC 官方披露。"
+                    : "SEC 官方源需要启用并填写联系邮箱。"
+            ),
+            TrendSourceStatus(
                 source: .webSearch,
                 status: trendSettings.webSearch.isConfigured ? .notRequested : .notConfigured,
                 receivedAt: generatedAt,
                 detail: trendSettings.webSearch.isConfigured
                     ? "等待 Agent 按研究目标发起联网搜索。"
                     : "未配置 Tavily API Key。"
+            ),
+            TrendSourceStatus(
+                source: .alphaVantage,
+                status: trendSettings.alphaVantage.isConfigured ? .notRequested : .notConfigured,
+                receivedAt: generatedAt,
+                detail: trendSettings.alphaVantage.isConfigured
+                    ? "等待 Agent 在官方源之后选择结构化数据补充。"
+                    : "未启用或未填写 Alpha Vantage API Key。"
             )
         ]
         var sourceWarnings = extendedSourceStatuses.compactMap(\.warningText)

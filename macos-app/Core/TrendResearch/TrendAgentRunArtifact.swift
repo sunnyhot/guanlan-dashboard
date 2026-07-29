@@ -57,8 +57,8 @@ struct TrendValidatorAuditResult: Codable, Hashable, Sendable {
 }
 
 struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
-    static let promptVersion = "trend-research-prompt-v3-modular"
-    static let policyVersion = "trend-claim-evidence-v1"
+    static let promptVersion = "trend-research-prompt-v4-official-first"
+    static let policyVersion = "trend-claim-evidence-v2"
 
     let runID: UUID
     let agentKind: String
@@ -187,6 +187,8 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
     static func makeFailure(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
+        officialSourceConfigured: Bool = false,
+        alphaVantageConfigured: Bool = false,
         webSearchConfigured: Bool,
         completedAt: String,
         toolCalls: [TrendAgentToolCallAudit],
@@ -197,6 +199,54 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
             snapshot.sourceStatuses.map { ($0.source, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        let officialEvidence = canonicalEvidence.filter {
+            $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
+        }
+        if snapshot.eligibleSECResearchTickers.isEmpty {
+            bySource[.officialSource] = TrendSourceStatus(
+                source: .officialSource,
+                status: .notRequested,
+                receivedAt: completedAt,
+                detail: "当前快照没有可映射到 SEC 的美国股票代码。"
+            )
+        } else {
+            bySource[.officialSource] = TrendSourceStatus(
+                source: .officialSource,
+                status: officialSourceConfigured
+                    ? (officialEvidence.isEmpty ? .failed : .success)
+                    : .notConfigured,
+                asOf: officialEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
+                receivedAt: officialEvidence.map(\.retrievedAt).max() ?? completedAt,
+                errorCode: officialSourceConfigured && officialEvidence.isEmpty
+                    ? "no_usable_official_evidence"
+                    : nil,
+                itemCount: officialEvidence.count
+            )
+        }
+        let alphaEvidence = canonicalEvidence.filter {
+            $0.metadata.sourceKind == .licensedMarketData
+                || $0.id.hasPrefix("vendor:alphavantage:")
+        }
+        if snapshot.eligibleAlphaVantageSymbols.isEmpty {
+            bySource[.alphaVantage] = TrendSourceStatus(
+                source: .alphaVantage,
+                status: .notRequested,
+                receivedAt: completedAt
+            )
+        } else {
+            bySource[.alphaVantage] = TrendSourceStatus(
+                source: .alphaVantage,
+                status: alphaVantageConfigured
+                    ? (alphaEvidence.isEmpty ? .failed : .success)
+                    : .notConfigured,
+                asOf: alphaEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
+                receivedAt: alphaEvidence.map(\.retrievedAt).max() ?? completedAt,
+                errorCode: alphaVantageConfigured && alphaEvidence.isEmpty
+                    ? "no_usable_alpha_vantage_evidence"
+                    : nil,
+                itemCount: alphaEvidence.count
+            )
+        }
         let webEvidence = canonicalEvidence.filter {
             $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
         }
