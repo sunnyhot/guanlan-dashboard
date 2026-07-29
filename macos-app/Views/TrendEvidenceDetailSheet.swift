@@ -1,10 +1,17 @@
 import SwiftUI
 
-struct TrendEvidenceDetailPopover: View {
+struct TrendEvidenceDetailSelection: Identifiable, Hashable {
+    let id: String
     let subjectTitle: String
     let rationale: String
     let dataAsOf: String
     let detail: TrendEvidenceDetailModel
+}
+
+struct TrendEvidenceDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selection: TrendEvidenceDetailSelection
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,9 +26,17 @@ struct TrendEvidenceDetailPopover: View {
                 }
                 .padding(AppPalette.spaceL)
             }
+            Divider()
+            footer
         }
-        .frame(width: 560)
-        .frame(minHeight: 320, idealHeight: 540, maxHeight: 640)
+        .frame(
+            minWidth: 680,
+            idealWidth: 760,
+            maxWidth: 900,
+            minHeight: 480,
+            idealHeight: 620,
+            maxHeight: 760
+        )
         .background(AppPalette.cardStrong)
         .textSelection(.enabled)
     }
@@ -33,24 +48,24 @@ struct TrendEvidenceDetailPopover: View {
                     .font(AppPalette.appFont(.headline, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 Spacer(minLength: AppPalette.spaceS)
-                Text("\(detail.items.count) 条已引用数据")
+                Text("\(selection.detail.items.count) 条已引用数据")
                     .font(AppPalette.appFont(.caption, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
             }
 
-            Text(subjectTitle)
+            Text(selection.subjectTitle)
                 .font(AppPalette.appFont(.title3, weight: .bold))
                 .foregroundStyle(AppPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(rationale)
+            Text(selection.rationale)
                 .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !dataAsOf.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Label("报告数据时点 \(dataAsOf)", systemImage: "clock")
+            if !selection.dataAsOf.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Label("报告数据时点 \(selection.dataAsOf)", systemImage: "clock")
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
             }
@@ -58,9 +73,25 @@ struct TrendEvidenceDetailPopover: View {
         .padding(AppPalette.spaceL)
     }
 
+    private var footer: some View {
+        HStack(spacing: AppPalette.spaceS) {
+            Text("这些数据由 Agent 获取并被当前 AI 判断引用。")
+                .font(AppPalette.appFont(.caption))
+                .foregroundStyle(AppPalette.muted)
+            Spacer(minLength: AppPalette.spaceL)
+            Button("关闭") {
+                dismiss()
+            }
+            .buttonStyle(.appPrimary)
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, AppPalette.spaceL)
+        .padding(.vertical, AppPalette.spaceM)
+    }
+
     @ViewBuilder
     private func evidenceSection(_ role: TrendEvidenceRole) -> some View {
-        let items = detail.items(for: role)
+        let items = selection.detail.items(for: role)
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                 Label(role.displayText, systemImage: role.systemImage)
@@ -150,27 +181,27 @@ struct TrendEvidenceDetailPopover: View {
 
     @ViewBuilder
     private var emptyOrMissingState: some View {
-        if detail.items.isEmpty {
+        if selection.detail.items.isEmpty {
             VStack(alignment: .leading, spacing: 5) {
                 Label("没有可展示的直接证据", systemImage: "exclamationmark.triangle")
                     .font(AppPalette.appFont(.subheadline, weight: .semibold))
                     .foregroundStyle(AppPalette.warning)
-                Text(detail.exemptionReason ?? "Agent 没有为这条判断关联证据账本数据。")
+                Text(selection.detail.exemptionReason ?? "Agent 没有为这条判断关联证据账本数据。")
                     .font(AppPalette.appFont(.footnote))
                     .foregroundStyle(AppPalette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
 
-        if !detail.missingEvidenceIDs.isEmpty {
+        if !selection.detail.missingEvidenceIDs.isEmpty {
             VStack(alignment: .leading, spacing: 5) {
                 Label(
-                    "\(detail.missingEvidenceIDs.count) 条引用未在报告证据账本中找到",
+                    "\(selection.detail.missingEvidenceIDs.count) 条引用未在报告证据账本中找到",
                     systemImage: "link.badge.plus"
                 )
                 .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.warning)
-                Text(detail.missingEvidenceIDs.joined(separator: "\n"))
+                Text(selection.detail.missingEvidenceIDs.joined(separator: "\n"))
                     .font(AppPalette.appFont(.caption, design: .monospaced))
                     .foregroundStyle(AppPalette.muted)
             }

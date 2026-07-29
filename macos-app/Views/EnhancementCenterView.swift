@@ -4,7 +4,7 @@ struct EnhancementCenterView: View {
     @EnvironmentObject var model: AppModel
     @State var trendAutoAnalysisTimesDraft = ""
     @State var isTrendConfigurationExpanded = false
-    @State var selectedTrendEvidenceCardID: String?
+    @State var selectedTrendEvidenceDetail: TrendEvidenceDetailSelection?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -28,6 +28,9 @@ struct EnhancementCenterView: View {
         .onAppear {
             normalizeSelectedTab()
             normalizeDefaultSegment()
+        }
+        .sheet(item: $selectedTrendEvidenceDetail) { selection in
+            TrendEvidenceDetailSheet(selection: selection)
         }
     }
 

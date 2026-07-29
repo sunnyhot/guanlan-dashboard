@@ -346,8 +346,8 @@ final class TrendDashboardSummaryTests: XCTestCase {
             contentsOf: rootURL.appendingPathComponent("Views/EnhancementTrendPanel.swift"),
             encoding: .utf8
         )
-        let evidencePopoverSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/TrendEvidenceDetailPopover.swift"),
+        let evidenceSheetSource = try String(
+            contentsOf: rootURL.appendingPathComponent("Views/TrendEvidenceDetailSheet.swift"),
             encoding: .utf8
         )
 
@@ -404,22 +404,25 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(trendSource.contains("trendBlock(\"行动候选\""))
         XCTAssertFalse(trendSource.contains("trendBlock(\"证据来源\""))
         XCTAssertFalse(trendSource.contains("trendBlock(\"边界与提示\""))
-        // 普通报告卡片仍复用静态表面；市场/板块卡片通过原生 Button + popover
-        // 明确提供 Agent 判断依据，并保留键盘、VoiceOver 与 Esc 关闭能力。
+        // 普通报告卡片仍复用静态表面；市场/板块卡片通过原生 Button + sheet
+        // 模态展示 Agent 判断依据，并保留键盘、VoiceOver 与 Esc 关闭能力。
         XCTAssertTrue(trendSource.contains(".staticSurface("))
         XCTAssertTrue(trendSource.contains("activeStrokeOpacity"))
         XCTAssertFalse(trendSource.contains("hoverFill: AppPalette.cardHover"))
         XCTAssertFalse(trendSource.contains("lift:"))
         XCTAssertTrue(trendSource.contains("trendEvidenceDisclosureFooter"))
-        XCTAssertTrue(trendSource.contains("trendEvidencePopoverBinding"))
-        XCTAssertTrue(trendSource.contains("TrendEvidenceDetailPopover("))
+        XCTAssertTrue(centerSource.contains(".sheet(item: $selectedTrendEvidenceDetail)"))
+        XCTAssertTrue(centerSource.contains("TrendEvidenceDetailSheet(selection: selection)"))
+        XCTAssertFalse(trendSource.contains(".popover("))
         XCTAssertTrue(trendSource.contains(".buttonStyle(PressResponsiveButtonStyle())"))
         XCTAssertTrue(trendSource.contains(".accessibilityHint("))
-        XCTAssertTrue(evidencePopoverSource.contains("Agent 判断依据"))
-        XCTAssertTrue(evidencePopoverSource.contains("支持证据"))
-        XCTAssertTrue(evidencePopoverSource.contains("反向证据"))
-        XCTAssertTrue(evidencePopoverSource.contains("背景数据"))
-        XCTAssertTrue(evidencePopoverSource.contains("item.summary"))
+        XCTAssertTrue(evidenceSheetSource.contains("Agent 判断依据"))
+        XCTAssertTrue(evidenceSheetSource.contains("支持证据"))
+        XCTAssertTrue(evidenceSheetSource.contains("反向证据"))
+        XCTAssertTrue(evidenceSheetSource.contains("背景数据"))
+        XCTAssertTrue(evidenceSheetSource.contains("item.summary"))
+        XCTAssertTrue(evidenceSheetSource.contains("Button(\"关闭\")"))
+        XCTAssertTrue(evidenceSheetSource.contains(".keyboardShortcut(.cancelAction)"))
         // 市场视图：周期与板块共用统一三列定义，消除宽屏空列与高矮不齐
         XCTAssertTrue(trendSource.contains("marketCardColumns"))
         XCTAssertTrue(trendSource.contains("columns: columns"))

@@ -166,13 +166,19 @@ extension EnhancementCenterView {
     }
 
     func trendMarketOutlookCard(_ outlook: TrendMarketOutlook) -> some View {
-        let cardID = "market:\(outlook.id)"
         let evidenceDetail = trendEvidenceDetail(
             claimEvidence: outlook.claimEvidence,
             referencedEvidenceIDs: outlook.evidenceIDs
         )
+        let selection = TrendEvidenceDetailSelection(
+            id: "market:\(outlook.id)",
+            subjectTitle: outlook.name,
+            rationale: outlook.rationale,
+            dataAsOf: model.trendReport?.dataAsOf ?? "",
+            detail: evidenceDetail
+        )
         return Button {
-            selectedTrendEvidenceCardID = cardID
+            selectedTrendEvidenceDetail = selection
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
@@ -206,20 +212,9 @@ extension EnhancementCenterView {
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())
-        .popover(
-            isPresented: trendEvidencePopoverBinding(for: cardID),
-            arrowEdge: .bottom
-        ) {
-            TrendEvidenceDetailPopover(
-                subjectTitle: outlook.name,
-                rationale: outlook.rationale,
-                dataAsOf: model.trendReport?.dataAsOf ?? "",
-                detail: evidenceDetail
-            )
-        }
         .contextMenu {
             Button("查看 Agent 判断依据") {
-                selectedTrendEvidenceCardID = cardID
+                selectedTrendEvidenceDetail = selection
             }
         }
         .help("查看 \(outlook.name) 的 Agent 判断依据")
@@ -483,13 +478,19 @@ extension EnhancementCenterView {
     }
 
     func trendSectorCard(_ sector: TrendSectorView) -> some View {
-        let cardID = "sector:\(sector.id)"
         let evidenceDetail = trendEvidenceDetail(
             claimEvidence: sector.claimEvidence,
             referencedEvidenceIDs: sector.evidenceIDs
         )
+        let selection = TrendEvidenceDetailSelection(
+            id: "sector:\(sector.id)",
+            subjectTitle: sector.name,
+            rationale: sector.rationale,
+            dataAsOf: model.trendReport?.dataAsOf ?? "",
+            detail: evidenceDetail
+        )
         return Button {
-            selectedTrendEvidenceCardID = cardID
+            selectedTrendEvidenceDetail = selection
         } label: {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
@@ -523,20 +524,9 @@ extension EnhancementCenterView {
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())
-        .popover(
-            isPresented: trendEvidencePopoverBinding(for: cardID),
-            arrowEdge: .bottom
-        ) {
-            TrendEvidenceDetailPopover(
-                subjectTitle: sector.name,
-                rationale: sector.rationale,
-                dataAsOf: model.trendReport?.dataAsOf ?? "",
-                detail: evidenceDetail
-            )
-        }
         .contextMenu {
             Button("查看 Agent 判断依据") {
-                selectedTrendEvidenceCardID = cardID
+                selectedTrendEvidenceDetail = selection
             }
         }
         .help("查看 \(sector.name) 的 Agent 判断依据")
@@ -569,19 +559,6 @@ extension EnhancementCenterView {
         }
         .foregroundStyle(AppPalette.info)
         .padding(.top, 2)
-    }
-
-    private func trendEvidencePopoverBinding(for cardID: String) -> Binding<Bool> {
-        Binding(
-            get: { selectedTrendEvidenceCardID == cardID },
-            set: { isPresented in
-                if isPresented {
-                    selectedTrendEvidenceCardID = cardID
-                } else if selectedTrendEvidenceCardID == cardID {
-                    selectedTrendEvidenceCardID = nil
-                }
-            }
-        )
     }
 
     func trendSectorExposure(_ exposureText: String) -> some View {
