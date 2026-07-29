@@ -292,7 +292,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(source.contains("FreshnessStatusPanel"))
         XCTAssertFalse(source.contains("openManagerActivity"))
         XCTAssertFalse(source.contains("openFreshness"))
-        XCTAssertFalse(source.contains("主理人动态"))
+        XCTAssertTrue(source.contains("title: \"主理人动态\""))
         XCTAssertFalse(source.contains("数据状态"))
     }
 

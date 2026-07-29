@@ -206,7 +206,7 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(chart.contains("Text(\"按当前份数\")"))
         XCTAssertTrue(chart.contains("distributionPanel(title: \"资产大类\""))
         XCTAssertTrue(chart.contains("distributionPanel(title: \"资产类型\""))
-        XCTAssertTrue(chart.contains("dimension: .assetType"))
+        XCTAssertTrue(chart.contains("slices(for: .assetType)"))
         XCTAssertTrue(chart.contains("holding.largeClass"))
         XCTAssertTrue(chart.contains("holding.currentUnits"))
         XCTAssertFalse(chart.contains("按持仓金额"))

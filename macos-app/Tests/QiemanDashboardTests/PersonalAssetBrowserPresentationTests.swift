@@ -197,7 +197,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertTrue(source.contains("let accent = plan.tone.detailAccentColor"))
         XCTAssertTrue(source.contains("var detailAccentColor: Color"))
         XCTAssertTrue(source.contains("self == .muted ? AppPalette.info : color"))
-        XCTAssertTrue(source.contains("Text(trendEvidenceTitle(summary))\n                .font(.system(size: 10))"))
+        XCTAssertTrue(source.contains("Text(trendEvidenceTitle(summary))\n                .font(AppPalette.appFont(.footnote))"))
         XCTAssertTrue(source.contains(".lineSpacing(1)"))
         XCTAssertFalse(source.contains("Text(trendEvidenceTitle(summary))\n                .font(.system(size: 11, weight: .semibold))"))
         XCTAssertFalse(source.contains("private func trendHorizonRow"))
