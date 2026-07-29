@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.3/QiemanDashboard-3.10.3.zip",
-    "name" : "QiemanDashboard-3.10.3.zip",
-    "sha256" : "f3e44d980cb4cfbd8b06c8b41b1d581e5d42dbaaaed117ad1d7867892385cd01",
-    "size" : 6019355
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.4/QiemanDashboard-3.10.4.zip",
+    "name" : "QiemanDashboard-3.10.4.zip",
+    "sha256" : "db32f3b54114ea4ddba572d9567d75eec47cb7d282723e8521deefe5d51d29a5",
+    "size" : 6048258
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.3/QiemanDashboard-3.10.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.10.4/QiemanDashboard-3.10.4.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.10.3.zip",
-      "size" : 6019355
+      "name" : "QiemanDashboard-3.10.4.zip",
+      "size" : 6048258
     }
   ],
-  "body" : "多板块视图样式优化 + 回归测试更新",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.10.3",
-  "name" : "QiemanDashboard v3.10.3",
-  "notes" : "多板块视图样式优化 + 回归测试更新",
+  "body" : "持仓/关注添加支持名称模糊搜索 + 删除工具栏冗余按钮",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.10.4",
+  "name" : "QiemanDashboard v3.10.4",
+  "notes" : "持仓/关注添加支持名称模糊搜索 + 删除工具栏冗余按钮",
   "published_at" : "",
-  "sha256" : "f3e44d980cb4cfbd8b06c8b41b1d581e5d42dbaaaed117ad1d7867892385cd01",
-  "tag" : "v3.10.3",
-  "tag_name" : "v3.10.3",
-  "version" : "3.10.3"
+  "sha256" : "db32f3b54114ea4ddba572d9567d75eec47cb7d282723e8521deefe5d51d29a5",
+  "tag" : "v3.10.4",
+  "tag_name" : "v3.10.4",
+  "version" : "3.10.4"
 }
