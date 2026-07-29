@@ -1102,20 +1102,19 @@ struct PersonalWatchlistAddSheet: View {
             .pickerStyle(.segmented)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("代码")
+                Text("代码或名称")
                     .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.muted)
-                TextField(codePlaceholder, text: $codeText)
-                    .textFieldStyle(.plain)
-                    .font(AppPalette.appFont(.body, design: .monospaced))
-                    .focused($isCodeFocused)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 9)
-                    .background(AppPalette.controlFill, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                            .stroke(AppPalette.line.opacity(0.48), lineWidth: 1)
+                FundSearchField(code: $codeText, onSelect: { result in
+                    codeText = result.code
+                    category = result.assetType == .stock ? .stock : .offExchangeFund
+                    resolution = PersonalAssetCodeResolution(
+                        assetType: result.assetType,
+                        code: result.code,
+                        displayName: result.name
                     )
+                    isCodeFocused = false
+                })
             }
 
             lookupStatus

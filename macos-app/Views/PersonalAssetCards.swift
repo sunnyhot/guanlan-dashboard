@@ -304,7 +304,20 @@ struct PersonalAssetAddHoldingSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                addHoldingField("代码", text: $codeText, placeholder: "例如 021550 / 600519 / SH600519", field: .code)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("代码或名称")
+                        .font(AppPalette.appFont(.subheadline, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                    FundSearchField(code: $codeText) { result in
+                        codeText = result.code
+                        codeResolution = PersonalAssetCodeResolution(
+                            assetType: result.assetType,
+                            code: result.code,
+                            displayName: result.name
+                        )
+                        hasResolvedName = true
+                    }
+                }
                 addHoldingField("份额", text: $unitsText, placeholder: "例如 100.00", field: .units)
                 addHoldingField("成本", text: $costPriceText, placeholder: "例如 1.2345", field: .cost)
             }

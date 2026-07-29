@@ -189,32 +189,11 @@ struct ContentView: View {
             Text(model.selectedSection.rawValue)
                 .font(AppPalette.appFont(.title2, weight: .bold))
                 .foregroundStyle(colorSchemeContrast == .increased ? .primary : AppPalette.ink)
-            HStack(spacing: AppPalette.spaceXS + 2) {
-                ToolbarBadge(
-                    title: model.liveModeLabel,
-                    tint: model.hasLiveService ? AppPalette.brand : AppPalette.muted
-                )
-            }
         }
     }
 
     private var toolbarActionRow: some View {
         HStack(spacing: 10) {
-            Button {
-                withAnimation(AppPalette.motionStandard) {
-                    switch columnVisibility {
-                    case .all: columnVisibility = .detailOnly
-                    default: columnVisibility = .all
-                    }
-                }
-            } label: {
-                Label("侧边栏", systemImage: "sidebar.left")
-                    .font(AppPalette.appFont(.headline, weight: .semibold))
-            }
-            .buttonStyle(.appSecondary)
-            .controlSize(.regular)
-            .help("显示/隐藏侧边栏")
-
             Button {
                 Task { try? await model.refreshLatest(persist: false) }
             } label: {
