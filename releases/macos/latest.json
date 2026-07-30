@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.2/QiemanDashboard-3.12.2.zip",
-    "name" : "QiemanDashboard-3.12.2.zip",
-    "sha256" : "71b874155ddd32248c82eeac1bad9b1af00b8c1136d66ceb0020094c01f01b33",
-    "size" : 6118871
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.3/QiemanDashboard-3.12.3.zip",
+    "name" : "QiemanDashboard-3.12.3.zip",
+    "sha256" : "23379b18eb1719339568e01f8acb58aa5b11f10603002f07c934525da35c46a6",
+    "size" : 6162023
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.2/QiemanDashboard-3.12.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.3/QiemanDashboard-3.12.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.12.2.zip",
-      "size" : 6118871
+      "name" : "QiemanDashboard-3.12.3.zip",
+      "size" : 6162023
     }
   ],
-  "body" : "主理人动态关注支持多调仓来源与通知开关",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.2",
-  "name" : "QiemanDashboard v3.12.2",
-  "notes" : "主理人动态关注支持多调仓来源与通知开关",
+  "body" : "设置中心四个面板统一为卡片式两列自适应布局",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.3",
+  "name" : "QiemanDashboard v3.12.3",
+  "notes" : "设置中心四个面板统一为卡片式两列自适应布局",
   "published_at" : "",
-  "sha256" : "71b874155ddd32248c82eeac1bad9b1af00b8c1136d66ceb0020094c01f01b33",
-  "tag" : "v3.12.2",
-  "tag_name" : "v3.12.2",
-  "version" : "3.12.2"
+  "sha256" : "23379b18eb1719339568e01f8acb58aa5b11f10603002f07c934525da35c46a6",
+  "tag" : "v3.12.3",
+  "tag_name" : "v3.12.3",
+  "version" : "3.12.3"
 }
