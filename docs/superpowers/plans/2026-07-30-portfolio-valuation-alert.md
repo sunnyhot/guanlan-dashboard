@@ -28,7 +28,7 @@
 | `macos-app/Core/Models/PortfolioValuationAlert.swift` | 数据模型（metric/side/direction/rule/profile/settings） |
 | `macos-app/Core/PortfolioValuationAlertEvaluator.swift` | 纯函数评估器 + 文案 describe |
 | `macos-app/Core/PortfolioValuationAlertStore.swift` | 持久化（profiles + settings JSON） |
-| `macos-app/Core/AppModel/PortfolioValuationAlert.swift` | AppModel 子逻辑（评估+发通知+CRUD） |
+| `macos-app/Core/AppModel/PortfolioValuationAlertActions.swift` | AppModel 子逻辑（评估+发通知+CRUD）。注：命名用 `*Actions.swift` 而非 `PortfolioValuationAlert.swift`，因 `Core/Models/PortfolioValuationAlert.swift` 已占同名 basename，SPM 报 multiple producers |
 | `macos-app/Views/PersonalAsset/PortfolioValuationAlertSection.swift` | 详情抽屉预警区块 |
 | `macos-app/Views/PersonalAsset/PortfolioValuationAlertEditSheet.swift` | 预警编辑 sheet |
 | `macos-app/Views/SettingsValuationAlertPanel.swift` | 设置中心面板 |

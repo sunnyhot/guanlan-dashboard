@@ -45,6 +45,14 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("user-investment-plans.json", isDirectory: false)
     }
 
+    var portfolioValuationAlertFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("portfolio-valuation-alerts.json", isDirectory: false)
+    }
+
+    var portfolioValuationAlertSettingsFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("portfolio-valuation-alert-settings.json", isDirectory: false)
+    }
+
     var managerWatchTimelineFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("manager-watch-timeline.json", isDirectory: false)
     }

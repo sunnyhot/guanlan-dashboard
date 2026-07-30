@@ -9,6 +9,11 @@ extension AppModel {
         do {
             try portfolioStore.delete(at: portfolioFileURL)
             userPortfolioHoldings = []
+            // 清空所有估值预警
+            if let portfolioValuationAlertFileURL {
+                try? portfolioValuationAlertStore.save([:], to: portfolioValuationAlertFileURL)
+            }
+            portfolioValuationAlertProfiles = [:]
             userPortfolioSnapshot = nil
             rebuildAssetRows()
             noticeMessage = "已清空个人持仓。"
@@ -46,6 +51,10 @@ extension AppModel {
                         shouldRefreshPortfolio = !activeUserPortfolioHoldings.isEmpty
                     }
                     deletedParts.append(row.hasArchivedHolding && !row.hasHolding ? "归档持仓" : "已持有")
+                    // 联动清理估值预警
+                    if let fundCode = row.fundCode {
+                        removePortfolioValuationAlertProfile(fundCode: fundCode)
+                    }
                 }
             }
 
