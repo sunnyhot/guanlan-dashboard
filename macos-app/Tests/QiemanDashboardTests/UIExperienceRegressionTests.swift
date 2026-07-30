@@ -398,6 +398,30 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(watchlist.contains(".disabled(resolution == nil || isResolving || isSaving)"))
     }
 
+    func testPortfolioAllocationPanelUsesCompactSummaryAndPopoverDetail() throws {
+        let panel = try source(at: "Views/PortfolioAllocationPanel.swift")
+
+        // 明细通过 Popover 呈现，主页不再直接铺开行业 / 重仓长列表
+        XCTAssertTrue(panel.contains(".popover(isPresented:"))
+        XCTAssertTrue(panel.contains("查看明细…"))
+
+        // 旧的长列表面板与大环形图已移除
+        XCTAssertFalse(panel.contains("PortfolioRankedExposurePanel"))
+        XCTAssertFalse(panel.contains("SectorMark"))
+        XCTAssertFalse(panel.contains("allocationDonut"))
+
+        // 进度条不再按“相对最大项”绘制（避免被误读为 100%）
+        XCTAssertFalse(panel.contains("total: maximumWeight"))
+
+        // 基金穿透模式不再使用四个 StatChip
+        XCTAssertFalse(panel.contains("StatChip("))
+
+        // 新的紧凑组件已落地
+        XCTAssertTrue(panel.contains("PortfolioAllocationStackedBar"))
+        XCTAssertTrue(panel.contains("PortfolioAllocationCompactLegend"))
+        XCTAssertTrue(panel.contains("PortfolioAllocationDetailPopover"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
