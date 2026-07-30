@@ -55,6 +55,8 @@ struct PersonalAssetDetailSheet: View {
                         trendAnalysisSection(trendSummary)
                     }
                     supportingSections(summary.attentionItems)
+
+                    PortfolioValuationAlertSection(row: row)
                 }
                 .padding(16)
             }
