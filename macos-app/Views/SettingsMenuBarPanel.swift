@@ -7,8 +7,7 @@ extension SettingsSectionView {
         let tickerEntries = model.menuBarTickerVisibleEntries
 
         return SettingsPanel(title: "菜单栏", subtitle: "选择常驻系统菜单栏的资产摘要、外观与轮播顺序", icon: "menubar.rectangle") {
-            VStack(alignment: .leading, spacing: 0) {
-                // 开关
+            VStack(alignment: .leading, spacing: AppPalette.spaceXL) {
                 SettingsToggleRow(
                     title: "启用菜单栏数据",
                     detail: "关闭后菜单栏恢复为普通持仓状态标题",
@@ -17,79 +16,19 @@ extension SettingsSectionView {
                     isOn: menuBarTickerEnabledBinding
                 )
 
-                SettingsDivider()
-
-                // 样式配置
-                SettingsRow(
-                    title: "菜单栏样式配置",
-                    value: "",
-                    detail: "预览、显示数量、颜色、字号、间距",
-                    icon: "paintbrush",
-                    tint: AppPalette.info
-                )
-
-                VStack(alignment: .leading, spacing: menuBarStyleSectionSpacing) {
-                    menuBarPreview(entries: tickerEntries)
-                    menuBarStyleOptions
-                }
-                .padding(.leading, 39)
-                .padding(.bottom, 14)
-
-                SettingsDivider()
-
-                // 资产项选择
-                SettingsRow(
-                    title: "资产项选择",
-                    value: "",
-                    detail: "整体资产、大盘指数、基金分组、单个标的",
-                    icon: "chart.bar",
-                    tint: AppPalette.info
-                )
-
-                VStack(alignment: .leading, spacing: 0) {
-                    menuBarOptionGroup(title: "整体资产", subtitle: "总资产、整体今日涨跌和整体持有收益", kinds: MenuBarTickerKind.overallKinds)
-
-                    SettingsDivider()
-
-                    menuBarOptionGroup(title: "自动 Top 标的", subtitle: "自动把今日波动最大、收益率最高的单个标的放到菜单栏", kinds: MenuBarTickerKind.automaticKinds)
-
-                    SettingsDivider()
-
-                    menuBarMarketIndexOptions
-
-                    SettingsDivider()
-
-                    menuBarFundMarketOptions
-
-                    SettingsDivider()
-
-                    menuBarHoldingOptions
-
-                    SettingsDivider()
-
-                    if model.menuBarTickerSettings.selections.count > model.menuBarTickerSettings.maxVisibleItems {
-                        SettingsDivider()
-                        menuBarCarouselOrder
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: AppPalette.spaceXL) {
+                        menuBarStyleCard(entries: tickerEntries)
+                            .frame(minWidth: 360, maxWidth: .infinity)
+                        menuBarSelectionCard
+                            .frame(minWidth: 420, maxWidth: .infinity)
                     }
 
-                    SettingsActionRow {
-                        Button {
-                            isConfirmingMenuBarReset = true
-                        } label: {
-                            Label("恢复默认", systemImage: "arrow.counterclockwise")
-                        }
-                        .buttonStyle(.appSecondary)
-
-                        Button {
-                            isConfirmingHoldingSelectionClear = true
-                        } label: {
-                            Label("清空单标的", systemImage: "xmark.circle")
-                        }
-                        .buttonStyle(.appSecondary)
-                        .disabled(!model.menuBarTickerSettings.selections.contains(where: { $0.holdingValue != nil }))
+                    VStack(spacing: AppPalette.spaceXL) {
+                        menuBarStyleCard(entries: tickerEntries)
+                        menuBarSelectionCard
                     }
                 }
-                .padding(.leading, 39)
             }
         }
         .alert("恢复菜单栏默认设置？", isPresented: $isConfirmingMenuBarReset) {
@@ -107,6 +46,74 @@ extension SettingsSectionView {
             Button("取消", role: .cancel) {}
         } message: {
             Text("整体资产和大盘指数设置会保留，所有单个持仓指标将从菜单栏移除。")
+        }
+    }
+
+    private func menuBarStyleCard(entries: [MenuBarTickerEntry]) -> some View {
+        SettingsCardGroup(
+            title: "菜单栏样式配置",
+            subtitle: "预览、显示数量、颜色、字号、间距",
+            icon: "paintbrush",
+            tint: AppPalette.info
+        ) {
+            VStack(alignment: .leading, spacing: menuBarStyleSectionSpacing) {
+                menuBarPreview(entries: entries)
+                menuBarStyleOptions
+            }
+            .padding(.vertical, 12)
+        }
+    }
+
+    private var menuBarSelectionCard: some View {
+        SettingsCardGroup(
+            title: "资产项选择",
+            subtitle: "整体资产、大盘指数、基金分组、单个标的",
+            icon: "chart.bar",
+            tint: AppPalette.info
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                menuBarOptionGroup(title: "整体资产", subtitle: "总资产、整体今日涨跌和整体持有收益", kinds: MenuBarTickerKind.overallKinds)
+
+                SettingsDivider(isInset: true)
+
+                menuBarOptionGroup(title: "自动 Top 标的", subtitle: "自动把今日波动最大、收益率最高的单个标的放到菜单栏", kinds: MenuBarTickerKind.automaticKinds)
+
+                SettingsDivider(isInset: true)
+
+                menuBarMarketIndexOptions
+
+                SettingsDivider(isInset: true)
+
+                menuBarFundMarketOptions
+
+                SettingsDivider(isInset: true)
+
+                menuBarHoldingOptions
+
+                if model.menuBarTickerSettings.selections.count > model.menuBarTickerSettings.maxVisibleItems {
+                    SettingsDivider(isInset: true)
+                    menuBarCarouselOrder
+                }
+
+                SettingsDivider(isInset: true)
+
+                SettingsActionRow {
+                    Button {
+                        isConfirmingMenuBarReset = true
+                    } label: {
+                        Label("恢复默认", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.appSecondary)
+
+                    Button {
+                        isConfirmingHoldingSelectionClear = true
+                    } label: {
+                        Label("清空单标的", systemImage: "xmark.circle")
+                    }
+                    .buttonStyle(.appSecondary)
+                    .disabled(!model.menuBarTickerSettings.selections.contains(where: { $0.holdingValue != nil }))
+                }
+            }
         }
     }
 

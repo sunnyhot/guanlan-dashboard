@@ -101,14 +101,7 @@ extension SettingsSectionView {
             VStack(alignment: .leading, spacing: 0) {
                 SettingsGroupHeader(title: "调仓动态 · 可多选")
 
-                VStack(spacing: 0) {
-                    ForEach(Array(model.managerWatchAvailableAdjustmentSources.enumerated()), id: \.element.id) { index, source in
-                        managerWatchAdjustmentSourceRow(source)
-                        if index < model.managerWatchAvailableAdjustmentSources.count - 1 {
-                            SettingsDivider(isInset: true)
-                        }
-                    }
-                }
+                AdjustmentSourceMultiSelect()
 
                 if model.alfaPortfolios.isEmpty {
                     Text("在“平台动态 → 调仓动态 → 投顾组合”中添加组合后，可在这里继续多选。")
@@ -125,54 +118,17 @@ extension SettingsSectionView {
 
                 SettingsToggleRow(
                     title: "巡检论坛发言",
-                    detail: "对应“平台动态 → 论坛发言”",
+                    detail: "按主理人名称巡检；对应“平台动态 → 论坛发言”",
                     icon: "text.bubble",
                     tint: model.managerWatchSettings.watchForum ? AppPalette.info : AppPalette.muted,
                     isOn: forumBinding
                 )
 
-                VStack(alignment: .leading, spacing: 10) {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 180), spacing: 10)],
-                        spacing: 10
-                    ) {
-                        settingsField(
-                            "产品代码",
-                            text: prodCodeBinding,
-                            placeholder: "LONG_WIN"
-                        )
-                        settingsField(
-                            "论坛主理人",
-                            text: managerNameBinding,
-                            placeholder: "ETF拯救世界"
-                        )
-                    }
-
-                    Text("产品代码同时用于长赢调仓；修改后保存，下一轮会静默重建对应基线。")
-                        .font(AppPalette.appFont(.footnote))
-                        .foregroundStyle(AppPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Button {
-                        model.syncManagerWatchTargetsFromCurrentForm()
-                    } label: {
-                        Label("使用平台动态当前查询", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .buttonStyle(.appSecondary)
-                }
-                .disabled(!model.managerWatchSettings.watchForum
-                    && !model.managerWatchSettings.selectedAdjustmentSourceIDs.contains(
-                        ManagerWatchAdjustmentSource.longWinID
-                    ))
-                .opacity(
-                    model.managerWatchSettings.watchForum
-                        || model.managerWatchSettings.selectedAdjustmentSourceIDs.contains(
-                            ManagerWatchAdjustmentSource.longWinID
-                        )
-                        ? 1
-                        : 0.55
-                )
-                .padding(.bottom, 10)
+                settingsField("论坛主理人", text: managerNameBinding, placeholder: "ETF拯救世界")
+                    .disabled(!model.managerWatchSettings.watchForum)
+                    .opacity(model.managerWatchSettings.watchForum ? 1 : 0.55)
+                    .padding(.leading, 35)
+                    .padding(.bottom, 10)
             }
         }
     }
@@ -229,40 +185,6 @@ extension SettingsSectionView {
         }
     }
 
-    private func managerWatchAdjustmentSourceRow(
-        _ source: ManagerWatchAdjustmentSource
-    ) -> some View {
-        Toggle(
-            isOn: Binding(
-                get: { model.managerWatchSettings.selectedAdjustmentSourceIDs.contains(source.id) },
-                set: { model.updateManagerWatchAdjustmentSource(source, isSelected: $0) }
-            )
-        ) {
-            HStack(spacing: 10) {
-                Image(systemName: source.kind == .longWin ? "chart.xyaxis.line" : "chart.pie")
-                    .font(AppPalette.appFont(.body, weight: .semibold))
-                    .foregroundStyle(source.kind == .longWin ? AppPalette.info : AppPalette.brand)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        (source.kind == .longWin ? AppPalette.info : AppPalette.brand).opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(source.displayName)
-                        .font(AppPalette.appFont(.body, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
-                    Text(source.detailText)
-                        .font(AppPalette.appFont(.footnote))
-                        .foregroundStyle(AppPalette.muted)
-                }
-            }
-        }
-        .toggleStyle(.checkbox)
-        .padding(.vertical, 9)
-        .accessibilityHint("选择后会独立保存增量基线")
-    }
-
     private var enabledBinding: Binding<Bool> {
         Binding(
             get: { model.managerWatchSettings.isEnabled },
@@ -281,13 +203,6 @@ extension SettingsSectionView {
         Binding(
             get: { model.managerWatchSettings.watchForum },
             set: { model.updateManagerWatchForumEnabled($0) }
-        )
-    }
-
-    private var prodCodeBinding: Binding<String> {
-        Binding(
-            get: { model.managerWatchSettings.prodCode },
-            set: { model.managerWatchSettings.prodCode = $0 }
         )
     }
 
@@ -353,5 +268,166 @@ extension SettingsSectionView {
                     model.saveManagerWatchConfiguration()
                 }
         }
+    }
+}
+
+// MARK: - Adjustment Source Multi-Select
+
+/// 调仓来源的紧凑下拉多选：一个按钮触发 Popover，内部可连续勾选多个来源；
+/// 长赢调仓被选中时，在其下方就地展开产品代码输入框。
+private struct AdjustmentSourceMultiSelect: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var isShowingPopover = false
+
+    private var availableSources: [ManagerWatchAdjustmentSource] {
+        model.managerWatchAvailableAdjustmentSources
+    }
+
+    private var selectedCount: Int {
+        let availableIDs = Set(availableSources.map(\.id))
+        return model.managerWatchSettings.selectedAdjustmentSourceIDs.intersection(availableIDs).count
+    }
+
+    private var totalCount: Int { availableSources.count }
+
+    var body: some View {
+        Button {
+            withAnimation(AppPalette.motionFast) {
+                isShowingPopover.toggle()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("调仓来源")
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Text("已选 \(selectedCount) / 共 \(totalCount)")
+                    .font(AppPalette.appFont(.footnote))
+                    .foregroundStyle(AppPalette.muted)
+                Spacer(minLength: 12)
+                Image(systemName: "chevron.down")
+                    .font(AppPalette.appFont(.caption2, weight: .bold))
+                    .foregroundStyle(AppPalette.muted)
+                    .rotationEffect(.degrees(isShowingPopover ? 180 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(settingsControlBackground, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+                    .stroke(AppPalette.line.opacity(0.7), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isShowingPopover ? "已展开" : "已折叠")
+        .popover(isPresented: $isShowingPopover, arrowEdge: .bottom) {
+            popoverContent
+        }
+    }
+
+    private var settingsControlBackground: Color {
+        Color(nsColor: .controlBackgroundColor).opacity(0.72)
+    }
+
+    private var popoverContent: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("调仓来源")
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(availableSources.enumerated()), id: \.element.id) { index, source in
+                        sourceRow(source)
+                        if index < availableSources.count - 1 {
+                            Divider().opacity(0.5)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 320)
+            .clipped()
+        }
+        .padding(.vertical, 4)
+        .frame(width: 320)
+        .background(AppPalette.card)
+    }
+
+    @ViewBuilder
+    private func sourceRow(_ source: ManagerWatchAdjustmentSource) -> some View {
+        let isSelected = model.managerWatchSettings.selectedAdjustmentSourceIDs.contains(source.id)
+
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                model.updateManagerWatchAdjustmentSource(source, isSelected: !isSelected)
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(AppPalette.appFont(.body, weight: .semibold))
+                        .foregroundStyle(isSelected ? AppPalette.positive : AppPalette.muted)
+
+                    Image(systemName: source.kind == .longWin ? "chart.xyaxis.line" : "chart.pie")
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                        .foregroundStyle(source.kind == .longWin ? AppPalette.info : AppPalette.brand)
+                        .frame(width: 28, height: 28)
+                        .background(
+                            (source.kind == .longWin ? AppPalette.info : AppPalette.brand).opacity(0.10),
+                            in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
+                        )
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(source.displayName)
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                            .foregroundStyle(AppPalette.ink)
+                        Text(source.detailText)
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
+
+            if source.kind == .longWin, isSelected {
+                inlineProdCodeField
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private var inlineProdCodeField: some View {
+        HStack(spacing: 8) {
+            Text("产品代码")
+                .font(AppPalette.appFont(.caption, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+            TextField("LONG_WIN", text: prodCodeBinding)
+                .textFieldStyle(.plain)
+                .font(AppPalette.appFont(.footnote))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(settingsControlBackground, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+                        .stroke(AppPalette.line.opacity(0.7), lineWidth: 1)
+                )
+                .onSubmit {
+                    model.saveManagerWatchConfiguration()
+                }
+        }
+    }
+
+    private var prodCodeBinding: Binding<String> {
+        Binding(
+            get: { model.managerWatchSettings.prodCode },
+            set: { model.managerWatchSettings.prodCode = $0 }
+        )
     }
 }
