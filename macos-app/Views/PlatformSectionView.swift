@@ -130,10 +130,10 @@ struct PlatformSectionView: View {
         }
 
         SectionCard(
-            title: "调仓浏览",
+            title: "调仓历史",
             subtitle: model.monthlyPlatformSummary.isEmpty
                 ? (isCompact ? "点列表会直接跳到详情" : "左边选动作，右边看详情")
-                : "\(model.monthlyPlatformSummary.count) 个月 · 完整历史走势与调仓明细",
+                : platformHistorySubtitle,
             icon: "chart.xyaxis.line"
         ) {
             VStack(alignment: .leading, spacing: 12) {
@@ -142,45 +142,14 @@ struct PlatformSectionView: View {
                 }
 
                 if model.hasPlatformActions {
-                    Button {
-                        withAnimation(AppPalette.motionSection) {
-                            isAdjustmentDetailsExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Label("调仓明细", systemImage: "list.bullet.rectangle")
-                                .font(AppPalette.appFont(.body, weight: .semibold))
-                                .foregroundStyle(AppPalette.ink)
-
-                            Text("\(model.platformActionPresentation.filteredActions.count)")
-                                .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
-                                .foregroundStyle(AppPalette.muted)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(AppPalette.cardStrong, in: Capsule())
-
-                            Spacer()
-
-                            Text(isAdjustmentDetailsExpanded ? "收起" : "展开")
-                                .font(AppPalette.appFont(.footnote, weight: .medium))
-                                .foregroundStyle(AppPalette.muted)
-
-                            Image(systemName: "chevron.down")
-                                .font(AppPalette.appFont(.caption, weight: .bold))
-                                .foregroundStyle(AppPalette.muted)
-                                .rotationEffect(.degrees(isAdjustmentDetailsExpanded ? 180 : 0))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .contentShape(Rectangle())
+                    InlineDisclosureButton(
+                        title: "调仓明细",
+                        countText: "\(model.platformActionPresentation.filteredActions.count) 笔",
+                        icon: "list.bullet.rectangle",
+                        isExpanded: isAdjustmentDetailsExpanded
+                    ) {
+                        isAdjustmentDetailsExpanded.toggle()
                     }
-                    .buttonStyle(.plain)
-                    .background(AppPalette.cardStrong.opacity(0.48), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-                    .overlay(
-                        AppPalette.borderOverlay(radius: AppPalette.controlRadius, opacity: AppPalette.borderSubtle)
-                    )
-                    .accessibilityLabel("调仓明细")
-                    .accessibilityValue(isAdjustmentDetailsExpanded ? "已展开" : "已收起")
 
                     if isAdjustmentDetailsExpanded {
                         adjustmentWorkspace(
@@ -203,6 +172,18 @@ struct PlatformSectionView: View {
         }
 
         currentHoldingsSection
+    }
+
+    private var platformHistorySubtitle: String {
+        guard
+            let firstMonth = model.monthlyPlatformSummary.first?.month,
+            let lastMonth = model.monthlyPlatformSummary.last?.month
+        else {
+            return "月度走势与调仓明细"
+        }
+
+        let range = firstMonth == lastMonth ? firstMonth : "\(firstMonth) — \(lastMonth)"
+        return "\(range) · \(model.monthlyPlatformSummary.count) 个月"
     }
 
     @ViewBuilder
@@ -255,45 +236,14 @@ struct PlatformSectionView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     PlatformHoldingsPieChart(holdings: model.platformHoldings)
 
-                    Button {
-                        withAnimation(AppPalette.motionSection) {
-                            isHoldingDetailsExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Label(
-                                isHoldingDetailsExpanded ? "收起持仓详情" : "展开持仓详情",
-                                systemImage: "list.bullet.rectangle"
-                            )
-                            .font(AppPalette.appFont(.footnote, weight: .semibold))
-                            .foregroundStyle(AppPalette.info)
-
-                            Spacer()
-
-                            Text("\(model.platformHoldings.count) 只")
-                                .font(AppPalette.appFont(.caption, weight: .medium))
-                                .foregroundStyle(AppPalette.muted)
-
-                            Image(systemName: "chevron.down")
-                                .font(AppPalette.appFont(.caption, weight: .semibold))
-                                .foregroundStyle(AppPalette.muted)
-                                .rotationEffect(.degrees(isHoldingDetailsExpanded ? 180 : 0))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
+                    InlineDisclosureButton(
+                        title: "持仓明细",
+                        countText: "\(model.platformHoldings.count) 只",
+                        icon: "list.bullet.rectangle",
+                        isExpanded: isHoldingDetailsExpanded
+                    ) {
+                        isHoldingDetailsExpanded.toggle()
                     }
-                    .buttonStyle(.plain)
-                    .background(
-                        AppPalette.cardStrong.opacity(0.42),
-                        in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                    )
-                    .accessibilityLabel("持仓详情")
-                    .accessibilityValue(
-                        isHoldingDetailsExpanded
-                            ? "已展开，共 \(model.platformHoldings.count) 只"
-                            : "已收起，共 \(model.platformHoldings.count) 只"
-                    )
 
                     if isHoldingDetailsExpanded {
                         LazyVStack(spacing: 6) {

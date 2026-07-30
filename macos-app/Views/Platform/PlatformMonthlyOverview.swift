@@ -36,13 +36,6 @@ struct PlatformMonthlyOverview: View {
         return String(format: "%.1f", Double(totalCount) / Double(months.count))
     }
 
-    private var historyRangeText: String {
-        guard let first = months.first?.month, let last = months.last?.month else {
-            return "暂无月份"
-        }
-        return first == last ? first : "\(first) — \(last)"
-    }
-
     private var axisMonths: [String] {
         guard months.count > 12 else { return months.map(\.month) }
         let step = Int(ceil(Double(months.count) / 10.0))
@@ -69,36 +62,21 @@ struct PlatformMonthlyOverview: View {
     }
 
     private var summaryPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(AppPalette.appFont(.title))
-                    .foregroundStyle(AppPalette.brand)
-                    .frame(width: 38, height: 38)
-                    .background(AppPalette.brand.opacity(0.14), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                            .stroke(AppPalette.brand.opacity(0.22), lineWidth: 1)
-                    )
+        VStack(alignment: .leading, spacing: AppPalette.spaceM) {
+            VStack(alignment: .leading, spacing: AppPalette.spaceXS) {
+                Text("累计调仓")
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("完整历史")
-                        .font(AppPalette.appFont(.body, weight: .semibold))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(totalCount)")
+                        .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(AppPalette.ink)
-                    Text(historyRangeText)
-                        .font(AppPalette.appFont(.footnote))
+                    Text("笔")
+                        .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                 }
-            }
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(totalCount)")
-                    .font(AppPalette.appFont(.largeTitle, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(AppPalette.ink)
-                Text("笔")
-                    .font(AppPalette.appFont(.body, weight: .semibold))
-                    .foregroundStyle(AppPalette.muted)
             }
 
             VStack(spacing: 8) {
@@ -117,11 +95,7 @@ struct PlatformMonthlyOverview: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.line.opacity(0.45), lineWidth: 1)
-        )
+        .background(AppPalette.cardStrong.opacity(0.42), in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
     }
 
     @State private var selectedMonth: PlatformMonthSummary?
@@ -136,15 +110,17 @@ struct PlatformMonthlyOverview: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.line.opacity(0.35), lineWidth: 1)
-        )
+        .background(AppPalette.cardStrong.opacity(0.42), in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
     }
 
     private var chartLegend: some View {
         HStack(spacing: 12) {
+            Text("月度趋势")
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+
+            Spacer()
+
             Label("买入", systemImage: "line.diagonal")
                 .font(AppPalette.appFont(.footnote, weight: .semibold))
                 .foregroundStyle(AppPalette.positive)

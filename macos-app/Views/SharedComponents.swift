@@ -428,6 +428,75 @@ struct FullRowDisclosureGroupStyle: DisclosureGroupStyle {
     }
 }
 
+struct InlineDisclosureButton: View {
+    let title: String
+    let countText: String
+    let icon: String
+    let isExpanded: Bool
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            if accessibilityReduceMotion {
+                action()
+            } else {
+                withAnimation(AppPalette.motionSection) {
+                    action()
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Label(title, systemImage: icon)
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+
+                Text(countText)
+                    .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppPalette.muted)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(AppPalette.card, in: Capsule())
+
+                Spacer()
+
+                Text(isExpanded ? "收起" : "展开")
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+
+                Image(systemName: "chevron.down")
+                    .font(AppPalette.appFont(.caption, weight: .bold))
+                    .foregroundStyle(AppPalette.muted)
+                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            AppPalette.cardStrong.opacity(isHovering ? 0.64 : 0.42),
+            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+        )
+        .overlay(
+            AppPalette.borderOverlay(
+                radius: AppPalette.controlRadius,
+                opacity: isHovering ? AppPalette.borderMedium : AppPalette.borderFaint
+            )
+        )
+        .animation(accessibilityReduceMotion ? nil : AppPalette.motionFast, value: isHovering)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .accessibilityLabel(title)
+        .accessibilityValue("\(countText)，\(isExpanded ? "已展开" : "已收起")")
+        .accessibilityHint("展开或收起明细")
+    }
+}
+
 private struct PressResponsiveButtonLabel: View {
     let configuration: PressResponsiveButtonStyle.Configuration
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion

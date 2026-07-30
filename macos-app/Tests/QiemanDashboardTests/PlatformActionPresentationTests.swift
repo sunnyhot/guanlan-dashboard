@@ -48,16 +48,21 @@ final class PlatformActionPresentationTests: XCTestCase {
         XCTAssertEqual(summary.first(where: { $0.month == "2023-02" })?.totalCount, 0)
     }
 
-    func testAdjustmentHistoryIsMergedIntoExpandedBrowserAsLineChart() throws {
+    func testAdjustmentHistoryUsesOneSectionHeadingAndLabelsItsSummaryAndChart() throws {
         let platform = try source(at: "Views/PlatformSectionView.swift")
         let overview = try source(at: "Views/Platform/PlatformMonthlyOverview.swift")
 
         XCTAssertFalse(platform.contains("交易时间总览"))
         XCTAssertFalse(platform.contains("isMonthlyExpanded"))
+        XCTAssertTrue(platform.contains("title: \"调仓历史\""))
+        XCTAssertTrue(platform.contains("platformHistorySubtitle"))
         XCTAssertTrue(platform.contains("PlatformMonthlyOverview(months: model.monthlyPlatformSummary)"))
         XCTAssertTrue(platform.contains("@State private var isAdjustmentDetailsExpanded = false"))
-        XCTAssertTrue(platform.contains("Label(\"调仓明细\", systemImage: \"list.bullet.rectangle\")"))
-        XCTAssertTrue(overview.contains("Text(\"完整历史\")"))
+        XCTAssertTrue(platform.contains("title: \"调仓明细\""))
+        XCTAssertTrue(platform.contains("countText: \"\\(model.platformActionPresentation.filteredActions.count) 笔\""))
+        XCTAssertFalse(overview.contains("Text(\"完整历史\")"))
+        XCTAssertTrue(overview.contains("Text(\"累计调仓\")"))
+        XCTAssertTrue(overview.contains("Text(\"月度趋势\")"))
         XCTAssertTrue(overview.contains("LineMark("))
         XCTAssertFalse(overview.contains("BarMark("))
         XCTAssertFalse(overview.contains("近 12 个月"))

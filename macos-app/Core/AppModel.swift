@@ -92,6 +92,9 @@ final class AppModel: ObservableObject {
     @Published var dataDirectoryURL: URL?
     @Published var personalAssetRows: [PersonalAssetAggregateRow] = []
     @Published var personalAssetSummary: PersonalAssetAggregateSummary?
+    @Published var portfolioLookThroughSnapshot: PortfolioLookThroughSnapshot?
+    @Published var portfolioLookThroughSourceWarnings: [String] = []
+    @Published var isRefreshingPortfolioLookThrough = false
     @Published var managerWatchSettings = ManagerWatchSettings.default
     @Published var menuBarTickerSettings = MenuBarTickerSettings.load()
 
@@ -146,6 +149,8 @@ final class AppModel: ObservableObject {
     var nextHourGuidanceGenerationTask: Task<Void, Never>?
     var activeCommentsRequestKey = ""
     var isApplyingPersonalAssetAutomation = false
+    var portfolioLookThroughLoadedRequestKey: String?
+    var portfolioLookThroughLoadGeneration = 0
     private var cancellables = Set<AnyCancellable>()
 
     // Lazy native client backing store

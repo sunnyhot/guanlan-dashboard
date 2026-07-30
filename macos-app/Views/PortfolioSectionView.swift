@@ -138,6 +138,7 @@ struct PortfolioSectionView: View {
                 .font(AppPalette.appFont(.subheadline))
                 .foregroundStyle(AppPalette.muted)
 
+                PortfolioAllocationPanel()
                 PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
                 ProfitAttributionPanel(summary: model.profitAttributionSummary)
             }

@@ -22,6 +22,20 @@ final class DisclosureInteractionPresentationTests: XCTestCase {
         try assertEveryDisclosureUsesFullRowStyle(in: "Views/EnhancementTrendPanel.swift")
     }
 
+    func testInlineDisclosureButtonOwnsTheSharedVisualAndInteractionStyle() throws {
+        let source = try source(at: "Views/SharedComponents.swift")
+        let styleStart = try XCTUnwrap(source.range(of: "struct InlineDisclosureButton: View"))
+        let styleEnd = try XCTUnwrap(
+            source.range(of: "private struct PressResponsiveButtonLabel", range: styleStart.upperBound..<source.endIndex)
+        )
+        let styleSource = String(source[styleStart.lowerBound..<styleEnd.lowerBound])
+
+        XCTAssertTrue(styleSource.contains(".frame(maxWidth: .infinity)"))
+        XCTAssertTrue(styleSource.contains(".onHover"))
+        XCTAssertTrue(styleSource.contains(".accessibilityValue"))
+        XCTAssertTrue(styleSource.contains("accessibilityReduceMotion"))
+    }
+
     private func assertEveryDisclosureUsesFullRowStyle(
         in relativePath: String,
         file: StaticString = #filePath,
