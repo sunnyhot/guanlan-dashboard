@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.0/QiemanDashboard-3.12.0.zip",
-    "name" : "QiemanDashboard-3.12.0.zip",
-    "sha256" : "1cb5ae9917736bd972e2342363d1433785d60c44520d9d483abc3372065cd27e",
-    "size" : 6035974
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.1/QiemanDashboard-3.12.1.zip",
+    "name" : "QiemanDashboard-3.12.1.zip",
+    "sha256" : "bd97e4899454efc1acfef3b9819f0c6f133dfb618e41d1e308c50ee00ea5f40c",
+    "size" : 6041649
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.0/QiemanDashboard-3.12.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.1/QiemanDashboard-3.12.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.12.0.zip",
-      "size" : 6035974
+      "name" : "QiemanDashboard-3.12.1.zip",
+      "size" : 6041649
     }
   ],
-  "body" : "新增持仓资产配比面板 + 持仓穿透 + 平台视图调整",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.0",
-  "name" : "QiemanDashboard v3.12.0",
-  "notes" : "新增持仓资产配比面板 + 持仓穿透 + 平台视图调整",
+  "body" : "资产分布界面紧凑化 + 明细改 Popover",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.1",
+  "name" : "QiemanDashboard v3.12.1",
+  "notes" : "资产分布界面紧凑化 + 明细改 Popover",
   "published_at" : "",
-  "sha256" : "1cb5ae9917736bd972e2342363d1433785d60c44520d9d483abc3372065cd27e",
-  "tag" : "v3.12.0",
-  "tag_name" : "v3.12.0",
-  "version" : "3.12.0"
+  "sha256" : "bd97e4899454efc1acfef3b9819f0c6f133dfb618e41d1e308c50ee00ea5f40c",
+  "tag" : "v3.12.1",
+  "tag_name" : "v3.12.1",
+  "version" : "3.12.1"
 }
