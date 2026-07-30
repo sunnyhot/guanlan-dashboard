@@ -17,7 +17,8 @@ struct PortfolioValuationAlertStore {
         }
         let data = try Data(contentsOf: fileURL)
         let array = try decoder.decode([PortfolioValuationAlertProfile].self, from: data)
-        return Dictionary(uniqueKeysWithValues: array.map { ($0.fundCode, $0) })
+        // 用 uniquingKeysWith 容忍手改 JSON 等导致的重复 fundCode，取最后一条，避免 uniqueKeysWithValues 在异常输入时崩溃。
+        return Dictionary(array.map { ($0.fundCode, $0) }, uniquingKeysWith: { last, _ in last })
     }
 
     func save(_ profiles: [String: PortfolioValuationAlertProfile], to fileURL: URL) throws {

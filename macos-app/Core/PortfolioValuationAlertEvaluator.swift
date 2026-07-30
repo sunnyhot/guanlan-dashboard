@@ -37,6 +37,12 @@ enum PortfolioValuationAlertEvaluator {
     ) -> PortfolioValuationAlertEvaluation {
         guard rule.isEnabled else { return .idle }
 
+        // 阈值非有限（仅可能来自手改 JSON 等异常输入）→ 视为规则无效，保持 breached 状态。
+        // 与 PersonalWatchlistAlertEvaluator 的 threshold 校验保持一致。
+        guard rule.threshold.isFinite else {
+            return isCurrentlyBreached ? .hold : .idle
+        }
+
         guard let observedValue = observedValue(for: rule.metric, in: context),
               observedValue.isFinite else {
             // 数据缺失：保持 breached 状态（不解除），避免行情闪烁误解除
