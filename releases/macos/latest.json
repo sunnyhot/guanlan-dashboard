@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.2/QiemanDashboard-3.11.2.zip",
-    "name" : "QiemanDashboard-3.11.2.zip",
-    "sha256" : "4af3df2d57072c0c8a0d00684ba45150c8ee2483f3d658ed2a4a7649cd5b1a09",
-    "size" : 5964713
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.0/QiemanDashboard-3.12.0.zip",
+    "name" : "QiemanDashboard-3.12.0.zip",
+    "sha256" : "1cb5ae9917736bd972e2342363d1433785d60c44520d9d483abc3372065cd27e",
+    "size" : 6035974
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.11.2/QiemanDashboard-3.11.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.0/QiemanDashboard-3.12.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.11.2.zip",
-      "size" : 5964713
+      "name" : "QiemanDashboard-3.12.0.zip",
+      "size" : 6035974
     }
   ],
-  "body" : "清理失效功能并统一 AI 跟踪入口",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.11.2",
-  "name" : "QiemanDashboard v3.11.2",
-  "notes" : "清理失效功能并统一 AI 跟踪入口",
+  "body" : "新增持仓资产配比面板 + 持仓穿透 + 平台视图调整",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.0",
+  "name" : "QiemanDashboard v3.12.0",
+  "notes" : "新增持仓资产配比面板 + 持仓穿透 + 平台视图调整",
   "published_at" : "",
-  "sha256" : "4af3df2d57072c0c8a0d00684ba45150c8ee2483f3d658ed2a4a7649cd5b1a09",
-  "tag" : "v3.11.2",
-  "tag_name" : "v3.11.2",
-  "version" : "3.11.2"
+  "sha256" : "1cb5ae9917736bd972e2342363d1433785d60c44520d9d483abc3372065cd27e",
+  "tag" : "v3.12.0",
+  "tag_name" : "v3.12.0",
+  "version" : "3.12.0"
 }
