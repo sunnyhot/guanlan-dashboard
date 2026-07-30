@@ -223,7 +223,7 @@ struct PortfolioAllocationPanel: View {
             } label: {
                 Label("重试", systemImage: "arrow.clockwise")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
             .controlSize(.small)
             .disabled(model.isRefreshingPortfolioLookThrough)
             .accessibilityLabel("重新读取基金穿透数据")
@@ -442,7 +442,7 @@ private struct PortfolioAllocationInsightRow<Detail: View>: View {
             } label: {
                 Label("查看明细…", systemImage: "list.bullet.rectangle")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.appSecondary)
             .controlSize(.small)
             .accessibilityLabel("查看资产穿透明细")
             .accessibilityHint("打开行业分布与底层重仓的完整列表")

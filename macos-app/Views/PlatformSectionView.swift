@@ -52,20 +52,7 @@ struct PlatformWorkspaceLayout {
 struct PlatformSectionView: View {
     @EnvironmentObject private var model: AppModel
     private let detailAnchor = "platform-detail-panel"
-    @State private var viewMode: PlatformViewMode = .longWin
     @State private var isAdjustmentDetailsExpanded = false
-
-    enum PlatformViewMode: String, CaseIterable {
-        case longWin
-        case alfa
-
-        var label: String {
-            switch self {
-            case .longWin: return "长赢调仓"
-            case .alfa: return "投顾组合"
-            }
-        }
-    }
 
     // MARK: - Body
 
@@ -78,7 +65,7 @@ struct PlatformSectionView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         viewModePicker
 
-                        if viewMode == .alfa {
+                        if model.selectedPlatformAdjustmentViewMode == .alfa {
                             AlfaPlatformPanel(
                                 isCompact: isCompact,
                                 availableWidth: proxy.size.width,
@@ -96,23 +83,23 @@ struct PlatformSectionView: View {
 
     private var viewModePicker: some View {
         HStack(spacing: 6) {
-            ForEach(PlatformViewMode.allCases, id: \.self) { mode in
+            ForEach(PlatformAdjustmentViewMode.allCases) { mode in
                 Button {
                     withAnimation(AppPalette.motionSection) {
-                        viewMode = mode
+                        model.selectedPlatformAdjustmentViewMode = mode
                     }
                     if mode == .alfa, model.alfaPayload == nil {
                         Task { await model.fetchAllAlfaPayloads() }
                     }
                 } label: {
                     Text(mode.label)
-                        .font(AppPalette.appFont(.body, weight: viewMode == mode ? .semibold : .regular))
-                        .foregroundStyle(viewMode == mode ? AppPalette.brand : AppPalette.muted)
+                        .font(AppPalette.appFont(.body, weight: model.selectedPlatformAdjustmentViewMode == mode ? .semibold : .regular))
+                        .foregroundStyle(model.selectedPlatformAdjustmentViewMode == mode ? AppPalette.brand : AppPalette.muted)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                                .fill(viewMode == mode ? AppPalette.brand.opacity(0.12) : .clear)
+                                .fill(model.selectedPlatformAdjustmentViewMode == mode ? AppPalette.brand.opacity(0.12) : .clear)
                         )
                 }
                 .buttonStyle(.plain)

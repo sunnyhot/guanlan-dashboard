@@ -168,6 +168,9 @@ extension AppModel {
     }
 
     var managerWatchStatusText: String {
+        if isManagerWatchPolling {
+            return "巡检中…"
+        }
         if managerWatchSettings.isEnabled {
             return "已开启 · \(managerWatchSettings.intervalLabel)"
         }
@@ -175,14 +178,44 @@ extension AppModel {
     }
 
     var managerWatchScopeText: String {
-        let scopes = [
-            managerWatchSettings.watchPlatform ? "调仓" : nil,
-            managerWatchSettings.watchForum ? "发言" : nil,
-        ]
-        .compactMap { $0 }
-        .joined(separator: " + ")
-        let scopeText = scopes.isEmpty ? "未选择" : scopes
-        return "\(managerWatchSettings.prodCode) · \(managerWatchSettings.managerName) · \(scopeText)"
+        var scopes = managerWatchSelectedAdjustmentSources.map(\.displayName)
+        if managerWatchSettings.watchForum {
+            scopes.append("论坛发言")
+        }
+        return scopes.isEmpty ? "未选择巡检范围" : scopes.joined(separator: " + ")
+    }
+
+    var managerWatchNextCheckText: String {
+        guard managerWatchSettings.isEnabled else { return "巡检已关闭" }
+        guard !isManagerWatchPolling else { return "正在执行" }
+        guard
+            let lastCheckedAt = managerWatchSettings.lastCheckedAt,
+            let lastDate = Self.timestampFormatter.date(from: lastCheckedAt),
+            let nextDate = Calendar.current.date(
+                byAdding: .minute,
+                value: max(5, managerWatchSettings.intervalMinutes),
+                to: lastDate
+            )
+        else {
+            return "等待首次巡检"
+        }
+        if nextDate <= Date() {
+            return "即将执行"
+        }
+        return Self.timestampFormatter.string(from: nextDate)
+    }
+
+    var managerWatchBaselineStatusText: String {
+        guard managerWatchSettings.watchForum || !managerWatchSelectedAdjustmentSources.isEmpty else {
+            return "未选择"
+        }
+        let adjustmentReady = managerWatchSelectedAdjustmentSources.allSatisfy {
+            managerWatchSettings.adjustmentBaselineTargetKeys[$0.id] == $0.baselineTargetKey
+        }
+        let forumKey = "forum|\(managerWatchSettings.prodCode.trimmingCharacters(in: .whitespacesAndNewlines))|\(managerWatchSettings.managerName.trimmingCharacters(in: .whitespacesAndNewlines))"
+        let forumReady = !managerWatchSettings.watchForum
+            || managerWatchSettings.forumBaselineTargetKey == forumKey
+        return adjustmentReady && forumReady ? "已建立" : "等待静默建立"
     }
 
     var launchAtLoginStatusText: String {

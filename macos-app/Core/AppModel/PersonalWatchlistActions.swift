@@ -269,7 +269,7 @@ extension AppModel {
         )
 
         for alert in alertResult.pendingAlerts {
-            await notificationManager.send(
+            try? await notificationManager.send(
                 title: personalWatchlistAlertTitle(for: alert),
                 subtitle: alert.row.sourceLabel,
                 body: personalWatchlistAlertBody(for: alert),

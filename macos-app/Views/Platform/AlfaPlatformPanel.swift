@@ -6,7 +6,6 @@ import SwiftUI
 /// 复用 `PlatformActionRow` / `PlatformActionDetailCard` 渲染。
 struct AlfaPlatformPanel: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selectedActionID: String?
     @State private var showingAddSheet = false
     @State private var manualPoCode = ""
 
@@ -21,7 +20,8 @@ struct AlfaPlatformPanel: View {
     }
 
     private var selectedAction: PlatformActionPayload? {
-        if let selectedActionID, let matched = actions.first(where: { $0.id == selectedActionID }) {
+        if let selectedActionID = model.selectedAlfaActionID,
+           let matched = actions.first(where: { $0.id == selectedActionID }) {
             return matched
         }
         return actions.first
@@ -110,7 +110,7 @@ struct AlfaPlatformPanel: View {
     private func portfolioChip(_ portfolio: AlfaPortfolioCatalogItem) -> some View {
         let selected = model.selectedAlfaPoCode == portfolio.poCode
         return Button {
-            selectedActionID = nil
+            model.selectedAlfaActionID = nil
             Task { await model.selectAlfaPortfolio(portfolio.poCode) }
         } label: {
             HStack(spacing: 6) {
@@ -203,7 +203,7 @@ struct AlfaPlatformPanel: View {
     private func actionButtons(isCompact: Bool, scrollProxy: ScrollViewProxy) -> some View {
         ForEach(actions.prefix(60)) { action in
             Button {
-                selectedActionID = action.id
+                model.selectedAlfaActionID = action.id
                 if isCompact {
                     withAnimation(AppPalette.motionSlow) {
                         scrollProxy.scrollTo(detailAnchor, anchor: .top)

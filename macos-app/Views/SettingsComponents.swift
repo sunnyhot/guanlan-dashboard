@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsPanel<Content: View>: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let title: String
     let subtitle: String
     let icon: String
@@ -15,18 +17,19 @@ struct SettingsPanel<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
                 Image(systemName: icon)
                     .font(AppPalette.appFont(.title2, weight: .semibold))
                     .foregroundStyle(AppPalette.brand)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
                     .background(
                         AppPalette.brandSoft,
-                        in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
+                        in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
                     )
-                VStack(alignment: .leading, spacing: 3) {
+
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(AppPalette.appFont(.title, weight: .bold))
+                        .font(AppPalette.appFont(.largeTitle, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     Text(subtitle)
                         .font(AppPalette.appFont(.subheadline))
@@ -35,32 +38,43 @@ struct SettingsPanel<Content: View>: View {
                 }
                 Spacer()
             }
-            .padding(18)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .background(AppPalette.card)
 
             Divider()
-                .overlay(AppPalette.hairline.opacity(AppPalette.strokeSubtle))
+                .overlay(AppPalette.brand.opacity(panelBorderOpacity))
 
             content
-                .padding(16)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppPalette.surfaceVariant.opacity(0.28))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            AppPalette.panelBackground.opacity(AppPalette.bgSettings),
+            AppPalette.card,
             in: RoundedRectangle(cornerRadius: AppPalette.panelRadius)
         )
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.panelRadius))
         .overlay(
             RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.hairline.opacity(AppPalette.strokeSubtle), lineWidth: 1)
+                .stroke(AppPalette.hairline.opacity(panelBorderOpacity), lineWidth: 1)
         )
         .shadow(
             color: AppPalette.panelShadowColor,
-            radius: AppPalette.panelShadowRadius,
-            y: AppPalette.panelShadowY
+            radius: AppPalette.panelShadowRadius + 2,
+            y: AppPalette.panelShadowY + 1
         )
+    }
+
+    private var panelBorderOpacity: Double {
+        colorSchemeContrast == .increased ? AppPalette.borderHeavy : AppPalette.borderMedium
     }
 }
 
 struct SettingsCardGroup<Content: View>: View {
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
     let title: String
     let subtitle: String
     let icon: String
@@ -87,8 +101,8 @@ struct SettingsCardGroup<Content: View>: View {
                 Image(systemName: icon)
                     .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(tint)
-                    .frame(width: 30, height: 30)
-                    .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
+                    .frame(width: 32, height: 32)
+                    .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
@@ -102,24 +116,44 @@ struct SettingsCardGroup<Content: View>: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.leading, 16)
+            .padding(.trailing, 14)
+            .padding(.vertical, 13)
+            .background(tint.opacity(0.075))
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(tint)
+                    .frame(width: 3)
+                    .padding(.vertical, 12)
+            }
 
             Divider()
-                .overlay(AppPalette.hairline.opacity(AppPalette.borderFaint))
+                .overlay(tint.opacity(groupDividerOpacity))
 
             content
                 .padding(.horizontal, 14)
-                .padding(.bottom, 4)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AppPalette.card)
         }
         .background(
-            AppPalette.cardStrong.opacity(0.62),
+            AppPalette.card,
             in: RoundedRectangle(cornerRadius: AppPalette.cardRadius)
         )
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: AppPalette.cardRadius)
-                .stroke(AppPalette.hairline.opacity(AppPalette.borderFaint), lineWidth: 1)
+                .stroke(AppPalette.hairline.opacity(groupBorderOpacity), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.035), radius: 5, y: 2)
+    }
+
+    private var groupBorderOpacity: Double {
+        colorSchemeContrast == .increased ? AppPalette.borderHeavy : AppPalette.borderMedium
+    }
+
+    private var groupDividerOpacity: Double {
+        colorSchemeContrast == .increased ? 0.64 : 0.30
     }
 }
 

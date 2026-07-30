@@ -96,6 +96,7 @@ final class AppModel: ObservableObject {
     @Published var portfolioLookThroughSourceWarnings: [String] = []
     @Published var isRefreshingPortfolioLookThrough = false
     @Published var managerWatchSettings = ManagerWatchSettings.default
+    @Published var isManagerWatchPolling = false
     @Published var menuBarTickerSettings = MenuBarTickerSettings.load()
 
     /// 调仓筛选状态
@@ -121,7 +122,7 @@ final class AppModel: ObservableObject {
     var nextHourGuidanceNotificationSender: @Sendable (NextHourGuidanceReport) async -> Void = { report in
         let manager = LocalNotificationManager()
         guard await manager.requestAuthorizationIfNeeded() else { return }
-        await manager.send(
+        try? await manager.send(
             title: "下一小时买卖建议已生成",
             subtitle: report.scope.displayName,
             body: "\(report.headline) · 有效至 \(String(report.validUntil.suffix(5)))",
@@ -257,6 +258,11 @@ final class AppModel: ObservableObject {
         set { platformState.selectedPlatformActionID = newValue }
     }
 
+    var selectedAlfaActionID: String? {
+        get { platformState.selectedAlfaActionID }
+        set { platformState.selectedAlfaActionID = newValue }
+    }
+
     // UIState proxies
     var selectedSection: AppSection {
         get { uiState.selectedSection }
@@ -266,6 +272,11 @@ final class AppModel: ObservableObject {
     var selectedPlatformActivityTab: PlatformActivityTab {
         get { uiState.selectedPlatformActivityTab }
         set { uiState.selectedPlatformActivityTab = newValue }
+    }
+
+    var selectedPlatformAdjustmentViewMode: PlatformAdjustmentViewMode {
+        get { uiState.selectedPlatformAdjustmentViewMode }
+        set { uiState.selectedPlatformAdjustmentViewMode = newValue }
     }
 
     var showsInDock: Bool {
@@ -599,7 +610,7 @@ final class AppModel: ObservableObject {
 
         await applyPersonalAssetAutomation(updateNotice: false)
         // 每日自动分析由 ContentView.task 在 start() 之后统一触发，避免双重入口。
-        restartManagerWatchLoop(immediate: false)
+        restartManagerWatchLoop(immediate: managerWatchSettings.isEnabled)
         restartPersonalAssetAutomationLoop()
         restartPortfolioAutoRefreshLoop()
         restartNextHourGuidanceSchedulerLoop(immediate: true)

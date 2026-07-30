@@ -79,6 +79,7 @@ final class ForumState: ObservableObject {
 final class PlatformState: ObservableObject {
     @Published var platformPayload: PlatformPayload?
     @Published var selectedPlatformActionID: String?
+    @Published var selectedAlfaActionID: String?
 }
 
 // MARK: - UIState
@@ -87,6 +88,7 @@ final class PlatformState: ObservableObject {
 final class UIState: ObservableObject {
     @Published var selectedSection: AppSection = .overview
     @Published var selectedPlatformActivityTab: PlatformActivityTab = .adjustments
+    @Published var selectedPlatformAdjustmentViewMode: PlatformAdjustmentViewMode = .longWin
     @Published var showsInDock: Bool = (UserDefaults.standard.object(forKey: "qieman.dashboard.showsInDock") as? Bool) ?? true {
         didSet {
             UserDefaults.standard.set(showsInDock, forKey: "qieman.dashboard.showsInDock")

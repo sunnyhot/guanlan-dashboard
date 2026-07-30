@@ -6,21 +6,21 @@ extension SettingsSectionView {
     var appPanel: some View {
         SettingsPanel(title: "通用", subtitle: "应用外观、启动方式、本地数据与软件更新", icon: "gearshape") {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(spacing: 14) {
+                HStack(alignment: .top, spacing: AppPalette.spaceXL) {
+                    VStack(spacing: AppPalette.spaceXL) {
                         appearanceAndLaunchCard
                         localDataCard
                     }
                     .frame(minWidth: 360, maxWidth: .infinity)
 
-                    VStack(spacing: 14) {
+                    VStack(spacing: AppPalette.spaceXL) {
                         softwareUpdateCard
                         applicationCard
                     }
                     .frame(minWidth: 360, maxWidth: .infinity)
                 }
 
-                VStack(spacing: 14) {
+                VStack(spacing: AppPalette.spaceXL) {
                     appearanceAndLaunchCard
                     localDataCard
                     softwareUpdateCard

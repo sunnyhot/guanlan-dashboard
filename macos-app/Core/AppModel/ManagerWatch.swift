@@ -3,6 +3,45 @@ import Foundation
 // MARK: - Manager Watch
 
 extension AppModel {
+    var managerWatchAvailableAdjustmentSources: [ManagerWatchAdjustmentSource] {
+        let prodCode = managerWatchSettings.prodCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            ManagerWatchAdjustmentSource.longWin(prodCode: prodCode)
+        ] + alfaPortfolios.map {
+            ManagerWatchAdjustmentSource.alfa(code: $0.poCode, name: $0.name)
+        }
+    }
+
+    var managerWatchSelectedAdjustmentSources: [ManagerWatchAdjustmentSource] {
+        let availableByID = Dictionary(
+            uniqueKeysWithValues: managerWatchAvailableAdjustmentSources.map { ($0.id, $0) }
+        )
+        return managerWatchSettings.selectedAdjustmentSourceIDs
+            .compactMap { sourceID in
+                if let source = availableByID[sourceID] {
+                    return source
+                }
+                guard let code = ManagerWatchAdjustmentSource.alfaCode(from: sourceID) else {
+                    return nil
+                }
+                return .alfa(code: code, name: code)
+            }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    func reconcileManagerWatchAdjustmentSources() {
+        let validIDs = Set(managerWatchAvailableAdjustmentSources.map(\.id))
+        let removedIDs = managerWatchSettings.selectedAdjustmentSourceIDs.subtracting(validIDs)
+        guard !removedIDs.isEmpty else { return }
+        managerWatchSettings.selectedAdjustmentSourceIDs.subtract(removedIDs)
+        for sourceID in removedIDs {
+            managerWatchSettings.latestSeenAdjustmentIDs.removeValue(forKey: sourceID)
+            managerWatchSettings.adjustmentBaselineTargetKeys.removeValue(forKey: sourceID)
+        }
+        persistManagerWatchSettings(restartLoop: false)
+    }
+
     func syncManagerWatchTargetsFromCurrentForm() {
         let prodCode = form.prodCode.trimmingCharacters(in: .whitespacesAndNewlines)
         let managerName = preferredManagerWatchName
@@ -13,6 +52,9 @@ extension AppModel {
             managerWatchSettings.managerName = managerName
         }
         persistManagerWatchSettings(restartLoop: false)
+        if managerWatchSettings.isEnabled {
+            restartManagerWatchLoop(immediate: true)
+        }
         noticeMessage = "已把通知巡检目标同步成当前查询参数。"
     }
 
@@ -30,16 +72,56 @@ extension AppModel {
 
     func updateManagerWatchForumEnabled(_ isEnabled: Bool) {
         managerWatchSettings.watchForum = isEnabled
-        persistManagerWatchSettings()
+        persistManagerWatchSettings(restartLoop: false)
+        if managerWatchSettings.isEnabled {
+            restartManagerWatchLoop(immediate: isEnabled)
+        }
     }
 
-    func updateManagerWatchPlatformEnabled(_ isEnabled: Bool) {
-        managerWatchSettings.watchPlatform = isEnabled
-        persistManagerWatchSettings()
+    func updateManagerWatchAdjustmentSource(_ source: ManagerWatchAdjustmentSource, isSelected: Bool) {
+        if isSelected {
+            managerWatchSettings.selectedAdjustmentSourceIDs.insert(source.id)
+        } else {
+            managerWatchSettings.selectedAdjustmentSourceIDs.remove(source.id)
+        }
+        managerWatchSettings.latestSeenAdjustmentIDs.removeValue(forKey: source.id)
+        managerWatchSettings.adjustmentBaselineTargetKeys.removeValue(forKey: source.id)
+        persistManagerWatchSettings(restartLoop: false)
+        if managerWatchSettings.isEnabled {
+            restartManagerWatchLoop(immediate: true)
+        }
+    }
+
+    func updateManagerWatchNotificationsEnabled(_ isEnabled: Bool) {
+        Task {
+            if isEnabled {
+                let granted = await notificationManager.requestAuthorizationIfNeeded()
+                managerWatchSettings.notificationsEnabled = granted
+                managerWatchSettings.lastNotificationErrorMessage = granted
+                    ? nil
+                    : "系统通知权限未开启"
+                persistManagerWatchSettings(restartLoop: false)
+                noticeMessage = granted
+                    ? "已开启巡检系统通知。"
+                    : "巡检仍会运行，但系统通知权限未开启。"
+            } else {
+                managerWatchSettings.notificationsEnabled = false
+                managerWatchSettings.lastNotificationErrorMessage = nil
+                persistManagerWatchSettings(restartLoop: false)
+                noticeMessage = "已关闭系统通知，巡检记录仍会继续更新。"
+            }
+        }
     }
 
     func saveManagerWatchConfiguration() {
-        persistManagerWatchSettings()
+        managerWatchSettings.prodCode = managerWatchSettings.prodCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        managerWatchSettings.managerName = managerWatchSettings.managerName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        persistManagerWatchSettings(restartLoop: false)
+        if managerWatchSettings.isEnabled {
+            restartManagerWatchLoop(immediate: true)
+        }
         noticeMessage = "已保存主理人通知巡检设置。"
     }
 
@@ -69,15 +151,14 @@ extension AppModel {
     }
 
     func setManagerWatchEnabled(_ isEnabled: Bool) async {
-        if isEnabled {
+        if isEnabled, managerWatchSettings.notificationsEnabled {
             let granted = await notificationManager.requestAuthorizationIfNeeded()
-            guard granted else {
-                managerWatchSettings.isEnabled = false
-                managerWatchSettings.lastErrorMessage = "系统通知权限未开启"
-                persistManagerWatchSettings(restartLoop: false)
-                errorMessage = "系统通知权限未开启。请在系统设置里允许\u{201c}且慢主理人\u{201d}的通知后再开启巡检。"
-                return
+            if !granted {
+                managerWatchSettings.notificationsEnabled = false
+                managerWatchSettings.lastNotificationErrorMessage = "系统通知权限未开启"
             }
+        }
+        if isEnabled {
             if managerWatchSettings.prodCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 managerWatchSettings.prodCode = form.prodCode.trimmingCharacters(in: .whitespacesAndNewlines)
             }
@@ -90,9 +171,13 @@ extension AppModel {
         managerWatchSettings.lastErrorMessage = nil
         persistManagerWatchSettings(restartLoop: false)
         restartManagerWatchLoop(immediate: isEnabled)
-        noticeMessage = isEnabled
-            ? "已开启主理人通知巡检，首次会先静默建立基线。"
-            : "已关闭主理人通知巡检。"
+        if isEnabled {
+            noticeMessage = managerWatchSettings.notificationsEnabled
+                ? "已开启巡检，新增动态会发送系统通知。"
+                : "已开启巡检；系统通知未启用，命中结果仍会保存在应用内。"
+        } else {
+            noticeMessage = "已关闭主理人通知巡检。"
+        }
     }
 
     func restartManagerWatchLoop(immediate: Bool) {
@@ -116,74 +201,78 @@ extension AppModel {
     }
 
     func performManagerWatchPoll(sendNotifications: Bool, manual: Bool) async {
-        let prodCode = managerWatchSettings.prodCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        let managerName = managerWatchSettings.managerName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prodCode.isEmpty, !managerName.isEmpty else {
-            recordManagerWatchTimelineEvent(
-                ManagerWatchTimelineEvent(
-                    kind: .failed,
-                    prodCode: prodCode,
-                    managerName: managerName,
-                    title: "巡检目标缺失",
-                    detail: "通知巡检需要产品代码和主理人名称。",
-                    errorMessage: "通知巡检需要产品代码和主理人名称。"
-                )
-            )
+        guard !isManagerWatchPolling else {
             if manual {
-                errorMessage = "通知巡检需要产品代码和主理人名称。"
+                noticeMessage = "巡检正在进行，请稍候。"
             }
             return
         }
-        guard managerWatchSettings.watchForum || managerWatchSettings.watchPlatform else {
-            recordManagerWatchTimelineEvent(
-                ManagerWatchTimelineEvent(
-                    kind: .failed,
-                    prodCode: prodCode,
-                    managerName: managerName,
-                    title: "巡检范围为空",
-                    detail: "至少要开启调仓或发言其中一项。",
-                    errorMessage: "通知巡检至少要开启调仓或发言其中一项。"
-                )
+        isManagerWatchPolling = true
+        defer { isManagerWatchPolling = false }
+
+        let prodCode = managerWatchSettings.prodCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let managerName = managerWatchSettings.managerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let adjustmentSources = managerWatchSelectedAdjustmentSources
+
+        guard managerWatchSettings.watchForum || !adjustmentSources.isEmpty else {
+            completeManagerWatchValidationFailure(
+                title: "巡检范围为空",
+                detail: "至少选择一个调仓来源或开启论坛发言巡检。",
+                prodCode: prodCode,
+                managerName: managerName,
+                manual: manual
             )
-            if manual {
-                errorMessage = "通知巡检至少要开启\u{201c}调仓\u{201d}或\u{201c}发言\u{201d}其中一项。"
-            }
+            return
+        }
+        if managerWatchSettings.watchForum, prodCode.isEmpty || managerName.isEmpty {
+            completeManagerWatchValidationFailure(
+                title: "论坛巡检目标缺失",
+                detail: "论坛发言巡检需要产品代码和主理人名称。",
+                prodCode: prodCode,
+                managerName: managerName,
+                manual: manual
+            )
+            return
+        }
+        if adjustmentSources.contains(where: { $0.kind == .longWin && $0.code.isEmpty }) {
+            completeManagerWatchValidationFailure(
+                title: "长赢调仓目标缺失",
+                detail: "长赢调仓巡检需要产品代码。",
+                prodCode: prodCode,
+                managerName: managerName,
+                manual: manual
+            )
             return
         }
 
-        recordManagerWatchTimelineEvent(
-            ManagerWatchTimelineEvent(
-                kind: .pollStarted,
-                prodCode: prodCode,
-                managerName: managerName,
-                title: manual ? "手动巡检开始" : "自动巡检开始",
-                detail: managerWatchScopeText
-            )
-        )
         managerWatchSettings.lastCheckedAt = Self.timestampString()
 
         var updateTitles: [String] = []
         var pendingNotifications: [(title: String, subtitle: String, body: String, deepLink: NotificationDeepLinkPayload?)] = []
         var encounteredErrors: [String] = []
+        var notificationErrors: [String] = []
+        var didEstablishBaseline = false
 
         if managerWatchSettings.watchForum {
             do {
                 let snapshot = try await fetchForumWatchSnapshot(prodCode: prodCode, managerName: managerName)
+                let baselineTargetKey = "forum|\(prodCode)|\(managerName)"
+                let hasBaseline = managerWatchSettings.forumBaselineTargetKey == baselineTargetKey
                 let previousID = managerWatchSettings.latestSeenForumRecordID
-                let newRecords = unseenItems(snapshot.records, previousID: previousID)
-                if previousID != nil, newRecords.isEmpty {
-                    recordManagerWatchTimelineEvent(
-                        ManagerWatchTimelineEvent(
-                            kind: .duplicateSuppressed,
-                            prodCode: prodCode,
-                            managerName: managerName,
-                            title: "发言无新增",
-                            detail: "最新发言已在巡检基线内，未重复通知。"
-                        )
-                    )
+                let newRecords = unseenItems(
+                    snapshot.records,
+                    previousID: previousID,
+                    baselineEstablished: hasBaseline
+                )
+                if !hasBaseline {
+                    didEstablishBaseline = true
                 }
-                if previousID != nil, !newRecords.isEmpty, sendNotifications {
-                    if let latest = newRecords.first {
+                if hasBaseline, !newRecords.isEmpty {
+                    updateTitles.append("论坛发言 \(newRecords.count) 条")
+                    managerWatchSettings.lastHitAt = managerWatchSettings.lastCheckedAt
+                    if sendNotifications,
+                       managerWatchSettings.notificationsEnabled,
+                       let latest = newRecords.first {
                         pendingNotifications.append((
                             title: "\(managerName) 有 \(newRecords.count) 条新发言",
                             subtitle: prodCode,
@@ -196,7 +285,6 @@ extension AppModel {
                             )
                         ))
                     }
-                    updateTitles.append("新发言 \(newRecords.count) 条")
                     recordManagerWatchTimelineEvent(
                         ManagerWatchTimelineEvent(
                             kind: .forumHit,
@@ -209,6 +297,7 @@ extension AppModel {
                     )
                 }
                 managerWatchSettings.latestSeenForumRecordID = snapshot.records.first?.id
+                managerWatchSettings.forumBaselineTargetKey = baselineTargetKey
             } catch {
                 encounteredErrors.append("发言巡检失败：\(error.localizedDescription)")
                 recordManagerWatchTimelineEvent(
@@ -224,58 +313,62 @@ extension AppModel {
             }
         }
 
-        if managerWatchSettings.watchPlatform {
+        for source in adjustmentSources {
             do {
-                let platform = try await platformClient.fetchPlatformPayload(prodCode: prodCode)
+                let platform = try await fetchManagerWatchAdjustmentPayload(for: source)
                 let actions = platform.actions ?? []
-                let previousID = managerWatchSettings.latestSeenPlatformActionID
-                let newActions = unseenItems(actions, previousID: previousID)
-                if previousID != nil, newActions.isEmpty {
-                    recordManagerWatchTimelineEvent(
-                        ManagerWatchTimelineEvent(
-                            kind: .duplicateSuppressed,
-                            prodCode: prodCode,
-                            managerName: managerName,
-                            title: "调仓无新增",
-                            detail: "最新调仓已在巡检基线内，未重复通知。"
-                        )
-                    )
+                let hasBaseline = managerWatchSettings.adjustmentBaselineTargetKeys[source.id]
+                    == source.baselineTargetKey
+                let previousID = managerWatchSettings.latestSeenAdjustmentIDs[source.id]
+                let newActions = unseenItems(
+                    actions,
+                    previousID: previousID,
+                    baselineEstablished: hasBaseline
+                )
+                if !hasBaseline {
+                    didEstablishBaseline = true
                 }
-                if previousID != nil, !newActions.isEmpty, sendNotifications {
-                    if let latest = newActions.first {
+                if hasBaseline, !newActions.isEmpty {
+                    updateTitles.append("\(source.displayName) \(newActions.count) 条")
+                    managerWatchSettings.lastHitAt = managerWatchSettings.lastCheckedAt
+                    if sendNotifications,
+                       managerWatchSettings.notificationsEnabled,
+                       let latest = newActions.first {
                         pendingNotifications.append((
-                            title: "\(managerName) 有 \(newActions.count) 条新调仓",
-                            subtitle: prodCode,
+                            title: "\(source.displayName) 有 \(newActions.count) 条新调仓",
+                            subtitle: source.detailText,
                             body: platformNotificationBody(for: latest),
                             deepLink: NotificationDeepLinkPayload(
                                 type: .platformAction,
                                 targetID: latest.id,
-                                prodCode: prodCode,
-                                managerName: managerName
+                                prodCode: source.kind == .longWin ? source.code : nil,
+                                managerName: source.name,
+                                adjustmentSourceKind: source.kind,
+                                adjustmentSourceCode: source.code
                             )
                         ))
                     }
-                    updateTitles.append("新调仓 \(newActions.count) 条")
                     recordManagerWatchTimelineEvent(
                         ManagerWatchTimelineEvent(
                             kind: .platformHit,
-                            prodCode: prodCode,
-                            managerName: managerName,
-                            title: "命中新调仓 \(newActions.count) 条",
+                            prodCode: source.code,
+                            managerName: source.displayName,
+                            title: "命中\(source.displayName) \(newActions.count) 条",
                             detail: newActions.first.map(platformNotificationBody(for:)) ?? "发现新的平台调仓",
                             targetID: newActions.first?.id
                         )
                     )
                 }
-                managerWatchSettings.latestSeenPlatformActionID = actions.first?.id
+                managerWatchSettings.latestSeenAdjustmentIDs[source.id] = actions.first?.id
+                managerWatchSettings.adjustmentBaselineTargetKeys[source.id] = source.baselineTargetKey
             } catch {
-                encounteredErrors.append("调仓巡检失败：\(error.localizedDescription)")
+                encounteredErrors.append("\(source.displayName)失败：\(error.localizedDescription)")
                 recordManagerWatchTimelineEvent(
                     ManagerWatchTimelineEvent(
                         kind: .failed,
-                        prodCode: prodCode,
-                        managerName: managerName,
-                        title: "调仓巡检失败",
+                        prodCode: source.code,
+                        managerName: source.displayName,
+                        title: "\(source.displayName)巡检失败",
                         detail: error.localizedDescription,
                         errorMessage: error.localizedDescription
                     )
@@ -283,10 +376,40 @@ extension AppModel {
             }
         }
 
+        var canSendNotifications = managerWatchSettings.notificationsEnabled
+        if !pendingNotifications.isEmpty, canSendNotifications {
+            canSendNotifications = await notificationManager.requestAuthorizationIfNeeded()
+            if !canSendNotifications {
+                managerWatchSettings.notificationsEnabled = false
+                notificationErrors.append("系统通知权限未开启")
+            }
+        }
+        if canSendNotifications {
+            for item in pendingNotifications {
+                do {
+                    try await notificationManager.send(
+                        title: item.title,
+                        subtitle: item.subtitle,
+                        body: item.body,
+                        deepLink: item.deepLink
+                    )
+                } catch {
+                    notificationErrors.append(error.localizedDescription)
+                }
+            }
+        }
+
         let previousErrorMessage = managerWatchSettings.lastErrorMessage
         if encounteredErrors.isEmpty {
             managerWatchSettings.lastSuccessAt = managerWatchSettings.lastCheckedAt
             managerWatchSettings.lastErrorMessage = nil
+            if !updateTitles.isEmpty {
+                managerWatchSettings.lastResultSummary = "命中 \(updateTitles.joined(separator: "、"))"
+            } else if didEstablishBaseline {
+                managerWatchSettings.lastResultSummary = "巡检完成，已静默建立新目标基线"
+            } else {
+                managerWatchSettings.lastResultSummary = "巡检完成，无新增动态"
+            }
             if previousErrorMessage?.isEmpty == false {
                 recordManagerWatchTimelineEvent(
                     ManagerWatchTimelineEvent(
@@ -297,7 +420,7 @@ extension AppModel {
                         detail: "上次失败后，本次巡检已恢复成功。"
                     )
                 )
-            } else if updateTitles.isEmpty {
+            } else if manual, updateTitles.isEmpty {
                 recordManagerWatchTimelineEvent(
                     ManagerWatchTimelineEvent(
                         kind: .noUpdates,
@@ -310,28 +433,71 @@ extension AppModel {
             }
         } else {
             managerWatchSettings.lastErrorMessage = encounteredErrors.joined(separator: "；")
+            managerWatchSettings.lastResultSummary = "巡检失败：\(managerWatchSettings.lastErrorMessage ?? "")"
             if manual {
                 errorMessage = managerWatchSettings.lastErrorMessage ?? ""
             }
         }
+        managerWatchSettings.lastNotificationErrorMessage = notificationErrors.isEmpty
+            ? nil
+            : "系统通知发送失败：\(notificationErrors.joined(separator: "；"))"
+        if !notificationErrors.isEmpty {
+            managerWatchSettings.lastResultSummary = [
+                managerWatchSettings.lastResultSummary,
+                managerWatchSettings.lastNotificationErrorMessage
+            ]
+            .compactMap { $0 }
+            .joined(separator: "；")
+        }
 
         persistManagerWatchSettings(restartLoop: false)
 
-        for item in pendingNotifications {
-            await notificationManager.send(
-                title: item.title,
-                subtitle: item.subtitle,
-                body: item.body,
-                deepLink: item.deepLink
-            )
-        }
-
         if manual {
-            if !pendingNotifications.isEmpty {
-                noticeMessage = "巡检完成，已推送 \(updateTitles.joined(separator: "，"))。"
+            if !updateTitles.isEmpty {
+                let deliveryText = pendingNotifications.isEmpty
+                    ? "，结果已记录"
+                    : (notificationErrors.isEmpty ? "，系统通知已发送" : "，但系统通知发送失败")
+                noticeMessage = "巡检完成，命中 \(updateTitles.joined(separator: "、"))\(deliveryText)。"
             } else if encounteredErrors.isEmpty {
-                noticeMessage = "巡检完成，目前没有新的主理人调仓或发言。"
+                noticeMessage = managerWatchSettings.lastResultSummary ?? "巡检完成，目前没有新增动态。"
             }
+        }
+    }
+
+    func completeManagerWatchValidationFailure(
+        title: String,
+        detail: String,
+        prodCode: String,
+        managerName: String,
+        manual: Bool
+    ) {
+        managerWatchSettings.lastCheckedAt = Self.timestampString()
+        managerWatchSettings.lastErrorMessage = detail
+        managerWatchSettings.lastResultSummary = "\(title)：\(detail)"
+        persistManagerWatchSettings(restartLoop: false)
+        recordManagerWatchTimelineEvent(
+            ManagerWatchTimelineEvent(
+                kind: .failed,
+                prodCode: prodCode,
+                managerName: managerName,
+                title: title,
+                detail: detail,
+                errorMessage: detail
+            )
+        )
+        if manual {
+            errorMessage = detail
+        }
+    }
+
+    func fetchManagerWatchAdjustmentPayload(
+        for source: ManagerWatchAdjustmentSource
+    ) async throws -> PlatformPayload {
+        switch source.kind {
+        case .longWin:
+            return try await platformClient.fetchPlatformPayload(prodCode: source.code)
+        case .alfa:
+            return try await alfaClient.fetchAlfaPayload(poCode: source.code)
         }
     }
 
@@ -342,17 +508,24 @@ extension AppModel {
         watchForm.managerName = managerName
         watchForm.userName = managerName
         watchForm.pages = "1"
-        watchForm.pageSize = "10"
+        watchForm.pageSize = "50"
         return try await nativeClient.fetchSnapshot(form: watchForm, persist: false, outputDirectory: nil)
     }
 
-    func unseenItems<T: Identifiable>(_ items: [T], previousID: T.ID?) -> [T] where T.ID: Equatable {
-        guard let previousID else { return [] }
+    func unseenItems<T: Identifiable>(
+        _ items: [T],
+        previousID: T.ID?,
+        baselineEstablished: Bool
+    ) -> [T] where T.ID: Equatable {
+        guard baselineEstablished else { return [] }
+        guard let previousID else {
+            return Array(items.prefix(min(items.count, 20)))
+        }
         if let index = items.firstIndex(where: { $0.id == previousID }) {
             guard index > 0 else { return [] }
             return Array(items.prefix(index))
         }
-        return Array(items.prefix(min(items.count, 3)))
+        return Array(items.prefix(min(items.count, 20)))
     }
 
     func platformNotificationBody(for action: PlatformActionPayload) -> String {
@@ -394,6 +567,28 @@ extension AppModel {
     func openPlatformAction(_ payload: NotificationDeepLinkPayload) {
         selectedPlatformActivityTab = .adjustments
         selectedSection = .platform
+
+        if payload.adjustmentSourceKind == .alfa,
+           let poCode = payload.adjustmentSourceCode,
+           alfaPortfolios.contains(where: { $0.poCode == poCode }) {
+            selectedPlatformAdjustmentViewMode = .alfa
+            selectedAlfaPoCode = poCode
+            selectedAlfaActionID = payload.targetID
+            if alfaPayload?.prodCode == poCode,
+               (alfaPayload?.actions ?? []).contains(where: { $0.id == payload.targetID }) {
+                return
+            }
+            Task {
+                await selectAlfaPortfolio(poCode)
+                selectedAlfaActionID = payload.targetID
+                if !(alfaPayload?.actions ?? []).contains(where: { $0.id == payload.targetID }) {
+                    noticeMessage = "已刷新投顾组合，原通知对应动作可能已归档。"
+                }
+            }
+            return
+        }
+
+        selectedPlatformAdjustmentViewMode = .longWin
         selectedPlatformActionID = payload.targetID
 
         let existingActions = platformPayload?.actions ?? []

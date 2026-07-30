@@ -39,6 +39,20 @@ enum PlatformActivityTab: String, CaseIterable, Identifiable {
     }
 }
 
+enum PlatformAdjustmentViewMode: String, CaseIterable, Identifiable {
+    case longWin
+    case alfa
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .longWin: return "长赢调仓"
+        case .alfa: return "投顾组合"
+        }
+    }
+}
+
 enum PersonalAssetDeleteScope: String, CaseIterable, Identifiable {
     case holding
     case pendingTrades

@@ -15,14 +15,15 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         XCTAssertEqual(AppLaunchPresentationPolicy.configuredActivationPolicy(showsInDock: false), .accessory)
     }
 
-    func testNotificationDelegateIsOptInAtLaunch() {
-        XCTAssertTrue(AppRuntimeCapabilities.shouldInstallNotificationDelegateAtLaunch(environment: [
-            "QIEMAN_INSTALL_NOTIFICATION_DELEGATE_AT_LAUNCH": "1"
-        ]))
-        XCTAssertFalse(AppRuntimeCapabilities.shouldInstallNotificationDelegateAtLaunch(environment: [:]))
-        XCTAssertFalse(AppRuntimeCapabilities.shouldInstallNotificationDelegateAtLaunch(environment: [
-            "QIEMAN_INSTALL_NOTIFICATION_DELEGATE_AT_LAUNCH": "0"
-        ]))
+    func testNotificationDelegateIsInstalledAtLaunch() throws {
+        let sourceRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(contentsOf: sourceRoot.appendingPathComponent("QiemanDashboardApp.swift"))
+
+        XCTAssertTrue(source.contains("UNUserNotificationCenter.current().delegate = self"))
+        XCTAssertFalse(source.contains("QIEMAN_INSTALL_NOTIFICATION_DELEGATE_AT_LAUNCH"))
     }
 
     func testSwiftUISceneWindowDeduplicatesDifferentTrackedWindowRegardlessOfVisibility() {

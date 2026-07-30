@@ -108,12 +108,20 @@ final class UIExperienceRegressionTests: XCTestCase {
     func testSettingsControlsHaveSemanticsKeyboardSortingAndSafeResetConfirmation() throws {
         let components = try source(at: "Views/SettingsComponents.swift")
         let menuBar = try source(at: "Views/SettingsMenuBarPanel.swift")
+        let watch = try source(at: "Views/SettingsWatchPanel.swift")
 
         XCTAssertTrue(components.contains("Toggle(title, isOn: isOn)"))
         XCTAssertTrue(menuBar.contains("isConfirmingMenuBarReset"))
         XCTAssertTrue(menuBar.contains("向前移动"))
         XCTAssertTrue(menuBar.contains("向后移动"))
         XCTAssertFalse(menuBar.contains(".frame(width: 18, height: 18)"))
+        XCTAssertTrue(watch.contains("title: \"平台动态来源\""))
+        XCTAssertTrue(watch.contains("调仓动态 · 可多选"))
+        XCTAssertTrue(watch.contains("model.managerWatchAvailableAdjustmentSources"))
+        XCTAssertTrue(watch.contains("model.updateManagerWatchAdjustmentSource"))
+        XCTAssertTrue(watch.contains("title: \"系统通知\""))
+        XCTAssertTrue(watch.contains("model.isManagerWatchPolling"))
+        XCTAssertTrue(watch.contains("model.managerWatchNextCheckText"))
     }
 
     @MainActor
@@ -145,9 +153,21 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(appSettings.contains("title: \"开机时启动\""))
         XCTAssertTrue(appSettings.contains("title: \"在 Dock 中显示\""))
         XCTAssertTrue(appSettings.contains("SettingsCardGroup"))
+        XCTAssertTrue(appSettings.contains("spacing: AppPalette.spaceXL"))
         XCTAssertTrue(content.contains(".preferredColorScheme(model.appearance.colorScheme)"))
         XCTAssertTrue(menuBar.contains(".preferredColorScheme(model.appearance.colorScheme)"))
         XCTAssertTrue(appModel.contains("appDelegate?.syncWindowAppearances()"))
+    }
+
+    func testSettingsHierarchyUsesDistinctPanelHeaderGroupHeaderAndContentSurfaces() throws {
+        let components = try source(at: "Views/SettingsComponents.swift")
+
+        XCTAssertTrue(components.contains(".font(AppPalette.appFont(.largeTitle, weight: .bold))"))
+        XCTAssertTrue(components.contains(".background(AppPalette.surfaceVariant.opacity(0.28))"))
+        XCTAssertTrue(components.contains(".background(tint.opacity(0.075))"))
+        XCTAssertTrue(components.contains("Capsule()"))
+        XCTAssertTrue(components.contains(".background(AppPalette.card)"))
+        XCTAssertTrue(components.contains("colorSchemeContrast == .increased"))
     }
 
     func testEditorsKeepValidationFeedbackInsideThePresentedSheet() throws {

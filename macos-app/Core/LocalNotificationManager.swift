@@ -22,7 +22,7 @@ struct LocalNotificationManager {
         subtitle: String? = nil,
         body: String,
         deepLink: NotificationDeepLinkPayload? = nil
-    ) async {
+    ) async throws {
         let center = UNUserNotificationCenter.current()
         let content = UNMutableNotificationContent()
         content.title = title
@@ -40,9 +40,13 @@ struct LocalNotificationManager {
             content: content,
             trigger: nil
         )
-        await withCheckedContinuation { continuation in
-            center.add(request) { _ in
-                continuation.resume()
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            center.add(request) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
             }
         }
     }

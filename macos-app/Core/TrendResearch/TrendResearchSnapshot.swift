@@ -342,9 +342,11 @@ struct TrendResearchSnapshotBuilder {
         }
     }
 
-    private static func managerSignals(from events: [ManagerWatchTimelineEvent]) -> [TrendResearchSignal] {
+    static func managerSignals(from events: [ManagerWatchTimelineEvent]) -> [TrendResearchSignal] {
         events
-            .filter { $0.kind == .forumHit || $0.kind == .platformHit }
+            // 调仓动作已经由 qieman/alfa 的结构化平台信号提供。
+            // 巡检层只补充论坛命中，避免同一调仓被 AI 当成两份独立证据。
+            .filter { $0.kind == .forumHit }
             .prefix(maxSignalsPerSource)
             .map { event in
                 TrendResearchSignal(

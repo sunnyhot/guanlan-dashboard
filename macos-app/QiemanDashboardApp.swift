@@ -19,12 +19,6 @@ enum AppLaunchPresentationPolicy {
     }
 }
 
-enum AppRuntimeCapabilities {
-    static func shouldInstallNotificationDelegateAtLaunch(environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
-        environment["QIEMAN_INSTALL_NOTIFICATION_DELEGATE_AT_LAUNCH"] == "1"
-    }
-}
-
 enum AppLaunchWindowPolicy {
     static let shouldCreateImmediateManualWindowOnLaunch = false
 }
@@ -78,9 +72,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
             )
         }
 
-        if AppRuntimeCapabilities.shouldInstallNotificationDelegateAtLaunch() {
-            UNUserNotificationCenter.current().delegate = self
-        }
+        UNUserNotificationCenter.current().delegate = self
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {

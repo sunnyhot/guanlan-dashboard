@@ -33,6 +33,7 @@ extension AppModel {
         let loaded = alfaPortfolioStore.load(from: url)
         alfaPortfolios = loaded
         selectedAlfaPoCode = loaded.first?.poCode
+        reconcileManagerWatchAdjustmentSources()
         // 首次运行：落盘默认组合
         if !FileManager.default.fileExists(atPath: url.path) {
             try? alfaPortfolioStore.save(loaded, to: url)
@@ -293,6 +294,7 @@ extension AppModel {
             alfaPayload = nil
             alfaHoldings = []
         }
+        reconcileManagerWatchAdjustmentSources()
         persistAlfaPortfolios()
     }
 
