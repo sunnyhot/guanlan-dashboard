@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.0/QiemanDashboard-3.14.0.zip",
-    "name" : "QiemanDashboard-3.14.0.zip",
-    "sha256" : "0fb81b98d2e2ca2b6e3e9cc104e0f87e2cb7903686bdc4fd63aad8898c7bebf7",
-    "size" : 6328066
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.1/QiemanDashboard-3.14.1.zip",
+    "name" : "QiemanDashboard-3.14.1.zip",
+    "sha256" : "2f45992abccd8e70408f5790bfd02c06238ec41c6c9eec21c0df2c30888dbedb",
+    "size" : 6330971
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.0/QiemanDashboard-3.14.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.1/QiemanDashboard-3.14.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.14.0.zip",
-      "size" : 6328066
+      "name" : "QiemanDashboard-3.14.1.zip",
+      "size" : 6330971
     }
   ],
-  "body" : "资产分布改饼图 + 组合诊断上移 + 删自动刷新提示",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.14.0",
-  "name" : "QiemanDashboard v3.14.0",
-  "notes" : "资产分布改饼图 + 组合诊断上移 + 删自动刷新提示",
+  "body" : "基金穿透饼图与明细展开行对齐收益归因卡片视觉",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.14.1",
+  "name" : "QiemanDashboard v3.14.1",
+  "notes" : "基金穿透饼图与明细展开行对齐收益归因卡片视觉",
   "published_at" : "",
-  "sha256" : "0fb81b98d2e2ca2b6e3e9cc104e0f87e2cb7903686bdc4fd63aad8898c7bebf7",
-  "tag" : "v3.14.0",
-  "tag_name" : "v3.14.0",
-  "version" : "3.14.0"
+  "sha256" : "2f45992abccd8e70408f5790bfd02c06238ec41c6c9eec21c0df2c30888dbedb",
+  "tag" : "v3.14.1",
+  "tag_name" : "v3.14.1",
+  "version" : "3.14.1"
 }
