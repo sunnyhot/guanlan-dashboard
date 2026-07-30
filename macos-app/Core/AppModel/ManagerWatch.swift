@@ -546,6 +546,8 @@ extension AppModel {
             openWorkbenchTrend(targetID: payload.targetID)
         case .personalWatchlist:
             selectedSection = .portfolio
+        case .portfolioValuationAlert:
+            selectedSection = .portfolio
         }
     }
 
