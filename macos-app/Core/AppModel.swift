@@ -98,6 +98,8 @@ final class AppModel: ObservableObject {
     @Published var managerWatchSettings = ManagerWatchSettings.default
     @Published var isManagerWatchPolling = false
     @Published var menuBarTickerSettings = MenuBarTickerSettings.load()
+    @Published var portfolioValuationAlertProfiles: [String: PortfolioValuationAlertProfile] = [:]
+    @Published var portfolioValuationAlertSettings = PortfolioValuationAlertSettings()
 
     /// 调仓筛选状态
     let filterState = PlatformFilterState()
@@ -111,6 +113,8 @@ final class AppModel: ObservableObject {
     let alfaPortfolioStore = AlfaPortfolioStore()
     let portfolioStore = UserPortfolioStore()
     let personalWatchlistStore = PersonalWatchlistStore()
+    let portfolioValuationAlertStore = PortfolioValuationAlertStore()
+    let portfolioValuationAlertSettingsStore = PortfolioValuationAlertSettingsStore()
     let pendingTradesStore = PendingTradesStore()
     let investmentPlansStore = InvestmentPlansStore()
     let managerWatchStore = ManagerWatchStore()
@@ -573,6 +577,7 @@ final class AppModel: ObservableObject {
             loadSavedPersonalWatchlist()
             loadPendingTrades()
             loadInvestmentPlans()
+            loadSavedPortfolioValuationAlerts()
             loadManagerWatchSettings()
             loadAlfaPortfolios()
             loadEnhancementState()

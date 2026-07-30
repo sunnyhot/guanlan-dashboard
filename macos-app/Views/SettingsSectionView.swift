@@ -8,6 +8,7 @@ enum SettingsFocus: CaseIterable, Identifiable {
     case watch
     case trend
     case menuBar
+    case valuationAlert
 
     var id: Self { self }
 
@@ -21,6 +22,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "AI 研判"
         case .menuBar:
             return "菜单栏"
+        case .valuationAlert:
+            return "估值预警"
         }
     }
 
@@ -34,6 +37,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "模型与自动分析"
         case .menuBar:
             return "摘要样式与内容"
+        case .valuationAlert:
+            return "持仓目标买卖提醒"
         }
     }
 
@@ -47,6 +52,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "sparkles"
         case .menuBar:
             return "menubar.rectangle"
+        case .valuationAlert:
+            return "target"
         }
     }
 }
@@ -244,6 +251,10 @@ struct SettingsSectionView: View {
             return model.menuBarTickerSettings.isEnabled
                 ? "\(model.menuBarTickerVisibleEntries.count) 项"
                 : "已关闭"
+        case .valuationAlert:
+            return model.portfolioValuationAlertSettings.isEnabled
+                ? "\(model.portfolioValuationAlertProfiles.values.reduce(0) { $0 + $1.rules.filter(\.isEnabled).count }) 条规则"
+                : "已关闭"
         }
     }
 
@@ -257,6 +268,8 @@ struct SettingsSectionView: View {
             return model.trendSettings.provider.isConfigured ? AppPalette.brand : AppPalette.muted
         case .menuBar:
             return model.menuBarTickerSettings.isEnabled ? AppPalette.info : AppPalette.muted
+        case .valuationAlert:
+            return model.portfolioValuationAlertSettings.isEnabled ? AppPalette.warning : AppPalette.muted
         }
     }
 
@@ -271,6 +284,8 @@ struct SettingsSectionView: View {
             TrendSettingsPanel()
         case .menuBar:
             menuBarPanel
+        case .valuationAlert:
+            valuationAlertPanel
         }
     }
 }

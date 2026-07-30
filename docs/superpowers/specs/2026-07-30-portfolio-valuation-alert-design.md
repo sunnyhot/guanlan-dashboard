@@ -185,7 +185,7 @@ func evaluatePortfolioValuationAlerts() async {
 **关键设计点：**
 - 纯派生 + 不持有时态：evaluator 是静态方法，输入只读 context，输出枚举。可单测。
 - 去重状态在 Store（持久化），evaluator 只判单次，AppModel 负责读写 breached 状态——职责分离。
-- 通知去重 identifier：`portfolio-valuation-alert-<fundCode>-<ruleID>`，回落重穿后追加 timestamp 后缀避免被系统级去重吞掉。
+- 通知去重：以 App 内 breached 状态（`breachedRuleIDs`）为权威去重闸——同一规则触发一次即标记 breached，回落离开区间才解除，不依赖系统级 identifier 去重。通知 identifier 复用 `LocalNotificationManager` 的 `qieman-<UUID>` 每次随机生成（每条 `.fire` 发一条通知），因此 App 内滞回是唯一去重路径（实现与设计评审后修订）。
 
 ## §3 持久化与刷新挂载
 

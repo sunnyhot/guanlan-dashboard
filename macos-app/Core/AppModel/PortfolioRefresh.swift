@@ -216,5 +216,10 @@ extension AppModel {
                 errorMessage = "我的关注自动刷新失败：\(error.localizedDescription)"
             }
         }
+
+        // 估值预警评估：无论可见性，只要有持仓数据就评估（持仓刷新在 ticker 常驻时也会后台进行）
+        if portfolioValuationAlertSettings.isEnabled, userPortfolioSnapshot != nil {
+            await evaluatePortfolioValuationAlerts()
+        }
     }
 }
