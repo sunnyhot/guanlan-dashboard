@@ -127,19 +127,21 @@ struct PortfolioSectionView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) {
-                        statusLineContent
+                if model.pendingTradeSummary?.latestTime != nil || model.investmentPlanSummary?.nextExecutionDate != nil {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            statusLineContent
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            statusLineContent
+                        }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
-                        statusLineContent
-                    }
+                    .font(AppPalette.appFont(.subheadline))
+                    .foregroundStyle(AppPalette.muted)
                 }
-                .font(AppPalette.appFont(.subheadline))
-                .foregroundStyle(AppPalette.muted)
 
-                PortfolioAllocationPanel()
                 PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)
+                PortfolioAllocationPanel()
                 ProfitAttributionPanel(summary: model.profitAttributionSummary)
             }
         } else {
@@ -335,7 +337,6 @@ struct PortfolioSectionView: View {
 
     @ViewBuilder
     private var statusLineContent: some View {
-        Text(model.portfolioAutoRefreshStatusText)
         if let latestTime = model.pendingTradeSummary?.latestTime {
             Text("待确认最新：\(latestTime)")
         }
@@ -411,12 +412,6 @@ struct PortfolioDiagnosticsPanel: View {
     var body: some View {
         SectionCard(title: "组合诊断", subtitle: summary.headline, icon: "stethoscope") {
             VStack(alignment: .leading, spacing: 12) {
-                Text(summary.headline)
-                    .font(AppPalette.appFont(.title2, weight: .bold))
-                    .foregroundStyle(AppPalette.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-
                 ViewThatFits(in: .horizontal) {
                     LazyVGrid(columns: portfolioDiagnosticWideColumns(count: summary.items.count), alignment: .leading, spacing: 10) {
                         ForEach(summary.items) { item in

@@ -85,6 +85,10 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("trend-tracking-items.json", isDirectory: false)
     }
 
+    var fundLookThroughCacheFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("fund-look-through-cache.json", isDirectory: false)
+    }
+
     var hasLiveService: Bool {
         true
     }
@@ -155,24 +159,6 @@ extension AppModel {
             hasInvestmentPlans: hasInvestmentPlans,
             hasArchivedPortfolio: hasArchivedPortfolio
         )
-    }
-
-    var portfolioAutoRefreshStatusText: String {
-        guard hasPersonalPortfolio else {
-            if hasPersonalWatchlist {
-                return isRefreshingPersonalWatchlist
-                    ? "关注行情刷新中…"
-                    : "关注行情每 \(portfolioAutoRefreshIntervalSeconds) 秒自动刷新"
-            }
-            if hasArchivedPortfolio {
-                return "暂无活跃持仓，归档记录已保留"
-            }
-            return "添加持仓后自动刷新估值"
-        }
-        if isRefreshingPortfolio {
-            return "持仓估值刷新中…"
-        }
-        return "持仓估值每 \(portfolioAutoRefreshIntervalSeconds) 秒自动刷新"
     }
 
     var managerWatchStatusText: String {

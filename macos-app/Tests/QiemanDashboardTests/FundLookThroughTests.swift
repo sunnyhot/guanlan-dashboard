@@ -305,4 +305,285 @@ final class FundLookThroughTests: XCTestCase {
             plans: []
         )
     }
+
+    // MARK: - 失败判定 / 重试 / 磁盘缓存兜底
+
+    func testCompleteSuccessPersistsToDisk() async throws {
+        let tempDir = makeTemporaryDirectory()
+        let cacheFile = tempDir.appendingPathComponent("fund-look-through-cache.json")
+        let responder = DisclosureStubResponder(fundCode: "163402", mode: .allSuccess)
+        let session = stubURLSession(responder: responder)
+
+        let client = FundLookThroughClient(
+            session: session,
+            now: { Date() },
+            cacheTTL: 24 * 60 * 60,
+            storageFileURL: cacheFile
+        )
+        let batch = await client.fetchDisclosures(fundCodes: ["163402"])
+
+        let disclosure = try XCTUnwrap(batch.disclosures["163402"])
+        // 完整披露：股票 6.45% + 债券 7.05% 全部到位，不再只剩债券冒充完整。
+        XCTAssertEqual(disclosure.disclosedSecurityWeightPct, 13.5, accuracy: 0.0001)
+        XCTAssertTrue(disclosure.warnings.isEmpty)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cacheFile.path))
+        let decoder = JSONDecoder()
+        let data = try Data(contentsOf: cacheFile)
+        let snapshot = try decoder.decode(
+            [String: FundLookThroughClient.CachedDisclosure].self,
+            from: data
+        )
+        let persisted = try XCTUnwrap(snapshot["163402"])
+        XCTAssertEqual(persisted.disclosure.disclosedSecurityWeightPct, 13.5, accuracy: 0.0001)
+    }
+
+    func testPartialFailureFallsBackToDiskCache() async throws {
+        let tempDir = makeTemporaryDirectory()
+        let cacheFile = tempDir.appendingPathComponent("fund-look-through-cache.json")
+        // 预置一份完整披露（含股票 6.45% + 债券 7.05%），loadedAt 留在兜底 TTL 内。
+        let seeded = FundLookThroughClient.CachedDisclosure(
+            loadedAt: Date(),
+            disclosure: disclosure(
+                code: "163402",
+                name: "兴全趋势",
+                holdingWeight: 6.45,
+                industryWeight: 30,
+                allocation: FundAssetAllocation(
+                    stockPct: 80, bondPct: 10, cashPct: 5, otherPct: 5,
+                    disclosureDate: "2026-06-30"
+                )
+            )
+        )
+        try prewarmDiskCache(at: cacheFile, with: ["163402": seeded])
+
+        // 线上股票接口持续失败，债券/行业/资产配置成功（复刻本次 bug 场景）。
+        let responder = DisclosureStubResponder(fundCode: "163402", mode: .stockFails)
+        let session = stubURLSession(responder: responder)
+        let client = FundLookThroughClient(
+            session: session,
+            now: { Date() },
+            cacheTTL: 24 * 60 * 60,
+            fallbackTTL: 120 * 24 * 60 * 60,
+            storageFileURL: cacheFile
+        )
+        let batch = await client.fetchDisclosures(fundCodes: ["163402"])
+
+        let disclosure = try XCTUnwrap(batch.disclosures["163402"])
+        // 兜底用的是缓存完整披露：披露证券占基金仍为 6.45%，而不是被债券数据冒充。
+        XCTAssertEqual(disclosure.disclosedSecurityWeightPct, 6.45, accuracy: 0.0001)
+        XCTAssertTrue(disclosure.warnings.contains { $0.contains("已使用") && $0.contains("缓存完整披露") })
+
+        // 残缺结果不得覆盖磁盘上已有的完整披露。
+        let decoder = JSONDecoder()
+        let reread = try decoder.decode(
+            [String: FundLookThroughClient.CachedDisclosure].self,
+            from: Data(contentsOf: cacheFile)
+        )
+        XCTAssertEqual(reread["163402"]?.disclosure.disclosedSecurityWeightPct, 6.45, accuracy: 0.0001)
+    }
+
+    func testPartialFailureWithoutCacheIsExcluded() async throws {
+        let tempDir = makeTemporaryDirectory()
+        let cacheFile = tempDir.appendingPathComponent("fund-look-through-cache.json")
+        let responder = DisclosureStubResponder(fundCode: "163402", mode: .stockFails)
+        let session = stubURLSession(responder: responder)
+        let client = FundLookThroughClient(
+            session: session,
+            now: { Date() },
+            cacheTTL: 24 * 60 * 60,
+            fallbackTTL: 120 * 24 * 60 * 60,
+            storageFileURL: cacheFile
+        )
+        let batch = await client.fetchDisclosures(fundCodes: ["163402"])
+
+        // 既无完整抓取、也无缓存兜底：该基金被排除出 disclosures，只进 warnings。
+        XCTAssertNil(batch.disclosures["163402"])
+        XCTAssertTrue(batch.warnings.contains { $0.contains("163402") })
+        // 残缺结果不落盘。
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cacheFile.path))
+    }
+
+    func testRetryingRequestRelievesTransientFailure() async throws {
+        let tempDir = makeTemporaryDirectory()
+        let cacheFile = tempDir.appendingPathComponent("fund-look-through-cache.json")
+        // 股票接口前 2 次返回 500，第 3 次成功；其余接口稳定成功。
+        let responder = DisclosureStubResponder(
+            fundCode: "163402",
+            mode: .stockTransientFail(transientFailures: 2)
+        )
+        let session = stubURLSession(responder: responder)
+        let client = FundLookThroughClient(
+            session: session,
+            now: { Date() },
+            cacheTTL: 24 * 60 * 60,
+            storageFileURL: cacheFile
+        )
+        let batch = await client.fetchDisclosures(fundCodes: ["163402"])
+
+        // 重试后四接口最终全部成功 → 完整披露（股票 6.45% + 债券 7.05%）。
+        let disclosure = try XCTUnwrap(batch.disclosures["163402"])
+        XCTAssertEqual(disclosure.disclosedSecurityWeightPct, 13.5, accuracy: 0.0001)
+        XCTAssertEqual(responder.stockAttempts, 3)
+    }
+
+    // MARK: - 网络测试辅助
+
+    private func makeTemporaryDirectory() -> URL {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("FundLookThroughTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true
+        )
+        return dir
+    }
+
+    private func prewarmDiskCache(
+        at fileURL: URL,
+        with snapshot: [String: FundLookThroughClient.CachedDisclosure]
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(snapshot)
+        try data.write(to: fileURL, options: .atomic)
+    }
+
+    private func stubURLSession(responder: DisclosureStubResponder) -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [DisclosureStubURLProtocol.self]
+        DisclosureStubURLProtocol.responder = { [weak responder] request in
+            responder?.respond(to: request) ?? .failure(404)
+        }
+        return URLSession(configuration: configuration)
+    }
+}
+
+private struct StubHTTPResponse {
+    let statusCode: Int
+    let body: String
+    static func success(_ body: String) -> StubHTTPResponse {
+        StubHTTPResponse(statusCode: 200, body: body)
+    }
+    static func failure(_ statusCode: Int = 500) -> StubHTTPResponse {
+        StubHTTPResponse(statusCode: statusCode, body: "")
+    }
+}
+
+/// 注入自定义响应的 URLProtocol；测试通过 `responder` 闭包按请求返回成功/失败。
+private final class DisclosureStubURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var responder: @Sendable (URLRequest) -> StubHTTPResponse = { _ in
+        .failure()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let response = Self.responder(request)
+        guard let url = request.url,
+              let http = HTTPURLResponse(
+                url: url,
+                statusCode: response.statusCode,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "text/html; charset=utf-8"]
+              ) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
+        client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(response.body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+/// 按 URL 路径/查询分发到四个披露接口的桩数据，支持全部成功、股票持续失败、股票瞬时失败。
+private final class DisclosureStubResponder: @unchecked Sendable {
+    enum Mode {
+        case allSuccess
+        case stockFails
+        case stockTransientFail(transientFailures: Int)
+    }
+
+    private let fundCode: String
+    private let mode: Mode
+    private let lock = NSLock()
+    private var stockFailRemaining: Int
+    private(set) var stockAttempts = 0
+
+    init(fundCode: String, mode: Mode) {
+        self.fundCode = fundCode
+        self.mode = mode
+        switch mode {
+        case .stockTransientFail(let n):
+            self.stockFailRemaining = n
+        default:
+            self.stockFailRemaining = 0
+        }
+    }
+
+    func respond(to request: URLRequest) -> StubHTTPResponse {
+        let url = request.url?.absoluteString ?? ""
+        if url.contains("FundArchivesDatas.aspx") {
+            if url.contains("type=jjcc") {
+                return respondToStock()
+            }
+            if url.contains("type=zqcc") {
+                return .success(Self.bondBody(fundCode: fundCode))
+            }
+        }
+        if url.contains("/f10/HYPZ/") {
+            return .success(Self.industryBody())
+        }
+        if url.contains("zcpz_") {
+            return .success(Self.allocationBody())
+        }
+        return .failure(404)
+    }
+
+    private func respondToStock() -> StubHTTPResponse {
+        lock.lock(); defer { lock.unlock() }
+        stockAttempts += 1
+        switch mode {
+        case .allSuccess:
+            return .success(Self.stockBody(fundCode: fundCode))
+        case .stockFails:
+            return .failure(500)
+        case .stockTransientFail:
+            if stockFailRemaining > 0 {
+                stockFailRemaining -= 1
+                return .failure(500)
+            }
+            return .success(Self.stockBody(fundCode: fundCode))
+        }
+    }
+
+    private static func stockBody(fundCode: String) -> String {
+        """
+        var apidata={ content:"<div><a title='测试基金' href='http://fund.eastmoney.com/\(fundCode).html'>测试基金</a>截止至：<font class='px12'>2026-06-30</font><table><tbody>
+        <tr><td>1</td><td>300308</td><td class='tol'><a>中际旭创</a></td><td></td><td></td><td>资讯</td><td class='tor'>6.45%</td><td>20.00</td><td>25,400.00</td></tr>
+        </tbody></table>"};
+        """
+    }
+
+    private static func bondBody(fundCode: String) -> String {
+        """
+        var apidata={ content:"<div><a href='http://fund.eastmoney.com/\(fundCode).html'>测试基金</a>截止至：<font class='px12'>2026-06-30</font><table><tbody>
+        <tr><td>1</td><td>019827</td><td class='tol'>26国债01</td><td class='tor'>7.05%</td><td>27,778.90</td></tr>
+        </tbody></table>"};
+        """
+    }
+
+    private static func industryBody() -> String {
+        """
+        {"Data":{"ShortName":"测试基金","QuarterInfos":[{"JZRQ":"2026-06-30","HYPZInfo":[{"HYMC":"制造业","FSRQ":"2026-06-30","ZJZBL":"30.00"}]}]},"ErrCode":0}
+        """
+    }
+
+    private static func allocationBody() -> String {
+        """
+        var Data_assetAllocation = {"series":[{"name":"股票占净比","data":[75.5]},{"name":"债券占净比","data":[18]},{"name":"现金占净比","data":[3.5]}],"categories":["2026-06-30"]};
+        """
+    }
 }

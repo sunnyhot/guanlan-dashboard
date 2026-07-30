@@ -341,7 +341,8 @@ enum PortfolioLookThroughCalculator {
 }
 
 actor FundLookThroughClient: FundLookThroughClientProtocol {
-    private struct CachedDisclosure {
+    /// 内存缓存条目，也作为磁盘缓存的单条载荷形态。
+    struct CachedDisclosure: Codable, Sendable {
         let loadedAt: Date
         let disclosure: FundLookThroughDisclosure
     }
@@ -349,19 +350,30 @@ actor FundLookThroughClient: FundLookThroughClientProtocol {
     private let session: URLSession
     private let now: @Sendable () -> Date
     private let cacheTTL: TimeInterval
+    private let fallbackTTL: TimeInterval
+    private let storageFileURL: URL?
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
     private var cache: [String: CachedDisclosure] = [:]
+    private var diskCacheLoaded = false
     private static let concurrencyLimit = 4
     private static let maximumHoldingsPerKind = 10
+    private static let requestMaxAttempts = 3
     private static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
     init(
         session: URLSession = .shared,
         now: @escaping @Sendable () -> Date = { Date() },
-        cacheTTL: TimeInterval = 24 * 60 * 60
+        cacheTTL: TimeInterval = 24 * 60 * 60,
+        fallbackTTL: TimeInterval = 120 * 24 * 60 * 60,
+        storageFileURL: URL? = nil
     ) {
         self.session = session
         self.now = now
         self.cacheTTL = cacheTTL
+        self.fallbackTTL = fallbackTTL
+        self.storageFileURL = storageFileURL
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     }
 
     func fetchDisclosures(fundCodes: [String]) async -> FundLookThroughBatchResult {
@@ -406,80 +418,206 @@ actor FundLookThroughClient: FundLookThroughClientProtocol {
     }
 
     private func fetchDisclosure(fundCode: String) async throws -> FundLookThroughDisclosure {
-        if let cached = cache[fundCode],
-           now().timeIntervalSince(cached.loadedAt) < cacheTTL {
+        await ensureDiskCacheLoaded()
+        if let cached = freshMemoryCacheEntry(for: fundCode) {
             return cached.disclosure
         }
 
-        async let stockText = optionalRequest(
+        async let stockOutcome = retryingRequest(
             url: archivesURL(type: "jjcc", fundCode: fundCode),
             referer: "https://fundf10.eastmoney.com/ccmx_\(fundCode).html"
         )
-        async let bondText = optionalRequest(
+        async let bondOutcome = retryingRequest(
             url: archivesURL(type: "zqcc", fundCode: fundCode),
             referer: "https://fundf10.eastmoney.com/ccmx1_\(fundCode).html"
         )
-        async let industryText = optionalRequest(
+        async let industryOutcome = retryingRequest(
             url: industryURL(fundCode: fundCode),
             referer: "https://fundf10.eastmoney.com/hytz_\(fundCode).html"
         )
-        async let allocationText = optionalRequest(
+        async let allocationOutcome = retryingRequest(
             url: assetAllocationURL(fundCode: fundCode),
             referer: "https://fundf10.eastmoney.com/zcpz_\(fundCode).html"
         )
 
-        let (stockResponse, bondResponse, industryResponse, allocationResponse) = await (
-            stockText,
-            bondText,
-            industryText,
-            allocationText
+        let (stockResult, bondResult, industryResult, allocationResult) = await (
+            stockOutcome,
+            bondOutcome,
+            industryOutcome,
+            allocationOutcome
         )
 
-        let stock = stockResponse.map {
+        let stock = stockResult.value.map {
             Self.parseArchiveHoldings($0, kind: .stock, limit: Self.maximumHoldingsPerKind)
         }
-        let bond = bondResponse.map {
+        let bond = bondResult.value.map {
             Self.parseArchiveHoldings($0, kind: .bond, limit: Self.maximumHoldingsPerKind)
         }
-        let industry = industryResponse.flatMap(Self.parseIndustries)
-        let allocation = allocationResponse.flatMap(Self.parseAssetAllocation)
+        let industry = industryResult.value.flatMap(Self.parseIndustries)
+        let allocation = allocationResult.value.flatMap(Self.parseAssetAllocation)
 
         let holdings = (stock?.holdings ?? []) + (bond?.holdings ?? [])
         let industries = industry?.exposures ?? []
-        guard !holdings.isEmpty || !industries.isEmpty || allocation != nil else {
-            throw FundLookThroughClientError.noDisclosure(fundCode)
+        let failedSources = failedSourceLabels(
+            stock: stockResult.error,
+            bond: bondResult.error,
+            industry: industryResult.error,
+            allocation: allocationResult.error
+        )
+
+        // 四个来源全部成功才视为"完整披露"，可缓存、可计入覆盖率。
+        if failedSources.isEmpty {
+            let dates = holdings.map(\.disclosureDate)
+                + industries.map(\.disclosureDate)
+                + [allocation?.disclosureDate].compactMap { $0 }
+            let fundName = stock?.fundName
+                ?? bond?.fundName
+                ?? industry?.fundName
+                ?? fundCode
+            let disclosure = FundLookThroughDisclosure(
+                fundCode: fundCode,
+                fundName: fundName,
+                asOf: dates.max() ?? "",
+                holdings: holdings,
+                industries: industries,
+                assetAllocation: allocation,
+                sourceLabel: "天天基金 · 基金定期报告",
+                sourceURL: "https://fundf10.eastmoney.com/ccmx_\(fundCode).html",
+                warnings: []
+            )
+            persist(fundCode: fundCode, disclosure: disclosure)
+            return disclosure
         }
 
-        let dates = holdings.map(\.disclosureDate)
-            + industries.map(\.disclosureDate)
-            + [allocation?.disclosureDate].compactMap { $0 }
-        var partialWarnings: [String] = []
-        if stockResponse == nil { partialWarnings.append("股票持仓接口暂不可用。") }
-        if bondResponse == nil { partialWarnings.append("债券持仓接口暂不可用。") }
-        if industryResponse == nil { partialWarnings.append("行业配置接口暂不可用。") }
-        if allocationResponse == nil { partialWarnings.append("资产配置接口暂不可用。") }
+        // 任一来源失败：不得用残缺数据冒充完整披露。优先回退到磁盘上已有的完整披露。
+        // 兜底用更长的 TTL——基金持仓变化慢，季报周期内的历史完整披露作为兜底比残缺数据安全。
+        if let fallback = fallbackCacheEntry(for: fundCode) {
+            let date = fallback.disclosure.asOf.isEmpty
+                ? shortDateString(fallback.loadedAt)
+                : String(fallback.disclosure.asOf.prefix(10))
+            let merged = FundLookThroughDisclosure(
+                fundCode: fallback.disclosure.fundCode,
+                fundName: fallback.disclosure.fundName,
+                asOf: fallback.disclosure.asOf,
+                holdings: fallback.disclosure.holdings,
+                industries: fallback.disclosure.industries,
+                assetAllocation: fallback.disclosure.assetAllocation,
+                sourceLabel: fallback.disclosure.sourceLabel,
+                sourceURL: fallback.disclosure.sourceURL,
+                warnings: fallback.disclosure.warnings + [
+                    "\(failedSources.joined(separator: "、"))接口暂不可用，已使用 \(date) 的缓存完整披露。"
+                ]
+            )
+            return merged
+        }
 
-        let fundName = stock?.fundName
-            ?? bond?.fundName
-            ?? industry?.fundName
-            ?? fundCode
-        let disclosure = FundLookThroughDisclosure(
-            fundCode: fundCode,
-            fundName: fundName,
-            asOf: dates.max() ?? "",
-            holdings: holdings,
-            industries: industries,
-            assetAllocation: allocation,
-            sourceLabel: "天天基金 · 基金定期报告",
-            sourceURL: "https://fundf10.eastmoney.com/ccmx_\(fundCode).html",
-            warnings: partialWarnings
+        // 既无完整抓取、也无缓存兜底：判为无可用披露，排除出覆盖率。绝不缓存残缺结果。
+        throw FundLookThroughClientError.incompleteDisclosure(
+            fundCode,
+            failed: failedSources
         )
-        cache[fundCode] = CachedDisclosure(loadedAt: now(), disclosure: disclosure)
-        return disclosure
     }
 
-    private func optionalRequest(url: URL, referer: String) async -> String? {
-        try? await requestText(url: url, referer: referer)
+    private func freshMemoryCacheEntry(for fundCode: String) -> CachedDisclosure? {
+        guard let entry = cache[fundCode],
+              now().timeIntervalSince(entry.loadedAt) < cacheTTL else {
+            return nil
+        }
+        return entry
+    }
+
+    private func fallbackCacheEntry(for fundCode: String) -> CachedDisclosure? {
+        guard let entry = cache[fundCode],
+              now().timeIntervalSince(entry.loadedAt) < fallbackTTL else {
+            return nil
+        }
+        return entry
+    }
+
+    private func persist(fundCode: String, disclosure: FundLookThroughDisclosure) {
+        let entry = CachedDisclosure(loadedAt: now(), disclosure: disclosure)
+        cache[fundCode] = entry
+        guard storageFileURL != nil else { return }
+        // 已通过 ensureDiskCacheLoaded 把磁盘内容并入 cache，直接基于内存快照写盘，
+        // 避免重复读盘与潜在竞态（actor 内部串行化保证一致性）。
+        writeDiskCache(cache)
+    }
+
+    private func ensureDiskCacheLoaded() async {
+        guard !diskCacheLoaded else { return }
+        diskCacheLoaded = true
+        for (code, entry) in loadDiskCache() {
+            cache[code] = entry
+        }
+    }
+
+    private func failedSourceLabels(
+        stock: Error?,
+        bond: Error?,
+        industry: Error?,
+        allocation: Error?
+    ) -> [String] {
+        var labels: [String] = []
+        if stock != nil { labels.append("股票持仓") }
+        if bond != nil { labels.append("债券持仓") }
+        if industry != nil { labels.append("行业配置") }
+        if allocation != nil { labels.append("资产配置") }
+        return labels
+    }
+
+    private func shortDateString(_ date: Date) -> String {
+        Self.shortDateFormatter.string(from: date)
+    }
+
+    private static let shortDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private func loadDiskCache() -> [String: CachedDisclosure] {
+        guard let storageFileURL,
+              FileManager.default.fileExists(atPath: storageFileURL.path),
+              let data = try? Data(contentsOf: storageFileURL),
+              let decoded = try? decoder.decode([String: CachedDisclosure].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    private func writeDiskCache(_ snapshot: [String: CachedDisclosure]) {
+        guard let storageFileURL,
+              let data = try? encoder.encode(snapshot) else {
+            return
+        }
+        try? data.write(to: storageFileURL, options: .atomic)
+    }
+
+    /// 对单个披露接口做有限次指数退避重试，缓解偶发抖动；返回成功正文或最终错误。
+    private func retryingRequest(url: URL, referer: String) async -> RequestOutcome {
+        var lastError: Error?
+        for attempt in 0..<Self.requestMaxAttempts {
+            do {
+                let text = try await requestText(url: url, referer: referer)
+                return RequestOutcome(value: text)
+            } catch {
+                lastError = error
+                if attempt < Self.requestMaxAttempts - 1 {
+                    let backoff = pow(3.0, Double(attempt)) * 0.1
+                    try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
+                }
+            }
+        }
+        return RequestOutcome(error: lastError ?? FundLookThroughClientError.invalidResponse(url.absoluteString))
+    }
+
+    private struct RequestOutcome {
+        let value: String?
+        let error: Error?
+        init(value: String) { self.value = value; self.error = nil }
+        init(error: Error) { self.value = nil; self.error = error }
     }
 
     private func requestText(url: URL, referer: String) async throws -> String {
@@ -788,6 +926,7 @@ enum FundLookThroughClientError: Error, LocalizedError {
     case invalidResponse(String)
     case invalidEncoding(String)
     case noDisclosure(String)
+    case incompleteDisclosure(String, failed: [String])
 
     var errorDescription: String? {
         switch self {
@@ -797,6 +936,9 @@ enum FundLookThroughClientError: Error, LocalizedError {
             return "基金披露接口编码异常：\(url)"
         case .noDisclosure(let code):
             return "基金 \(code) 暂无可解析的持仓、行业或资产配置披露。"
+        case .incompleteDisclosure(let code, let failed):
+            let joined = failed.isEmpty ? "部分接口" : failed.joined(separator: "、")
+            return "基金 \(code) 的 \(joined) 接口暂不可用，且无可用缓存兜底，已排除以免残缺数据冒充完整披露。"
         }
     }
 }

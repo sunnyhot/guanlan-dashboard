@@ -573,6 +573,11 @@ final class AppModel: ObservableObject {
             let supportDirectory = try dataController.prepareEnvironment()
             logFileURL = dataController.logFileURL
             dataDirectoryURL = supportDirectory
+            // 基金穿透披露接入磁盘缓存：完整披露落盘，部分失败时用历史完整披露兜底，
+            // 避免残缺数据冒充完整披露（如股票接口失败只剩债券时）。
+            fundLookThroughClient = FundLookThroughClient(
+                storageFileURL: fundLookThroughCacheFileURL
+            )
             loadSavedPortfolio()
             loadSavedPersonalWatchlist()
             loadPendingTrades()

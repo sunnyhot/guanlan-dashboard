@@ -418,28 +418,41 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(watchlist.contains(".disabled(resolution == nil || isResolving || isSaving)"))
     }
 
-    func testPortfolioAllocationPanelUsesCompactSummaryAndPopoverDetail() throws {
+    func testPortfolioAllocationPanelUsesReadableRankedBreakdown() throws {
         let panel = try source(at: "Views/PortfolioAllocationPanel.swift")
 
-        // 明细通过 Popover 呈现，主页不再直接铺开行业 / 重仓长列表
-        XCTAssertTrue(panel.contains(".popover(isPresented:"))
-        XCTAssertTrue(panel.contains("查看明细…"))
+        // 主视图先交代数据口径，再直接展示直接 + 间接证券暴露和基金披露行业
+        XCTAssertTrue(panel.contains("PortfolioLookThroughMetricStrip"))
+        XCTAssertTrue(panel.contains("PortfolioUnderlyingPositionList"))
+        XCTAssertTrue(panel.contains("PortfolioIndustryExposureList"))
+        XCTAssertTrue(panel.contains("基金仓位未披露到证券"))
+        XCTAssertTrue(panel.contains("穿透后证券暴露"))
+        XCTAssertTrue(panel.contains("基金披露行业"))
+        XCTAssertTrue(panel.contains("真实 0–100% 刻度"))
 
-        // 旧的长列表面板与大环形图已移除
+        // 基金到证券的换算降级为可展开对账表，不再用交叉流带占据主视野
+        XCTAssertTrue(panel.contains("PortfolioFundDisclosureTable"))
+        XCTAssertTrue(panel.contains("DisclosureGroup(isExpanded: $showsFundDisclosure)"))
+        XCTAssertTrue(panel.contains("披露重仓占基金"))
+        XCTAssertTrue(panel.contains("折算占组合"))
+        XCTAssertFalse(panel.contains("struct SankeyDiagram"))
+        XCTAssertFalse(panel.contains("Canvas { context, size in"))
+        XCTAssertFalse(panel.contains("bandPath"))
+
+        // 明细留在当前阅读上下文内，不使用 popover 隐藏
+        XCTAssertFalse(panel.contains(".popover(isPresented:"))
+        XCTAssertFalse(panel.contains("查看明细…"))
+        XCTAssertFalse(panel.contains("PortfolioAllocationDetailPopover"))
+
+        // 行业饼图用 Charts 框架；证券暴露改用块状图（Treemap）
+        XCTAssertTrue(panel.contains("import Charts"))
+        XCTAssertTrue(panel.contains("SectorMark"))
+        XCTAssertTrue(panel.contains("PortfolioTreemap"))
+
+        // 旧的大环形图 / 相对最大项进度条 / StatChip 仍不存在
         XCTAssertFalse(panel.contains("PortfolioRankedExposurePanel"))
-        XCTAssertFalse(panel.contains("SectorMark"))
-        XCTAssertFalse(panel.contains("allocationDonut"))
-
-        // 进度条不再按“相对最大项”绘制（避免被误读为 100%）
         XCTAssertFalse(panel.contains("total: maximumWeight"))
-
-        // 基金穿透模式不再使用四个 StatChip
         XCTAssertFalse(panel.contains("StatChip("))
-
-        // 新的紧凑组件已落地
-        XCTAssertTrue(panel.contains("PortfolioAllocationStackedBar"))
-        XCTAssertTrue(panel.contains("PortfolioAllocationCompactLegend"))
-        XCTAssertTrue(panel.contains("PortfolioAllocationDetailPopover"))
     }
 
     private func source(at relativePath: String) throws -> String {
