@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.3/QiemanDashboard-3.12.3.zip",
-    "name" : "QiemanDashboard-3.12.3.zip",
-    "sha256" : "23379b18eb1719339568e01f8acb58aa5b11f10603002f07c934525da35c46a6",
-    "size" : 6162023
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.13.0/QiemanDashboard-3.13.0.zip",
+    "name" : "QiemanDashboard-3.13.0.zip",
+    "sha256" : "4ccf7a1ddcd4ab73faaeb7d2550610925ea1d481d560ef50befe640f10502cd6",
+    "size" : 6269745
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.12.3/QiemanDashboard-3.12.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.13.0/QiemanDashboard-3.13.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.12.3.zip",
-      "size" : 6162023
+      "name" : "QiemanDashboard-3.13.0.zip",
+      "size" : 6269745
     }
   ],
-  "body" : "设置中心四个面板统一为卡片式两列自适应布局",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.12.3",
-  "name" : "QiemanDashboard v3.12.3",
-  "notes" : "设置中心四个面板统一为卡片式两列自适应布局",
+  "body" : "估值预警防御性加固与文档修正\n设置中心新增估值预警面板\n估值预警编辑 sheet\n资产详情抽屉新增估值预警区块\n估值预警挂载到持仓 60s 自动刷新循环\n估值预警接入 AppModel 状态、加载与评估发通知\n估值预警通知深链支持\n持仓估值预警持久化 Store\n持仓估值预警纯函数评估器与文案生成\n持仓估值预警数据模型\n持仓估值目标预警实现计划\n持仓估值目标预警功能设计文档",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.13.0",
+  "name" : "QiemanDashboard v3.13.0",
+  "notes" : "估值预警防御性加固与文档修正\n设置中心新增估值预警面板\n估值预警编辑 sheet\n资产详情抽屉新增估值预警区块\n估值预警挂载到持仓 60s 自动刷新循环\n估值预警接入 AppModel 状态、加载与评估发通知\n估值预警通知深链支持\n持仓估值预警持久化 Store\n持仓估值预警纯函数评估器与文案生成\n持仓估值预警数据模型\n持仓估值目标预警实现计划\n持仓估值目标预警功能设计文档",
   "published_at" : "",
-  "sha256" : "23379b18eb1719339568e01f8acb58aa5b11f10603002f07c934525da35c46a6",
-  "tag" : "v3.12.3",
-  "tag_name" : "v3.12.3",
-  "version" : "3.12.3"
+  "sha256" : "4ccf7a1ddcd4ab73faaeb7d2550610925ea1d481d560ef50befe640f10502cd6",
+  "tag" : "v3.13.0",
+  "tag_name" : "v3.13.0",
+  "version" : "3.13.0"
 }
