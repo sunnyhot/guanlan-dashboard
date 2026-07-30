@@ -269,7 +269,7 @@ struct PortfolioAllocationPanel: View {
             snapshot.warnings + model.portfolioLookThroughSourceWarnings
         )
 
-        return VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+        return VStack(alignment: .leading, spacing: 12) {
             PortfolioLookThroughMetricStrip(snapshot: snapshot)
 
             VStack(alignment: .leading, spacing: AppPalette.spaceS) {
@@ -281,52 +281,83 @@ struct PortfolioAllocationPanel: View {
                 PortfolioAllocationCompactLegend(slices: assetSlices)
             }
 
-            Divider()
-
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: AppPalette.spaceXL) {
+                HStack(alignment: .top, spacing: 10) {
                     PortfolioUnderlyingPositionList(positions: snapshot.topPositions)
-                        .frame(maxWidth: .infinity, alignment: .top)
-
-                    Divider()
-
                     PortfolioIndustryExposureList(industries: snapshot.industries)
-                        .frame(maxWidth: .infinity, alignment: .top)
                 }
 
-                VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+                VStack(alignment: .leading, spacing: 10) {
                     PortfolioUnderlyingPositionList(positions: snapshot.topPositions)
-                    Divider()
                     PortfolioIndustryExposureList(industries: snapshot.industries)
                 }
             }
 
-            Divider()
-
-            DisclosureGroup(isExpanded: $showsFundDisclosure) {
-                PortfolioFundDisclosureTable(funds: snapshot.funds)
-                    .padding(.top, AppPalette.spaceS)
-            } label: {
-                HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
-                    Text("基金披露明细")
-                        .font(AppPalette.appFont(.footnote, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
-                    Text("查看“基金已披露重仓”的计算来源")
-                        .font(AppPalette.appFont(.caption))
-                        .foregroundStyle(AppPalette.muted)
-                    Spacer(minLength: AppPalette.spaceS)
-                    Text("\(snapshot.funds.count) 只")
-                        .font(AppPalette.appFont(.caption, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AppPalette.muted)
-                        .monospacedDigit()
-                }
-            }
-            .tint(AppPalette.brand)
-            .accessibilityHint("展开后显示每只基金占组合、披露重仓占基金以及折算占组合的比例")
+            fundDisclosureSection(snapshot)
 
             PortfolioDisclosureNotice(
                 messages: disclosureNoticeMessages(warnings: warnings)
             )
+        }
+    }
+
+    @ViewBuilder
+    private func fundDisclosureSection(_ snapshot: PortfolioLookThroughSnapshot) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    showsFundDisclosure.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Label(
+                        showsFundDisclosure ? "收起基金披露明细" : "查看基金披露明细",
+                        systemImage: "list.bullet"
+                    )
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(AppPalette.info)
+
+                    Text("查看“基金已披露重仓”的计算来源")
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text("\(snapshot.funds.count) 只")
+                        .font(AppPalette.appFont(.caption, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppPalette.muted)
+                        .monospacedDigit()
+
+                    Image(systemName: "chevron.down")
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
+                        .foregroundStyle(AppPalette.muted)
+                        .rotationEffect(.degrees(showsFundDisclosure ? 180 : 0))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .background(
+                AppPalette.cardStrong.opacity(0.42),
+                in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+            )
+            .accessibilityLabel("基金披露明细")
+            .accessibilityValue(
+                showsFundDisclosure
+                    ? "已展开，共 \(snapshot.funds.count) 只"
+                    : "已收起，共 \(snapshot.funds.count) 只"
+            )
+            .accessibilityHint("展开后显示每只基金占组合、披露重仓占基金以及折算占组合的比例")
+
+            if showsFundDisclosure {
+                PortfolioFundDisclosureTable(funds: snapshot.funds)
+                    .padding(.top, AppPalette.spaceS)
+                    .clipped()
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -459,99 +490,35 @@ private struct PortfolioLookThroughSectionHeader: View {
 private struct PortfolioLookThroughMetricStrip: View {
     let snapshot: PortfolioLookThroughSnapshot
 
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: 0) {
-                metric(
-                    title: "基金披露覆盖",
-                    value: "\(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只",
-                    detail: "覆盖基金金额 \(allocationPercentage(snapshot.fundDataCoveragePct))",
-                    tint: AppPalette.brand
-                )
-                Divider().frame(height: 42)
-                metric(
-                    title: "基金已披露重仓",
-                    value: allocationPercentage(snapshot.disclosedSecurityCoveragePct),
-                    detail: "折算占整个组合",
-                    tint: AppPalette.info
-                )
-                Divider().frame(height: 42)
-                metric(
-                    title: "基金仓位未披露到证券",
-                    value: allocationPercentage(snapshot.unknownPortfolioWeightPct),
-                    detail: "非重仓部分或缺少披露",
-                    tint: AppPalette.muted
-                )
-            }
-
-            VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                metric(
-                    title: "基金披露覆盖",
-                    value: "\(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只",
-                    detail: "覆盖基金金额 \(allocationPercentage(snapshot.fundDataCoveragePct))",
-                    tint: AppPalette.brand
-                )
-                Divider()
-                metric(
-                    title: "基金已披露重仓",
-                    value: allocationPercentage(snapshot.disclosedSecurityCoveragePct),
-                    detail: "折算占整个组合",
-                    tint: AppPalette.info
-                )
-                Divider()
-                metric(
-                    title: "基金仓位未披露到证券",
-                    value: allocationPercentage(snapshot.unknownPortfolioWeightPct),
-                    detail: "非重仓部分或缺少披露",
-                    tint: AppPalette.muted
-                )
-            }
-        }
-        .padding(AppPalette.spaceM)
-        .background(
-            AppPalette.cardStrong.opacity(0.72),
-            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.controlRadius)
-                .stroke(AppPalette.hairline.opacity(AppPalette.borderFaint), lineWidth: 0.5)
-        )
+    private struct MetricItem: Identifiable {
+        let id: Int
+        let title: String
+        let value: String
+        let tint: Color
     }
 
-    private func metric(
-        title: String,
-        value: String,
-        detail: String,
-        tint: Color
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(AppPalette.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(value)
-                    .font(AppPalette.appFont(.title3, weight: .semibold, design: .rounded))
-                    .foregroundStyle(tint)
-                    .monospacedDigit()
-                Text(detail)
-                    .font(AppPalette.appFont(.caption))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
-            }
+    private var items: [MetricItem] {
+        [
+            .init(id: 0, title: "基金披露覆盖", value: "\(snapshot.coveredFundCount)/\(snapshot.expectedFundCount) 只", tint: AppPalette.brand),
+            .init(id: 1, title: "基金已披露重仓", value: allocationPercentage(snapshot.disclosedSecurityCoveragePct), tint: AppPalette.info),
+            .init(id: 2, title: "基金仓位未披露到证券", value: allocationPercentage(snapshot.unknownPortfolioWeightPct), tint: AppPalette.muted)
+        ]
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            EqualHeightGrid(items: items, columnsCount: 3) { ProfitAttributionMetric(title: $0.title, value: $0.value, tint: $0.tint) }
+            EqualHeightGrid(items: items, columnsCount: 2) { ProfitAttributionMetric(title: $0.title, value: $0.value, tint: $0.tint) }
+            EqualHeightGrid(items: items, columnsCount: 1) { ProfitAttributionMetric(title: $0.title, value: $0.value, tint: $0.tint) }
         }
-        .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, AppPalette.spaceM)
-        .accessibilityElement(children: .combine)
     }
 }
 
-/// 穿透后证券暴露的块状图（Treemap）：只展示占组合 ≥1% 的证券，其余合并为「其他」，
-/// 每块用调色板的不同颜色区分；块面积反映权重。
-/// 穿透后证券暴露饼图（SectorMark）：占组合 ≥1% 的 top10 + 其他。
+/// 穿透后证券暴露饼图（SectorMark）：权重最高的若干证券 + 其他，颜色取自调色板。
 private struct PortfolioTreemap: View {
     let positions: [PortfolioLookThroughPosition]
 
-    private let palette: [Color] = [
+    private static let palette: [Color] = [
         AppPalette.brand,
         AppPalette.info,
         AppPalette.accentWarm,
@@ -568,10 +535,13 @@ private struct PortfolioTreemap: View {
         let tint: Color
     }
 
-    private var items: [TreemapItem] {
+    static func displayedItemCount(for positions: [PortfolioLookThroughPosition]) -> Int {
+        buildItems(for: positions).count
+    }
+
+    private static func buildItems(for positions: [PortfolioLookThroughPosition]) -> [TreemapItem] {
         let sorted = positions.sorted { $0.portfolioWeightPct > $1.portfolioWeightPct }
-        let significant = sorted.filter { $0.portfolioWeightPct >= 1 }
-        let shown = Array(significant.prefix(10))
+        let shown = Array(sorted.prefix(9))
         let shownIDs = Set(shown.map(\.id))
         let otherWeight = sorted
             .filter { !shownIDs.contains($0.id) }
@@ -589,12 +559,16 @@ private struct PortfolioTreemap: View {
         return output
     }
 
+    private var items: [TreemapItem] {
+        Self.buildItems(for: positions)
+    }
+
     private var totalWeight: Double {
         items.reduce(0) { $0 + max(0, $1.weight) }
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: AppPalette.spaceL) {
+        HStack(alignment: .center, spacing: 16) {
             donut
             legend
         }
@@ -612,33 +586,35 @@ private struct PortfolioTreemap: View {
             Chart(items) { item in
                 SectorMark(
                     angle: .value("占组合", max(0, item.weight)),
-                    innerRadius: .ratio(0.62),
-                    angularInset: 1.2
+                    innerRadius: .ratio(0.64),
+                    angularInset: 1.5
                 )
                 .foregroundStyle(item.tint)
-                .cornerRadius(2)
+                .cornerRadius(3)
             }
             .chartLegend(.hidden)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
 
-            VStack(spacing: 1) {
+            VStack(spacing: 2) {
                 Text(allocationPrecisePercentage(totalWeight))
-                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppPalette.brand)
                     .monospacedDigit()
-                    .foregroundStyle(AppPalette.ink)
-                Text("\(items.count) 项")
-                    .font(AppPalette.appFont(.caption2))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Text("合计")
+                    .font(AppPalette.appFont(.caption2, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
             }
-            .frame(width: 64)
+            .frame(width: 72)
         }
-        .frame(width: 132, height: 132)
+        .frame(width: 142, height: 142)
     }
 
     @ViewBuilder
     private var legend: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(items) { item in
                 HStack(spacing: 6) {
                     Circle()
@@ -646,12 +622,12 @@ private struct PortfolioTreemap: View {
                         .frame(width: 7, height: 7)
                         .accessibilityHidden(true)
                     Text(item.label)
-                        .font(AppPalette.appFont(.caption))
+                        .font(AppPalette.appFont(.caption, weight: .medium))
                         .foregroundStyle(AppPalette.ink.opacity(0.84))
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Text(allocationPrecisePercentage(item.weight))
-                        .font(AppPalette.appFont(.caption2, weight: .semibold, design: .rounded))
+                        .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
                         .foregroundStyle(AppPalette.muted)
                         .monospacedDigit()
                 }
@@ -667,45 +643,77 @@ private struct PortfolioUnderlyingPositionList: View {
     let positions: [PortfolioLookThroughPosition]
     @State private var showsDetail = false
 
+    private let tint = AppPalette.brand
+
     private var sortedPositions: [PortfolioLookThroughPosition] {
         positions.sorted { $0.portfolioWeightPct > $1.portfolioWeightPct }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-            HStack(alignment: .top, spacing: AppPalette.spaceS) {
-                PortfolioLookThroughSectionHeader(
-                    title: "穿透后证券暴露",
-                    detail: "直接持有 + 基金披露重仓 · 占组合"
-                )
-                Spacer(minLength: 0)
-                if !sortedPositions.isEmpty {
-                    Button {
-                        showsDetail = true
-                    } label: {
-                        Label("查看完整明细", systemImage: "list.bullet")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel("查看穿透后证券暴露完整明细")
-                }
-            }
+    private var legendItemCount: Int {
+        PortfolioTreemap.displayedItemCount(for: sortedPositions)
+    }
 
-            if sortedPositions.isEmpty {
-                Text("披露中暂无底层证券")
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("穿透后证券暴露")
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text("\(legendItemCount) 项")
+                        .font(AppPalette.appFont(.caption, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                        .monospacedDigit()
+                    Spacer()
+                    if !sortedPositions.isEmpty {
+                        Button {
+                            showsDetail = true
+                        } label: {
+                            Text("查看完整明细")
+                                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                                .foregroundStyle(AppPalette.brand)
+                        }
+                        .buttonStyle(.plain)
+                        .controlSize(.small)
+                        .accessibilityLabel("查看穿透后证券暴露完整明细")
+                    }
+                }
+                Text("直接持有 + 基金披露重仓 · 占组合")
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
-                Spacer(minLength: 0)
-            } else {
-                Spacer(minLength: 0)
-                PortfolioTreemap(positions: sortedPositions)
-                Spacer(minLength: 0)
+                    .lineLimit(1)
             }
+
+            Group {
+                if sortedPositions.isEmpty {
+                    emptyState
+                } else {
+                    PortfolioTreemap(positions: sortedPositions)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+        .padding(12)
+        .frame(minWidth: 300, maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+        .background(
+            tint.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+        )
         .sheet(isPresented: $showsDetail) {
             positionDetailSheet
         }
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.pie")
+                .font(AppPalette.appFont(.title2, weight: .semibold))
+                .foregroundStyle(tint.opacity(0.72))
+            Text("披露中暂无底层证券")
+                .font(AppPalette.appFont(.footnote, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+        }
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .center)
     }
 
     private var positionDetailSheet: some View {
@@ -717,7 +725,7 @@ private struct PortfolioUnderlyingPositionList: View {
                 Spacer()
                 Button("完成") { showsDetail = false }
                     .keyboardShortcut(.cancelAction)
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .controlSize(.small)
                     .accessibilityLabel("关闭明细")
             }
@@ -830,6 +838,8 @@ private struct PortfolioUnderlyingPositionRow: View {
 private struct PortfolioIndustryExposureList: View {
     let industries: [PortfolioLookThroughIndustry]
 
+    private let tint = AppPalette.info
+
     private var displayedIndustries: [PortfolioLookThroughIndustry] {
         Array(
             industries
@@ -839,27 +849,54 @@ private struct PortfolioIndustryExposureList: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-            PortfolioLookThroughSectionHeader(
-                title: "基金披露行业",
-                detail: "折算占整个组合 · 真实 0–100% 刻度"
-            )
-
-            if displayedIndustries.isEmpty {
-                Text("披露中暂无行业配置")
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("基金披露行业")
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                        .foregroundStyle(AppPalette.ink)
+                    Text("\(displayedIndustries.count) 项")
+                        .font(AppPalette.appFont(.caption, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                        .monospacedDigit()
+                    Spacer()
+                }
+                Text("折算占整个组合 · 真实 0–100% 刻度")
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
-                Spacer(minLength: 0)
-            } else {
-                Spacer(minLength: 0)
-                HStack(alignment: .center, spacing: AppPalette.spaceL) {
-                    industryDonut
-                    industryLegend
-                }
-                Spacer(minLength: 0)
+                    .lineLimit(1)
             }
+
+            Group {
+                if displayedIndustries.isEmpty {
+                    emptyState
+                } else {
+                    HStack(alignment: .center, spacing: 16) {
+                        industryDonut
+                        industryLegend
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
+        .padding(12)
+        .frame(minWidth: 300, maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+        .background(
+            tint.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
+        )
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "chart.pie")
+                .font(AppPalette.appFont(.title2, weight: .semibold))
+                .foregroundStyle(tint.opacity(0.72))
+            Text("披露中暂无行业配置")
+                .font(AppPalette.appFont(.footnote, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+        }
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .center)
     }
 
     @ViewBuilder
@@ -868,28 +905,30 @@ private struct PortfolioIndustryExposureList: View {
             Chart(Array(displayedIndustries.enumerated()), id: \.element.id) { index, industry in
                 SectorMark(
                     angle: .value("行业占比", industrySliceWeight(industry.portfolioWeightPct)),
-                    innerRadius: .ratio(0.62),
-                    angularInset: 1.2
+                    innerRadius: .ratio(0.64),
+                    angularInset: 1.5
                 )
                 .foregroundStyle(industryColor(index: index))
-                .cornerRadius(2)
+                .cornerRadius(3)
             }
             .chartLegend(.hidden)
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
 
-            VStack(spacing: 1) {
+            VStack(spacing: 2) {
                 Text(allocationPrecisePercentage(totalIndustryWeight))
-                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppPalette.info)
                     .monospacedDigit()
-                    .foregroundStyle(AppPalette.ink)
-                Text("\(displayedIndustries.count) 个行业")
-                    .font(AppPalette.appFont(.caption2))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                Text("合计")
+                    .font(AppPalette.appFont(.caption2, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
             }
-            .frame(width: 64)
+            .frame(width: 72)
         }
-        .frame(width: 132, height: 132)
+        .frame(width: 142, height: 142)
         .accessibilityLabel("基金披露行业饼图")
         .accessibilityValue(
             displayedIndustries
@@ -900,7 +939,7 @@ private struct PortfolioIndustryExposureList: View {
 
     @ViewBuilder
     private var industryLegend: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(displayedIndustries.enumerated()), id: \.element.id) { index, industry in
                 HStack(spacing: 6) {
                     Circle()
@@ -908,12 +947,12 @@ private struct PortfolioIndustryExposureList: View {
                         .frame(width: 7, height: 7)
                         .accessibilityHidden(true)
                     Text(industry.name)
-                        .font(AppPalette.appFont(.caption))
+                        .font(AppPalette.appFont(.caption, weight: .medium))
                         .foregroundStyle(AppPalette.ink.opacity(0.84))
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     Text(allocationPrecisePercentage(industry.portfolioWeightPct))
-                        .font(AppPalette.appFont(.caption2, weight: .semibold, design: .rounded))
+                        .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
                         .foregroundStyle(AppPalette.muted)
                         .monospacedDigit()
                 }

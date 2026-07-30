@@ -432,9 +432,14 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         // 基金到证券的换算降级为可展开对账表，不再用交叉流带占据主视野
         XCTAssertTrue(panel.contains("PortfolioFundDisclosureTable"))
-        XCTAssertTrue(panel.contains("DisclosureGroup(isExpanded: $showsFundDisclosure)"))
+        XCTAssertTrue(panel.contains("showsFundDisclosure.toggle()"))
+        XCTAssertTrue(panel.contains("if showsFundDisclosure"))
+        XCTAssertTrue(panel.contains("chevron.down"))
+        XCTAssertTrue(panel.contains("rotationEffect"))
+        XCTAssertTrue(panel.contains("transition(.opacity)"))
         XCTAssertTrue(panel.contains("披露重仓占基金"))
         XCTAssertTrue(panel.contains("折算占组合"))
+        XCTAssertFalse(panel.contains("DisclosureGroup"))
         XCTAssertFalse(panel.contains("struct SankeyDiagram"))
         XCTAssertFalse(panel.contains("Canvas { context, size in"))
         XCTAssertFalse(panel.contains("bandPath"))
