@@ -185,16 +185,16 @@ struct PersonalAssetPriceTrendChart: View {
     }
 
     private func trendMetric(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-            Text(value)
-                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .rounded))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-                .lineLimit(1)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleSize: .caption,
+            titleWeight: .medium,
+            valueSize: .subheadline,
+            valueDesign: .rounded,
+            minimumScaleFactor: 1.0
+        )
     }
 
     private var visibleRangeText: String {

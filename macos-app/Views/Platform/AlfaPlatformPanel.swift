@@ -172,12 +172,14 @@ struct AlfaPlatformPanel: View {
         ) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
-                    Text("\(actions.count) 条")
-                        .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppPalette.muted)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(AppPalette.cardStrong, in: Capsule())
+                    TintedCapsuleBadge(
+                        text: "\(actions.count) 条",
+                        tint: AppPalette.muted,
+                        style: .neutral,
+                        font: AppPalette.appFont(.caption, weight: .bold, design: .rounded),
+                        horizontalPadding: 6,
+                        verticalPadding: 2
+                    )
                     Spacer()
                 }
 
@@ -265,18 +267,24 @@ struct AlfaPlatformPanel: View {
                 .font(AppPalette.appFont(.footnote, weight: .medium))
                 .foregroundStyle(AppPalette.muted)
             Spacer()
-            Text("\(holdings.count) 只基金")
-                .font(AppPalette.appFont(.footnote, weight: .semibold))
-                .foregroundStyle(AppPalette.info)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(AppPalette.info.opacity(0.10), in: Capsule())
-            Text(String(format: "目标配置 %.2f%%", totalPercent * 100))
-                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
-                .foregroundStyle(AppPalette.brand)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(AppPalette.brand.opacity(0.10), in: Capsule())
+            TintedCapsuleBadge(
+                text: "\(holdings.count) 只基金",
+                tint: AppPalette.info,
+                font: AppPalette.appFont(.footnote, weight: .semibold),
+                horizontalPadding: 8,
+                verticalPadding: 4,
+                softFillOpacity: 0.10,
+                softStrokeOpacity: nil
+            )
+            TintedCapsuleBadge(
+                text: String(format: "目标配置 %.2f%%", totalPercent * 100),
+                tint: AppPalette.brand,
+                font: AppPalette.appFont(.footnote, weight: .semibold, design: .rounded),
+                horizontalPadding: 8,
+                verticalPadding: 4,
+                softFillOpacity: 0.10,
+                softStrokeOpacity: nil
+            )
         }
     }
 

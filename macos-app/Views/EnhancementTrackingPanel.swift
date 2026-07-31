@@ -33,13 +33,13 @@ extension EnhancementCenterView {
                 Text(item.action.displayText)
                     .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(tint)
-                Text(item.status.displayText)
-                    .font(AppPalette.appFont(.footnote, weight: .bold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(tint.opacity(AppPalette.accentFill), in: Capsule())
-                    .overlay(Capsule().stroke(tint.opacity(AppPalette.accentBorder), lineWidth: 1))
+                TintedCapsuleBadge(
+                    text: item.status.displayText,
+                    tint: tint,
+                    font: AppPalette.appFont(.footnote, weight: .bold),
+                    horizontalPadding: 8,
+                    verticalPadding: 3
+                )
             }
 
             Text("\(item.action.displayText)：\(item.reason)")

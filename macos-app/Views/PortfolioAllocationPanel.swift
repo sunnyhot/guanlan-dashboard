@@ -41,16 +41,6 @@ struct PortfolioAllocationPanel: View {
     private var selectedModeRawValue = PortfolioAllocationViewMode.direct.rawValue
     @State private var showsFundDisclosure = false
 
-    private let palette: [Color] = [
-        AppPalette.brand,
-        AppPalette.info,
-        AppPalette.accentWarm,
-        AppPalette.positive,
-        AppPalette.warning,
-        AppPalette.danger,
-        AppPalette.muted,
-    ]
-
     private var selectedMode: PortfolioAllocationViewMode {
         PortfolioAllocationViewMode(rawValue: selectedModeRawValue) ?? .direct
     }
@@ -151,7 +141,7 @@ struct PortfolioAllocationPanel: View {
                 label: item.category.displayName,
                 weightPct: item.weightPct,
                 detail: "\(item.assetCount) 个标的 · \(currencyText(item.amount))",
-                tint: palette[index % palette.count]
+                tint: AppPalette.chartColor(index: index)
             )
         }
     }
@@ -199,7 +189,7 @@ struct PortfolioAllocationPanel: View {
         case "其他":
             return AppPalette.accentWarm
         default:
-            return palette[fallbackIndex % palette.count]
+            return AppPalette.chartColor(index: fallbackIndex)
         }
     }
 
@@ -518,16 +508,6 @@ private struct PortfolioLookThroughMetricStrip: View {
 private struct PortfolioTreemap: View {
     let positions: [PortfolioLookThroughPosition]
 
-    private static let palette: [Color] = [
-        AppPalette.brand,
-        AppPalette.info,
-        AppPalette.accentWarm,
-        AppPalette.positive,
-        AppPalette.warning,
-        AppPalette.danger,
-        AppPalette.muted,
-    ]
-
     private struct TreemapItem: Identifiable {
         let id = UUID()
         let label: String
@@ -550,7 +530,7 @@ private struct PortfolioTreemap: View {
             TreemapItem(
                 label: position.name,
                 weight: max(0, position.portfolioWeightPct),
-                tint: palette[index % palette.count]
+                tint: AppPalette.chartColor(index: index)
             )
         }
         if otherWeight >= 0.05 {
@@ -582,20 +562,10 @@ private struct PortfolioTreemap: View {
 
     @ViewBuilder
     private var donut: some View {
-        ZStack {
-            Chart(items) { item in
-                SectorMark(
-                    angle: .value("占组合", max(0, item.weight)),
-                    innerRadius: .ratio(0.64),
-                    angularInset: 1.5
-                )
-                .foregroundStyle(item.tint)
-                .cornerRadius(3)
-            }
-            .chartLegend(.hidden)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-
+        DonutChart(
+            slices: items.map { DonutSlice(id: $0.id.uuidString, value: max(0, $0.weight), color: $0.tint) },
+            angleTitle: "占组合"
+        ) {
             VStack(spacing: 2) {
                 Text(allocationPrecisePercentage(totalWeight))
                     .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
@@ -609,33 +579,30 @@ private struct PortfolioTreemap: View {
             }
             .frame(width: 72)
         }
-        .frame(width: 142, height: 142)
     }
 
     @ViewBuilder
     private var legend: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(items) { item in
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(item.tint)
-                        .frame(width: 7, height: 7)
-                        .accessibilityHidden(true)
-                    Text(item.label)
-                        .font(AppPalette.appFont(.caption, weight: .medium))
-                        .foregroundStyle(AppPalette.ink.opacity(0.84))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(allocationPrecisePercentage(item.weight))
-                        .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
-                        .foregroundStyle(AppPalette.muted)
-                        .monospacedDigit()
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(item.label) 占组合 \(allocationPrecisePercentage(item.weight))")
+        DonutLegend(
+            items: items,
+            swatchShape: .circle,
+            swatchColor: { $0.tint },
+            label: { item in
+                Text(item.label)
+                    .font(AppPalette.appFont(.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.ink.opacity(0.84))
+                    .lineLimit(1)
+            },
+            trailing: { item in
+                Text(allocationPrecisePercentage(item.weight))
+                    .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppPalette.muted)
+                    .monospacedDigit()
+            },
+            accessibilityLabel: { item in
+                "\(item.label) 占组合 \(allocationPrecisePercentage(item.weight))"
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        )
     }
 }
 
@@ -901,20 +868,16 @@ private struct PortfolioIndustryExposureList: View {
 
     @ViewBuilder
     private var industryDonut: some View {
-        ZStack {
-            Chart(Array(displayedIndustries.enumerated()), id: \.element.id) { index, industry in
-                SectorMark(
-                    angle: .value("行业占比", industrySliceWeight(industry.portfolioWeightPct)),
-                    innerRadius: .ratio(0.64),
-                    angularInset: 1.5
+        DonutChart(
+            slices: Array(displayedIndustries.enumerated()).map { index, industry in
+                DonutSlice(
+                    id: "industry-\(index)",
+                    value: industrySliceWeight(industry.portfolioWeightPct),
+                    color: industryColor(index: index)
                 )
-                .foregroundStyle(industryColor(index: index))
-                .cornerRadius(3)
-            }
-            .chartLegend(.hidden)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-
+            },
+            angleTitle: "行业占比"
+        ) {
             VStack(spacing: 2) {
                 Text(allocationPrecisePercentage(totalIndustryWeight))
                     .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
@@ -928,7 +891,6 @@ private struct PortfolioIndustryExposureList: View {
             }
             .frame(width: 72)
         }
-        .frame(width: 142, height: 142)
         .accessibilityLabel("基金披露行业饼图")
         .accessibilityValue(
             displayedIndustries
@@ -939,43 +901,49 @@ private struct PortfolioIndustryExposureList: View {
 
     @ViewBuilder
     private var industryLegend: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(displayedIndustries.enumerated()), id: \.element.id) { index, industry in
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(industryColor(index: index))
-                        .frame(width: 7, height: 7)
-                        .accessibilityHidden(true)
-                    Text(industry.name)
-                        .font(AppPalette.appFont(.caption, weight: .medium))
-                        .foregroundStyle(AppPalette.ink.opacity(0.84))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(allocationPrecisePercentage(industry.portfolioWeightPct))
-                        .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
-                        .foregroundStyle(AppPalette.muted)
-                        .monospacedDigit()
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    "\(industry.name)，占组合 \(allocationPrecisePercentage(industry.portfolioWeightPct))"
-                )
+        DonutLegend(
+            items: industryLegendItems,
+            swatchShape: .circle,
+            swatchColor: { $0.color },
+            label: { item in
+                Text(item.name)
+                    .font(AppPalette.appFont(.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.ink.opacity(0.84))
+                    .lineLimit(1)
+            },
+            trailing: { item in
+                Text(allocationPrecisePercentage(item.weightPct))
+                    .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
+                    .foregroundStyle(AppPalette.muted)
+                    .monospacedDigit()
+            },
+            accessibilityLabel: { item in
+                "\(item.name)，占组合 \(allocationPrecisePercentage(item.weightPct))"
             }
+        )
+    }
+
+    private var industryLegendItems: [IndustryLegendItem] {
+        Array(displayedIndustries.enumerated()).map { index, industry in
+            IndustryLegendItem(
+                id: "industry-\(index)",
+                color: industryColor(index: index),
+                name: industry.name,
+                weightPct: industry.portfolioWeightPct
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private struct IndustryLegendItem: Identifiable {
+        let id: String
+        let color: Color
+        let name: String
+        let weightPct: Double
     }
 
     /// 行业饼图配色：按 index 在调色板中循环取色。
     private func industryColor(index: Int) -> Color {
-        [
-            AppPalette.brand,
-            AppPalette.info,
-            AppPalette.accentWarm,
-            AppPalette.positive,
-            AppPalette.warning,
-            AppPalette.danger,
-            AppPalette.muted,
-        ][index % 7]
+        AppPalette.chartColor(index: index)
     }
 
     /// 行业饼图按“行业间占比”归一化到 0–100，使饼图铺满整圈；组合口径合计另在中央标注。

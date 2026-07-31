@@ -54,16 +54,13 @@ struct PlatformActionRow: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 4) {
-                            Text(isBuy ? "买入" : "卖出")
-                                .font(AppPalette.appFont(.subheadline, weight: .bold))
-                                .foregroundStyle(sideColor)
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 4)
-                                .background(sideColor.opacity(0.14), in: Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .stroke(sideColor.opacity(0.22), lineWidth: 1)
-                                )
+                            TintedCapsuleBadge(
+                                text: isBuy ? "买入" : "卖出",
+                                tint: sideColor,
+                                font: AppPalette.appFont(.subheadline, weight: .bold),
+                                horizontalPadding: 9,
+                                verticalPadding: 4
+                            )
                             if let article = action.articleUrl, let url = URL(string: article) {
                                 Link("打开平台原文", destination: url)
                                     .font(AppPalette.appFont(.footnote))
@@ -247,16 +244,13 @@ struct PlatformActionRow: View {
     @ViewBuilder
     private var compactActions: some View {
         VStack(alignment: .trailing, spacing: 3) {
-            Text(isBuy ? "买入" : "卖出")
-                .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                .foregroundStyle(sideColor)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(sideColor.opacity(0.14), in: Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(sideColor.opacity(0.22), lineWidth: 1)
-                )
+            TintedCapsuleBadge(
+                text: isBuy ? "买入" : "卖出",
+                tint: sideColor,
+                font: AppPalette.appFont(.footnote, weight: .bold, design: .rounded),
+                horizontalPadding: 8,
+                verticalPadding: 3
+            )
             if showsCompactArticleLink,
                let article = action.articleUrl,
                let url = URL(string: article) {
@@ -295,16 +289,16 @@ struct PlatformActionRow: View {
         tint: Color,
         isEmphasized: Bool = false
     ) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-            Text(value)
-                .font(AppPalette.appFont(isEmphasized ? .subheadline : .footnote, weight: isEmphasized ? .bold : .semibold, design: .monospaced))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleSize: .caption,
+            titleWeight: .medium,
+            valueSize: isEmphasized ? .subheadline : .footnote,
+            valueWeight: isEmphasized ? .bold : .semibold,
+            minimumScaleFactor: 0.72
+        )
     }
 
     private func compactMetricCell(

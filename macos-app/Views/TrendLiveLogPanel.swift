@@ -71,12 +71,14 @@ struct TrendLiveLogPanel: View {
                     Text("AI 分析实时日志")
                         .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
-                    Text(stateText)
-                        .font(AppPalette.appFont(.caption, weight: .bold))
-                        .foregroundStyle(stateTint)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(stateTint.opacity(AppPalette.accentFill), in: Capsule())
+                    TintedCapsuleBadge(
+                        text: stateText,
+                        tint: stateTint,
+                        font: AppPalette.appFont(.caption, weight: .bold),
+                        horizontalPadding: 7,
+                        verticalPadding: 2,
+                        softStrokeOpacity: nil
+                    )
                 }
                 Text(latestLog?.message ?? "正在准备分析")
                     .font(AppPalette.appFont(.footnote, weight: .medium))

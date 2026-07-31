@@ -71,16 +71,13 @@ struct PlatformActionDetailCard: View {
                             .font(AppPalette.appFont(.title, weight: .bold))
                             .foregroundStyle(AppPalette.ink)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(sideText)
-                            .font(AppPalette.appFont(.subheadline, weight: .bold))
-                            .foregroundStyle(sideColor)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 4)
-                            .background(sideColor.opacity(0.14), in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(sideColor.opacity(0.22), lineWidth: 1)
-                            )
+                        TintedCapsuleBadge(
+                            text: sideText,
+                            tint: sideColor,
+                            font: AppPalette.appFont(.subheadline, weight: .bold),
+                            horizontalPadding: 9,
+                            verticalPadding: 4
+                        )
                     }
 
                     Text("\(fundIdentityText) · \(compactActionDateText)")

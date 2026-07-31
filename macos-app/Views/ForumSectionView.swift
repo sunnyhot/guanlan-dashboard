@@ -81,12 +81,14 @@ struct ForumSectionView: View {
                     Text("主理人发言")
                         .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
-                    Text("\(model.forumRecords.count)")
-                        .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                        .foregroundStyle(AppPalette.muted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppPalette.cardStrong, in: Capsule())
+                    TintedCapsuleBadge(
+                        text: "\(model.forumRecords.count)",
+                        tint: AppPalette.muted,
+                        style: .neutral,
+                        font: AppPalette.appFont(.footnote, weight: .bold, design: .rounded),
+                        horizontalPadding: 8,
+                        verticalPadding: 4
+                    )
                     Spacer()
                     if isCompact {
                         Text("点一下直接看详情")

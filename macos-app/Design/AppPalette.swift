@@ -209,6 +209,27 @@ enum AppPalette {
         return muted
     }
 
+    // MARK: - Chart Palette
+
+    /// 全仓环形图/饼图统一调色板。替换原 4 处逐字重复的 7 色数组。
+    static let chartPalette: [Color] = [
+        brand,
+        info,
+        accentWarm,
+        positive,
+        warning,
+        danger,
+        muted,
+    ]
+
+    /// 按 index 在 chartPalette 中循环取色,等价于原 `[index % 7]`,
+    /// 但调色板长度变化时自动收敛,避免硬编码 7。防御负 index。
+    static func chartColor(index: Int) -> Color {
+        guard !chartPalette.isEmpty else { return muted }
+        let count = chartPalette.count
+        return chartPalette[(index % count + count) % count]
+    }
+
     // MARK: - Glass / Blur Helpers
 
     static var glassMaterial: Material { .ultraThinMaterial }

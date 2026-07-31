@@ -140,18 +140,17 @@ private struct HoldingCardMetric: View {
     var tint: Color = AppPalette.ink
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-                .lineLimit(1)
-
-            Text(value)
-                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.78)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleSize: .caption,
+            titleWeight: .medium,
+            titleLineLimit: 1,
+            valueSize: .subheadline,
+            spacing: 1,
+            minimumScaleFactor: 0.78
+        )
         .frame(minWidth: 54, alignment: .leading)
     }
 }

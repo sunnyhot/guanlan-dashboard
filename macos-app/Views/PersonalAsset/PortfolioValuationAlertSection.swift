@@ -77,17 +77,16 @@ struct PortfolioValuationAlertSection: View {
     }
 
     private func snapshotMetric(_ title: String, _ value: String?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-            Text(value ?? "—")
-                .font(AppPalette.appFont(.body, weight: .bold, design: .rounded))
-                .foregroundStyle(AppPalette.ink)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
+        LabeledValue(
+            title: title,
+            value: value ?? "—",
+            titleSize: .caption,
+            titleWeight: .medium,
+            valueWeight: .bold,
+            valueDesign: .rounded,
+            spacing: 3,
+            minimumScaleFactor: 0.7
+        )
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
         .padding(.horizontal, 8)
     }
@@ -95,11 +94,14 @@ struct PortfolioValuationAlertSection: View {
     private func ruleRow(_ rule: PortfolioValuationAlertRule, isBreached: Bool) -> some View {
         let sideTint: Color = rule.side == .sell ? AppPalette.marketGain : AppPalette.marketLoss
         return HStack(alignment: .center, spacing: 10) {
-            Text(rule.side == .sell ? "卖出" : "加仓")
-                .font(AppPalette.appFont(.caption, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(sideTint, in: Capsule())
+            TintedCapsuleBadge(
+                text: rule.side == .sell ? "卖出" : "加仓",
+                tint: sideTint,
+                style: .solid,
+                font: AppPalette.appFont(.caption, weight: .bold),
+                horizontalPadding: 7,
+                verticalPadding: 3
+            )
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(rule.metric.displayName) \(rule.direction.displayName) \(Self.formatThreshold(rule))")
                     .font(AppPalette.appFont(.subheadline, weight: .semibold))

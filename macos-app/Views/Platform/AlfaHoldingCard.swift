@@ -31,12 +31,15 @@ struct AlfaHoldingCard: View {
                             .font(AppPalette.appFont(.caption, weight: .medium, design: .monospaced))
                             .foregroundStyle(AppPalette.muted)
                         if let variety = part.varietyName, !variety.isEmpty {
-                            Text(variety)
-                                .font(AppPalette.appFont(.caption, weight: .medium))
-                                .foregroundStyle(AppPalette.info)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(AppPalette.info.opacity(0.09), in: Capsule())
+                            TintedCapsuleBadge(
+                                text: variety,
+                                tint: AppPalette.info,
+                                font: AppPalette.appFont(.caption, weight: .medium),
+                                horizontalPadding: 5,
+                                verticalPadding: 2,
+                                softFillOpacity: 0.09,
+                                softStrokeOpacity: nil
+                            )
                         }
                     }
                 }
@@ -92,14 +95,16 @@ struct AlfaHoldingCard: View {
         tint: Color,
         alignment: HorizontalAlignment = .leading
     ) -> some View {
-        VStack(alignment: alignment, spacing: 2) {
-            Text(title)
-                .font(AppPalette.appFont(.caption2))
-                .foregroundStyle(AppPalette.muted)
-            Text(value)
-                .font(AppPalette.appFont(.footnote, weight: .semibold, design: .monospaced))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleSize: .caption2,
+            valueSize: .footnote,
+            valueWeight: .semibold,
+            valueDesign: .monospaced,
+            minimumScaleFactor: 1.0,
+            alignment: alignment
+        )
     }
 }

@@ -685,17 +685,16 @@ struct AssetMiniStat: View {
     let tint: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .lineLimit(1)
-            Text(value)
-                .font(AppPalette.appFont(.subheadline, weight: .semibold))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleLineLimit: 1,
+            valueSize: .subheadline,
+            valueWeight: .semibold,
+            valueDesign: .default,
+            minimumScaleFactor: 0.7
+        )
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)

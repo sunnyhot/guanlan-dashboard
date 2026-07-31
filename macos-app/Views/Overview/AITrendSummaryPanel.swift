@@ -159,13 +159,15 @@ private struct AITrendHorizonCard: View {
                     .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 Spacer(minLength: 4)
-                Text(item.directionText)
-                    .font(AppPalette.appFont(.caption, weight: .bold))
-                    .foregroundStyle(item.tone.color)
-                    .lineLimit(1)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(item.tone.color.opacity(0.12), in: Capsule())
+                TintedCapsuleBadge(
+                    text: item.directionText,
+                    tint: item.tone.color,
+                    font: AppPalette.appFont(.caption, weight: .bold),
+                    horizontalPadding: 6,
+                    verticalPadding: 2,
+                    softFillOpacity: 0.12,
+                    softStrokeOpacity: nil
+                )
                 TrendConfidenceMeter(confidence: item.confidence)
             }
             Text(item.rationale)
@@ -198,13 +200,15 @@ private struct AITrendSectorCard: View {
                     .foregroundStyle(AppPalette.ink)
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text(item.directionText)
-                    .font(AppPalette.appFont(.caption, weight: .bold))
-                    .foregroundStyle(item.tone.color)
-                    .lineLimit(1)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(item.tone.color.opacity(0.12), in: Capsule())
+                TintedCapsuleBadge(
+                    text: item.directionText,
+                    tint: item.tone.color,
+                    font: AppPalette.appFont(.caption, weight: .bold),
+                    horizontalPadding: 6,
+                    verticalPadding: 2,
+                    softFillOpacity: 0.12,
+                    softStrokeOpacity: nil
+                )
                 TrendConfidenceMeter(confidence: item.confidence)
             }
             Text(item.exposureText)

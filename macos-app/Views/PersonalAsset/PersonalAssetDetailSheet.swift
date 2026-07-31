@@ -495,16 +495,15 @@ struct PersonalAssetDetailSheet: View {
     }
 
     private func compactFact(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-            Text(value)
-                .font(AppPalette.appFont(.body, weight: .semibold, design: .rounded))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            valueWeight: .semibold,
+            valueDesign: .rounded,
+            spacing: 4,
+            minimumScaleFactor: 0.72
+        )
         .frame(maxWidth: .infinity, minHeight: 50, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

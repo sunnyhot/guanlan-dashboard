@@ -21,20 +21,10 @@ struct PlatformHoldingsPieChart: View {
                 value: allocation.value,
                 assetCount: allocation.assetCount,
                 ratio: allocation.ratio,
-                tint: allocationPalette[index % allocationPalette.count]
+                tint: AppPalette.chartColor(index: index)
             )
         }
     }
-
-    private let allocationPalette: [Color] = [
-        AppPalette.brand,
-        AppPalette.info,
-        AppPalette.accentWarm,
-        AppPalette.positive,
-        AppPalette.warning,
-        AppPalette.danger,
-        AppPalette.muted,
-    ]
 
     var body: some View {
         if !assetClassSlices.isEmpty {
@@ -95,19 +85,14 @@ struct PlatformHoldingsPieChart: View {
         let totalValue = slices.map(\.value).reduce(0, +)
         let largestSlice = slices.first
 
-        return ZStack {
-            Chart(slices) { slice in
-                SectorMark(
-                    angle: .value("当前份数", slice.value),
-                    innerRadius: .ratio(0.58),
-                    angularInset: 1.2
-                )
-                .foregroundStyle(slice.tint)
-            }
-            .chartLegend(.hidden)
-            .chartXAxis(.hidden)
-            .chartYAxis(.hidden)
-
+        return DonutChart(
+            slices: slices.map { DonutSlice(id: $0.id, value: $0.value, color: $0.tint) },
+            innerRadius: 0.58,
+            angularInset: 1.2,
+            cornerRadius: 0,
+            size: nil,
+            angleTitle: "当前份数"
+        ) {
             VStack(spacing: 1) {
                 Text(unitsText(totalValue))
                     .font(AppPalette.appFont(.title3, weight: .bold, design: .rounded))
@@ -128,34 +113,31 @@ struct PlatformHoldingsPieChart: View {
     }
 
     private func legend(slices: [HoldingAllocationSlice]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(slices) { slice in
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(slice.tint)
-                        .frame(width: 8, height: 8)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(slice.label)
-                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
-                            .foregroundStyle(AppPalette.ink)
-                            .lineLimit(1)
-                        Text("\(slice.assetCount) 只 · \(percentText(slice.ratio))")
-                            .font(AppPalette.appFont(.caption))
-                            .foregroundStyle(AppPalette.muted)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 10)
-
-                    Text("\(unitsText(slice.value)) 份")
-                        .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
+        DonutLegend(
+            items: slices,
+            swatchShape: .roundedRect,
+            swatchColor: { $0.tint },
+            label: { slice in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(slice.label)
+                        .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
+                    Text("\(slice.assetCount) 只 · \(percentText(slice.ratio))")
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
                 }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+            },
+            trailing: { slice in
+                Text("\(unitsText(slice.value)) 份")
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineLimit(1)
+            },
+            rowSpacing: 8,
+            spacerMinLength: 10
+        )
     }
 
     private func percentText(_ value: Double) -> String {

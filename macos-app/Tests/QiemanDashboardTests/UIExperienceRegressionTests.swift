@@ -458,7 +458,7 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         // 行业饼图用 Charts 框架；证券暴露改用块状图（Treemap）
         XCTAssertTrue(panel.contains("import Charts"))
-        XCTAssertTrue(panel.contains("SectorMark"))
+        XCTAssertTrue(try source(at: "Views/DonutChart.swift").contains("SectorMark"))
         XCTAssertTrue(panel.contains("PortfolioTreemap"))
 
         // 旧的大环形图 / 相对最大项进度条 / StatChip 仍不存在

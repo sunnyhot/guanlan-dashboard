@@ -108,15 +108,14 @@ struct TrendEvidenceDetailSheet: View {
         let item = detailItem.evidence
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(detailItem.role.displayText)
-                    .font(AppPalette.appFont(.caption2, weight: .bold))
-                    .foregroundStyle(detailItem.role.tint)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(
-                        detailItem.role.tint.opacity(AppPalette.accentFill),
-                        in: Capsule()
-                    )
+                TintedCapsuleBadge(
+                    text: detailItem.role.displayText,
+                    tint: detailItem.role.tint,
+                    font: AppPalette.appFont(.caption2, weight: .bold),
+                    horizontalPadding: 7,
+                    verticalPadding: 3,
+                    softStrokeOpacity: nil
+                )
                 Text(item.sourceName)
                     .font(AppPalette.appFont(.footnote, weight: .semibold))
                     .foregroundStyle(AppPalette.info)
@@ -171,12 +170,14 @@ struct TrendEvidenceDetailSheet: View {
     }
 
     private func evidenceMetadataTag(_ text: String) -> some View {
-        Text(text)
-            .font(AppPalette.appFont(.caption2, weight: .semibold))
-            .foregroundStyle(AppPalette.muted)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(AppPalette.controlFill, in: Capsule())
+        TintedCapsuleBadge(
+            text: text,
+            tint: AppPalette.muted,
+            style: .neutral,
+            font: AppPalette.appFont(.caption2, weight: .semibold),
+            horizontalPadding: 7,
+            verticalPadding: 3
+        )
     }
 
     @ViewBuilder

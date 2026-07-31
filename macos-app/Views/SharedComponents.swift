@@ -782,23 +782,134 @@ struct LabeledValue: View {
     let title: String
     let value: String
     let tint: Color
+    let titleSize: AppPalette.AppFontSize
+    let titleWeight: Font.Weight
+    let titleLineLimit: Int?
+    let valueSize: AppPalette.AppFontSize
+    let valueWeight: Font.Weight
+    let valueDesign: Font.Design
+    let spacing: CGFloat
+    let minimumScaleFactor: CGFloat
+    let lineLimit: Int?
+    let alignment: HorizontalAlignment
 
-    init(title: String, value: String, tint: Color = AppPalette.ink) {
+    init(
+        title: String,
+        value: String,
+        tint: Color = AppPalette.ink,
+        titleSize: AppPalette.AppFontSize = .footnote,
+        titleWeight: Font.Weight = .regular,
+        titleLineLimit: Int? = nil,
+        valueSize: AppPalette.AppFontSize = .body,
+        valueWeight: Font.Weight = .semibold,
+        valueDesign: Font.Design = .monospaced,
+        spacing: CGFloat = 2,
+        minimumScaleFactor: CGFloat = 0.8,
+        lineLimit: Int? = 1,
+        alignment: HorizontalAlignment = .leading
+    ) {
         self.title = title
         self.value = value
         self.tint = tint
+        self.titleSize = titleSize
+        self.titleWeight = titleWeight
+        self.titleLineLimit = titleLineLimit
+        self.valueSize = valueSize
+        self.valueWeight = valueWeight
+        self.valueDesign = valueDesign
+        self.spacing = spacing
+        self.minimumScaleFactor = minimumScaleFactor
+        self.lineLimit = lineLimit
+        self.alignment = alignment
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: alignment, spacing: spacing) {
             Text(title)
-                .font(AppPalette.appFont(.footnote))
+                .font(AppPalette.appFont(titleSize, weight: titleWeight))
                 .foregroundStyle(AppPalette.muted)
+                .lineLimit(titleLineLimit)
             Text(value)
-                .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
+                .font(AppPalette.appFont(valueSize, weight: valueWeight, design: valueDesign))
                 .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .lineLimit(lineLimit)
+                .minimumScaleFactor(minimumScaleFactor)
+        }
+    }
+}
+
+struct TintedCapsuleBadge: View {
+    enum FillStyle {
+        case soft
+        case solid
+        case neutral
+    }
+
+    let text: String
+    let tint: Color
+    let style: FillStyle
+    let font: Font
+    let horizontalPadding: CGFloat
+    let verticalPadding: CGFloat
+    let softFillOpacity: Double
+    let softStrokeOpacity: Double?
+
+    init(
+        text: String,
+        tint: Color,
+        style: FillStyle = .soft,
+        font: Font = AppPalette.appFont(.footnote, weight: .semibold),
+        horizontalPadding: CGFloat = AppPalette.spaceS,
+        verticalPadding: CGFloat = AppPalette.spaceXS,
+        softFillOpacity: Double = AppPalette.accentFill,
+        softStrokeOpacity: Double? = AppPalette.accentBorder
+    ) {
+        self.text = text
+        self.tint = tint
+        self.style = style
+        self.font = font
+        self.horizontalPadding = horizontalPadding
+        self.verticalPadding = verticalPadding
+        self.softFillOpacity = softFillOpacity
+        self.softStrokeOpacity = softStrokeOpacity
+    }
+
+    var body: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .background(background, in: Capsule())
+            .overlay(overlay)
+    }
+
+    private var foreground: Color {
+        switch style {
+        case .soft:    return tint
+        case .solid:   return .white
+        case .neutral: return AppPalette.muted
+        }
+    }
+
+    private var background: Color {
+        switch style {
+        case .soft:    return tint.opacity(softFillOpacity)
+        case .solid:   return tint
+        case .neutral: return AppPalette.cardStrong
+        }
+    }
+
+    @ViewBuilder
+    private var overlay: some View {
+        switch style {
+        case .soft:
+            if let softStrokeOpacity {
+                Capsule().stroke(tint.opacity(softStrokeOpacity), lineWidth: 1)
+            }
+        case .solid, .neutral:
+            EmptyView()
         }
     }
 }

@@ -313,13 +313,16 @@ extension EnhancementCenterView {
     }
 
     func trendRiskBadge(_ riskLevel: TrendRiskLevel) -> some View {
-        Text(riskLevel.displayText)
-            .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
-            .foregroundStyle(riskLevel.tint)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(riskLevel.tint.opacity(AppPalette.accentOnFill), in: Capsule())
+        TintedCapsuleBadge(
+            text: riskLevel.displayText,
+            tint: riskLevel.tint,
+            style: .soft,
+            font: AppPalette.appFont(.subheadline, weight: .bold, design: .rounded),
+            horizontalPadding: 8,
+            verticalPadding: 4,
+            softFillOpacity: AppPalette.accentOnFill,
+            softStrokeOpacity: nil
+        )
     }
 
     func trendHorizonGrid(_ horizons: [TrendHorizonView]) -> some View {
@@ -478,14 +481,14 @@ extension EnhancementCenterView {
     }
 
     func trendDirectionBadge(_ direction: TrendDirection) -> some View {
-        Text(direction.displayText)
-            .font(AppPalette.appFont(.footnote, weight: .bold))
-            .foregroundStyle(direction.tint)
-            .lineLimit(1)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(direction.tint.opacity(AppPalette.accentFill), in: Capsule())
-            .overlay(Capsule().stroke(direction.tint.opacity(AppPalette.accentBorder), lineWidth: 1))
+        TintedCapsuleBadge(
+            text: direction.displayText,
+            tint: direction.tint,
+            style: .soft,
+            font: AppPalette.appFont(.footnote, weight: .bold),
+            horizontalPadding: 7,
+            verticalPadding: 3
+        )
     }
 
     func trendConfidenceMeter(_ confidence: TrendConfidence) -> some View {

@@ -131,15 +131,14 @@ extension EnhancementCenterView {
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: AppPalette.spaceS)
-                Text(report.posture.displayName)
-                    .font(AppPalette.appFont(.footnote, weight: .bold))
-                    .foregroundStyle(nextHourPostureTint(report.posture))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        nextHourPostureTint(report.posture).opacity(AppPalette.accentFill),
-                        in: Capsule()
-                    )
+                TintedCapsuleBadge(
+                    text: report.posture.displayName,
+                    tint: nextHourPostureTint(report.posture),
+                    font: AppPalette.appFont(.footnote, weight: .bold),
+                    horizontalPadding: 8,
+                    verticalPadding: 3,
+                    softStrokeOpacity: nil
+                )
             }
 
             HStack(spacing: 6) {
@@ -344,14 +343,13 @@ extension EnhancementCenterView {
                     .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                     .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-                Text(action.kind.displayText)
-                    .font(AppPalette.appFont(.caption, weight: .bold))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(tint.opacity(AppPalette.accentFill), in: Capsule())
-                    .overlay(Capsule().stroke(tint.opacity(AppPalette.accentBorder), lineWidth: 1))
+                TintedCapsuleBadge(
+                    text: action.kind.displayText,
+                    tint: tint,
+                    font: AppPalette.appFont(.caption, weight: .bold),
+                    horizontalPadding: 6,
+                    verticalPadding: 2
+                )
                 trendConfidenceMeter(action.confidence)
                 Spacer(minLength: 6)
                 Button {

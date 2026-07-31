@@ -729,20 +729,10 @@ struct ProfitAttributionDonutCard: View {
                 .frame(maxWidth: .infinity, minHeight: 142, alignment: .center)
             } else {
                 HStack(alignment: .center, spacing: 16) {
-                    ZStack {
-                        Chart {
-                            ForEach(slices) { slice in
-                                SectorMark(
-                                    angle: .value("影响金额", slice.amount),
-                                    innerRadius: .ratio(0.64),
-                                    angularInset: 1.5
-                                )
-                                .foregroundStyle(slice.color)
-                                .cornerRadius(3)
-                            }
-                        }
-                        .chartLegend(.hidden)
-
+                    DonutChart(
+                        slices: slices.map { DonutSlice(id: $0.id, value: $0.amount, color: $0.color) },
+                        angleTitle: "影响金额"
+                    ) {
                         VStack(spacing: 2) {
                             Text(compactAttributionAmount(signedTotal))
                                 .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
@@ -756,27 +746,24 @@ struct ProfitAttributionDonutCard: View {
                         }
                         .frame(width: 72)
                     }
-                    .frame(width: 142, height: 142)
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(slices) { slice in
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(slice.color)
-                                    .frame(width: 7, height: 7)
-                                Text(slice.title)
-                                    .font(AppPalette.appFont(.caption, weight: .medium))
-                                    .foregroundStyle(AppPalette.ink.opacity(0.84))
-                                    .lineLimit(1)
-                                Spacer(minLength: 4)
-                                Text(percentText(slice.amount))
-                                    .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
-                                    .foregroundStyle(AppPalette.muted)
-                                    .monospacedDigit()
-                            }
+                    DonutLegend(
+                        items: slices,
+                        swatchShape: .circle,
+                        swatchColor: { $0.color },
+                        label: { slice in
+                            Text(slice.title)
+                                .font(AppPalette.appFont(.caption, weight: .medium))
+                                .foregroundStyle(AppPalette.ink.opacity(0.84))
+                                .lineLimit(1)
+                        },
+                        trailing: { slice in
+                            Text(percentText(slice.amount))
+                                .font(AppPalette.appFont(.caption2, weight: .medium, design: .rounded))
+                                .foregroundStyle(AppPalette.muted)
+                                .monospacedDigit()
                         }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    )
                 }
             }
         }

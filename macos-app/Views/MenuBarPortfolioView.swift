@@ -233,13 +233,14 @@ struct MenuBarPortfolioView: View {
                 Text("我的持仓")
                     .font(AppPalette.appFont(.body, weight: .semibold))
                     .foregroundStyle(AppPalette.ink)
-                Text("\(model.userPortfolioSnapshot?.holdingCount ?? model.activePortfolioHoldingCount)")
-                    .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppPalette.muted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(AppPalette.cardStrong)
-                    .clipShape(Capsule())
+                TintedCapsuleBadge(
+                    text: "\(model.userPortfolioSnapshot?.holdingCount ?? model.activePortfolioHoldingCount)",
+                    tint: AppPalette.muted,
+                    style: .neutral,
+                    font: AppPalette.appFont(.footnote, weight: .bold, design: .rounded),
+                    horizontalPadding: 8,
+                    verticalPadding: 4
+                )
                 Spacer()
                 if let snapshot = model.userPortfolioSnapshot, !snapshot.rows.isEmpty {
                     Picker("排序", selection: holdingSortBinding) {

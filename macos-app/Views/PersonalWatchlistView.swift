@@ -388,18 +388,16 @@ private struct PersonalWatchlistListRow: View {
     }
 
     private func watchlistValue(title: String, value: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(AppPalette.muted)
-                .lineLimit(1)
-            Text(value)
-                .font(AppPalette.appFont(.subheadline, weight: .semibold, design: .monospaced))
-                .foregroundStyle(tint)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            tint: tint,
+            titleSize: .caption,
+            titleLineLimit: 1,
+            valueSize: .subheadline,
+            spacing: 3,
+            minimumScaleFactor: 0.75
+        )
     }
 }
 
@@ -933,15 +931,12 @@ private struct PersonalWatchlistAlertSheet: View {
     }
 
     private func alertMetric(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(AppPalette.muted)
-            Text(value)
-                .font(AppPalette.appFont(.body, weight: .semibold, design: .monospaced))
-                .foregroundStyle(AppPalette.ink)
-                .monospacedDigit()
-        }
+        LabeledValue(
+            title: title,
+            value: value,
+            titleSize: .caption,
+            spacing: 3
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
     }
