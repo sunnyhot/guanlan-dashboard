@@ -101,11 +101,24 @@ struct IOSPlatformMonthlyChart: View {
         .frame(maxWidth: .infinity)
     }
 
+    @ViewBuilder
     private func chart(_ months: [PlatformMonthSummary]) -> some View {
+        // 月数多时:水平滚动,每柱给足宽度,底部标尺不再挤;月数少时直接显示。
+        if months.count > 6 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                chartBody(months)
+                    .frame(width: CGFloat(months.count) * 56)
+            }
+        } else {
+            chartBody(months)
+        }
+    }
+
+    private func chartBody(_ months: [PlatformMonthSummary]) -> some View {
         let maxCount = max(months.map(\.totalCount).max() ?? 1, 1)
         return Chart(months, content: chartMarks)
             .chartXAxis {
-                AxisMarks(values: xAxisValues(months)) { value in
+                AxisMarks(values: .automatic) { value in
                     AxisValueLabel {
                         if let s = value.as(String.self) { Text(s).font(.system(size: 9)) }
                     }
@@ -155,14 +168,6 @@ struct IOSPlatformMonthlyChart: View {
         } else {
             selectedMonth = nil
         }
-    }
-
-    /// X 轴标签值:月数多时抽稀,避免挤成一团。
-    private func xAxisValues(_ months: [PlatformMonthSummary]) -> [String] {
-        let labels = months.map { monthLabel($0.month) }
-        guard labels.count > 6 else { return labels }
-        let step = max(1, labels.count / 6)
-        return stride(from: 0, to: labels.count, by: step).map { labels[$0] }
     }
 
     private func tooltip(_ m: PlatformMonthSummary) -> some View {
