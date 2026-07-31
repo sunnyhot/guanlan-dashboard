@@ -26,22 +26,6 @@ struct PortfolioSectionView: View {
         .refreshable {
             try? await model.refreshLatest(persist: false)
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showingWatchlist = true
-                } label: {
-                    Image(systemName: "star")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingAddHolding = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-            }
-        }
         .sheet(item: $detailRow) { row in
             IOSPersonalAssetDetailSheet(row: row)
                 .presentationDetents([.medium, .large])
@@ -102,11 +86,39 @@ struct PortfolioSectionView: View {
 
     private var holdingsListCard: some View {
         let rows = model.personalAssetRows.filter { $0.holdingRow != nil }
-        return IOSSectionCard(title: "持仓明细", subtitle: "\(rows.count) 只基金", icon: "list.bullet.rectangle.portrait") {
+        return IOSSectionCard(
+            title: "持仓明细",
+            subtitle: "\(rows.count) 只基金",
+            icon: "list.bullet.rectangle.portrait",
+            trailing: {
+                Button {
+                    showingAddHolding = true
+                } label: {
+                    Label("添加", systemImage: "plus.circle.fill")
+                        .font(IOSDesign.sansBody(13, weight: .semibold))
+                        .foregroundStyle(IOSDesign.accent)
+                }
+            }
+        ) {
+            // 关注列表入口
+            Button {
+                showingWatchlist = true
+            } label: {
+                HStack {
+                    Image(systemName: "star.fill").foregroundStyle(IOSDesign.accent)
+                    Text("关注列表").font(IOSDesign.sansBody(14, weight: .medium)).foregroundStyle(IOSDesign.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(IOSDesign.muted)
+                }
+                .contentShape(Rectangle())
+                .padding(.bottom, IOSDesign.spaceS)
+            }
+            .buttonStyle(.plain)
+
             if rows.isEmpty {
                 IOSEmptyState(
                     title: "暂无持仓",
-                    subtitle: "点击下方添加你的第一只基金或股票,开始跟踪持仓收益。",
+                    subtitle: "点击右上角「添加」,录入你的第一只基金或股票。",
                     actionTitle: "添加持仓"
                 ) {
                     showingAddHolding = true
