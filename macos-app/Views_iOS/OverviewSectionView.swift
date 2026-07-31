@@ -13,8 +13,6 @@ struct OverviewSectionView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
-                // Signature detail：杂志型报头（serif 大标题 + 日期 + 细线）
-                masthead
                 todayBriefCard
                 aiTrendCard
                 managerActivityCard
@@ -28,35 +26,6 @@ struct OverviewSectionView: View {
         .refreshable {
             try? await model.refreshLatest(persist: false)
         }
-    }
-
-    // MARK: - 报头（Signature Detail）
-
-    /// 杂志刊头：serif 标题 + 日期，像一份每日简报的报眼。
-    private var masthead: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("今日简报")
-                .font(IOSDesign.serifHeading(30))
-                .foregroundStyle(IOSDesign.ink)
-            Text(mastheadDateString)
-                .font(IOSDesign.sansBody(13))
-                .foregroundStyle(IOSDesign.muted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, IOSDesign.spaceS)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(IOSDesign.accent.opacity(0.6))
-                .frame(height: 1.5)
-                .padding(.bottom, -1)
-        }
-    }
-
-    private var mastheadDateString: String {
-        let fmt = DateFormatter()
-        fmt.locale = Locale(identifier: "zh_CN")
-        fmt.dateFormat = "M月d日 EEEE"
-        return fmt.string(from: Date())
     }
 
     // MARK: - 今日简报
