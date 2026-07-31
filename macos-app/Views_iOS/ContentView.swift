@@ -26,20 +26,6 @@ struct ContentView: View {
                     sectionContent(for: section)
                         .navigationTitle(section.rawValue)
                         .navigationBarTitleDisplayMode(.large)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    Task { try? await model.refreshLatest(persist: false) }
-                                } label: {
-                                    if model.isRefreshing {
-                                        ProgressView()
-                                    } else {
-                                        Image(systemName: "arrow.clockwise")
-                                    }
-                                }
-                                .disabled(model.isRefreshing)
-                            }
-                        }
                 }
                 .tabItem {
                     Label(section.rawValue, systemImage: section.systemImage)

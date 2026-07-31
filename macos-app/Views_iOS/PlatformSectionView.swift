@@ -44,19 +44,23 @@ struct PlatformSectionView: View {
     }
 
     var body: some View {
-        // 平台页有自己的分段控件作为主导航,用 inline 标题(大标题会和分段控件争空间)。
-        // VStack 结构,ScrollView 正常滚动;分段控件常驻顶部。
-        VStack(spacing: 0) {
-            Picker("", selection: sectionBinding) {
-                ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, IOSDesign.spaceM)
-            .padding(.vertical, IOSDesign.spaceS)
+        // 分段控件放进 ScrollView 内容顶部,随内容滚动 —— 这样 ScrollView 是
+        // NavigationStack 的直接内容,大标题能正常联动缩放,与其他页面交互一致。
+        // 分段控件会随内容上移,大标题缩成 inline 后它停在导航栏下方(系统标准行为)。
+        ScrollView {
+            VStack(spacing: 0) {
+                Picker("", selection: sectionBinding) {
+                    ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, IOSDesign.spaceM)
+                .padding(.top, IOSDesign.spaceS)
+                .padding(.bottom, IOSDesign.spaceS)
 
-            sectionSwitcherBody
+                sectionSwitcherBody
+            }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .background(IOSDesign.paper)
         .sheet(item: $detailAction) { action in
             IOSPlatformActionDetailSheet(action: action)
                 .presentationDetents([.large])
@@ -73,15 +77,11 @@ struct PlatformSectionView: View {
     private var sectionSwitcherBody: some View {
         switch sectionBinding.wrappedValue {
         case .longWin:
-            ScrollView { longWinContent }
-                .background(IOSDesign.paper)
-                .refreshable { try? await model.refreshLatest(persist: false) }
+            longWinContent
         case .alfa:
             IOSAlfaPlatformPanel()
         case .forum:
-            ScrollView { forumList }
-                .background(IOSDesign.paper)
-                .refreshable { try? await model.refreshLatest(persist: false) }
+            forumList
         }
     }
 
