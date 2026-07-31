@@ -194,4 +194,48 @@ func marketTone(for value: Double?) -> IOSStatTile.StatTone {
     if value < 0 { return .negative }
     return .neutral
 }
+
+// MARK: - 可折叠 Section（带数量徽章，默认收起）
+
+/// 标题行 + 数量徽章 + 展开/收起箭头，点击切换内容显隐。
+/// 用于把原始日志列表（调仓明细/持仓明细）做成二级钻取，让分析图表成为主角。
+struct IOSDisclosureCard<Content: View>: View {
+    let title: String
+    let count: Int
+    let unit: String
+    @State private var isExpanded = false
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text(title).font(IOSDesign.sansBody(15, weight: .semibold)).foregroundStyle(IOSDesign.ink)
+                    Text("\(count) \(unit)")
+                        .font(IOSDesign.sansBody(12))
+                        .foregroundStyle(IOSDesign.muted)
+                    Spacer()
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(IOSDesign.muted)
+                }
+                .contentShape(Rectangle())
+                .padding(.vertical, IOSDesign.spaceS)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                content()
+                    .padding(.top, IOSDesign.spaceS)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(IOSDesign.spaceM)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(IOSDesign.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusM))
+        .overlay(RoundedRectangle(cornerRadius: IOSDesign.radiusM).stroke(IOSDesign.ink.opacity(0.1), lineWidth: 1))
+    }
+}
 #endif

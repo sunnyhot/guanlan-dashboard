@@ -21,6 +21,7 @@ struct PlatformSectionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 一级切换:动态 / 论坛(对等的两个目的地)
             Picker("", selection: tabBinding) {
                 ForEach(PlatformActivityTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
@@ -31,15 +32,8 @@ struct PlatformSectionView: View {
             .padding(.vertical, IOSDesign.spaceS)
 
             if model.selectedPlatformActivityTab == .adjustments {
-                // 二级切换:长赢调仓 / 投顾组合
-                Picker("", selection: viewModeBinding) {
-                    ForEach(PlatformAdjustmentViewMode.allCases) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, IOSDesign.spaceM)
-                .padding(.bottom, IOSDesign.spaceS)
+                // 轻量长赢/投顾切换(视觉权重低于一级 segment,对齐 macOS subtle picker)
+                modeSwitcher
 
                 if model.selectedPlatformAdjustmentViewMode == .alfa {
                     IOSAlfaPlatformPanel()
@@ -74,6 +68,25 @@ struct PlatformSectionView: View {
         }
     }
 
+    /// 轻量长赢/投顾文字切换(非第二个 segmented,避免视觉噪音)
+    private var modeSwitcher: some View {
+        HStack(spacing: IOSDesign.spaceM) {
+            ForEach(PlatformAdjustmentViewMode.allCases) { mode in
+                let active = model.selectedPlatformAdjustmentViewMode == mode
+                Button {
+                    model.selectedPlatformAdjustmentViewMode = mode
+                } label: {
+                    Text(mode.label)
+                        .font(IOSDesign.sansBody(13, weight: active ? .semibold : .regular))
+                        .foregroundStyle(active ? IOSDesign.accent : IOSDesign.muted)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, IOSDesign.spaceM)
+        .padding(.bottom, IOSDesign.spaceS)
+    }
+
     // MARK: - 调仓动态
 
     private var viewModeBinding: Binding<PlatformAdjustmentViewMode> {
@@ -83,12 +96,17 @@ struct PlatformSectionView: View {
         )
     }
 
+    /// 长赢调仓:分析层为 hero(雷达→月度趋势→持仓饼图),始终可见;
+    /// 调仓明细分列默认折叠(带笔数徽章),点击展开。对齐 macOS 的"分析优先、日志钻取"。
     private var longWinContent: some View {
         let actions = model.latestPlatformActions
         return VStack(alignment: .leading, spacing: IOSDesign.spaceS + 4) {
+            // 分析层(hero,始终可见)
             IOSStrategyRadarPanel()
             IOSPlatformMonthlyChart()
             IOSPlatformHoldingsPie()
+
+            // 调仓明细(默认折叠,点击展开原始日志)
             if actions.isEmpty {
                 IOSEmptyState(
                     title: "暂无调仓动态",
@@ -97,9 +115,9 @@ struct PlatformSectionView: View {
                 ) {
                     Task { try? await model.refreshLatest(persist: false) }
                 }
-                .padding(.top, IOSDesign.spaceXL)
+                .padding(.top, IOSDesign.spaceS)
             } else {
-                IOSSectionCard(title: "调仓明细", subtitle: "\(actions.count) 笔", icon: "list.bullet.rectangle") {
+                IOSDisclosureCard(title: "调仓明细", count: actions.count, unit: "笔") {
                     ForEach(actions, id: \.id) { action in
                         actionRow(action)
                         if action.id != actions.last?.id {
@@ -109,8 +127,6 @@ struct PlatformSectionView: View {
                 }
             }
         }
-        .padding(.horizontal, IOSDesign.spaceM)
-        .padding(.vertical, IOSDesign.spaceS + 4)
         .padding(.horizontal, IOSDesign.spaceM)
         .padding(.vertical, IOSDesign.spaceS + 4)
     }
