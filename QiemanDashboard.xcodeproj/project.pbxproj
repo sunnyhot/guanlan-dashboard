@@ -137,6 +137,7 @@
 		4FE58945E05A6F9BA59C3106 /* AppUpdateReleaseNotesFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC04B71B8DADC02172F1AC5 /* AppUpdateReleaseNotesFormatter.swift */; };
 		50CF9CAFED748277B063F3D1 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC593517B7DEBA5B0E18F2B /* LocalNotificationManager.swift */; };
 		50EFF5360135E5A89A424394 /* AlfaPortfolioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71767516855F0ABF5A7D549 /* AlfaPortfolioStore.swift */; };
+		53288AD081791EEB4B7BFF8E /* brand-spec.md in Resources */ = {isa = PBXBuildFile; fileRef = DB7DC8275591D21F8D5A981C /* brand-spec.md */; };
 		53D4C1C1895A5490E1259085 /* TrendAgentRunLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E2E11F4A5EA28FBCF0580 /* TrendAgentRunLogStore.swift */; };
 		5412789BC194C3AB1C548DFE /* StrategyRadarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D694D380386539B3898654 /* StrategyRadarTests.swift */; };
 		54DA34AA00B0C8C059D3F4E7 /* MacAppUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA730B3039CDD30F85940FB8 /* MacAppUpdateService.swift */; };
@@ -339,6 +340,7 @@
 		DA5F5CA4C222E67577728AD4 /* AppUpdateReleaseNotesFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56BA48DC1B3E0445FFFE6E4D /* AppUpdateReleaseNotesFormatterTests.swift */; };
 		DA9A02D42EAE0586AA3E2205 /* MenuBarTickerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BCB55BE6D1A6ACE6EF3AF99 /* MenuBarTickerSettings.swift */; };
 		DDA8F4039143EDC572CC5BF2 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567FFF197FEDE74061603126 /* UpdateService.swift */; };
+		DFCC4388C01CE3E3B4747D85 /* brand-spec.md in Resources */ = {isa = PBXBuildFile; fileRef = DB7DC8275591D21F8D5A981C /* brand-spec.md */; };
 		DFF49190D79BA237335AC4DD /* TrendAnalysisModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B138D8B20907015BF12685A4 /* TrendAnalysisModels.swift */; };
 		E033170DC2BBFC0B2D4AB320 /* TrendResearchHarnessState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5180864A6348145FD631590 /* TrendResearchHarnessState.swift */; };
 		E0967B11631B55D70DEF94F4 /* PlatformFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF65ABCE614CC6A0B8BECF9 /* PlatformFilterBar.swift */; };
@@ -653,6 +655,7 @@
 		D88BAB9B7A27D1FF218C7812 /* PersonalAssetPriceTrendChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAssetPriceTrendChart.swift; sourceTree = "<group>"; };
 		D95EC819040D269977244785 /* TrendComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendComponents.swift; sourceTree = "<group>"; };
 		DAF65ABCE614CC6A0B8BECF9 /* PlatformFilterBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformFilterBar.swift; sourceTree = "<group>"; };
+		DB7DC8275591D21F8D5A981C /* brand-spec.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "brand-spec.md"; sourceTree = "<group>"; };
 		DD318F8A3F06C2D5E537CDE5 /* TrendEvidenceMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendEvidenceMetadata.swift; sourceTree = "<group>"; };
 		DD9D295F50B3A85EA8C8289A /* ValueFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueFormatting.swift; sourceTree = "<group>"; };
 		E1C2370C014B842C73807DF4 /* ManagerWatchTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagerWatchTimelineTests.swift; sourceTree = "<group>"; };
@@ -879,6 +882,7 @@
 			isa = PBXGroup;
 			children = (
 				5FCB72CD118C144C196EFED3 /* AppPalette.swift */,
+				DB7DC8275591D21F8D5A981C /* brand-spec.md */,
 			);
 			path = Design;
 			sourceTree = "<group>";
@@ -1165,6 +1169,7 @@
 			buildConfigurationList = A9A8893B2BE8472A9A4A7B38 /* Build configuration list for PBXNativeTarget "QiemanDashboard-iOS" */;
 			buildPhases = (
 				B4B7563F009367BD42C32619 /* Sources */,
+				0616D1D870BC8C09A6D9CD11 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -1201,6 +1206,7 @@
 			buildConfigurationList = 0553368DF21616EF555D93D4 /* Build configuration list for PBXNativeTarget "QiemanDashboard" */;
 			buildPhases = (
 				DF2B67EA71A98F43CE7458C7 /* Sources */,
+				E996248110BE00F178153BBF /* Resources */,
 			);
 			buildRules = (
 			);
@@ -1252,6 +1258,22 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		0616D1D870BC8C09A6D9CD11 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DFCC4388C01CE3E3B4747D85 /* brand-spec.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E996248110BE00F178153BBF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				53288AD081791EEB4B7BFF8E /* brand-spec.md in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FC3D59A47C21E9B68B819B36 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;

@@ -13,13 +13,14 @@ struct PortfolioSectionView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
                 overviewCard
                 holdingsListCard
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, IOSDesign.spaceM)
             .padding(.vertical, 12)
         }
+        .background(IOSDesign.paper)
         .refreshable {
             try? await model.refreshLatest(persist: false)
         }
@@ -104,35 +105,35 @@ struct PortfolioSectionView: View {
         return Button {
             detailRow = row
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: IOSDesign.spaceS + 2) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.fundName)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(AppPalette.ink)
+                        .font(IOSDesign.sansBody(15, weight: .medium))
+                        .foregroundStyle(IOSDesign.ink)
                         .lineLimit(1)
                     if let code = row.fundCode {
                         Text(code)
-                            .font(.system(size: 12))
-                            .foregroundStyle(AppPalette.muted)
+                            .font(IOSDesign.sansBody(12))
+                            .foregroundStyle(IOSDesign.muted)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(marketValue.map { currencyText($0) } ?? "—")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
+                        .font(IOSDesign.monoNumber(15))
+                        .foregroundStyle(IOSDesign.ink)
                     if let change {
                         Text(signedCurrencyText(change))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(IOSDesign.monoNumber(12, weight: .medium))
                             .foregroundStyle(marketTone(for: change).color)
                     }
                 }
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11))
-                    .foregroundStyle(AppPalette.muted)
+                    .foregroundStyle(IOSDesign.muted)
             }
             .contentShape(Rectangle())
-            .padding(.vertical, 4)
+            .padding(.vertical, IOSDesign.spaceXS)
         }
         .buttonStyle(.plain)
     }

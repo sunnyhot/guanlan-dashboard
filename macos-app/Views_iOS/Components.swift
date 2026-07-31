@@ -1,14 +1,45 @@
 #if os(iOS)
 import SwiftUI
 
-// MARK: - iOS Shared UI Components
+// MARK: - iOS Design Tokens（编辑杂志型方向，见 Design/brand-spec.md）
 //
-// 精简的 iOS 基础组件,风格与 macOS 版(SectionCard 等)保持视觉一致,但
-// 独立实现以遵守「完全两套 Views」策略。复用共享的 AppPalette 设计 token
-// (颜色/字体/间距/圆角)及其纯 SwiftUI modifier(panelStroke/sectionShadow 等)。
+// iOS 专属设计 token，覆盖共享 AppPalette 里偏通用/默认蓝的部分。不改
+// 共享 AppPalette（避免影响 macOS）。哲学：暖砖红单重点 + serif 标题 +
+// 大留白 + 等宽数字，反 AI-slop。
+enum IOSDesign {
+    // 颜色：暖砖红品牌色（替换默认蓝 brand）
+    static let accent = Color(hex: "C44A3A") ?? AppPalette.brand
+    static let paper = Color(hex: "FAF8F4") ?? AppPalette.surface   // 暖白底
+    static let ink = AppPalette.ink
+    static let muted = Color(hex: "6B6358") ?? AppPalette.muted     // 暖灰
 
-/// 卡片容器:图标 + 标题 + 副标题 + 尾部内容 + 主体内容。
-/// 等价 macOS 版 SectionCard,iPhone 用更紧凑的间距。
+    // 间距：严格 8pt 网格
+    static let spaceXS: CGFloat = 4
+    static let spaceS: CGFloat = 8
+    static let spaceM: CGFloat = 16
+    static let spaceL: CGFloat = 24
+    static let spaceXL: CGFloat = 32
+
+    // 圆角（杂志型偏方正，不用大圆角）
+    static let radiusS: CGFloat = 8
+    static let radiusM: CGFloat = 12
+
+    // 字体 helper
+    static func serifHeading(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        .system(size: size, weight: weight, design: .serif)
+    }
+    static func sansBody(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight)
+    }
+    /// 等宽数字（金额/百分比，专业对齐感）
+    static func monoNumber(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+        .system(size: size, weight: weight, design: .monospaced)
+    }
+}
+
+// MARK: - iOS Shared UI Components
+
+/// 卡片容器：杂志型——衬线标题、暖白卡片底、细线分隔，不用圆角图标块。
 struct IOSSectionCard<Trailing: View, Content: View>: View {
     let title: String
     let subtitle: String
@@ -31,41 +62,40 @@ struct IOSSectionCard<Trailing: View, Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            HStack(alignment: .firstTextBaseline, spacing: IOSDesign.spaceS) {
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AppPalette.brand)
-                    .frame(width: 30, height: 30)
-                    .background(AppPalette.brand.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(AppPalette.ink)
-                        .lineLimit(2)
-                    if !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.system(size: 13))
-                            .foregroundStyle(AppPalette.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(IOSDesign.accent)
+                // 杂志型：衬线标题，不用图标色块
+                Text(title)
+                    .font(IOSDesign.serifHeading(20))
+                    .foregroundStyle(IOSDesign.ink)
+                    .lineLimit(2)
+                Spacer()
                 trailing
             }
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(IOSDesign.sansBody(13))
+                    .foregroundStyle(IOSDesign.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // 细线分隔 header 与 content（杂志感）
+            Divider().opacity(0.4)
             content
         }
-        .padding(16)
+        .padding(IOSDesign.spaceM)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.panelRadius))
+        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusM))
         .overlay(
-            RoundedRectangle(cornerRadius: AppPalette.panelRadius)
-                .stroke(AppPalette.hairline.opacity(0.34), lineWidth: 1)
+            RoundedRectangle(cornerRadius: IOSDesign.radiusM)
+                .stroke(AppPalette.hairline.opacity(0.3), lineWidth: 1)
         )
     }
 }
 
-/// 空状态占位。
+/// 空状态占位。杂志型：serif 标题，细线边框卡片。
 struct IOSEmptyState: View {
     let title: String
     let subtitle: String
@@ -73,28 +103,28 @@ struct IOSEmptyState: View {
     var action: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
             Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(AppPalette.ink)
+                .font(IOSDesign.serifHeading(17, weight: .semibold))
+                .foregroundStyle(IOSDesign.ink)
             Text(subtitle)
-                .font(.system(size: 14))
-                .foregroundStyle(AppPalette.muted)
+                .font(IOSDesign.sansBody(14))
+                .foregroundStyle(IOSDesign.muted)
                 .fixedSize(horizontal: false, vertical: true)
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
-                    .tint(AppPalette.brand)
+                    .tint(IOSDesign.accent)
                     .controlSize(.small)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(AppPalette.cardHover, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .padding(IOSDesign.spaceM)
+        .background(AppPalette.cardHover, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
     }
 }
 
-/// 统计数字小卡片(标题 + 数值 + 可选涨跌色)。
+/// 统计数字小卡片：serif 小标题 + 等宽数字（杂志型，对齐专业感）。
 struct IOSStatTile: View {
     let title: String
     let value: String
@@ -104,7 +134,7 @@ struct IOSStatTile: View {
         case neutral, positive, negative
         var color: Color {
             switch self {
-            case .neutral: return AppPalette.ink
+            case .neutral: return IOSDesign.ink
             case .positive: return AppPalette.marketGain
             case .negative: return AppPalette.marketLoss
             }
@@ -112,38 +142,39 @@ struct IOSStatTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceXS) {
             Text(title)
-                .font(.system(size: 12))
-                .foregroundStyle(AppPalette.muted)
+                .font(IOSDesign.sansBody(12))
+                .foregroundStyle(IOSDesign.muted)
             Text(value)
-                .font(.system(size: 17, weight: .semibold))
+                .font(IOSDesign.monoNumber(16))
                 .foregroundStyle(tone.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(AppPalette.surface, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .padding(IOSDesign.spaceS + 4)
+        .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
     }
 }
 
-/// 彩色小标签(状态/风险等级用)。
+/// 彩色小标签（状态/风险等级用）。杂志型：细边框胶囊而非纯填色。
 struct IOSTintedBadge: View {
     let text: String
     var tone: IOSStatTile.StatTone = .neutral
 
     var body: some View {
         Text(text)
-            .font(.system(size: 12, weight: .medium))
-            .padding(.horizontal, 8)
+            .font(IOSDesign.sansBody(12, weight: .medium))
+            .padding(.horizontal, IOSDesign.spaceS)
             .padding(.vertical, 3)
-            .background(tone.color.opacity(0.12), in: Capsule())
+            .background(tone.color.opacity(0.08), in: Capsule())
+            .overlay(Capsule().stroke(tone.color.opacity(0.3), lineWidth: 1))
             .foregroundStyle(tone.color)
     }
 }
 
-/// 涨跌色辅助:正数红涨、负数绿跌(中国股市惯例)。
+/// 涨跌色辅助：正数红涨、负数绿跌（中国股市惯例）。
 func marketTone(for value: Double?) -> IOSStatTile.StatTone {
     guard let value else { return .neutral }
     if value > 0 { return .positive }
