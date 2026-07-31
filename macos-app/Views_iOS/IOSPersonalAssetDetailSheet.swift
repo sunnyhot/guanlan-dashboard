@@ -12,6 +12,11 @@ struct IOSPersonalAssetDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingDeleteConfirm = false
     @State private var showingEdit = false
+    @State private var editingTrade: PersonalPendingTrade?
+    @State private var showingAddTrade = false
+    @State private var editingPlan: PersonalInvestmentPlan?
+    @State private var showingAddPlan = false
+    @State private var showingValuationAlert = false
 
     private var summary: PersonalAssetDetailSummary {
         PersonalAssetDetailSummary.make(row: row)
@@ -24,6 +29,9 @@ struct IOSPersonalAssetDetailSheet: View {
                     headerSection
                     metricsSection
                     attentionSection
+                    pendingTradesSection
+                    plansSection
+                    valuationAlertEntry
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
@@ -70,6 +78,21 @@ struct IOSPersonalAssetDetailSheet: View {
             }
             .sheet(isPresented: $showingEdit) {
                 IOSEditHoldingSheet(row: row)
+            }
+            .sheet(item: $editingTrade) { trade in
+                IOSPendingTradeEditSheet(row: row, trade: trade)
+            }
+            .sheet(isPresented: $showingAddTrade) {
+                IOSPendingTradeEditSheet(row: row, trade: nil)
+            }
+            .sheet(item: $editingPlan) { plan in
+                IOSInvestmentPlanEditSheet(row: row, plan: plan)
+            }
+            .sheet(isPresented: $showingAddPlan) {
+                IOSInvestmentPlanEditSheet(row: row, plan: nil)
+            }
+            .sheet(isPresented: $showingValuationAlert) {
+                IOSValuationAlertSheet(row: row)
             }
         }
     }
@@ -180,6 +203,107 @@ struct IOSPersonalAssetDetailSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - 待确认交易
+
+    private var pendingTradesSection: some View {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+            HStack {
+                Text("待确认交易").font(IOSDesign.serifHeading(16)).foregroundStyle(IOSDesign.ink)
+                Spacer()
+                Button { showingAddTrade = true } label: {
+                    Image(systemName: "plus.circle.fill").foregroundStyle(IOSDesign.accent)
+                }
+            }
+            if row.pendingTrades.isEmpty {
+                Text("暂无待确认交易").font(IOSDesign.sansBody(13)).foregroundStyle(IOSDesign.muted)
+            } else {
+                ForEach(row.pendingTrades) { trade in
+                    tradeRow(trade)
+                }
+            }
+        }
+    }
+
+    private func tradeRow(_ trade: PersonalPendingTrade) -> some View {
+        Button { editingTrade = trade } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(trade.displayTitle).font(IOSDesign.sansBody(14, weight: .medium)).foregroundStyle(IOSDesign.ink).lineLimit(1)
+                    Text("\(String(trade.occurredAt.prefix(10))) · \(trade.status)").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
+                }
+                Spacer()
+                Text(trade.amountText).font(IOSDesign.monoNumber(13)).foregroundStyle(IOSDesign.ink)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { model.deletePendingTrade(trade.id) } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - 投资计划
+
+    private var plansSection: some View {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+            HStack {
+                Text("投资计划").font(IOSDesign.serifHeading(16)).foregroundStyle(IOSDesign.ink)
+                Spacer()
+                Button { showingAddPlan = true } label: {
+                    Image(systemName: "plus.circle.fill").foregroundStyle(IOSDesign.accent)
+                }
+            }
+            if row.plans.isEmpty {
+                Text("暂无投资计划").font(IOSDesign.sansBody(13)).foregroundStyle(IOSDesign.muted)
+            } else {
+                ForEach(row.plans) { plan in
+                    planRow(plan)
+                }
+            }
+        }
+    }
+
+    private func planRow(_ plan: PersonalInvestmentPlan) -> some View {
+        Button { editingPlan = plan } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(plan.planTypeLabel) · \(plan.scheduleText)").font(IOSDesign.sansBody(14, weight: .medium)).foregroundStyle(IOSDesign.ink).lineLimit(1)
+                    Text("\(plan.status) · 每期 \(plan.amountText)").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
+                }
+                Spacer()
+                if let next = plan.nextExecutionDate.isEmpty ? nil : String(plan.nextExecutionDate.prefix(10)) {
+                    Text("下次 \(next)").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.accent)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) { model.deleteInvestmentPlan(plan.id) } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - 估值告警入口
+
+    private var valuationAlertEntry: some View {
+        Button { showingValuationAlert = true } label: {
+            HStack {
+                Image(systemName: "bell.badge").foregroundStyle(IOSDesign.accent)
+                Text("估值告警规则").font(IOSDesign.sansBody(14, weight: .medium)).foregroundStyle(IOSDesign.ink)
+                Spacer()
+                let count = (row.fundCode.flatMap { model.portfolioValuationAlertProfile(for: $0).rules.count }) ?? 0
+                Text(count > 0 ? "\(count) 条" : "未设置").font(IOSDesign.sansBody(12)).foregroundStyle(IOSDesign.muted)
+                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(IOSDesign.muted)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - 辅助

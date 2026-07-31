@@ -20,6 +20,7 @@ struct SettingsSectionView: View {
             appearanceSection
             managerSection
             trendSection
+            alertSection
             aboutSection
         }
         .listStyle(.insetGrouped)
@@ -79,6 +80,24 @@ struct SettingsSectionView: View {
                 Task { try? await model.refreshLatest(persist: false) }
             }
         }
+    }
+
+    // MARK: - 估值告警
+
+    private var alertSection: some View {
+        Section("估值告警") {
+            Toggle("启用估值告警巡检", isOn: alertEnabledBinding)
+        }
+    }
+
+    private var alertEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { model.portfolioValuationAlertSettings.isEnabled },
+            set: {
+                model.portfolioValuationAlertSettings.isEnabled = $0
+                model.setPortfolioValuationAlertEnabled($0)
+            }
+        )
     }
 
     // MARK: - AI 趋势模型
