@@ -19,6 +19,7 @@ struct SettingsSectionView: View {
         List {
             appearanceSection
             managerSection
+            trendSection
             aboutSection
         }
         .listStyle(.insetGrouped)
@@ -76,6 +77,26 @@ struct SettingsSectionView: View {
             }
             Button("立即刷新数据") {
                 Task { try? await model.refreshLatest(persist: false) }
+            }
+        }
+    }
+
+    // MARK: - AI 趋势模型
+
+    private var trendSection: some View {
+        Section("AI 与数据") {
+            NavigationLink {
+                IOSTrendSettingsView()
+            } label: {
+                HStack {
+                    Label("AI 趋势模型", systemImage: "sparkles")
+                    Spacer()
+                    if model.trendSettings.provider.isConfigured {
+                        Text("已配置").foregroundStyle(IOSDesign.muted)
+                    } else {
+                        Text("未配置").foregroundStyle(AppPalette.marketGain)
+                    }
+                }
             }
         }
     }

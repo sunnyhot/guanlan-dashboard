@@ -8,7 +8,10 @@ import SwiftUI
 
 struct IOSPersonalAssetDetailSheet: View {
     let row: PersonalAssetAggregateRow
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showingDeleteConfirm = false
+    @State private var showingEdit = false
 
     private var summary: PersonalAssetDetailSummary {
         PersonalAssetDetailSummary.make(row: row)
@@ -28,9 +31,45 @@ struct IOSPersonalAssetDetailSheet: View {
             .navigationTitle(summary.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if row.holdingRow != nil {
+                            Button {
+                                showingEdit = true
+                            } label: {
+                                Label("编辑持仓", systemImage: "pencil")
+                            }
+                        }
+                        Button(role: .destructive) {
+                            showingDeleteConfirm = true
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+            .confirmationDialog("确认删除该持仓？", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
+                Button("删除全部(持仓+待确认+计划)", role: .destructive) {
+                    model.deletePersonalAssetEntry(row, scope: .all)
+                    dismiss()
+                }
+                if row.holdingRow != nil {
+                    Button("仅删除持仓", role: .destructive) {
+                        model.deletePersonalAssetEntry(row, scope: .holding)
+                        dismiss()
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后不可恢复。可选择删除范围。")
+            }
+            .sheet(isPresented: $showingEdit) {
+                IOSEditHoldingSheet(row: row)
             }
         }
     }

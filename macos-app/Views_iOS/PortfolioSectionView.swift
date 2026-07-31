@@ -10,6 +10,7 @@ import SwiftUI
 struct PortfolioSectionView: View {
     @EnvironmentObject private var model: AppModel
     @State private var detailRow: PersonalAssetAggregateRow?
+    @State private var showingAddHolding = false
 
     var body: some View {
         ScrollView {
@@ -24,10 +25,22 @@ struct PortfolioSectionView: View {
         .refreshable {
             try? await model.refreshLatest(persist: false)
         }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingAddHolding = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        }
         .sheet(item: $detailRow) { row in
             IOSPersonalAssetDetailSheet(row: row)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingAddHolding) {
+            IOSAddHoldingSheet()
         }
     }
 
@@ -82,10 +95,10 @@ struct PortfolioSectionView: View {
             if rows.isEmpty {
                 IOSEmptyState(
                     title: "暂无持仓",
-                    subtitle: "在设置中配置主理人并刷新,或稍后手动导入持仓数据。",
-                    actionTitle: "刷新"
+                    subtitle: "点击下方添加你的第一只基金或股票,开始跟踪持仓收益。",
+                    actionTitle: "添加持仓"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    showingAddHolding = true
                 }
             } else {
                 ForEach(rows) { row in

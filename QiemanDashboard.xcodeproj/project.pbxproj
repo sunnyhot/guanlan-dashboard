@@ -281,6 +281,7 @@
 		B34586BDD458DA96EE3D5230 /* TrendResearchToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F4669E07B218BB34165C58 /* TrendResearchToolRegistry.swift */; };
 		B58D7F298DB1C4187181E30A /* QiemanPlatformNativeClientSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8501952D61D691482E93191A /* QiemanPlatformNativeClientSupport.swift */; };
 		B591E6905AAD2A6800BD1E01 /* PortfolioMenuBarTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C264872F20282920B9715B /* PortfolioMenuBarTitle.swift */; };
+		B5B02750EE44C9EF83ED9BF8 /* IOSTrendSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE93839027A567F03CFF9DC /* IOSTrendSettingsView.swift */; };
 		B5CD1427804BB09F5FF9DCFC /* AlphaVantageResearchToolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1E65E4A095A821F9F81EDE /* AlphaVantageResearchToolTests.swift */; };
 		B676FFA5F9F3E8C347FD1257 /* SettingsMenuBarPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1DE137F2BF7108FEB22FCAB /* SettingsMenuBarPanel.swift */; };
 		B7904384B139D36879C74540 /* QiemanDashboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4902A0C13E1B98A24CDE6003 /* QiemanDashboardApp.swift */; };
@@ -314,6 +315,7 @@
 		C6F59223F5C0FCC610255AA4 /* PersonalAssetComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = F044E6D3DA3AB78595C81414 /* PersonalAssetComparison.swift */; };
 		C6F8DAE7BA1E613FBEC8C61B /* PlatformSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 786316F801976A11FFF8D771 /* PlatformSectionView.swift */; };
 		C720DAC285630364475D9A74 /* TrendSourceFreshnessPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA24AB0976A647BE9BD0744F /* TrendSourceFreshnessPolicy.swift */; };
+		C741F38675E35084A54F2745 /* IOSAddHoldingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB2CD44252F192F4FD45E05 /* IOSAddHoldingSheet.swift */; };
 		C91BE1B5CBE88B0D77723F6F /* TavilySearchClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A0B3073643C8A2AC60DBDCF /* TavilySearchClientTests.swift */; };
 		C997ADA573601F7F3F91BCA1 /* InvestmentPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432E46A1D2DCDDA7EC528103 /* InvestmentPlan.swift */; };
 		CA0AB49B27BAAF9547E603FE /* ForumRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CE2EA625F70F5EB324918CA /* ForumRows.swift */; };
@@ -578,6 +580,7 @@
 		8B95B7596D50A9986276671A /* PlatformActionAssetBucketsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformActionAssetBucketsTests.swift; sourceTree = "<group>"; };
 		8C481905ECB163552D419E92 /* PersonalWatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistView.swift; sourceTree = "<group>"; };
 		8C498581E3B3501920C769E2 /* PortfolioAllocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAllocation.swift; sourceTree = "<group>"; };
+		8CB2CD44252F192F4FD45E05 /* IOSAddHoldingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAddHoldingSheet.swift; sourceTree = "<group>"; };
 		8CF1657C8AB4E6B64CFA7F9B /* TrendReportModuleTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendReportModuleTools.swift; sourceTree = "<group>"; };
 		8CFF745909C0EEF88F70B08F /* TrendAnalysisContextBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAnalysisContextBuilderTests.swift; sourceTree = "<group>"; };
 		8D97A68DC36D924B777A6C8C /* UIEffectsTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIEffectsTokenTests.swift; sourceTree = "<group>"; };
@@ -678,6 +681,7 @@
 		ECDEFE5CB6B2CEE48B4BD0A8 /* UserPortfolioDropdownQuoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPortfolioDropdownQuoteTests.swift; sourceTree = "<group>"; };
 		EDA6C4806612C88AB5D74FA1 /* RefreshDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshDecision.swift; sourceTree = "<group>"; };
 		EE17B9BE81B37BFAF7DED74B /* QiemanPlatformCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanPlatformCacheTests.swift; sourceTree = "<group>"; };
+		EEE93839027A567F03CFF9DC /* IOSTrendSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSTrendSettingsView.swift; sourceTree = "<group>"; };
 		EFA1EA95FA5BC84A069EA431 /* SettingsValuationAlertPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsValuationAlertPanel.swift; sourceTree = "<group>"; };
 		F0407FE1ECE1D79D23D09480 /* IOSPlatformActionDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformActionDetailSheet.swift; sourceTree = "<group>"; };
 		F044E6D3DA3AB78595C81414 /* PersonalAssetComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAssetComparison.swift; sourceTree = "<group>"; };
@@ -971,9 +975,11 @@
 				CE201C2F0C17C15705831D40 /* Components.swift */,
 				5E0DFBC8DE9AE828C34898EC /* ContentView.swift */,
 				FDD9F9506EEEE00B803DF564 /* EnhancementSectionView.swift */,
+				8CB2CD44252F192F4FD45E05 /* IOSAddHoldingSheet.swift */,
 				EB433BB62C19ABC69C2B9A71 /* IOSForumPostDetailSheet.swift */,
 				D11873E9BEF6B86B786E2EC1 /* IOSPersonalAssetDetailSheet.swift */,
 				F0407FE1ECE1D79D23D09480 /* IOSPlatformActionDetailSheet.swift */,
+				EEE93839027A567F03CFF9DC /* IOSTrendSettingsView.swift */,
 				1762048C6BEA212E7A558C67 /* OverviewSectionView.swift */,
 				786316F801976A11FFF8D771 /* PlatformSectionView.swift */,
 				BDEEA128B88CE9A7CC451FFC /* PortfolioSectionView.swift */,
@@ -1320,10 +1326,12 @@
 				2EED13AE3AEECA30FEA3ABE9 /* EnhancementSectionView.swift in Sources */,
 				8E0E679CE162769A3A2913A0 /* FundLookThrough.swift in Sources */,
 				E7634C4C0ED26F34ED4F227B /* FundSearchClient.swift in Sources */,
+				C741F38675E35084A54F2745 /* IOSAddHoldingSheet.swift in Sources */,
 				CF491AC37A66E6E6AA5E1D1A /* IOSAppUpdateService.swift in Sources */,
 				06CACD016190C8EEC80ECA74 /* IOSForumPostDetailSheet.swift in Sources */,
 				0D5C8B9552C8CB7DD0CB5981 /* IOSPersonalAssetDetailSheet.swift in Sources */,
 				6AA684CB467733F9C891433A /* IOSPlatformActionDetailSheet.swift in Sources */,
+				B5B02750EE44C9EF83ED9BF8 /* IOSTrendSettingsView.swift in Sources */,
 				AE1D18180B7F995248C52FE7 /* Import.swift in Sources */,
 				0DC45F72310C6FBD76D2BE42 /* InvestmentPlan.swift in Sources */,
 				0A1E16D35EA5332696622E6E /* InvestmentPlansStore.swift in Sources */,
