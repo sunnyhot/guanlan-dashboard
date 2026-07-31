@@ -44,38 +44,43 @@ struct PlatformSectionView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: sectionBinding) {
-                ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, IOSDesign.spaceM)
-            .padding(.vertical, IOSDesign.spaceS)
-
-            Group {
-                switch sectionBinding.wrappedValue {
-                case .longWin:
-                    ScrollView { longWinContent }
-                        .background(IOSDesign.paper)
-                        .refreshable { try? await model.refreshLatest(persist: false) }
-                case .alfa:
-                    IOSAlfaPlatformPanel()
-                case .forum:
-                    ScrollView { forumList }
-                        .background(IOSDesign.paper)
-                        .refreshable { try? await model.refreshLatest(persist: false) }
+        // segmented 用 safeAreaInset 钉在顶部,ScrollView 作为根内容——
+        // 这样 NavigationStack 能感知滚动,大标题可正常联动伸缩。
+        sectionSwitcherBody
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Picker("", selection: sectionBinding) {
+                    ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, IOSDesign.spaceM)
+                .padding(.vertical, IOSDesign.spaceS)
+                .background(.bar)
             }
-        }
-        .sheet(item: $detailAction) { action in
-            IOSPlatformActionDetailSheet(action: action)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $detailPost) { post in
-            IOSForumPostDetailSheet(post: post)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            .sheet(item: $detailAction) { action in
+                IOSPlatformActionDetailSheet(action: action)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $detailPost) { post in
+                IOSForumPostDetailSheet(post: post)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+    }
+
+    @ViewBuilder
+    private var sectionSwitcherBody: some View {
+        switch sectionBinding.wrappedValue {
+        case .longWin:
+            ScrollView { longWinContent }
+                .background(IOSDesign.paper)
+                .refreshable { try? await model.refreshLatest(persist: false) }
+        case .alfa:
+            IOSAlfaPlatformPanel()
+        case .forum:
+            ScrollView { forumList }
+                .background(IOSDesign.paper)
+                .refreshable { try? await model.refreshLatest(persist: false) }
         }
     }
 
