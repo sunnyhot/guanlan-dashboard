@@ -20,7 +20,8 @@ struct OverviewSectionView: View {
                 managerActivityCard
             }
             .padding(.horizontal, IOSDesign.spaceM)
-            .padding(.vertical, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
         }
         .background(IOSDesign.paper)
         .scrollDismissesKeyboard(.interactively)
@@ -42,7 +43,6 @@ struct OverviewSectionView: View {
                 .foregroundStyle(IOSDesign.muted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, IOSDesign.spaceS)
         .padding(.bottom, IOSDesign.spaceS)
         .overlay(alignment: .bottom) {
             Rectangle()

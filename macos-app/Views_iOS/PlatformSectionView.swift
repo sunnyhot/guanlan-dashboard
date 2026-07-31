@@ -54,7 +54,7 @@ struct PlatformSectionView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, IOSDesign.spaceM)
-                .padding(.top, IOSDesign.spaceS)
+                .padding(.top, 2)
                 .padding(.bottom, IOSDesign.spaceS)
 
                 sectionSwitcherBody

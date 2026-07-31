@@ -20,7 +20,8 @@ struct PortfolioSectionView: View {
                 holdingsListCard
             }
             .padding(.horizontal, IOSDesign.spaceM)
-            .padding(.vertical, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
         }
         .background(IOSDesign.paper)
         .refreshable {
