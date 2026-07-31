@@ -266,7 +266,7 @@ struct OverviewSectionView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .tint(AppPalette.brand)
+                .tint(IOSDesign.accent)
             }
         }
     }

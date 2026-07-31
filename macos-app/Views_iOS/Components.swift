@@ -7,11 +7,17 @@ import SwiftUI
 // 共享 AppPalette（避免影响 macOS）。哲学：暖砖红单重点 + serif 标题 +
 // 大留白 + 等宽数字，反 AI-slop。
 enum IOSDesign {
-    // 颜色：暖砖红品牌色（替换默认蓝 brand）
-    static let accent = Color(hex: "C44A3A") ?? AppPalette.brand
-    static let paper = Color(hex: "FAF8F4") ?? AppPalette.surface   // 暖白底
-    static let ink = AppPalette.ink
-    static let muted = Color(hex: "6B6358") ?? AppPalette.muted     // 暖灰
+    // 颜色：全部明暗自适应（用 UIColor dynamic provider）。暖色调贯穿。
+    // 暖砖红品牌色：浅色沉稳砖红，深色稍亮保证可见度
+    static let accent = adaptive(light: Color(hex: "C44A3A")!, dark: Color(hex: "E06A55")!)
+    // 暖白/暖黑底色：浅色暖白纸，深色暖黑炭（不是冷 zinc，保持杂志暖调）
+    static let paper = adaptive(light: Color(hex: "FAF8F4")!, dark: Color(hex: "14110E")!)
+    // 卡片底：略浅于 paper（dark 下略亮于背景）
+    static let card = adaptive(light: Color(hex: "FFFFFF")!, dark: Color(hex: "1F1B16")!)
+    // 文字：暖墨黑 / 暖白
+    static let ink = adaptive(light: Color(hex: "1A1A1A")!, dark: Color(hex: "F2F0EC")!)
+    // 次文字：暖灰
+    static let muted = adaptive(light: Color(hex: "6B6358")!, dark: Color(hex: "9A9388")!)
 
     // 间距：严格 8pt 网格
     static let spaceXS: CGFloat = 4
@@ -34,6 +40,13 @@ enum IOSDesign {
     /// 等宽数字（金额/百分比，专业对齐感）
     static func monoNumber(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// iOS 明暗自适应颜色（UIColor dynamic provider，随 colorScheme 切换）。
+    private static func adaptive(light: Color, dark: Color) -> Color {
+        Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
     }
 }
 
@@ -87,10 +100,10 @@ struct IOSSectionCard<Trailing: View, Content: View>: View {
         }
         .padding(IOSDesign.spaceM)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusM))
+        .background(IOSDesign.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusM))
         .overlay(
             RoundedRectangle(cornerRadius: IOSDesign.radiusM)
-                .stroke(AppPalette.hairline.opacity(0.3), lineWidth: 1)
+                .stroke(IOSDesign.ink.opacity(0.1), lineWidth: 1)
         )
     }
 }
@@ -120,7 +133,7 @@ struct IOSEmptyState: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(IOSDesign.spaceM)
-        .background(AppPalette.cardHover, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
+        .background(IOSDesign.card.opacity(0.6), in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
     }
 }
 
@@ -154,7 +167,7 @@ struct IOSStatTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(IOSDesign.spaceS + 4)
-        .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
+        .background(IOSDesign.ink.opacity(0.04), in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
     }
 }
 

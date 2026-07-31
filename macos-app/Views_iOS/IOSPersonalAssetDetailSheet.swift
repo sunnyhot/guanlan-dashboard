@@ -62,7 +62,7 @@ struct IOSPersonalAssetDetailSheet: View {
             }
             Text(summary.effectiveAmountText)
                 .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(AppPalette.brand)
+                .foregroundStyle(IOSDesign.accent)
                 .padding(.top, 4)
         }
     }

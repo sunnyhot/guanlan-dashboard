@@ -48,7 +48,7 @@ struct ContentView: View {
                 .tag(section)
             }
         }
-        .tint(AppPalette.brand)
+        .tint(IOSDesign.accent)
         .preferredColorScheme(model.appearance.colorScheme)
         .overlay(alignment: .top) { toastOverlay }
         // Onboarding + launch task mirror the macOS ContentView wiring so the
@@ -122,7 +122,7 @@ struct ContentView: View {
                     .padding(.vertical, 10)
                     .foregroundStyle(.white)
                     .background(
-                        isError ? AppPalette.marketGain : AppPalette.brand,
+                        isError ? AppPalette.marketGain : IOSDesign.accent,
                         in: RoundedRectangle(cornerRadius: 10)
                     )
                     .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
@@ -157,7 +157,7 @@ private struct OnboardingPlaceholder: View {
                 Spacer()
                 Image(systemName: "rectangle.grid.2x2")
                     .font(.system(size: 60))
-                    .foregroundStyle(AppPalette.brand)
+                    .foregroundStyle(IOSDesign.accent)
                 Text("且慢主理人")
                     .font(.largeTitle.bold())
                 Text("iOS 版欢迎你。完整的引导流程将在后续阶段补全。")
