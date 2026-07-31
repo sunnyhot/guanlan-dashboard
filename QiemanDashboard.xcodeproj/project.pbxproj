@@ -72,6 +72,7 @@
 		23A9421C620297C405C33931 /* TrendSourceStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54464D476D112BD2F980CD9 /* TrendSourceStatus.swift */; };
 		256422A9EAECD5983BD49DBC /* TrendAssetTaggingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BE0B21528A9F9EBB172169 /* TrendAssetTaggingTests.swift */; };
 		276D16B83FEBCE94CB44BBF6 /* ComputedProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E09CF8BF0CA1C86535816A5 /* ComputedProperties.swift */; };
+		277D58C78475B0B25DFB3C77 /* IOSPlatformVisualizations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A568605B11A6687A68C197D2 /* IOSPlatformVisualizations.swift */; };
 		27AAAB74B1C1B7DD5E3CAE33 /* EnhancementRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DB057F76EE3CDE84496DC /* EnhancementRoutingTests.swift */; };
 		2829718EFA600762CD4F7F5D /* UserPortfolio.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB33D89FA67ED56E95202969 /* UserPortfolio.swift */; };
 		29EAC64FCDED7F63D85C3784 /* PersonalAssetDetailSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66C97E80BA4440744265016 /* PersonalAssetDetailSummaryTests.swift */; };
@@ -143,6 +144,7 @@
 		53D4C1C1895A5490E1259085 /* TrendAgentRunLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 212E2E11F4A5EA28FBCF0580 /* TrendAgentRunLogStore.swift */; };
 		5412789BC194C3AB1C548DFE /* StrategyRadarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23D694D380386539B3898654 /* StrategyRadarTests.swift */; };
 		54DA34AA00B0C8C059D3F4E7 /* MacAppUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA730B3039CDD30F85940FB8 /* MacAppUpdateService.swift */; };
+		5579194975B947D9282B43B0 /* IOSAlfaPlatformPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E2CF6A76F392C1B21C15EEA /* IOSAlfaPlatformPanel.swift */; };
 		570EF1D890C90F81BA1FF614 /* UserPortfolioDropdownQuoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDEFE5CB6B2CEE48B4BD0A8 /* UserPortfolioDropdownQuoteTests.swift */; };
 		584340552460794B0CF4C13A /* Automation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C4DF9CEBB9EC22DAF7FE09 /* Automation.swift */; };
 		585C6295F2AE5A33A9F504F1 /* AITrendSummaryPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F5030281FC61E98E66B111D /* AITrendSummaryPanel.swift */; };
@@ -444,6 +446,7 @@
 		0BD83914B3D431764BE2048D /* PersonalWatchlistStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistStore.swift; sourceTree = "<group>"; };
 		0BF8043CC3870EBB588B7CAB /* EnhancementCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancementCenterView.swift; sourceTree = "<group>"; };
 		0CC514EAEEEB7C4CF06D811F /* MenuBarTickerEntries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarTickerEntries.swift; sourceTree = "<group>"; };
+		0E2CF6A76F392C1B21C15EEA /* IOSAlfaPlatformPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAlfaPlatformPanel.swift; sourceTree = "<group>"; };
 		0E4A171FAE07B3C1F625100A /* RefreshDecisionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshDecisionTests.swift; sourceTree = "<group>"; };
 		0E560BA395B4DD4760EA0B7D /* IOSPersonalWatchlistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPersonalWatchlistSheet.swift; sourceTree = "<group>"; };
 		0EC296889BD7EA39D1F9FD6F /* HoldingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingCard.swift; sourceTree = "<group>"; };
@@ -607,6 +610,7 @@
 		A5124F80FE2024759D77F742 /* MacLaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacLaunchAtLogin.swift; sourceTree = "<group>"; };
 		A539AA69C962723A2A7C258B /* TrendTracking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendTracking.swift; sourceTree = "<group>"; };
 		A552A95EDC0B2250851F9BAC /* DonutChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonutChart.swift; sourceTree = "<group>"; };
+		A568605B11A6687A68C197D2 /* IOSPlatformVisualizations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformVisualizations.swift; sourceTree = "<group>"; };
 		A611ECD5B10B0A1E06A9383A /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		A674FFA4D1049BB31FA5C8A5 /* SettingsWatchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWatchPanel.swift; sourceTree = "<group>"; };
 		A716ED78F4AE53696E128B89 /* PersonalWatchlistAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistAlertTests.swift; sourceTree = "<group>"; };
@@ -984,12 +988,14 @@
 				5E0DFBC8DE9AE828C34898EC /* ContentView.swift */,
 				FDD9F9506EEEE00B803DF564 /* EnhancementSectionView.swift */,
 				8CB2CD44252F192F4FD45E05 /* IOSAddHoldingSheet.swift */,
+				0E2CF6A76F392C1B21C15EEA /* IOSAlfaPlatformPanel.swift */,
 				EB433BB62C19ABC69C2B9A71 /* IOSForumPostDetailSheet.swift */,
 				7C9E399C7F3D8CE97854EAF0 /* IOSManagerWatchSettingsView.swift */,
 				B131986ABF90706A2D5EF4CD /* IOSPendingTradeAndPlanSheets.swift */,
 				D11873E9BEF6B86B786E2EC1 /* IOSPersonalAssetDetailSheet.swift */,
 				0E560BA395B4DD4760EA0B7D /* IOSPersonalWatchlistSheet.swift */,
 				F0407FE1ECE1D79D23D09480 /* IOSPlatformActionDetailSheet.swift */,
+				A568605B11A6687A68C197D2 /* IOSPlatformVisualizations.swift */,
 				EEE93839027A567F03CFF9DC /* IOSTrendSettingsView.swift */,
 				4AA0CF04F30665B08255A355 /* IOSValuationAlertSheet.swift */,
 				1762048C6BEA212E7A558C67 /* OverviewSectionView.swift */,
@@ -1339,6 +1345,7 @@
 				8E0E679CE162769A3A2913A0 /* FundLookThrough.swift in Sources */,
 				E7634C4C0ED26F34ED4F227B /* FundSearchClient.swift in Sources */,
 				C741F38675E35084A54F2745 /* IOSAddHoldingSheet.swift in Sources */,
+				5579194975B947D9282B43B0 /* IOSAlfaPlatformPanel.swift in Sources */,
 				CF491AC37A66E6E6AA5E1D1A /* IOSAppUpdateService.swift in Sources */,
 				06CACD016190C8EEC80ECA74 /* IOSForumPostDetailSheet.swift in Sources */,
 				67EA1E8B93AA1607191269ED /* IOSManagerWatchSettingsView.swift in Sources */,
@@ -1346,6 +1353,7 @@
 				0D5C8B9552C8CB7DD0CB5981 /* IOSPersonalAssetDetailSheet.swift in Sources */,
 				A226FC24F052D6425B7522C0 /* IOSPersonalWatchlistSheet.swift in Sources */,
 				6AA684CB467733F9C891433A /* IOSPlatformActionDetailSheet.swift in Sources */,
+				277D58C78475B0B25DFB3C77 /* IOSPlatformVisualizations.swift in Sources */,
 				B5B02750EE44C9EF83ED9BF8 /* IOSTrendSettingsView.swift in Sources */,
 				DBA7877FE1990FE47D9E42FD /* IOSValuationAlertSheet.swift in Sources */,
 				AE1D18180B7F995248C52FE7 /* Import.swift in Sources */,

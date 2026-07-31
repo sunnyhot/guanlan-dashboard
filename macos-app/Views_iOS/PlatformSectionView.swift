@@ -30,35 +30,65 @@ struct PlatformSectionView: View {
             .padding(.horizontal, IOSDesign.spaceM)
             .padding(.vertical, IOSDesign.spaceS)
 
-            ScrollView {
-                if model.selectedPlatformActivityTab == .adjustments {
-                    adjustmentsList
+            if model.selectedPlatformActivityTab == .adjustments {
+                // 二级切换:长赢调仓 / 投顾组合
+                Picker("", selection: viewModeBinding) {
+                    ForEach(PlatformAdjustmentViewMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, IOSDesign.spaceM)
+                .padding(.bottom, IOSDesign.spaceS)
+
+                if model.selectedPlatformAdjustmentViewMode == .alfa {
+                    IOSAlfaPlatformPanel()
                 } else {
+                    ScrollView {
+                        longWinContent
+                    }
+                    .background(IOSDesign.paper)
+                    .refreshable {
+                        try? await model.refreshLatest(persist: false)
+                    }
+                }
+            } else {
+                ScrollView {
                     forumList
                 }
+                .background(IOSDesign.paper)
+                .refreshable {
+                    try? await model.refreshLatest(persist: false)
+                }
             }
-            .background(IOSDesign.paper)
-            .refreshable {
-                try? await model.refreshLatest(persist: false)
-            }
-            .sheet(item: $detailAction) { action in
-                IOSPlatformActionDetailSheet(action: action)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(item: $detailPost) { post in
-                IOSForumPostDetailSheet(post: post)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
+        }
+        .sheet(item: $detailAction) { action in
+            IOSPlatformActionDetailSheet(action: action)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $detailPost) { post in
+            IOSForumPostDetailSheet(post: post)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
     // MARK: - 调仓动态
 
-    private var adjustmentsList: some View {
+    private var viewModeBinding: Binding<PlatformAdjustmentViewMode> {
+        Binding(
+            get: { model.selectedPlatformAdjustmentViewMode },
+            set: { model.selectedPlatformAdjustmentViewMode = $0 }
+        )
+    }
+
+    private var longWinContent: some View {
         let actions = model.latestPlatformActions
         return VStack(alignment: .leading, spacing: IOSDesign.spaceS + 4) {
+            IOSStrategyRadarPanel()
+            IOSPlatformMonthlyChart()
+            IOSPlatformHoldingsPie()
             if actions.isEmpty {
                 IOSEmptyState(
                     title: "暂无调仓动态",
@@ -69,55 +99,51 @@ struct PlatformSectionView: View {
                 }
                 .padding(.top, IOSDesign.spaceXL)
             } else {
-                ForEach(actions, id: \.id) { action in
-                    actionCard(action)
+                IOSSectionCard(title: "调仓明细", subtitle: "\(actions.count) 笔", icon: "list.bullet.rectangle") {
+                    ForEach(actions, id: \.id) { action in
+                        actionRow(action)
+                        if action.id != actions.last?.id {
+                            Divider().opacity(0.4)
+                        }
+                    }
                 }
             }
         }
         .padding(.horizontal, IOSDesign.spaceM)
         .padding(.vertical, IOSDesign.spaceS + 4)
+        .padding(.horizontal, IOSDesign.spaceM)
+        .padding(.vertical, IOSDesign.spaceS + 4)
     }
 
-    private func actionCard(_ action: PlatformActionPayload) -> some View {
+    private func actionRow(_ action: PlatformActionPayload) -> some View {
         Button {
             detailAction = action
         } label: {
             VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
-                // 标题行:side 徽章 + 标题
                 HStack(alignment: .top, spacing: IOSDesign.spaceS) {
                     if let side = action.side {
                         sideBadge(side)
                     }
                     Text(action.displayTitle)
-                        .font(IOSDesign.serifHeading(16, weight: .semibold))
+                        .font(IOSDesign.sansBody(15, weight: .semibold))
                         .foregroundStyle(IOSDesign.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Spacer()
                 }
-                // 基金名 · 代码
                 if let code = action.fundCode, !code.isEmpty {
                     Text("\(action.fundName ?? "") · \(code)")
                         .font(IOSDesign.sansBody(12))
                         .foregroundStyle(IOSDesign.muted)
                         .lineLimit(1)
                 }
-                // 金额/百分比 摘要(百分比分支 or 估值分支)
                 actionSummary(action)
-                // 日期
                 if let date = actionDateText(action) {
-                    HStack {
-                        Spacer()
-                        Text(date)
-                            .font(IOSDesign.sansBody(11))
-                            .foregroundStyle(IOSDesign.muted)
-                    }
+                    Text(date).font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(IOSDesign.spaceM)
-            .background(IOSDesign.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusM))
-            .overlay(RoundedRectangle(cornerRadius: IOSDesign.radiusM).stroke(IOSDesign.ink.opacity(0.1), lineWidth: 1))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
