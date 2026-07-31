@@ -44,28 +44,29 @@ struct PlatformSectionView: View {
     }
 
     var body: some View {
-        // segmented 用 safeAreaInset 钉在顶部,ScrollView 作为根内容——
-        // 这样 NavigationStack 能感知滚动,大标题可正常联动伸缩。
-        sectionSwitcherBody
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Picker("", selection: sectionBinding) {
-                    ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, IOSDesign.spaceM)
-                .padding(.vertical, IOSDesign.spaceS)
-                .background(.bar)
+        // 平台页有自己的分段控件作为主导航,用 inline 标题(大标题会和分段控件争空间)。
+        // VStack 结构,ScrollView 正常滚动;分段控件常驻顶部。
+        VStack(spacing: 0) {
+            Picker("", selection: sectionBinding) {
+                ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
             }
-            .sheet(item: $detailAction) { action in
-                IOSPlatformActionDetailSheet(action: action)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
-            .sheet(item: $detailPost) { post in
-                IOSForumPostDetailSheet(post: post)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, IOSDesign.spaceM)
+            .padding(.vertical, IOSDesign.spaceS)
+
+            sectionSwitcherBody
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $detailAction) { action in
+            IOSPlatformActionDetailSheet(action: action)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $detailPost) { post in
+            IOSForumPostDetailSheet(post: post)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     @ViewBuilder
