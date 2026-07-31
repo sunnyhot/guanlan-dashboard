@@ -57,14 +57,28 @@ struct IOSPlatformMonthlyChart: View {
 
     var body: some View {
         let months = model.monthlyPlatformSummary
-        return IOSSectionCard(title: "月度调仓", subtitle: "近 \(months.count) 个月", icon: "chart.line.uptrend.xyaxis") {
+        return IOSSectionCard(title: "月度调仓", subtitle: "近 \(months.count) 个月 · 点柱看详情", icon: "chart.bar.fill") {
             if months.isEmpty {
                 Text("暂无月度数据").font(IOSDesign.sansBody(13)).foregroundStyle(IOSDesign.muted)
             } else {
+                legend
                 summaryStats(months)
                 chart(months)
-                if let sel = selectedMonth { tooltip(sel) }
             }
+        }
+    }
+
+    private var legend: some View {
+        HStack(spacing: IOSDesign.spaceM) {
+            HStack(spacing: 4) {
+                Circle().fill(AppPalette.marketLoss.opacity(0.85)).frame(width: 8, height: 8)
+                Text("买入").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
+            }
+            HStack(spacing: 4) {
+                Circle().fill(AppPalette.marketGain.opacity(0.85)).frame(width: 8, height: 8)
+                Text("卖出").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
+            }
+            Spacer()
         }
     }
 
@@ -88,51 +102,67 @@ struct IOSPlatformMonthlyChart: View {
     }
 
     private func chart(_ months: [PlatformMonthSummary]) -> some View {
-        Chart {
-            ForEach(months) { m in
-                LineMark(
-                    x: .value("月", monthLabel(m.month)),
-                    y: .value("买入", m.buyCount)
-                )
-                .foregroundStyle(AppPalette.marketLoss)
-                .interpolationMethod(.linear)
-                .symbol(.circle)
+        let maxCount = max(months.map(\.totalCount).max() ?? 1, 1)
+        return Chart(months, content: chartMarks)
+            .chartXAxis {
+                AxisMarks(values: xAxisValues(months)) { value in
+                    AxisValueLabel {
+                        if let s = value.as(String.self) { Text(s).font(.system(size: 9)) }
+                    }
+                    AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel().font(.system(size: 10))
+                    AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
+                }
+            }
+            .chartYScale(domain: 0...(maxCount + 1))
+            .frame(height: 200)
+            .chartOverlay { proxy in
+                GeometryReader { geo in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .onTapGesture { location in
+                            handleTap(location, proxy: proxy, geo: geo, months: months)
+                        }
+                }
+            }
+    }
 
-                LineMark(
-                    x: .value("月", monthLabel(m.month)),
-                    y: .value("卖出", m.sellCount)
-                )
-                .foregroundStyle(AppPalette.marketGain)
-                .interpolationMethod(.linear)
-                .symbol(.square)
-            }
-            if let sel = selectedMonth {
-                RuleMark(x: .value("选中", monthLabel(sel.month)))
-                    .foregroundStyle(IOSDesign.accent.opacity(0.4))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            }
+    @ChartContentBuilder
+    private func chartMarks(_ m: PlatformMonthSummary) -> some ChartContent {
+        BarMark(
+            x: .value("月", monthLabel(m.month)),
+            y: .value("买入", m.buyCount)
+        )
+        .foregroundStyle(AppPalette.marketLoss.opacity(0.85))
+
+        BarMark(
+            x: .value("月", monthLabel(m.month)),
+            y: .value("卖出", m.sellCount)
+        )
+        .foregroundStyle(AppPalette.marketGain.opacity(0.85))
+    }
+
+    private func handleTap(_ location: CGPoint, proxy: ChartProxy, geo: GeometryProxy, months: [PlatformMonthSummary]) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let origin = geo[plotFrame].origin
+        let x = location.x - origin.x
+        if let raw = proxy.value(atX: x, as: String.self),
+           let m = months.first(where: { monthLabel($0.month) == raw }) {
+            selectedMonth = (selectedMonth?.month == m.month) ? nil : m
+        } else {
+            selectedMonth = nil
         }
-        .chartXAxis(.automatic)
-        .chartYAxis(.automatic)
-        .frame(height: 180)
-        .chartOverlay { proxy in
-            GeometryReader { geo in
-                Rectangle().fill(.clear).contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                guard let plotFrame = proxy.plotFrame else { return }
-                                let origin = geo[plotFrame].origin
-                                let x = value.location.x - origin.x
-                                if let raw = proxy.value(atX: x, as: String.self),
-                                   let m = months.first(where: { monthLabel($0.month) == raw }) {
-                                    selectedMonth = m
-                                }
-                            }
-                            .onEnded { _ in }
-                    )
-            }
-        }
+    }
+
+    /// X 轴标签值:月数多时抽稀,避免挤成一团。
+    private func xAxisValues(_ months: [PlatformMonthSummary]) -> [String] {
+        let labels = months.map { monthLabel($0.month) }
+        guard labels.count > 6 else { return labels }
+        let step = max(1, labels.count / 6)
+        return stride(from: 0, to: labels.count, by: step).map { labels[$0] }
     }
 
     private func tooltip(_ m: PlatformMonthSummary) -> some View {

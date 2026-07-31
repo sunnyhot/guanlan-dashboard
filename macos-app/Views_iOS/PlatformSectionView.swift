@@ -12,47 +12,58 @@ struct PlatformSectionView: View {
     @State private var detailAction: PlatformActionPayload?
     @State private var detailPost: SnapshotRecordPayload?
 
-    private var tabBinding: Binding<PlatformActivityTab> {
+    /// iOS 平台页三段切换:长赢调仓 / 投顾组合 / 论坛。
+    /// 不复用共享的 PlatformActivityTab 枚举(改它会影响 macOS),
+    /// 而是映射到 selectedPlatformActivityTab + selectedPlatformAdjustmentViewMode。
+    private enum IOSSection: String, CaseIterable, Identifiable {
+        case longWin = "长赢调仓"
+        case alfa = "投顾组合"
+        case forum = "论坛"
+        var id: String { rawValue }
+    }
+
+    private var sectionBinding: Binding<IOSSection> {
         Binding(
-            get: { model.selectedPlatformActivityTab },
-            set: { model.selectedPlatformActivityTab = $0 }
+            get: {
+                if model.selectedPlatformActivityTab == .forum { return .forum }
+                return model.selectedPlatformAdjustmentViewMode == .alfa ? .alfa : .longWin
+            },
+            set: { section in
+                switch section {
+                case .forum:
+                    model.selectedPlatformActivityTab = .forum
+                case .alfa:
+                    model.selectedPlatformActivityTab = .adjustments
+                    model.selectedPlatformAdjustmentViewMode = .alfa
+                case .longWin:
+                    model.selectedPlatformActivityTab = .adjustments
+                    model.selectedPlatformAdjustmentViewMode = .longWin
+                }
+            }
         )
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // 一级切换:动态 / 论坛(对等的两个目的地)
-            Picker("", selection: tabBinding) {
-                ForEach(PlatformActivityTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
-                }
+            Picker("", selection: sectionBinding) {
+                ForEach(IOSSection.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, IOSDesign.spaceM)
             .padding(.vertical, IOSDesign.spaceS)
 
-            if model.selectedPlatformActivityTab == .adjustments {
-                // 轻量长赢/投顾切换(视觉权重低于一级 segment,对齐 macOS subtle picker)
-                modeSwitcher
-
-                if model.selectedPlatformAdjustmentViewMode == .alfa {
+            Group {
+                switch sectionBinding.wrappedValue {
+                case .longWin:
+                    ScrollView { longWinContent }
+                        .background(IOSDesign.paper)
+                        .refreshable { try? await model.refreshLatest(persist: false) }
+                case .alfa:
                     IOSAlfaPlatformPanel()
-                } else {
-                    ScrollView {
-                        longWinContent
-                    }
-                    .background(IOSDesign.paper)
-                    .refreshable {
-                        try? await model.refreshLatest(persist: false)
-                    }
-                }
-            } else {
-                ScrollView {
-                    forumList
-                }
-                .background(IOSDesign.paper)
-                .refreshable {
-                    try? await model.refreshLatest(persist: false)
+                case .forum:
+                    ScrollView { forumList }
+                        .background(IOSDesign.paper)
+                        .refreshable { try? await model.refreshLatest(persist: false) }
                 }
             }
         }
@@ -68,33 +79,7 @@ struct PlatformSectionView: View {
         }
     }
 
-    /// 轻量长赢/投顾文字切换(非第二个 segmented,避免视觉噪音)
-    private var modeSwitcher: some View {
-        HStack(spacing: IOSDesign.spaceM) {
-            ForEach(PlatformAdjustmentViewMode.allCases) { mode in
-                let active = model.selectedPlatformAdjustmentViewMode == mode
-                Button {
-                    model.selectedPlatformAdjustmentViewMode = mode
-                } label: {
-                    Text(mode.label)
-                        .font(IOSDesign.sansBody(13, weight: active ? .semibold : .regular))
-                        .foregroundStyle(active ? IOSDesign.accent : IOSDesign.muted)
-                }
-            }
-            Spacer()
-        }
-        .padding(.horizontal, IOSDesign.spaceM)
-        .padding(.bottom, IOSDesign.spaceS)
-    }
-
     // MARK: - 调仓动态
-
-    private var viewModeBinding: Binding<PlatformAdjustmentViewMode> {
-        Binding(
-            get: { model.selectedPlatformAdjustmentViewMode },
-            set: { model.selectedPlatformAdjustmentViewMode = $0 }
-        )
-    }
 
     /// 长赢调仓:分析层为 hero(雷达→月度趋势→持仓饼图),始终可见;
     /// 调仓明细分列默认折叠(带笔数徽章),点击展开。对齐 macOS 的"分析优先、日志钻取"。
