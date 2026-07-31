@@ -23,7 +23,7 @@ struct ContentView: View {
         TabView(selection: $model.selectedSection) {
             ForEach(AppSection.allCases) { section in
                 NavigationStack {
-                    sectionPlaceholder(for: section)
+                    sectionContent(for: section)
                         .navigationTitle(section.rawValue)
                         .navigationBarTitleDisplayMode(.large)
                         .toolbar {
@@ -68,26 +68,18 @@ struct ContentView: View {
     // MARK: - Placeholders (replaced by real iOS section views in stage 2/3)
 
     @ViewBuilder
-    private func sectionPlaceholder(for section: AppSection) -> some View {
-        ScrollView {
-            VStack(spacing: AppPalette.spaceM) {
-                Image(systemName: section.systemImage)
-                    .font(.system(size: 48))
-                    .foregroundStyle(AppPalette.brand)
-                    .padding(.top, 40)
-                Text(section.rawValue)
-                    .font(.title2.bold())
-                Text("iOS 版本开发中")
-                    .font(.subheadline)
-                    .foregroundStyle(AppPalette.muted)
-                Text("阶段 1：跨平台骨架已就绪。此板块的 iPhone 界面将在后续阶段实现。")
-                    .font(.caption)
-                    .foregroundStyle(AppPalette.muted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 40)
+    private func sectionContent(for section: AppSection) -> some View {
+        switch section {
+        case .overview:
+            OverviewSectionView()
+        case .portfolio:
+            PortfolioSectionView()
+        case .platform:
+            PlatformSectionView()
+        case .enhancement:
+            EnhancementSectionView()
+        case .settings:
+            SettingsSectionView()
         }
     }
 
