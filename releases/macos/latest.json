@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.2/QiemanDashboard-3.14.2.zip",
-    "name" : "QiemanDashboard-3.14.2.zip",
-    "sha256" : "54b9789dddfcbbf6058cbd227f78df3278579e6a727891451e48957af458b703",
-    "size" : 6340156
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.3/QiemanDashboard-3.14.3.zip",
+    "name" : "QiemanDashboard-3.14.3.zip",
+    "sha256" : "676b5c69645bf9d54a6e371a1f01b677095d033cbb03300fd7ace5448c3fccd5",
+    "size" : 6317083
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.2/QiemanDashboard-3.14.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.3/QiemanDashboard-3.14.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.14.2.zip",
-      "size" : 6340156
+      "name" : "QiemanDashboard-3.14.3.zip",
+      "size" : 6317083
     }
   ],
-  "body" : "菜单栏 popover 我的关注支持右键取消关注",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.14.2",
-  "name" : "QiemanDashboard v3.14.2",
-  "notes" : "菜单栏 popover 我的关注支持右键取消关注",
+  "body" : "提取可复用 UI 组件,收敛环形图/胶囊/指标块重复",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.14.3",
+  "name" : "QiemanDashboard v3.14.3",
+  "notes" : "提取可复用 UI 组件,收敛环形图/胶囊/指标块重复",
   "published_at" : "",
-  "sha256" : "54b9789dddfcbbf6058cbd227f78df3278579e6a727891451e48957af458b703",
-  "tag" : "v3.14.2",
-  "tag_name" : "v3.14.2",
-  "version" : "3.14.2"
+  "sha256" : "676b5c69645bf9d54a6e371a1f01b677095d033cbb03300fd7ace5448c3fccd5",
+  "tag" : "v3.14.3",
+  "tag_name" : "v3.14.3",
+  "version" : "3.14.3"
 }
