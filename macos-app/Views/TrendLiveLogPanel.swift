@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 
 /// AI 分析工作台内的实时日志。
@@ -258,13 +260,12 @@ struct TrendLiveLogPanel: View {
             return "[\(entry.timestamp)] [\(entry.level.rawValue)] \(entry.message)\(detail)"
         }
         .joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        PasteboardHelper.copy(text)
     }
 
     private func revealLogFile() {
         guard let url = model.trendAgentRunLogFileURL else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        FilePresenter.reveal(url)
     }
 
     private func logTime(_ timestamp: String) -> String {

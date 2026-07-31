@@ -1,4 +1,9 @@
+#if canImport(AppKit)
 import AppKit
+#endif
+#if canImport(UIKit)
+import UIKit
+#endif
 import SwiftUI
 
 enum AppPalette {
@@ -244,6 +249,7 @@ enum AppPalette {
     }
 
     /// NSVisualEffectView.Material convenience aliases for consistent usage.
+    #if canImport(AppKit)
     enum Materials {
         /// Primary sidebar / panel background material.
         static let sidebar: NSVisualEffectView.Material = .sidebar
@@ -254,6 +260,7 @@ enum AppPalette {
         /// Elevated card / popover material.
         static let popover: NSVisualEffectView.Material = .hudWindow
     }
+    #endif
 
     // MARK: - Gradients
 
@@ -355,19 +362,46 @@ enum AppPalette {
 
     // MARK: - Helpers
 
-    private static func adaptive(light: NSColor, dark: NSColor) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
+    private static func adaptive(light: Color, dark: Color) -> Color {
+        // Dynamic light/dark color that resolves against the current color scheme.
+        // Uses the AppKit/UIKit dynamic color providers under the hood; on the
+        // opposite platform the corresponding branch returns the matching Color.
+        #if canImport(AppKit)
+        return Color(nsColor: NSColor(name: nil) { appearance in
             switch appearance.bestMatch(from: [.darkAqua, .aqua]) {
-            case .darkAqua:
-                return dark
-            default:
-                return light
+            case .darkAqua: return NSColor(dark)
+            default: return NSColor(light)
             }
         })
+        #elseif canImport(UIKit)
+        return Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+        #else
+        return light
+        #endif
     }
 
-    private static func rgb(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat, _ alpha: CGFloat = 1) -> NSColor {
-        NSColor(srgbRed: red, green: green, blue: blue, alpha: alpha)
+    /// Cross-platform sRGB color builder. Returns SwiftUI Color so adaptive() and
+    /// direct color tokens share one type on both macOS and iOS.
+    private static func rgb(_ red: Double, _ green: Double, _ blue: Double, _ alpha: Double = 1) -> Color {
+        Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
+    }
+}
+
+// MARK: - Color Hex Initializer (cross-platform)
+
+extension Color {
+    /// Initializes a Color from a 6-digit hex string (e.g. "#FF8800" or "FF8800").
+    /// Returns nil for invalid input. Cross-platform (AppKit + UIKit).
+    init?(hex: String) {
+        let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard raw.count == 6, let value = Int(raw, radix: 16) else { return nil }
+        let red = Double((value >> 16) & 0xFF) / 255.0
+        let green = Double((value >> 8) & 0xFF) / 255.0
+        let blue = Double(value & 0xFF) / 255.0
+        self.init(.sRGB, red: red, green: green, blue: blue, opacity: 1)
     }
 }
 

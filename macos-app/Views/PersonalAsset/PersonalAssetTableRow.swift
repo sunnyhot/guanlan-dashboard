@@ -330,8 +330,7 @@ struct PersonalAssetTableRow: View {
             if let summary = trendSummary {
                 Button("复制趋势摘要") {
                     let text = "\(row.fundName)(\(row.fundCode ?? "-"))：\(summary.impactText)"
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
+                    PasteboardHelper.copy(text)
                 }
             }
             Divider()

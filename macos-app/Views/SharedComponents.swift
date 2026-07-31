@@ -916,6 +916,7 @@ struct TintedCapsuleBadge: View {
 
 // MARK: - Reusable Material Components
 
+#if canImport(AppKit)
 /// A translucent material panel suitable for sidebar, toolbar, or section backgrounds.
 /// Uses NSVisualEffectView for consistent vibrancy across macOS 13+.
 struct MaterialPanel: NSViewRepresentable {
@@ -962,6 +963,39 @@ struct MaterialBackgroundModifier: ViewModifier {
             )
     }
 }
+#else
+/// iOS fallback material panel backed by SwiftUI's native material system.
+struct MaterialPanel: View {
+    var material: Material = .regularMaterial
+    var blendingMode: Material = .regularMaterial // ignored on iOS
+    var emphasized: Bool = false
+
+    var body: some View {
+        Color.clear.background(material, ignoreSafeAreaEdges: .all)
+    }
+}
+
+struct MaterialBackgroundModifier: ViewModifier {
+    var material: Material = .regularMaterial
+    var blendingMode: Material = .regularMaterial
+    var cornerRadius: CGFloat
+    var borderColor: Color?
+    var borderWidth: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                Color.clear.background(material)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor ?? AppPalette.line.opacity(0.35), lineWidth: borderWidth)
+            )
+    }
+}
+#endif
 
 extension View {
     func interactiveSurface(
@@ -1018,6 +1052,7 @@ extension View {
     }
 
     /// Apply a translucent material background with rounded corners and optional border.
+    #if canImport(AppKit)
     func materialBackground(
         _ material: NSVisualEffectView.Material = .sidebar,
         blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
@@ -1033,4 +1068,22 @@ extension View {
             borderWidth: borderWidth
         ))
     }
+    #else
+    /// iOS material background using SwiftUI's native material system.
+    func materialBackground(
+        _ material: Material = .regularMaterial,
+        blendingMode: Material = .regularMaterial,
+        cornerRadius: CGFloat = AppPalette.panelRadius,
+        borderColor: Color? = nil,
+        borderWidth: CGFloat = 1
+    ) -> some View {
+        modifier(MaterialBackgroundModifier(
+            material: material,
+            blendingMode: blendingMode,
+            cornerRadius: cornerRadius,
+            borderColor: borderColor,
+            borderWidth: borderWidth
+        ))
+    }
+    #endif
 }

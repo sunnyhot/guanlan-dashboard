@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 enum AppSelfUpdateError: LocalizedError {
@@ -355,3 +356,4 @@ struct AppSelfUpdater {
         return stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+#endif

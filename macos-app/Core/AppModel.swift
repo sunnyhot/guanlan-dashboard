@@ -1,8 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Combine
-import Darwin
 import Foundation
-import ServiceManagement
 import SwiftUI
 
 // MARK: - Settings
@@ -30,7 +30,9 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 
     /// Map to NSAppearance so NSColor dynamic colors (used by AppPalette.adaptive)
-    /// pick up the correct light/dark variant.
+    /// pick up the correct light/dark variant. macOS-only; iOS resolves light/dark
+    /// via SwiftUI `.preferredColorScheme` directly.
+    #if canImport(AppKit)
     var nsAppearance: NSAppearance? {
         switch self {
         case .system: return nil
@@ -38,6 +40,7 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         case .dark: return NSAppearance(named: .darkAqua)
         }
     }
+    #endif
 
     private static let storageKey = "qieman.dashboard.appearance"
 
@@ -104,7 +107,9 @@ final class AppModel: ObservableObject {
     /// 调仓筛选状态
     let filterState = PlatformFilterState()
 
+    #if os(macOS)
     weak var appDelegate: QiemanApplicationDelegate?
+    #endif
 
     // Services
     let dataController = ApplicationDataController()
@@ -120,6 +125,10 @@ final class AppModel: ObservableObject {
     let managerWatchStore = ManagerWatchStore()
     let notificationManager = LocalNotificationManager()
     let personalAssetAutomation = PersonalAssetAutomation()
+    /// 平台无关更新服务。macOS 走 GitHub Release 自更新；iOS 由 App Store 管理。
+    var updateService: any AppUpdateService = makeDefaultAppUpdateService()
+    /// 平台无关开机自启。macOS 走 SMAppService + LaunchAgent；iOS 不支持（no-op）。
+    var launchAtLoginController: any LaunchAtLoginController = makeDefaultLaunchAtLoginController()
     var fundLookThroughClient: any FundLookThroughClientProtocol = FundLookThroughClient()
     var trendResearchAgent: any TrendResearchAgentProtocol = TrendResearchAgent()
     var nextHourGuidanceAgent: any NextHourGuidanceAgentProtocol = NextHourGuidanceAgent()
@@ -293,7 +302,9 @@ final class AppModel: ObservableObject {
         set {
             guard uiState.appearance != newValue else { return }
             uiState.appearance = newValue
+            #if os(macOS)
             appDelegate?.syncWindowAppearances()
+            #endif
             NotificationCenter.default.post(name: .qiemanAppearanceDidChange, object: newValue)
         }
     }

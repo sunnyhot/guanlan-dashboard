@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 enum ApplicationDataError: LocalizedError {
@@ -35,7 +34,7 @@ final class ApplicationDataController {
 
     func openDataDirectory() {
         guard let supportDirectory else { return }
-        NSWorkspace.shared.open(supportDirectory)
+        FilePresenter.reveal(supportDirectory)
     }
 
     func updateSupportDirectory(_ url: URL) {

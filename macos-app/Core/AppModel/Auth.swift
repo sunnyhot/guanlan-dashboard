@@ -1,6 +1,7 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Foundation
-import ServiceManagement
 
 // MARK: - Comments & Data Directory
 
@@ -150,69 +151,27 @@ extension AppModel {
     }
 
     func refreshLaunchAtLoginStatus() {
-        let launchAgent = LaunchAtLoginAgent()
-        if #available(macOS 13.0, *) {
-            let serviceEnabled = SMAppService.mainApp.status == .enabled
-            if serviceEnabled && !launchAgent.isInstalled {
-                try? launchAgent.install()
-            }
-            launchAtLoginEnabled = serviceEnabled || launchAgent.isInstalled
-        } else {
-            launchAtLoginEnabled = launchAgent.isInstalled
+        #if os(macOS)
+        if let mac = launchAtLoginController as? macOSLaunchAtLoginController {
+            mac.syncAgentIfNeeded()
         }
+        #endif
+        launchAtLoginEnabled = launchAtLoginController.isInstalled
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
-        let launchAgent = LaunchAtLoginAgent()
-        var failures: [String] = []
-
-        if #available(macOS 13.0, *), isEnabled {
-            do {
-                if SMAppService.mainApp.status != .enabled {
-                    try SMAppService.mainApp.register()
-                }
-            } catch {
-                failures.append(error.localizedDescription)
-            }
-        }
-
-        do {
-            if isEnabled {
-                try launchAgent.install()
-            } else {
-                try launchAgent.uninstall()
-            }
-        } catch {
-            failures.append(error.localizedDescription)
-        }
-
-        if #available(macOS 13.0, *), !isEnabled {
-            do {
-                switch SMAppService.mainApp.status {
-                case .enabled, .requiresApproval:
-                    try SMAppService.mainApp.unregister()
-                case .notFound, .notRegistered:
-                    break
-                @unknown default:
-                    break
-                }
-            } catch {
-                failures.append(error.localizedDescription)
-            }
-        }
-
+        let failure = launchAtLoginController.setEnabled(isEnabled)
         refreshLaunchAtLoginStatus()
 
-        if failures.isEmpty {
-            noticeMessage = isEnabled ? "已开启开机自启。" : "已关闭开机自启。"
-        } else if isEnabled && launchAgent.isInstalled {
-            noticeMessage = "已开启开机自启（兼容模式）。"
+        if let failure {
+            errorMessage = "设置开机自启失败：\(failure)"
         } else {
-            errorMessage = "设置开机自启失败：\(failures.joined(separator: "；"))"
+            noticeMessage = isEnabled ? "已开启开机自启。" : "已关闭开机自启。"
         }
     }
 
     func revealMainWindowIfNeeded() {
+        #if os(macOS)
         appDelegate?.closePopover()
         NSApplication.shared.activate(ignoringOtherApps: true)
 
@@ -233,5 +192,6 @@ extension AppModel {
                 window.makeKeyAndOrderFront(nil)
             }
         }
+        #endif
     }
 }

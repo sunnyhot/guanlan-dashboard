@@ -1,5 +1,6 @@
+#if canImport(AppKit)
 import AppKit
-import Darwin
+#endif
 import Foundation
 
 // MARK: - App Update Management
@@ -15,14 +16,13 @@ extension AppModel {
         defer { isCheckingForUpdates = false }
 
         do {
-            let checker = try AppUpdateChecker()
-            let update = try await checker.check()
+            let update = try await updateService.checkForUpdate()
             if let update {
                 availableUpdate = update
                 isPresentingUpdateSheet = true
                 noticeMessage = "发现新版本 \(update.version)，可以下载并重启安装。"
             } else if userInitiated {
-                noticeMessage = "已经是最新版本：\(checker.currentVersion)。"
+                noticeMessage = "已经是最新版本：\(updateService.currentVersion)。"
             }
         } catch {
             if userInitiated {
@@ -44,27 +44,20 @@ extension AppModel {
         }
 
         do {
-            try await AppSelfUpdater.downloadAndPrepareInstall(
-                release: update,
-                progress: { [weak self] message in
-                    self?.updateInstallProgress = message
-                    // Reset fraction to 0 once download phase is done (extracting/validating/installing)
-                    if message != "正在准备更新…" {
-                        self?.updateDownloadFraction = 0
-                    }
-                },
-                downloadProgress: { [weak self] progress in
-                    self?.updateDownloadFraction = progress.fraction
-                    self?.updateInstallProgress = "正在下载… \(progress.percentText)  \(progress.sizeText)"
-                }
-            )
+            try await updateService.install(release: update) { [weak self] message, fraction in
+                guard let self else { return }
+                self.updateInstallProgress = message
+                self.updateDownloadFraction = fraction
+            }
             updateDownloadFraction = 0
             updateInstallProgress = "安装器已启动，应用即将重启…"
             noticeMessage = "更新包已准备好，正在重启应用完成覆盖安装。"
             try? await Task.sleep(nanoseconds: 600_000_000)
+            #if os(macOS)
             NSApplication.shared.terminate(nil)
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             Darwin.exit(0)
+            #endif
         } catch {
             updateDownloadFraction = 0
             updateInstallProgress = ""
@@ -73,15 +66,15 @@ extension AppModel {
     }
 
     func openAvailableUpdateDownload() {
-        guard let url = availableUpdate?.downloadURL else { return }
-        NSWorkspace.shared.open(url)
-        noticeMessage = "已打开 GitHub 更新下载页。"
+        guard let update = availableUpdate else { return }
+        updateService.openUpdateDestination(for: update)
+        noticeMessage = "已打开更新页。"
     }
 
     func openAvailableUpdateReleasePage() {
-        guard let url = availableUpdate?.htmlURL else { return }
-        NSWorkspace.shared.open(url)
-        noticeMessage = "已打开 GitHub Release 页面。"
+        guard let update = availableUpdate else { return }
+        updateService.openUpdateDestination(for: update)
+        noticeMessage = "已打开更新页。"
     }
 
     func dismissUpdateSheet() {

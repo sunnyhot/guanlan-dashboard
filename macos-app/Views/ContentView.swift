@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 
 enum PersonalAssetFilterScope: String, CaseIterable, Identifiable {
@@ -209,7 +211,9 @@ struct ContentView: View {
 
     /// Double-click the toolbar title area to zoom (maximize/restore) the main window.
     /// Only targets the app's tracked main window — never a sheet, popover, or NSPanel.
+    /// iOS has no window-zoom concept; this is a no-op there.
     private func toggleMainWindowZoom() {
+        #if os(macOS)
         // Prefer the AppDelegate's tracked mainWindow reference.
         if let delegate = NSApplication.shared.delegate as? QiemanApplicationDelegate,
            let mainWin = delegate.mainWindowForZoom {
@@ -225,6 +229,7 @@ struct ContentView: View {
                 && window.styleMask.contains(.resizable)
         }) else { return }
         targetWindow.performZoom(nil)
+        #endif
     }
 
     @ViewBuilder
@@ -269,8 +274,7 @@ struct ContentView: View {
     }
 
     private func copyErrorMessage() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(model.errorMessage, forType: .string)
+        PasteboardHelper.copy(model.errorMessage)
     }
 
     private func sidebarBadge(for section: AppSection) -> Int {
@@ -591,6 +595,7 @@ struct SidebarFloatingCompatModifier: ViewModifier {
 
 /// Wraps `NSVisualEffectView` to provide a blurred material backdrop.
 /// Kept for backward compatibility; new code should use `MaterialPanel` instead.
+#if canImport(AppKit)
 struct VisualEffectBlurView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
 
@@ -609,3 +614,4 @@ struct VisualEffectBlurView: NSViewRepresentable {
         nsView.state = .active
     }
 }
+#endif

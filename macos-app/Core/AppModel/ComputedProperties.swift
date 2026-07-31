@@ -1,5 +1,4 @@
 import Foundation
-import ServiceManagement
 
 // MARK: - Public Computed Properties
 
@@ -213,25 +212,7 @@ extension AppModel {
     }
 
     var launchAtLoginStatusText: String {
-        let launchAgent = LaunchAtLoginAgent()
-        if launchAgent.isInstalled {
-            return "已开启"
-        }
-        if #available(macOS 13.0, *) {
-            switch SMAppService.mainApp.status {
-            case .enabled:
-                return "已开启"
-            case .requiresApproval:
-                return "待系统授权"
-            case .notFound:
-                return "当前构建不支持"
-            case .notRegistered:
-                return "已关闭"
-            @unknown default:
-                return "未知"
-            }
-        }
-        return "已关闭"
+        launchAtLoginController.statusText
     }
 
     var hasForumPosts: Bool {

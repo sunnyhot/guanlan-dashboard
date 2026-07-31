@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import SwiftUI
 
 // MARK: - Settings
@@ -89,7 +91,8 @@ struct SettingsSectionView: View {
     }
 
     var menuBarTickerCustomColorBinding: Binding<Color> {
-        Binding(
+        #if canImport(AppKit)
+        return Binding(
             get: {
                 Color(nsColor: MenuBarTickerAppearance.nsColor(hex: model.menuBarTickerSettings.appearance.customTextColorHex) ?? .labelColor)
             },
@@ -100,6 +103,17 @@ struct SettingsSectionView: View {
                 }
             }
         )
+        #else
+        // iOS: menu-bar settings tab is hidden; provide a no-op binding so the
+        // computed property still compiles cross-platform.
+        return Binding(
+            get: { Color(hex: model.menuBarTickerSettings.appearance.customTextColorHex) ?? AppPalette.ink },
+            set: { color in
+                // ColorPicker-derived hex not persisted on iOS (no menu bar).
+                _ = color
+            }
+        )
+        #endif
     }
 
     var menuBarTickerCarouselIntervalBinding: Binding<Double> {

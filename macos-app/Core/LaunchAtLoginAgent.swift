@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 struct LaunchAtLoginAgent {
@@ -53,3 +54,4 @@ struct LaunchAtLoginAgent {
         )
     }
 }
+#endif

@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Foundation
 import SwiftUI
 
@@ -131,14 +133,19 @@ struct MenuBarTickerAppearance: Codable, Hashable {
            copy.manualWidth == Self.default.manualWidth {
             copy.widthMode = .automatic
         }
-        if MenuBarTickerAppearance.nsColor(hex: copy.customTextColorHex) == nil {
+        // Hex validation stays cross-platform (no AppKit dependency).
+        if !Self.isValidHex(copy.customTextColorHex) {
             copy.customTextColorHex = Self.default.customTextColorHex
         }
         return copy
     }
 
-    var fontWeight: NSFont.Weight {
-        isBold ? .bold : .medium
+    /// Cross-platform hex validation. True when `hex` is a valid 6-digit RGB color string.
+    static func isValidHex(_ hex: String) -> Bool {
+        let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard raw.count == 6, Int(raw, radix: 16) != nil else { return false }
+        return true
     }
 
     var swiftUIColor: Color {
@@ -146,8 +153,13 @@ struct MenuBarTickerAppearance: Codable, Hashable {
         case .system:
             return AppPalette.ink
         case .custom:
-            return Color(nsColor: MenuBarTickerAppearance.nsColor(hex: customTextColorHex) ?? .labelColor)
+            return Color(hex: customTextColorHex) ?? AppPalette.ink
         }
+    }
+
+    #if canImport(AppKit)
+    var fontWeight: NSFont.Weight {
+        isBold ? .bold : .medium
     }
 
     var nsColor: NSColor? {
@@ -176,6 +188,7 @@ struct MenuBarTickerAppearance: Codable, Hashable {
         let blue = CGFloat(value & 0xFF) / 255
         return NSColor(srgbRed: red, green: green, blue: blue, alpha: 1)
     }
+    #endif
 }
 
 enum MenuBarTickerLayoutMetrics {
