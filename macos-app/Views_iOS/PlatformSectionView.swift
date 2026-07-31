@@ -8,11 +8,17 @@ import SwiftUI
 
 struct PlatformSectionView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var selectedTab: PlatformActivityTab = .adjustments
+
+    private var tabBinding: Binding<PlatformActivityTab> {
+        Binding(
+            get: { model.selectedPlatformActivityTab },
+            set: { model.selectedPlatformActivityTab = $0 }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
+            Picker("", selection: tabBinding) {
                 ForEach(PlatformActivityTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
@@ -22,7 +28,7 @@ struct PlatformSectionView: View {
             .padding(.vertical, 8)
 
             ScrollView {
-                if selectedTab == .adjustments {
+                if model.selectedPlatformActivityTab == .adjustments {
                     adjustmentsList
                 } else {
                     forumList

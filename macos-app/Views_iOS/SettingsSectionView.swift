@@ -11,6 +11,10 @@ struct SettingsSectionView: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage("qieman.dashboard.update.autoCheckOnLaunch") private var autoCheckOnLaunch = true
 
+    @FocusState private var focusedField: Field?
+
+    enum Field { case managerName, prodCode }
+
     var body: some View {
         List {
             appearanceSection
@@ -18,6 +22,17 @@ struct SettingsSectionView: View {
             aboutSection
         }
         .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            // 键盘上方 Done 按钮,收起键盘
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { focusedField = nil }
+            }
+        }
+        .refreshable {
+            try? await model.refreshLatest(persist: false)
+        }
     }
 
     // MARK: - 外观
@@ -49,6 +64,7 @@ struct SettingsSectionView: View {
                 TextField("主理人昵称", text: managerNameBinding)
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(AppPalette.muted)
+                    .focused($focusedField, equals: .managerName)
             }
             HStack {
                 Text("产品代码")
@@ -56,6 +72,7 @@ struct SettingsSectionView: View {
                 TextField("LONG_WIN", text: prodCodeBinding)
                     .multilineTextAlignment(.trailing)
                     .foregroundStyle(AppPalette.muted)
+                    .focused($focusedField, equals: .prodCode)
             }
             Button("立即刷新数据") {
                 Task { try? await model.refreshLatest(persist: false) }

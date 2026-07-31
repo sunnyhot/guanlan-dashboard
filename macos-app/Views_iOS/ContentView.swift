@@ -31,8 +31,13 @@ struct ContentView: View {
                                 Button {
                                     Task { try? await model.refreshLatest(persist: false) }
                                 } label: {
-                                    Image(systemName: "arrow.clockwise")
+                                    if model.isRefreshing {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "arrow.clockwise")
+                                    }
                                 }
+                                .disabled(model.isRefreshing)
                             }
                         }
                 }
@@ -45,6 +50,7 @@ struct ContentView: View {
         }
         .tint(AppPalette.brand)
         .preferredColorScheme(model.appearance.colorScheme)
+        .overlay(alignment: .top) { toastOverlay }
         // Onboarding + launch task mirror the macOS ContentView wiring so the
         // shared AppModel behaves identically on both platforms.
         .sheet(isPresented: Binding(
@@ -88,6 +94,54 @@ struct ContentView: View {
         case .portfolio: return model.pendingTrades.count
         case .enhancement: return model.trendTrackingItems.count
         default: return 0
+        }
+    }
+
+    // MARK: - Toast(通知/错误反馈)
+    //
+    // macOS 用自定义 toast 条;iOS 用顶部浮层卡片显示 notice/error,
+    // 4 秒后自动清空。错误用红涨色(中国股市惯例:红=警示正向),通知用品牌色。
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        let message = model.errorMessage.isEmpty ? model.noticeMessage : model.errorMessage
+        let isError = !model.errorMessage.isEmpty
+        if !message.isEmpty {
+            VStack {
+                Button {
+                    if isError { model.errorMessage = "" } else { model.noticeMessage = "" }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: isError ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                        Text(message)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .foregroundStyle(.white)
+                    .background(
+                        isError ? AppPalette.marketGain : AppPalette.brand,
+                        in: RoundedRectangle(cornerRadius: 10)
+                    )
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                Spacer()
+            }
+            .task {
+                // 4 秒后自动清除
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                if isError {
+                    if model.errorMessage == message { model.errorMessage = "" }
+                } else {
+                    if model.noticeMessage == message { model.noticeMessage = "" }
+                }
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }

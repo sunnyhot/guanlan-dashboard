@@ -24,6 +24,10 @@ struct EnhancementSectionView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .refreshable {
+            try? await model.refreshLatest(persist: false)
+        }
     }
 
     private func statusCard(_ summary: TrendDashboardSummary) -> some View {

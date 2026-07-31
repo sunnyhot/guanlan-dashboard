@@ -28,6 +28,7 @@
 		0B1B3089817601A4CAD7C9CE /* MenuBarPortfolioRefreshDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D32D3ADBCF61DF55FA6A678 /* MenuBarPortfolioRefreshDecisionTests.swift */; };
 		0C98E71FE688145F62390BD7 /* AlphaVantageResearchTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56E9CBCC1E7917CA11466AD /* AlphaVantageResearchTool.swift */; };
 		0D498DC52BC65A7D357511CE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067C30E8084C8D8B7279EE90 /* AppModel.swift */; };
+		0D5C8B9552C8CB7DD0CB5981 /* IOSPersonalAssetDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D11873E9BEF6B86B786E2EC1 /* IOSPersonalAssetDetailSheet.swift */; };
 		0DC45F72310C6FBD76D2BE42 /* InvestmentPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 432E46A1D2DCDDA7EC528103 /* InvestmentPlan.swift */; };
 		0E6184696F807703287CE732 /* PlatformActionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4654D36B5E8DAE0B81C57C1C /* PlatformActionRow.swift */; };
 		0F5D8876B4B135105A3BDCE9 /* StrategyRadar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161AFF3AF6FB52DE9E5D246B /* StrategyRadar.swift */; };
@@ -639,6 +640,7 @@
 		CE6DFF1B1F92BF837175DE66 /* QiemanText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanText.swift; sourceTree = "<group>"; };
 		CED5E9778234A54285C5845A /* AppUpdateCheckerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckerTests.swift; sourceTree = "<group>"; };
 		D0C4DF9CEBB9EC22DAF7FE09 /* Automation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Automation.swift; sourceTree = "<group>"; };
+		D11873E9BEF6B86B786E2EC1 /* IOSPersonalAssetDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPersonalAssetDetailSheet.swift; sourceTree = "<group>"; };
 		D3E4F04C80C765D21924489E /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		D4AC1F7CAEFEB91B141BC945 /* Validation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Validation.swift; sourceTree = "<group>"; };
 		D583CA3F837A6DEC46B98FEB /* QiemanRequestSigning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanRequestSigning.swift; sourceTree = "<group>"; };
@@ -961,6 +963,7 @@
 				CE201C2F0C17C15705831D40 /* Components.swift */,
 				5E0DFBC8DE9AE828C34898EC /* ContentView.swift */,
 				FDD9F9506EEEE00B803DF564 /* EnhancementSectionView.swift */,
+				D11873E9BEF6B86B786E2EC1 /* IOSPersonalAssetDetailSheet.swift */,
 				1762048C6BEA212E7A558C67 /* OverviewSectionView.swift */,
 				786316F801976A11FFF8D771 /* PlatformSectionView.swift */,
 				BDEEA128B88CE9A7CC451FFC /* PortfolioSectionView.swift */,
@@ -1290,6 +1293,7 @@
 				8E0E679CE162769A3A2913A0 /* FundLookThrough.swift in Sources */,
 				E7634C4C0ED26F34ED4F227B /* FundSearchClient.swift in Sources */,
 				CF491AC37A66E6E6AA5E1D1A /* IOSAppUpdateService.swift in Sources */,
+				0D5C8B9552C8CB7DD0CB5981 /* IOSPersonalAssetDetailSheet.swift in Sources */,
 				AE1D18180B7F995248C52FE7 /* Import.swift in Sources */,
 				0DC45F72310C6FBD76D2BE42 /* InvestmentPlan.swift in Sources */,
 				0A1E16D35EA5332696622E6E /* InvestmentPlansStore.swift in Sources */,
