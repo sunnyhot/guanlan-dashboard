@@ -1,0 +1,117 @@
+name: QiemanDashboard
+options:
+  bundleIdPrefix: com.sunnyhot.qieman.dashboard
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "3.14.2"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+    SWIFT_STRICT_CONCURRENCY: minimal
+
+# Shared source globs compiled into BOTH app targets. xcodegen expands globs
+# per-target, so each target lists the same shared roots explicitly (anchors
+# are not reliably expanded inside `sources`). Excludes the CLI subsystem
+# (QiemanCommandLine.swift + Core/CLI/) which is built separately by
+# scripts/build_qieman_cli.sh.
+targets:
+  # MARK: - macOS app
+  QiemanDashboard:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: macos-app/Core
+        excludes:
+          - "CLI/main.swift"
+      - path: macos-app/Support
+        excludes:
+          - "Info-macOS.plist"
+          - "Info-iOS.plist"
+      - path: macos-app/Design
+      - path: macos-app/Views_macOS
+      - path: macos-app/QiemanDashboardApp.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sunnyhot.qieman.dashboard
+        PRODUCT_NAME: QiemanDashboard
+        INFOPLIST_FILE: macos-app/Support/Info-macOS.plist
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        # Match the existing ad-hoc distribution: no sandbox (CLI embedding).
+        ENABLE_APP_SANDBOX: NO
+
+  # MARK: - iOS app
+  QiemanDashboard-iOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: macos-app/Core
+        excludes:
+          - "CLI/**"
+          - "QiemanCommandLine.swift"
+      - path: macos-app/Support
+        excludes:
+          # Info plists are referenced via INFOPLIST_FILE, not bundled as
+          # resources. Including Info-macOS.plist here would inject macOS-only
+          # keys (NSPrincipalClass=NSApplication) into the iOS bundle, which
+          # SpringBoard rejects at launch.
+          - "Info-macOS.plist"
+          - "Info-iOS.plist"
+      - path: macos-app/Design
+      - path: macos-app/Views_iOS
+      - path: macos-app/QiemanDashboardApp_iOS.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sunnyhot.qieman.dashboard.ios
+        PRODUCT_NAME: QiemanDashboard
+        INFOPLIST_FILE: macos-app/Support/Info-iOS.plist
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTS_MACCATALYST: NO
+
+  # MARK: - Tests (macOS; mirrors the existing swift test suite)
+  QiemanDashboardTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: macos-app/Tests/QiemanDashboardTests
+    dependencies:
+      - target: QiemanDashboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.sunnyhot.qieman.dashboard.tests
+        GENERATE_INFOPLIST_FILE: YES
+        # Tests reference the macOS entry filename and AppKit types, so they
+        # build against the macOS host target only.
+
+schemes:
+  QiemanDashboard:
+    build:
+      targets:
+        QiemanDashboard: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+  QiemanDashboard-iOS:
+    build:
+      targets:
+        QiemanDashboard-iOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release

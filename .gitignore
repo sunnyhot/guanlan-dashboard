@@ -16,6 +16,14 @@ dist/
 macos-app/.build/
 releases/macos/*.zip
 
+# Xcode 构建产物(工程由 xcodegen 从 project.yml 生成,DerivedData/build 不入库)
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.swp
+*.swo
+
 .superpowers/
 .worktrees
 .worktrees/
