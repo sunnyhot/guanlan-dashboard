@@ -1,3 +1,4 @@
+#if os(macOS)
 import AppKit
 import Combine
 import SwiftUI
@@ -862,3 +863,4 @@ struct QiemanDashboardApp: App {
         }
     }
 }
+#endif
