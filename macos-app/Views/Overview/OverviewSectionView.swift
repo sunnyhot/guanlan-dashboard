@@ -70,7 +70,7 @@ struct OverviewSectionView: View {
                 subtitle: "平台接口现在会和论坛分开刷新；点一次刷新后，这里会优先恢复可用数据。",
                 actionTitle: "刷新"
             ) {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest() }
             }
         } else {
             VStack(spacing: 8) {
@@ -111,7 +111,7 @@ struct OverviewSectionView: View {
                 subtitle: "论坛页会自动补拉帖子流；这里也会跟着恢复到最新发言。",
                 actionTitle: "刷新"
             ) {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest() }
             }
         }
     }

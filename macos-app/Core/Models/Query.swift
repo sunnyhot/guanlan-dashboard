@@ -1,25 +1,7 @@
 import Foundation
 
-enum QueryMode: String, CaseIterable, Identifiable {
+enum QueryMode: String {
     case groupManager = "group-manager"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .groupManager:
-            return "公开主理人流"
-        }
-    }
-}
-
-extension QueryMode {
-    var producesPostRecords: Bool {
-        switch self {
-        case .groupManager:
-            return true
-        }
-    }
 }
 
 struct QueryFormState {
@@ -37,7 +19,7 @@ struct QueryFormState {
     var pageSize: String = "50"
     var autoRefresh: String = ""
 
-    func fetchPayload(persist: Bool) -> [String: Any] {
+    func fetchPayload() -> [String: Any] {
         var payload: [String: Any] = [
             "mode": mode.rawValue,
             "prod_code": prodCode,
@@ -51,12 +33,8 @@ struct QueryFormState {
             "pages": pages,
             "page_size": pageSize,
             "auto_refresh": autoRefresh,
-            "persist": persist,
         ]
-        payload = payload.filter { key, value in
-            if key == "persist" {
-                return true
-            }
+        payload = payload.filter { _, value in
             if let text = value as? String {
                 return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }

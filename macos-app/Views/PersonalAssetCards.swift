@@ -678,26 +678,3 @@ struct PlanArchiveGroup: View {
         return "会从本地保存的数据中删除 \(itemText) 的这条计划档案。"
     }
 }
-
-struct AssetMiniStat: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        LabeledValue(
-            title: title,
-            value: value,
-            tint: tint,
-            titleLineLimit: 1,
-            valueSize: .subheadline,
-            valueWeight: .semibold,
-            valueDesign: .default,
-            minimumScaleFactor: 0.7
-        )
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint.opacity(AppPalette.accentSubtle), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-    }
-}

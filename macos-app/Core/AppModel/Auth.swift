@@ -96,7 +96,7 @@ extension AppModel {
         case .refreshPortfolio:
             Task { try? await refreshUserPortfolio(updateNotice: false) }
         case .refreshLatest:
-            Task { try? await refreshLatest(persist: false, updateNotice: false) }
+            Task { try? await refreshLatest(updateNotice: false) }
         }
     }
 

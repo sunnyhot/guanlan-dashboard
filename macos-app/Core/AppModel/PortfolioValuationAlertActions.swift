@@ -4,10 +4,6 @@ import Foundation
 
 extension AppModel {
 
-    var hasActivePortfolioValuationAlerts: Bool {
-        portfolioValuationAlertProfiles.values.contains { $0.hasActiveRules }
-    }
-
     /// 启动时从磁盘加载
     func loadSavedPortfolioValuationAlerts() {
         do {

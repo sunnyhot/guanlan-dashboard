@@ -95,7 +95,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
             }
         }
 
-        let showInDock = (UserDefaults.standard.object(forKey: "qieman.dashboard.showsInDock") as? Bool) ?? true
+        let showInDock = (UserDefaults.standard.object(forKey: AppStorageKey.showsInDock) as? Bool) ?? true
         NSApplication.shared.setActivationPolicy(
             AppLaunchPresentationPolicy.initialActivationPolicy(storedShowsInDock: showInDock)
         )
@@ -488,7 +488,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
     @objc private func dockRefresh() {
         Task { @MainActor in
             guard let model else { return }
-            try? await model.refreshLatest(persist: false)
+            try? await model.refreshLatest()
         }
     }
 
@@ -793,7 +793,7 @@ struct QiemanDashboardApp: App {
                 .keyboardShortcut("k", modifiers: .command)
                 Divider()
                 Button("立即刷新") {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest() }
                 }
                 .keyboardShortcut("r")
             }

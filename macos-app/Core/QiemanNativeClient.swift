@@ -36,10 +36,10 @@ final class QiemanNativeClient {
         self.anonymousID = "anon-\(Self.sha256Hex(seed).prefix(16))"
     }
 
-    func fetchSnapshot(form: QueryFormState, persist: Bool, outputDirectory: URL?) async throws -> SnapshotPayload {
+    func fetchSnapshot(form: QueryFormState) async throws -> SnapshotPayload {
         switch form.mode {
         case .groupManager:
-            return try await fetchGroupManagerSnapshot(form: form, persist: persist, outputDirectory: outputDirectory)
+            return try await fetchGroupManagerSnapshot(form: form)
         }
     }
 
@@ -81,7 +81,7 @@ final class QiemanNativeClient {
         )
     }
 
-    private func fetchGroupManagerSnapshot(form: QueryFormState, persist: Bool, outputDirectory: URL?) async throws -> SnapshotPayload {
+    private func fetchGroupManagerSnapshot(form: QueryFormState) async throws -> SnapshotPayload {
         let groupID = try await resolveGroupID(form: form)
         let group = try await fetchGroupInfo(groupID: groupID, source: resolvedGroupSource(form: form, groupID: groupID))
         let pageSize = positiveInt(form.pageSize, fallback: 50)
@@ -152,7 +152,7 @@ final class QiemanNativeClient {
             form.prodCode,
             group.groupName,
         ]))
-        return try buildSnapshot(raw: raw, fileStem: fileStem, suffix: "community", persist: persist, outputDirectory: outputDirectory)
+        return try buildSnapshot(raw: raw, fileStem: fileStem, suffix: "community")
     }
 
     /// 未设置页数上限时，只要接口仍返回完整一页，就继续拉取下一页。
@@ -167,7 +167,7 @@ final class QiemanNativeClient {
         return currentPage < pageLimit
     }
 
-    private func buildSnapshot(raw: [String: Any], fileStem: String, suffix: String, persist _: Bool, outputDirectory _: URL?) throws -> SnapshotPayload {
+    private func buildSnapshot(raw: [String: Any], fileStem: String, suffix: String) throws -> SnapshotPayload {
         let timestamp = timestampString()
         let fileName = "\(fileStem)-\(suffix)-\(timestamp).json"
         let fileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(fileName, isDirectory: false)
@@ -176,8 +176,7 @@ final class QiemanNativeClient {
             from: raw,
             fileURL: fileURL,
             createdAt: isoTimestampNow(),
-            includeRecords: true,
-            persisted: false
+            includeRecords: true
         )
     }
 

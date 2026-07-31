@@ -334,15 +334,7 @@ extension AppModel {
         )
     }
 
-    var outputDirectoryURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("output", isDirectory: true)
-    }
-
     var activeUserPortfolioHoldings: [UserPortfolioHolding] {
         userPortfolioHoldings.filter { !$0.isArchived }
-    }
-
-    var archivedUserPortfolioHoldings: [UserPortfolioHolding] {
-        userPortfolioHoldings.filter(\.isArchived)
     }
 }

@@ -1,11 +1,11 @@
 import Foundation
 
 struct NativeSnapshotStore {
-    func snapshot(from raw: Any, fileURL: URL, createdAt: String? = nil, includeRecords: Bool, persisted: Bool) -> SnapshotPayload {
-        normalizeSnapshot(raw: raw, fileURL: fileURL, createdAt: createdAt ?? formatNow(), includeRecords: includeRecords, persisted: persisted)
+    func snapshot(from raw: Any, fileURL: URL, createdAt: String? = nil, includeRecords: Bool) -> SnapshotPayload {
+        normalizeSnapshot(raw: raw, fileURL: fileURL, createdAt: createdAt ?? formatNow(), includeRecords: includeRecords)
     }
 
-    private func normalizeSnapshot(raw: Any, fileURL: URL, createdAt: String, includeRecords: Bool, persisted: Bool) -> SnapshotPayload {
+    private func normalizeSnapshot(raw: Any, fileURL: URL, createdAt: String, includeRecords: Bool) -> SnapshotPayload {
         if let object = raw as? [String: Any], let posts = object["posts"] as? [[String: Any]] {
             let records = normalizePostRecords(posts)
             let groupObject = object["group"] as? [String: Any] ?? [:]
@@ -46,124 +46,7 @@ struct NativeSnapshotStore {
                 group: normalizeGroup(groupObject),
                 meta: SnapshotMetaPayload(mode: mode),
                 stats: buildPostStats(records),
-                records: includeRecords ? records : [],
-                persisted: persisted
-            )
-        }
-
-        if let object = raw as? [String: Any], let users = object["users"] as? [[String: Any]] {
-            let metaObject = object["meta"] as? [String: Any] ?? [:]
-            let authUser = metaObject["auth_user"] as? [String: Any] ?? [:]
-            let title = firstNonEmpty([
-                normalizedString(authUser["user_name"]),
-                normalizedString(authUser["broker_user_id"]),
-                "关注用户",
-            ]) ?? "关注用户"
-            let mode = normalizedString(metaObject["mode"]).isEmpty ? "following-users" : normalizedString(metaObject["mode"])
-            let records = users.map(buildRecord)
-
-            return SnapshotPayload(
-                fileName: fileURL.lastPathComponent,
-                filePath: fileURL.path,
-                snapshotType: "users",
-                kindLabel: "用户",
-                mode: mode,
-                title: title,
-                subtitle: "关注列表",
-                createdAt: createdAt,
-                count: records.count,
-                filters: [:],
-                group: nil,
-                meta: SnapshotMetaPayload(mode: mode),
-                stats: SnapshotStatsPayload(
-                    count: records.count,
-                    latestCreatedAt: nil,
-                    oldestCreatedAt: nil,
-                    uniqueUsers: nil,
-                    uniqueGroups: nil,
-                    totalLikes: nil,
-                    totalComments: nil,
-                    byDay: nil
-                ),
-                records: includeRecords ? records : [],
-                persisted: persisted
-            )
-        }
-
-        if let object = raw as? [String: Any], let groups = object["groups"] as? [[String: Any]] {
-            let metaObject = object["meta"] as? [String: Any] ?? [:]
-            let authUser = metaObject["auth_user"] as? [String: Any] ?? [:]
-            let title = firstNonEmpty([
-                normalizedString(authUser["user_name"]),
-                normalizedString(authUser["broker_user_id"]),
-                "已加入小组",
-            ]) ?? "已加入小组"
-            let mode = normalizedString(metaObject["mode"]).isEmpty ? "my-groups" : normalizedString(metaObject["mode"])
-            let records = groups.map(buildRecord)
-
-            return SnapshotPayload(
-                fileName: fileURL.lastPathComponent,
-                filePath: fileURL.path,
-                snapshotType: "groups",
-                kindLabel: "小组",
-                mode: mode,
-                title: title,
-                subtitle: "小组列表",
-                createdAt: createdAt,
-                count: records.count,
-                filters: [:],
-                group: nil,
-                meta: SnapshotMetaPayload(mode: mode),
-                stats: SnapshotStatsPayload(
-                    count: records.count,
-                    latestCreatedAt: nil,
-                    oldestCreatedAt: nil,
-                    uniqueUsers: nil,
-                    uniqueGroups: nil,
-                    totalLikes: nil,
-                    totalComments: nil,
-                    byDay: nil
-                ),
-                records: includeRecords ? records : [],
-                persisted: persisted
-            )
-        }
-
-        if let list = raw as? [[String: Any]] {
-            let records = list.map(buildRecord)
-            let query = normalizedString(list.first?["query"])
-            let byDay = buildByDay(records)
-            let authors: Set<String> = Set(records.compactMap { value in
-                let value = value.userName
-                guard let value, !value.isEmpty else { return nil }
-                return value
-            })
-
-            return SnapshotPayload(
-                fileName: fileURL.lastPathComponent,
-                filePath: fileURL.path,
-                snapshotType: "items",
-                kindLabel: "内容",
-                mode: "public-content",
-                title: query.isEmpty ? inferTitle(from: fileURL) : query,
-                subtitle: "公开内容检索",
-                createdAt: createdAt,
-                count: records.count,
-                filters: query.isEmpty ? [:] : ["query": query],
-                group: nil,
-                meta: SnapshotMetaPayload(mode: "public-content"),
-                stats: SnapshotStatsPayload(
-                    count: records.count,
-                    latestCreatedAt: records.first?.createdAt,
-                    oldestCreatedAt: records.last?.createdAt,
-                    uniqueUsers: authors.count,
-                    uniqueGroups: nil,
-                    totalLikes: records.compactMap(\.likeCount).reduce(0, +),
-                    totalComments: records.compactMap(\.commentCount).reduce(0, +),
-                    byDay: byDay.isEmpty ? nil : byDay
-                ),
-                records: includeRecords ? records : [],
-                persisted: persisted
+                records: includeRecords ? records : []
             )
         }
 
@@ -190,8 +73,7 @@ struct NativeSnapshotStore {
                 totalComments: nil,
                 byDay: nil
             ),
-            records: [],
-            persisted: persisted
+            records: []
         )
     }
 

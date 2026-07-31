@@ -89,9 +89,9 @@ final class UIState: ObservableObject {
     @Published var selectedSection: AppSection = .overview
     @Published var selectedPlatformActivityTab: PlatformActivityTab = .adjustments
     @Published var selectedPlatformAdjustmentViewMode: PlatformAdjustmentViewMode = .longWin
-    @Published var showsInDock: Bool = (UserDefaults.standard.object(forKey: "qieman.dashboard.showsInDock") as? Bool) ?? true {
+    @Published var showsInDock: Bool = (UserDefaults.standard.object(forKey: AppStorageKey.showsInDock) as? Bool) ?? true {
         didSet {
-            UserDefaults.standard.set(showsInDock, forKey: "qieman.dashboard.showsInDock")
+            UserDefaults.standard.set(showsInDock, forKey: AppStorageKey.showsInDock)
             NSApplication.shared.setActivationPolicy(
                 AppLaunchPresentationPolicy.configuredActivationPolicy(showsInDock: showsInDock)
             )
@@ -113,9 +113,9 @@ final class UpdateState: ObservableObject {
     @Published var isInstallingUpdate = false
     @Published var updateInstallProgress = ""
     @Published var updateDownloadFraction: Double = 0
-    @Published var autoCheckForUpdatesOnLaunch: Bool = (UserDefaults.standard.object(forKey: "qieman.dashboard.update.autoCheckOnLaunch") as? Bool) ?? true {
+    @Published var autoCheckForUpdatesOnLaunch: Bool = (UserDefaults.standard.object(forKey: AppStorageKey.autoCheckUpdateOnLaunch) as? Bool) ?? true {
         didSet {
-            UserDefaults.standard.set(autoCheckForUpdatesOnLaunch, forKey: "qieman.dashboard.update.autoCheckOnLaunch")
+            UserDefaults.standard.set(autoCheckForUpdatesOnLaunch, forKey: AppStorageKey.autoCheckUpdateOnLaunch)
         }
     }
 }

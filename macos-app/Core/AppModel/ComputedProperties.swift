@@ -97,23 +97,12 @@ extension AppModel {
         true
     }
 
-    var liveModeLabel: String {
-        if isRefreshing {
-            return "刷新中"
-        }
-        return "原生直连"
-    }
-
     var currentSnapshotSupportsComments: Bool {
         currentSnapshot?.snapshotType == "posts" && selectedPost?.postId != nil
     }
 
     var activePortfolioHoldingCount: Int {
         userPortfolioHoldings.reduce(0) { $0 + ($1.isArchived ? 0 : 1) }
-    }
-
-    var archivedPortfolioHoldingCount: Int {
-        userPortfolioHoldings.reduce(0) { $0 + ($1.isArchived ? 1 : 0) }
     }
 
     var hasAnyPortfolioRecords: Bool {
@@ -142,13 +131,6 @@ extension AppModel {
 
     var hasInvestmentPlans: Bool {
         !investmentPlans.isEmpty
-    }
-
-    var portfolioMenuBarTitle: String {
-        if let menuBarTickerTitle {
-            return menuBarTickerTitle
-        }
-        return portfolioMenuBarFallbackTitle
     }
 
     var portfolioMenuBarFallbackTitle: String {

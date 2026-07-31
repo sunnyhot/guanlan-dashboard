@@ -509,7 +509,7 @@ extension AppModel {
         watchForm.userName = managerName
         watchForm.pages = "1"
         watchForm.pageSize = "50"
-        return try await nativeClient.fetchSnapshot(form: watchForm, persist: false, outputDirectory: nil)
+        return try await nativeClient.fetchSnapshot(form: watchForm)
     }
 
     func unseenItems<T: Identifiable>(

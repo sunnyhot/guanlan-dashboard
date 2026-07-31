@@ -261,7 +261,7 @@ actor AlphaVantageResponseCache {
     private static func defaultDirectory(fileManager: FileManager) -> URL {
         let base: URL
         if let customPath = UserDefaults.standard.string(
-            forKey: "qieman.dashboard.customDataDirectory"
+            forKey: AppStorageKey.customDataDirectory
         ), !customPath.isEmpty {
             base = URL(fileURLWithPath: customPath, isDirectory: true)
         } else {

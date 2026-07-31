@@ -79,7 +79,7 @@ struct CommandPaletteView: View {
             .init(title: "AI 研判", icon: "sparkles", shortcut: "⌘5") { navigate(.enhancement) },
             .init(title: "设置", icon: "gearshape.fill", shortcut: "⌘6") { navigate(.settings) },
             .init(title: "刷新数据", icon: "arrow.clockwise", shortcut: "⌘R") {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest() }
             },
             .init(title: "生成趋势分析", icon: "wand.and.stars", shortcut: nil) {
                 model.startTrendAnalysis(userInitiated: true)

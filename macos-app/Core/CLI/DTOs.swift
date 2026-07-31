@@ -146,15 +146,8 @@ struct CLIPlatformHoldingsOutput: Codable {
     let prodCode: String
     let assetCount: Int
     let totalUnits: Int
-    /// 历史遗留的空对象占位；保持契约兼容，永远输出 `{}`。
-    let pricingSummary: CLIPricingSummaryPlaceholder
     let count: Int
     let items: [CLIHoldingRow]
-}
-
-/// 永远序列化为空 JSON 对象 `{}`，保留历史契约字段。
-struct CLIPricingSummaryPlaceholder: Codable, Equatable {
-    // 没有字段：Codable 会输出空对象。
 }
 
 // MARK: - Platform timeline
@@ -217,10 +210,6 @@ struct CLIValuationRow: Codable, Equatable {
     let currentValuation: NullDouble
     let currentSource: String
     let currentTime: String
-    /// 历史遗留字段：永远输出 null（`--at-date` 已禁用）。
-    let valuationAtDate: NullDouble
-    /// 历史遗留字段：永远输出空字符串。
-    let valuationAtActualDate: String
     /// nil → JSON `null`（原 `JSONValue`）。
     let changePct: NullDouble
 }
@@ -293,10 +282,6 @@ struct CLISignalActionCount: Codable {
     let count: Int
 }
 
-/// 永远序列化为空 JSON 对象 `{}` 的占位类型，用于 `top_assets` / `timeline` 内元素。
-/// 实际使用时这两个数组始终为空，但保留 `[EmptyJSONObject]` 类型以表达"对象数组"语义。
-struct EmptyJSONObject: Codable, Equatable {}
-
 struct CLISignalExtractOutput: Codable {
     let source: String
     let recordCount: Int
@@ -304,11 +289,7 @@ struct CLISignalExtractOutput: Codable {
     let eventCount: Int
     let counts: [String: Int]
     let topActions: [CLISignalActionCount]
-    /// 历史占位：契约里永远输出 `[]`。
-    let topAssets: [EmptyJSONObject]
     /// 最新一条信号项；若无信号则输出空对象 `{}`（原 `limited.first ?? [:]`）。
     let latest: CLISignalItem
     let items: [CLISignalItem]
-    /// 历史占位：契约里永远输出 `[]`。
-    let timeline: [EmptyJSONObject]
 }

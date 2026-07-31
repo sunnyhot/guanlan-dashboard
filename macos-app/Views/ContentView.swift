@@ -195,7 +195,7 @@ struct ContentView: View {
     private var toolbarActionRow: some View {
         HStack(spacing: 10) {
             Button {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest() }
             } label: {
                 Label("刷新", systemImage: "arrow.clockwise")
                     .font(AppPalette.appFont(.headline, weight: .semibold))
@@ -392,7 +392,7 @@ private struct SidebarSectionButton: View {
             }
             Divider()
             Button("刷新数据") {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest() }
             }
             .keyboardShortcut("r", modifiers: .command)
             if section == .enhancement {
