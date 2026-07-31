@@ -76,6 +76,19 @@ struct SettingsSectionView: View {
                     .foregroundStyle(AppPalette.muted)
                     .focused($focusedField, equals: .prodCode)
             }
+            NavigationLink {
+                IOSManagerWatchSettingsView()
+            } label: {
+                HStack {
+                    Label("关注与巡检", systemImage: "bell.and.waveform")
+                    Spacer()
+                    if model.managerWatchSettings.isEnabled {
+                        Text("已启用").foregroundStyle(IOSDesign.muted)
+                    } else {
+                        Text("未启用").foregroundStyle(AppPalette.marketGain)
+                    }
+                }
+            }
             Button("立即刷新数据") {
                 Task { try? await model.refreshLatest(persist: false) }
             }

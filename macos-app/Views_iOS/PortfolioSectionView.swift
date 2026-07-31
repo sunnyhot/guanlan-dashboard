@@ -11,6 +11,7 @@ struct PortfolioSectionView: View {
     @EnvironmentObject private var model: AppModel
     @State private var detailRow: PersonalAssetAggregateRow?
     @State private var showingAddHolding = false
+    @State private var showingWatchlist = false
 
     var body: some View {
         ScrollView {
@@ -26,6 +27,13 @@ struct PortfolioSectionView: View {
             try? await model.refreshLatest(persist: false)
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingWatchlist = true
+                } label: {
+                    Image(systemName: "star")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showingAddHolding = true
@@ -41,6 +49,9 @@ struct PortfolioSectionView: View {
         }
         .sheet(isPresented: $showingAddHolding) {
             IOSAddHoldingSheet()
+        }
+        .sheet(isPresented: $showingWatchlist) {
+            IOSPersonalWatchlistSheet()
         }
     }
 
