@@ -388,6 +388,13 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBar.contains("@AppStorage(\"menu.bar.popover.top-section\")"))
         XCTAssertTrue(menuBar.contains("Text(\"\\(section.title)在上\")"))
         XCTAssertTrue(menuBar.contains("ForEach(orderedSections)"))
+
+        // 关注行支持右键取消关注（复用 removePersonalWatchlistItem，带确认弹窗）
+        XCTAssertTrue(menuBar.contains("let onDelete: () -> Void"))
+        XCTAssertTrue(menuBar.contains(".contextMenu"))
+        XCTAssertTrue(menuBar.contains("Button(role: .destructive, action: onDelete)"))
+        XCTAssertTrue(menuBar.contains("pendingWatchlistDeletion"))
+        XCTAssertTrue(menuBar.contains("model.removePersonalWatchlistItem(pendingWatchlistDeletion.record.id)"))
     }
 
     func testMenuBarPopoverChecksForUpdatesInsteadOfOpeningTheDataDirectory() throws {

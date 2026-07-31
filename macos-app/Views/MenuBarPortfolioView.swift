@@ -27,6 +27,8 @@ struct MenuBarPortfolioView: View {
     @AppStorage("menu.bar.holdings.sort") private var holdingSortRawValue = MenuBarHoldingSortOption.marketValue.rawValue
     @AppStorage("menu.bar.popover.top-section") private var topSectionRawValue = MenuBarPopoverSection.portfolio.rawValue
 
+    @State private var pendingWatchlistDeletion: PersonalWatchlistQuoteRow?
+
     private var holdingSort: MenuBarHoldingSortOption {
         MenuBarHoldingSortOption(rawValue: holdingSortRawValue) ?? .marketValue
     }
@@ -69,6 +71,21 @@ struct MenuBarPortfolioView: View {
         if !watchlistRefresh.isEmpty { return watchlistRefresh }
 
         return "点击刷新获取最新行情"
+    }
+
+    private var pendingWatchlistDeletionBinding: Binding<Bool> {
+        Binding(
+            get: { pendingWatchlistDeletion != nil },
+            set: { isPresented in
+                if !isPresented { pendingWatchlistDeletion = nil }
+            }
+        )
+    }
+
+    private var pendingWatchlistDeletionMessage: String {
+        guard let pendingWatchlistDeletion else { return "" }
+        let name = pendingWatchlistDeletion.item.normalizedName ?? pendingWatchlistDeletion.item.normalizedCode
+        return "会删除 \(name) 的关注基准与本地每日价格记录，不会影响实际持仓。"
     }
 
     var body: some View {
@@ -327,10 +344,25 @@ struct MenuBarPortfolioView: View {
             } else {
                 LazyVStack(spacing: 6) {
                     ForEach(rows) { row in
-                        MenuBarWatchlistRow(row: row)
+                        MenuBarWatchlistRow(row: row) {
+                            pendingWatchlistDeletion = row
+                        }
                     }
                 }
             }
+        }
+        .alert("取消关注？", isPresented: pendingWatchlistDeletionBinding) {
+            Button("取消关注", role: .destructive) {
+                if let pendingWatchlistDeletion {
+                    model.removePersonalWatchlistItem(pendingWatchlistDeletion.record.id)
+                }
+                pendingWatchlistDeletion = nil
+            }
+            Button("保留", role: .cancel) {
+                pendingWatchlistDeletion = nil
+            }
+        } message: {
+            Text(pendingWatchlistDeletionMessage)
         }
     }
 }
@@ -531,6 +563,7 @@ private struct MenuBarHoldingRow: View {
 
 private struct MenuBarWatchlistRow: View {
     let row: PersonalWatchlistQuoteRow
+    let onDelete: () -> Void
 
     private var categoryTint: Color {
         switch row.category {
@@ -625,6 +658,11 @@ private struct MenuBarWatchlistRow: View {
         .accessibilityLabel(
             "\(row.displayName)，最新价 \(currentPriceText)，今日 \(percentOptional(row.dailyChangePct))，关注以来 \(percentOptional(row.changeSinceFollowPct))"
         )
+        .contextMenu {
+            Button(role: .destructive, action: onDelete) {
+                Label("取消关注", systemImage: "star.slash")
+            }
+        }
     }
 }
 
