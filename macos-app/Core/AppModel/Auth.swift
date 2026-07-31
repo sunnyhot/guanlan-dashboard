@@ -64,9 +64,12 @@ extension AppModel {
     }
 
     /// 终止整个应用进程。提供给菜单栏弹框与设置面板的「退出应用」入口复用，
-    /// 避免在多个 View 里直接耦合 NSApplication。
+    /// 避免在多个 View 里直接耦合 NSApplication。iOS 不提供主动退出（无对应 API，
+    /// 且 Apple 审核禁止应用自行退出），UI 上应隐藏「退出」入口。
     func quitApplication() {
+        #if os(macOS)
         NSApplication.shared.terminate(nil)
+        #endif
     }
 
     func refreshDataForSectionIfNeeded(_ section: AppSection) {

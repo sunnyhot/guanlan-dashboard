@@ -8,7 +8,11 @@ let package = Package(
         .executableTarget(
             name: "QiemanDashboard",
             path: ".",
-            exclude: ["Package.swift", "Tests", "CLI"]
+            // SPM serves the macOS build only. Views_iOS/ holds the iOS target's
+            // UI (managed by the Xcode project), and QiemanDashboardApp_iOS.swift
+            // is whole-file `#if os(iOS)` so it compiles to nothing here. We still
+            // exclude Views_iOS/ to avoid same-filename source collisions.
+            exclude: ["Package.swift", "Tests", "CLI", "Views_iOS"]
         ),
         .testTarget(
             name: "QiemanDashboardTests",

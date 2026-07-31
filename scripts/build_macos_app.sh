@@ -25,7 +25,7 @@ SWIFT_SOURCES=()
 
 while IFS= read -r file; do
   SWIFT_SOURCES+=("$file")
-done < <(find "$ROOT_DIR/macos-app" -name '*.swift' ! -name 'Package.swift' ! -path "$ROOT_DIR/macos-app/Tests/*" ! -path "$ROOT_DIR/macos-app/CLI/*" ! -path "$ROOT_DIR/macos-app/.build/*" | sort)
+done < <(find "$ROOT_DIR/macos-app" -name '*.swift' ! -name 'Package.swift' ! -path "$ROOT_DIR/macos-app/Tests/*" ! -path "$ROOT_DIR/macos-app/CLI/*" ! -path "$ROOT_DIR/macos-app/Views_iOS/*" ! -path "$ROOT_DIR/macos-app/.build/*" | sort)
 
 echo "[1/8] 清理旧产物"
 rm -rf "$APP_DIR"
