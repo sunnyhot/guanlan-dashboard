@@ -32,9 +32,6 @@ struct SettingsSectionView: View {
                 Button("完成") { focusedField = nil }
             }
         }
-        .refreshable {
-            try? await model.refreshLatest(persist: false)
-        }
     }
 
     // MARK: - 外观
