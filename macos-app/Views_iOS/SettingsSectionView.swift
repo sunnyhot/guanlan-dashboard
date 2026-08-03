@@ -156,17 +156,6 @@ struct SettingsSectionView: View {
                 Spacer()
                 Text(appVersion).foregroundStyle(AppPalette.muted)
             }
-            HStack {
-                Text("平台")
-                Spacer()
-                Text("iOS").foregroundStyle(AppPalette.muted)
-            }
-            // iOS 不支持应用内自更新;说明文字告知用户通过 App Store 更新
-            HStack {
-                Text("更新方式")
-                Spacer()
-                Text("App Store").foregroundStyle(AppPalette.muted)
-            }
         }
     }
 
