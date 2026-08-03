@@ -73,13 +73,33 @@ function checkAuth(req, group) {
 // 路由处理
 // ============================================================
 
-// POST /v1/groups — 注册同步组
+// POST /v1/groups — 注册新同步组 或 加入已有同步组
 async function handleRegister(req, res) {
   if (groups.size >= MAX_GROUPS) {
     return sendJSON(res, 503, { error: 'server_full', message: '服务端同步组数量已满' });
   }
-  const groupId = genId('g');
+  let body = {};
+  try {
+    const raw = await readBody(req);
+    if (raw) body = JSON.parse(raw);
+  } catch (e) {
+    return sendJSON(res, 400, { error: 'bad_request' });
+  }
+
   const deviceId = genId('d');
+
+  // 加入已有同步组:传 existingGroupId + accessToken
+  if (body.existingGroupId && body.accessToken) {
+    const group = groups.get(body.existingGroupId);
+    if (!group) return sendJSON(res, 404, { error: 'group_not_found', message: '同步组不存在' });
+    if (group.accessToken !== body.accessToken) {
+      return sendJSON(res, 401, { error: 'unauthorized', message: 'accessToken 不正确' });
+    }
+    return sendJSON(res, 200, { groupId: body.existingGroupId, deviceId, accessToken: body.accessToken });
+  }
+
+  // 注册新同步组
+  const groupId = genId('g');
   const accessToken = genId('tok');
   groups.set(groupId, {
     accessToken,

@@ -11,8 +11,12 @@ struct MacSyncConfigPanel: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isRegistering = false
+    @State private var isJoining = false
     @State private var isUploading = false
     @State private var isDownloading = false
+    @State private var joinGroupId = ""
+    @State private var joinToken = ""
+    @State private var joinPassword = ""
     @State private var downloadPreview: SyncImportPreview?
     @State private var pendingPayload: SyncPayload?
     @State private var errorMessage = ""
@@ -30,6 +34,7 @@ struct MacSyncConfigPanel: View {
                 serverCard
                 if SyncClient.shared.groupId == nil {
                     registerCard
+                    joinCard
                 } else {
                     statusCard
                     actionsCard
@@ -98,6 +103,42 @@ struct MacSyncConfigPanel: View {
                 .buttonStyle(.borderedProminent)
                 .tint(AppPalette.brand)
                 .disabled(isRegistering || password.isEmpty || password != confirmPassword)
+            }
+        }
+    }
+
+    // MARK: - 加入已有同步组
+
+    private var joinCard: some View {
+        SettingsCardGroup(title: "加入同步组", subtitle: "从其他设备加入", icon: "person.badge.plus", tint: AppPalette.info) {
+            SettingsControlRow(title: "同步组 ID", detail: "第一台设备的 groupId", icon: "number", tint: AppPalette.info) {
+                TextField("g_xxxxx", text: $joinGroupId)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+            }
+            SettingsDivider()
+            SettingsControlRow(title: "访问令牌", detail: "第一台设备的 accessToken", icon: "key", tint: AppPalette.info) {
+                SecureField("tok_xxxxx", text: $joinToken)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+            }
+            SettingsDivider()
+            SettingsControlRow(title: "同步密码", detail: "与第一台设备相同的密码", icon: "lock", tint: AppPalette.info) {
+                SecureField("密码", text: $joinPassword)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+            }
+            SettingsDivider()
+            SettingsActionRow {
+                Button {
+                    Task { await joinGroup() }
+                } label: {
+                    if isJoining { HStack { ProgressView(); Text("加入中…") } }
+                    else { Text("加入同步组") }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppPalette.info)
+                .disabled(isJoining || joinGroupId.isEmpty || joinToken.isEmpty || joinPassword.isEmpty)
             }
         }
     }
@@ -180,10 +221,21 @@ struct MacSyncConfigPanel: View {
         isRegistering = true
         do {
             try await SyncClient.shared.register(password: password)
-            noticeMessage = "同步组注册成功,可以开始同步了。"
+            noticeMessage = "同步组注册成功。请上传数据,然后在其他设备用下方 groupId/token 加入。"
         } catch { errorMessage = (error as? SyncError)?.errorDescription ?? error.localizedDescription }
         isRegistering = false
         password = ""; confirmPassword = ""
+    }
+
+    private func joinGroup() async {
+        clearMessages()
+        isJoining = true
+        do {
+            try await SyncClient.shared.joinGroup(existingGroupId: joinGroupId, accessToken: joinToken, password: joinPassword)
+            noticeMessage = "已加入同步组,可以下载云端数据了。"
+        } catch { errorMessage = (error as? SyncError)?.errorDescription ?? error.localizedDescription }
+        isJoining = false
+        joinGroupId = ""; joinToken = ""; joinPassword = ""
     }
 
     private func upload() async {
