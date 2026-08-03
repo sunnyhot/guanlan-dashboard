@@ -144,9 +144,15 @@ struct EnhancementSectionView: View {
     }
 
     private func handleTrendAction(_ action: TrendDashboardAction) {
-        // 主要操作(如生成/重新生成)直接触发,其他跳转
-        Task {
-            await model.startTrendAnalysis(userInitiated: true)
+        guard !action.isDisabled else { return }
+        switch action.kind {
+        case .configure:
+            // 未配置模型 → 跳设置页配置(对齐 macOS 逻辑)
+            model.selectedSection = .settings
+        case .generate, .refresh:
+            Task { await model.startTrendAnalysis(userInitiated: true) }
+        case .openReport, .wait:
+            break
         }
     }
 }

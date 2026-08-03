@@ -270,8 +270,15 @@ struct OverviewSectionView: View {
     }
 
     private func handleTrendAction(_ action: TrendDashboardAction) {
-        // 趋势操作主要在 AI 研判板块;总览页点击跳转过去
-        model.selectedSection = .enhancement
+        guard !action.isDisabled else { return }
+        switch action.kind {
+        case .configure:
+            model.selectedSection = .settings
+        case .generate, .refresh:
+            model.selectedSection = .enhancement
+        case .openReport, .wait:
+            model.selectedSection = .enhancement
+        }
     }
 
     // MARK: - 颜色与格式化辅助

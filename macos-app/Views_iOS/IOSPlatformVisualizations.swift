@@ -155,14 +155,13 @@ struct IOSPlatformMonthlyChart: View {
             GeometryReader { geo in
                 Rectangle().fill(.clear).contentShape(Rectangle())
                     .onTapGesture { location in
-                        // 用 plotArea 而非 plotFrame(后者在某些布局下为 nil)
-                        let plotOrigin = geo[proxy.plotAreaFrame].origin
-                        let x = location.x - plotOrigin.x
-                        if let raw = proxy.value(atX: x, as: String.self),
+                        // plotAreaFrame 给出绘图区在 geo 中的 frame(含 Y 轴偏移)
+                        let plotFrame = geo[proxy.plotAreaFrame]
+                        let xInPlot = location.x - plotFrame.origin.x
+                        guard xInPlot >= 0, xInPlot <= plotFrame.width else { return }
+                        if let raw = proxy.value(atX: xInPlot, as: String.self),
                            let m = months.first(where: { monthLabel($0.month) == raw }) {
                             selectedMonth = (selectedMonth?.month == m.month) ? nil : m
-                        } else {
-                            selectedMonth = nil
                         }
                     }
             }
