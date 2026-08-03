@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - macOS 数据同步配置面板
 //
-// UI 完全为 macOS 原生写,不复用 iOS 版。复用 Core/Sync 的纯逻辑。
+// 使用 SettingsPanel + SettingsCardGroup,与其他设置面板风格一致。
 
 struct MacSyncConfigPanel: View {
     @EnvironmentObject private var model: AppModel
@@ -21,29 +21,22 @@ struct MacSyncConfigPanel: View {
     @State private var showUndoConfirm = false
 
     private let deviceName: String = {
-        #if os(macOS)
-        return Host.current().localizedName ?? "Mac"
-        #else
-        return "Mac"
-        #endif
+        Host.current().localizedName ?? "Mac"
     }()
 
     var body: some View {
-        Form {
-            Section("同步服务") {
-                TextField("服务地址 (https://...)", text: $serverURL)
-                    .onChange(of: serverURL) { _, v in SyncClient.shared.serverURL = v }
-            }
-
-            if SyncClient.shared.groupId == nil {
-                registerSection
-            } else {
-                statusSection
-                actionsSection
-                undoSection
+        SettingsPanel(title: "数据同步", subtitle: "跨设备同步持仓、配置与关注列表", icon: "icloud.and.arrow.up.and.down") {
+            VStack(alignment: .leading, spacing: AppPalette.spaceXL) {
+                serverCard
+                if SyncClient.shared.groupId == nil {
+                    registerCard
+                } else {
+                    statusCard
+                    actionsCard
+                    undoCard
+                }
             }
         }
-        .formStyle(.grouped)
         .onAppear { serverURL = SyncClient.shared.serverURL }
         .confirmationDialog("确认下载并覆盖本机数据?", isPresented: $showDownloadConfirm, titleVisibility: .visible) {
             Button("下载并覆盖", role: .destructive) { applyDownload() }
@@ -60,72 +53,122 @@ struct MacSyncConfigPanel: View {
         } message: { Text("将恢复到上次下载前的本地数据。") }
     }
 
+    // MARK: - 服务地址
+
+    private var serverCard: some View {
+        SettingsCardGroup(title: "同步服务", subtitle: "服务端地址", icon: "server.rack", tint: AppPalette.brand) {
+            SettingsControlRow(title: "地址", detail: "同步服务器的 URL", icon: "link", tint: AppPalette.brand) {
+                TextField("https://...", text: $serverURL)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 260)
+                    .onChange(of: serverURL) { _, v in SyncClient.shared.serverURL = v }
+            }
+            SettingsDivider()
+            SettingsActionRow {
+                Text(noticeMessage)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.positive)
+            }
+        }
+    }
+
     // MARK: - 注册
 
-    private var registerSection: some View {
-        Section {
-            SecureField("设置同步密码", text: $password)
-            SecureField("再次确认密码", text: $confirmPassword)
-            Button {
-                Task { await register() }
-            } label: {
-                if isRegistering { HStack { ProgressView(); Text("注册中…") } }
-                else { Text("注册同步组") }
+    private var registerCard: some View {
+        SettingsCardGroup(title: "注册", subtitle: "创建同步组", icon: "person.badge.plus", tint: AppPalette.brand) {
+            SettingsControlRow(title: "密码", detail: "用于加密同步数据,丢失无法恢复", icon: "lock", tint: AppPalette.brand) {
+                SecureField("同步密码", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
             }
-            .disabled(isRegistering || password.isEmpty || password != confirmPassword)
-        } header: {
-            Text("注册")
-        } footer: {
-            Text("密码用于加密同步数据,丢失后无法恢复。密码不会上传服务端。")
+            SettingsDivider()
+            SettingsControlRow(title: "确认", detail: "再次输入密码", icon: "lock.fill", tint: AppPalette.brand) {
+                SecureField("确认密码", text: $confirmPassword)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+            }
+            SettingsDivider()
+            SettingsActionRow {
+                Button {
+                    Task { await register() }
+                } label: {
+                    if isRegistering { HStack { ProgressView(); Text("注册中…") } }
+                    else { Text("注册同步组") }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppPalette.brand)
+                .disabled(isRegistering || password.isEmpty || password != confirmPassword)
+            }
         }
     }
 
     // MARK: - 状态
 
-    private var statusSection: some View {
-        Section("同步状态") {
+    private var statusCard: some View {
+        SettingsCardGroup(title: "同步状态", subtitle: "当前同步信息", icon: "checkmark.seal", tint: AppPalette.positive) {
             if let gid = SyncClient.shared.groupId {
-                LabeledContent("同步组") { Text(gid).font(.caption.monospaced()).lineLimit(1) }
+                SettingsRow(title: "同步组", value: gid, detail: "组标识", icon: "number", tint: AppPalette.muted)
+                SettingsDivider()
             }
             if let time = SyncClient.shared.lastSyncTime {
-                LabeledContent("上次同步") {
-                    Text(time.formatted(date: .abbreviated, time: .shortened)).foregroundStyle(.secondary)
-                }
+                SettingsRow(title: "上次同步", value: time.formatted(date: .abbreviated, time: .shortened), detail: "最近一次同步", icon: "clock", tint: AppPalette.muted)
+                SettingsDivider()
             }
-            LabeledContent("版本") { Text("rev \(SyncClient.shared.lastKnownRevision)").foregroundStyle(.secondary) }
+            SettingsRow(title: "版本", value: "rev \(SyncClient.shared.lastKnownRevision)", detail: "服务端版本号", icon: "tag", tint: AppPalette.muted)
         }
     }
 
     // MARK: - 操作
 
-    private var actionsSection: some View {
-        Section {
-            Button {
-                Task { await upload() }
-            } label: {
-                if isUploading { HStack { ProgressView(); Text("上传中…") } }
-                else { Label("上传并覆盖云端", systemImage: "icloud.and.arrow.up") }
-            }
-            .disabled(isUploading || isDownloading)
+    private var actionsCard: some View {
+        SettingsCardGroup(title: "数据同步", subtitle: "上传或下载数据", icon: "arrow.up.arrow.down.circle", tint: AppPalette.brand) {
+            SettingsActionRow {
+                Button {
+                    Task { await upload() }
+                } label: {
+                    if isUploading { HStack { ProgressView(); Text("上传中…") } }
+                    else { Label("上传并覆盖云端", systemImage: "icloud.and.arrow.up") }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(AppPalette.brand)
+                .disabled(isUploading || isDownloading)
 
-            Button {
-                Task { await download() }
-            } label: {
-                if isDownloading { HStack { ProgressView(); Text("下载中…") } }
-                else { Label("下载并覆盖本机", systemImage: "icloud.and.arrow.down") }
+                Button {
+                    Task { await download() }
+                } label: {
+                    if isDownloading { HStack { ProgressView(); Text("下载中…") } }
+                    else { Label("下载并覆盖本机", systemImage: "icloud.and.arrow.down") }
+                }
+                .buttonStyle(.bordered)
+                .tint(AppPalette.brand)
+                .disabled(isUploading || isDownloading)
             }
-            .disabled(isUploading || isDownloading)
-        } header: {
-            Text("数据同步")
-        } footer: {
-            if !noticeMessage.isEmpty { Text(noticeMessage).foregroundStyle(.green) }
+            if !noticeMessage.isEmpty {
+                SettingsDivider()
+                SettingsActionRow {
+                    Text(noticeMessage)
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.positive)
+                }
+            }
         }
     }
 
-    private var undoSection: some View {
-        Section {
-            Button("撤销上次下载", role: .destructive) { showUndoConfirm = true }
-            Button("重置同步配置", role: .destructive) { resetConfig() }
+    private var undoCard: some View {
+        SettingsCardGroup(title: "恢复", subtitle: "撤销上次下载", icon: "arrow.uturn.backward", tint: AppPalette.warning) {
+            SettingsActionRow {
+                Button("撤销上次下载", role: .destructive) {
+                    showUndoConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .tint(AppPalette.warning)
+
+                Button("重置同步配置", role: .destructive) {
+                    resetConfig()
+                }
+                .buttonStyle(.bordered)
+                .tint(AppPalette.danger)
+            }
         }
     }
 
@@ -188,6 +231,7 @@ struct MacSyncConfigPanel: View {
         SyncClient.shared.groupId = nil
         SyncClient.shared.syncPassword = nil
         KeychainHelper.delete(account: KeychainHelper.Account.syncAccessToken)
+        UserDefaults.standard.removeObject(forKey: "qieman.sync.accessToken")
         UserDefaults.standard.removeObject(forKey: "qieman.sync.deviceId")
         UserDefaults.standard.removeObject(forKey: "qieman.sync.lastRevision")
         noticeMessage = "已重置同步配置,请重新注册。"
