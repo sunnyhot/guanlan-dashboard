@@ -60,6 +60,7 @@
 		1D72BFB910BE6117AA3D20DC /* PlatformFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2957A5B1AFB717AC01DDCC47 /* PlatformFilters.swift */; };
 		1D9339AE5884A4F5548741C2 /* FundLookThrough.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43D4DF9DDCE531523194A919 /* FundLookThrough.swift */; };
 		1DAC96AE71B2A2C832862395 /* PlatformHoldingsPieChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A66DEADC98B28CA63538FD8 /* PlatformHoldingsPieChart.swift */; };
+		1E5FDA97B38630DF1F63FC1D /* SyncArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB40CD4B04C6B037855667ED /* SyncArchive.swift */; };
 		1EA7BE83383ED44D91FBDFD0 /* PersonalAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB945063A505D3C9BB0F80EA /* PersonalAsset.swift */; };
 		1F79BF4678C49DED60F12291 /* EnhancementTrackingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B32A9296BE974691BBCF0AB /* EnhancementTrackingPanel.swift */; };
 		1F923BEF36AC704E2BB65C0F /* MenuBarTickerEntriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF6649E2C7E51D642E61DCF /* MenuBarTickerEntriesTests.swift */; };
@@ -94,6 +95,7 @@
 		33341316618F79D1EEB84C58 /* TrendReportModuleTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF1657C8AB4E6B64CFA7F9B /* TrendReportModuleTools.swift */; };
 		33C5C787798E9D65DA730D62 /* SECOfficialResearchToolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA7C40A85E84C73799CEA2B /* SECOfficialResearchToolTests.swift */; };
 		349C2C35504FCACCA8F7209C /* ProfitAttribution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A7DFDF99FBAACFC4D8B2DB3 /* ProfitAttribution.swift */; };
+		350E29A13A28F7409F4D72E1 /* SyncArchiveActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BB7AF02F4B65547320F095 /* SyncArchiveActions.swift */; };
 		35345465A96A1451CE7164ED /* PlatformMonthlyOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D6C9699C22EE6D0306C6BD5 /* PlatformMonthlyOverview.swift */; };
 		35AA52D0585958B5D2921D9A /* Contract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87506C84FFB208D52F743BA0 /* Contract.swift */; };
 		373E3F382487F6DCA7FEB521 /* TrendTrackingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD264DB06C56596F8D3EA39 /* TrendTrackingStore.swift */; };
@@ -252,6 +254,7 @@
 		9C36219054E8CCAF474A3D30 /* PersonalAssetSorting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AC5A0B78A009A43AB933067 /* PersonalAssetSorting.swift */; };
 		9E33C749DF076FDFD87A4A2D /* MenuBarTickerKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E9E0B640B6AF6B7871D2AB3 /* MenuBarTickerKind.swift */; };
 		9FE427E6DFD584E510EEC054 /* SubmitTrendReportTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F155E854E7D007F44667DD /* SubmitTrendReportTool.swift */; };
+		A002CF4F2816602B481BF0C1 /* SyncArchiveActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BB7AF02F4B65547320F095 /* SyncArchiveActions.swift */; };
 		A06323771C5969FA99F5C3F7 /* AppUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E1919467E10BB273CE758E /* AppUpdateChecker.swift */; };
 		A06D67A0ADB1334749C3E886 /* PersonalWatchlistCodeResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9355668E36675CC5A70D374A /* PersonalWatchlistCodeResolutionTests.swift */; };
 		A0865FD8E58F611DFEDBA8FF /* SnapshotPayloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8411DDB8E68F4CC63AB4FBB5 /* SnapshotPayloads.swift */; };
@@ -356,6 +359,7 @@
 		DFF49190D79BA237335AC4DD /* TrendAnalysisModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B138D8B20907015BF12685A4 /* TrendAnalysisModels.swift */; };
 		E033170DC2BBFC0B2D4AB320 /* TrendResearchHarnessState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5180864A6348145FD631590 /* TrendResearchHarnessState.swift */; };
 		E0967B11631B55D70DEF94F4 /* PlatformFilterBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAF65ABCE614CC6A0B8BECF9 /* PlatformFilterBar.swift */; };
+		E0E874A0F6D18B1FA8FFF7FE /* SyncArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB40CD4B04C6B037855667ED /* SyncArchive.swift */; };
 		E18369BCFE24272EFA49493F /* TrendCredibilityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 506CB9186D27649CE08EB81F /* TrendCredibilityPolicyTests.swift */; };
 		E1D894E95BF7F3DFCC24CF00 /* EnhancementCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7A15E883CF8566311B6C41 /* EnhancementCenter.swift */; };
 		E24C91EAF1B3E19104C5A5C7 /* PersonalPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CCFAC8978241A670F34F94 /* PersonalPlan.swift */; };
@@ -546,6 +550,7 @@
 		61242E6F51033F513DFAE40D /* AppLaunchPresentationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLaunchPresentationPolicyTests.swift; sourceTree = "<group>"; };
 		63AB5C9CF03DF4DF5AD8361F /* UserPortfolioDailyChangeAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPortfolioDailyChangeAvailabilityTests.swift; sourceTree = "<group>"; };
 		643155FF6FB41C35132DF5D4 /* PlatformPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformPayloads.swift; sourceTree = "<group>"; };
+		66BB7AF02F4B65547320F095 /* SyncArchiveActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncArchiveActions.swift; sourceTree = "<group>"; };
 		691E60DE782B633BAE37A94B /* SettingsAppPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsAppPanel.swift; sourceTree = "<group>"; };
 		69D2E1E01449F24B0D4E362B /* TrendEvidenceDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendEvidenceDetailSheet.swift; sourceTree = "<group>"; };
 		6AC6C611B96990046748ABFC /* QiemanCommandLineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanCommandLineTests.swift; sourceTree = "<group>"; };
@@ -690,6 +695,7 @@
 		EA730B3039CDD30F85940FB8 /* MacAppUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppUpdateService.swift; sourceTree = "<group>"; };
 		EA936F3F8D0E847D189B030C /* MainWindowZoomPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowZoomPolicy.swift; sourceTree = "<group>"; };
 		EAB65261E268BAD7796224FE /* ForumSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForumSectionView.swift; sourceTree = "<group>"; };
+		EB40CD4B04C6B037855667ED /* SyncArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncArchive.swift; sourceTree = "<group>"; };
 		EB433BB62C19ABC69C2B9A71 /* IOSForumPostDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSForumPostDetailSheet.swift; sourceTree = "<group>"; };
 		EC9C2C4E61BDC3AFBEDF210F /* NativePlatformDTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlatformDTOs.swift; sourceTree = "<group>"; };
 		ECA671E22B82F4E28AF9902D /* TavilyWebSearchTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TavilyWebSearchTool.swift; sourceTree = "<group>"; };
@@ -773,6 +779,15 @@
 				D4AC1F7CAEFEB91B141BC945 /* Validation.swift */,
 			);
 			path = AppModel;
+			sourceTree = "<group>";
+		};
+		387976450000AEF4BE5048DA /* Sync */ = {
+			isa = PBXGroup;
+			children = (
+				EB40CD4B04C6B037855667ED /* SyncArchive.swift */,
+				66BB7AF02F4B65547320F095 /* SyncArchiveActions.swift */,
+			);
+			path = Sync;
 			sourceTree = "<group>";
 		};
 		4307532F024C38B1A771BCDF /* Alfa */ = {
@@ -880,6 +895,7 @@
 				504EC6E9D463C4C18D64BF54 /* MenuBarTicker */,
 				54D131A3CFC22F6E51214CEE /* Models */,
 				D0C454D690B137897B303400 /* Platform */,
+				387976450000AEF4BE5048DA /* Sync */,
 				8326D6C2F5FB9A660CF4B44F /* Trend */,
 				7CED4962A9C4D08A6516C999 /* TrendResearch */,
 			);
@@ -1439,6 +1455,8 @@
 				0F5D8876B4B135105A3BDCE9 /* StrategyRadar.swift in Sources */,
 				A17CC6307A35833D3E964A8F /* SubModels.swift in Sources */,
 				9FE427E6DFD584E510EEC054 /* SubmitTrendReportTool.swift in Sources */,
+				E0E874A0F6D18B1FA8FFF7FE /* SyncArchive.swift in Sources */,
+				A002CF4F2816602B481BF0C1 /* SyncArchiveActions.swift in Sources */,
 				3C4B26BAB7628E2C75D76586 /* TavilySearchClient.swift in Sources */,
 				7B06FD25D2F82E5981A02C1E /* TavilyWebSearchTool.swift in Sources */,
 				4ABB0C54F9BF5384D7B27D15 /* TodayBrief.swift in Sources */,
@@ -1632,6 +1650,8 @@
 				E32D20FED029B441C1CC7A4E /* StrategyRadarPanel.swift in Sources */,
 				10D30F697A88EC7C1690001C /* SubModels.swift in Sources */,
 				90C5E25094E860D1EE188853 /* SubmitTrendReportTool.swift in Sources */,
+				1E5FDA97B38630DF1F63FC1D /* SyncArchive.swift in Sources */,
+				350E29A13A28F7409F4D72E1 /* SyncArchiveActions.swift in Sources */,
 				BA34D49B1586EF757F5BD0AA /* TavilySearchClient.swift in Sources */,
 				AB27BB5A8C9647420A40DDA6 /* TavilyWebSearchTool.swift in Sources */,
 				CC0073B8F9DD5DD2F5386D88 /* TodayBrief.swift in Sources */,
