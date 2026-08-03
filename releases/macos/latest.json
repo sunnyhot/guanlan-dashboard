@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.8/QiemanDashboard-3.15.8.zip",
-    "name" : "QiemanDashboard-3.15.8.zip",
-    "sha256" : "f17f94512877b91bca4b07e9a35ad2b6ee3e6cc5ca502aea0e02b46d8ffaa07e",
-    "size" : 6997701
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.9/QiemanDashboard-3.15.9.zip",
+    "name" : "QiemanDashboard-3.15.9.zip",
+    "sha256" : "6517a2161fb318f504681f7e16d230f4aeff951c7a32136d148c3142f4d72399",
+    "size" : 7002042
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.8/QiemanDashboard-3.15.8.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.9/QiemanDashboard-3.15.9.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.8.zip",
-      "size" : 6997701
+      "name" : "QiemanDashboard-3.15.9.zip",
+      "size" : 7002042
     }
   ],
-  "body" : "release: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理\nrelease: v3.15.7 macOS 数据同步面板风格统一 + 设置同步配置重置 + token fallback",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.8",
-  "name" : "QiemanDashboard v3.15.8",
-  "notes" : "release: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理\nrelease: v3.15.7 macOS 数据同步面板风格统一 + 设置同步配置重置 + token fallback",
+  "body" : "release: v3.15.9 二维码扫码加入同步组\nrelease: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.9",
+  "name" : "QiemanDashboard v3.15.9",
+  "notes" : "release: v3.15.9 二维码扫码加入同步组\nrelease: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理",
   "published_at" : "",
-  "sha256" : "f17f94512877b91bca4b07e9a35ad2b6ee3e6cc5ca502aea0e02b46d8ffaa07e",
-  "tag" : "v3.15.8",
-  "tag_name" : "v3.15.8",
-  "version" : "3.15.8"
+  "sha256" : "6517a2161fb318f504681f7e16d230f4aeff951c7a32136d148c3142f4d72399",
+  "tag" : "v3.15.9",
+  "tag_name" : "v3.15.9",
+  "version" : "3.15.9"
 }
