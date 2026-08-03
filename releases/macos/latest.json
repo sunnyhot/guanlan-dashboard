@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.9/QiemanDashboard-3.15.9.zip",
-    "name" : "QiemanDashboard-3.15.9.zip",
-    "sha256" : "6517a2161fb318f504681f7e16d230f4aeff951c7a32136d148c3142f4d72399",
-    "size" : 7002042
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.0/QiemanDashboard-3.16.0.zip",
+    "name" : "QiemanDashboard-3.16.0.zip",
+    "sha256" : "6de4893e72fb0166c6c62a08e66e6fd1ea16406493a0dfea81f9640635f787dd",
+    "size" : 7002896
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.9/QiemanDashboard-3.15.9.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.0/QiemanDashboard-3.16.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.9.zip",
-      "size" : 7002042
+      "name" : "QiemanDashboard-3.16.0.zip",
+      "size" : 7002896
     }
   ],
-  "body" : "release: v3.15.9 二维码扫码加入同步组\nrelease: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.9",
-  "name" : "QiemanDashboard v3.15.9",
-  "notes" : "release: v3.15.9 二维码扫码加入同步组\nrelease: v3.15.8 加入同步组功能 + 服务端多设备支持\niOS refreshLatest 签名更新 + entitlements 引用清理",
+  "body" : "release: v3.16.0 API Key 同步修复(Keychain + UserDefaults 双写)\niOS Info-iOS.plist 加 ATS 例外(允许 HTTP 同步服务)\nrelease: v3.15.9 二维码扫码加入同步组",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.0",
+  "name" : "QiemanDashboard v3.16.0",
+  "notes" : "release: v3.16.0 API Key 同步修复(Keychain + UserDefaults 双写)\niOS Info-iOS.plist 加 ATS 例外(允许 HTTP 同步服务)\nrelease: v3.15.9 二维码扫码加入同步组",
   "published_at" : "",
-  "sha256" : "6517a2161fb318f504681f7e16d230f4aeff951c7a32136d148c3142f4d72399",
-  "tag" : "v3.15.9",
-  "tag_name" : "v3.15.9",
-  "version" : "3.15.9"
+  "sha256" : "6de4893e72fb0166c6c62a08e66e6fd1ea16406493a0dfea81f9640635f787dd",
+  "tag" : "v3.16.0",
+  "tag_name" : "v3.16.0",
+  "version" : "3.16.0"
 }
