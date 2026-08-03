@@ -85,6 +85,7 @@
 		2C4C957C666D3C6A3516C988 /* PersonalWatchlistStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD83914B3D431764BE2048D /* PersonalWatchlistStore.swift */; };
 		2C97F8EF460C2B11A3F12FAA /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1FC2A93339B49039BEF4CB /* OnboardingView.swift */; };
 		2CA9DD69D6D634CE913DCE40 /* post-snapshot.json in Resources */ = {isa = PBXBuildFile; fileRef = BA288C396BE92D8DB1E1DD91 /* post-snapshot.json */; };
+		2DF9E3AB24D9DE0B1D8F1144 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */; };
 		2E6A13345B961EC4DEE15847 /* PersonalTrade.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4165D229148EEC4528E25B5B /* PersonalTrade.swift */; };
 		2EED13AE3AEECA30FEA3ABE9 /* EnhancementSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD9F9506EEEE00B803DF564 /* EnhancementSectionView.swift */; };
 		306351695D2BB87BEE18F867 /* PersonalAssetAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 366867A4D7907080E3C70D7E /* PersonalAssetAutomation.swift */; };
@@ -176,6 +177,7 @@
 		69E96D15DAADE089A70A8934 /* QiemanCommandLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 064F99B7EB864BCAD7882EAD /* QiemanCommandLine.swift */; };
 		6AA684CB467733F9C891433A /* IOSPlatformActionDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0407FE1ECE1D79D23D09480 /* IOSPlatformActionDetailSheet.swift */; };
 		6AD12B845BED6F18EE5475FE /* PortfolioSnapshotInsightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D3FD87E3023AE453F84F608 /* PortfolioSnapshotInsightTests.swift */; };
+		6BEDD43769C4DEB7BCD7D02B /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */; };
 		6C1B42494A9D5F584738A6B2 /* PlatformActionAssetBuckets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30DE10375D92C5C9C98A4742 /* PlatformActionAssetBuckets.swift */; };
 		6D19D394BEE58A22BE16C979 /* TrendAnalysisValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA49651A9B6DBF98A13E3E45 /* TrendAnalysisValidator.swift */; };
 		6D28FEA623AA95594F2AC9FF /* TrendDashboardSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88A97B71995E10C93BB70F97 /* TrendDashboardSummary.swift */; };
@@ -614,6 +616,7 @@
 		A611ECD5B10B0A1E06A9383A /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		A674FFA4D1049BB31FA5C8A5 /* SettingsWatchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWatchPanel.swift; sourceTree = "<group>"; };
 		A716ED78F4AE53696E128B89 /* PersonalWatchlistAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistAlertTests.swift; sourceTree = "<group>"; };
+		A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		AACB723BAA59C85709DD4813 /* NextHourGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextHourGuidanceTests.swift; sourceTree = "<group>"; };
 		AAF6649E2C7E51D642E61DCF /* MenuBarTickerEntriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarTickerEntriesTests.swift; sourceTree = "<group>"; };
 		AB945063A505D3C9BB0F80EA /* PersonalAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAsset.swift; sourceTree = "<group>"; };
@@ -1009,6 +1012,7 @@
 		87F93868168FC12D92C19A76 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */,
 				2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */,
 				DD9D295F50B3A85EA8C8289A /* ValueFormatting.swift */,
 			);
@@ -1359,6 +1363,7 @@
 				AE1D18180B7F995248C52FE7 /* Import.swift in Sources */,
 				0DC45F72310C6FBD76D2BE42 /* InvestmentPlan.swift in Sources */,
 				0A1E16D35EA5332696622E6E /* InvestmentPlansStore.swift in Sources */,
+				2DF9E3AB24D9DE0B1D8F1144 /* KeychainHelper.swift in Sources */,
 				4865548FF18A03D74D023AFA /* LaunchAtLogin.swift in Sources */,
 				BCCC5556A703B94E675FCEA0 /* LaunchAtLoginAgent.swift in Sources */,
 				50CF9CAFED748277B063F3D1 /* LocalNotificationManager.swift in Sources */,
@@ -1521,6 +1526,7 @@
 				D2CA9509350652BDFACE8F8D /* Import.swift in Sources */,
 				C997ADA573601F7F3F91BCA1 /* InvestmentPlan.swift in Sources */,
 				ED29316BA53E89D30E71D376 /* InvestmentPlansStore.swift in Sources */,
+				6BEDD43769C4DEB7BCD7D02B /* KeychainHelper.swift in Sources */,
 				EFB2073C2647FB1679C23D34 /* LaunchAtLogin.swift in Sources */,
 				F96858ADFC80FE94B08FB603 /* LaunchAtLoginAgent.swift in Sources */,
 				024104A3086A9B3EE573FD12 /* LocalNotificationManager.swift in Sources */,
