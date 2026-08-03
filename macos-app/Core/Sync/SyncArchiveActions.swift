@@ -14,17 +14,26 @@ extension AppModel {
     /// 注意:trendSettings 的 API Key 从 Keychain 读取后填入(内存短暂存在)。
     func makeSyncPayload(sourceDeviceName: String) -> SyncPayload {
         var settings = trendSettings
-        // API Key:优先从 Keychain 读,Keychain 没有则用内存值(Keychain 弹窗被拒时 fallback)
-        let kcOpenAI = KeychainHelper.get(account: KeychainHelper.Account.openAIKey)
-        let kcTavily = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey)
-        let kcAlpha = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey)
-        if let key = kcOpenAI, !key.isEmpty { settings.provider.apiKey = key }
-        if let key = kcTavily, !key.isEmpty { settings.webSearch.apiKey = key }
-        if let key = kcAlpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
-        // 如果内存里的 key 非空(用户通过 UI 填的),也确保不丢
-        if settings.provider.apiKey.isEmpty, let key = UserDefaults.standard.string(forKey: "qieman.trend.openai.key"), !key.isEmpty {
-            settings.provider.apiKey = key
+        // API Key:取内存值、Keychain、UserDefaults 三者中第一个非空的。
+        // 不能用 nil 覆盖内存里的非空值(Keychain 弹窗被拒时写入可能失败)。
+        func resolveKey(memValue: String, kcAccount: String, udKey: String) -> String {
+            if !memValue.isEmpty { return memValue }
+            if let kc = KeychainHelper.get(account: kcAccount), !kc.isEmpty { return kc }
+            if let ud = UserDefaults.standard.string(forKey: udKey), !ud.isEmpty { return ud }
+            return ""
         }
+        settings.provider.apiKey = resolveKey(
+            memValue: settings.provider.apiKey,
+            kcAccount: KeychainHelper.Account.openAIKey,
+            udKey: "qieman.trend.openai.key")
+        settings.webSearch.apiKey = resolveKey(
+            memValue: settings.webSearch.apiKey,
+            kcAccount: KeychainHelper.Account.tavilyKey,
+            udKey: "qieman.trend.tavily.key")
+        settings.alphaVantage.apiKey = resolveKey(
+            memValue: settings.alphaVantage.apiKey,
+            kcAccount: KeychainHelper.Account.alphaVantageKey,
+            udKey: "qieman.trend.alphavantage.key")
 
         return SyncPayload(
             schemaVersion: SyncPayload.currentSchemaVersion,
