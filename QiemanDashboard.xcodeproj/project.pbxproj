@@ -202,6 +202,7 @@
 		769950900A247F0129E30D15 /* Update.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033B69A4234FA476D36CF6C8 /* Update.swift */; };
 		7742C0DD715E6B1111E06582 /* ArchiveCipher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F5C9ED4C58CECA861EB4CF /* ArchiveCipher.swift */; };
 		774C8BA21584DB444F25C6B7 /* MacLaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5124F80FE2024759D77F742 /* MacLaunchAtLogin.swift */; };
+		7796BA4187A1672F808D2F8F /* AppStorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5D858117DAB47FB4818C6C /* AppStorageKeys.swift */; };
 		77E90221B9CC0EDEFFDABB64 /* MainWindowZoomPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9AAD217883B72A818867723 /* MainWindowZoomPolicyTests.swift */; };
 		77F49B34097EB72672C47B2B /* PortfolioValuationAlertStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEE0296B80DB59C512D462F5 /* PortfolioValuationAlertStore.swift */; };
 		78F1DC6CE2E4839FF4796914 /* PersonalAssetComparisonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C3BDB5AC66D7E1FAE243F4 /* PersonalAssetComparisonTests.swift */; };
@@ -312,8 +313,7 @@
 		BB49AC152E4CDA5B140893BA /* PlatformBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */; };
 		BCCC5556A703B94E675FCEA0 /* LaunchAtLoginAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B49BD5EA76F592A1AF0350 /* LaunchAtLoginAgent.swift */; };
 		BD14B6C73AA4A6787BAD1C83 /* QiemanCommandLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC6C611B96990046748ABFC /* QiemanCommandLineTests.swift */; };
-		BD19C8B4BE9AB12BD6F2F548 /* DashboardInsightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F45F2269D49BA3FA4BDD3EE3 /* DashboardInsightTests.swift */; };
-		BE5D948698F73C40B9DA5CAA /* DashboardInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159E3000F40E8FC3368E1C5B /* DashboardInsight.swift */; };
+		BD7CC64E7B3BE43791B0AB04 /* AppStorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5D858117DAB47FB4818C6C /* AppStorageKeys.swift */; };
 		BF8CC5FD26221BAF37BDC66F /* AppPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FCB72CD118C144C196EFED3 /* AppPalette.swift */; };
 		C13061E4AD4EE0D0222E0CCE /* PersonalAssetBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D7B7CD483AA78C59505F661 /* PersonalAssetBrowser.swift */; };
 		C201C420940F01B2A780853F /* NativePlatformError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FA1654700150B392F28F67 /* NativePlatformError.swift */; };
@@ -324,7 +324,6 @@
 		C3F7685462942E9F1EB1DE96 /* AlfaHoldingPart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1932D109E52CACA02F3A18 /* AlfaHoldingPart.swift */; };
 		C40DA65AC72AB6F18D8AC634 /* Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F15B54D8954A26CBA946059 /* Auth.swift */; };
 		C52243F81B62BE57F94BF6B8 /* Update.swift in Sources */ = {isa = PBXBuildFile; fileRef = 033B69A4234FA476D36CF6C8 /* Update.swift */; };
-		C61418B7DC11C947D860FDD6 /* DashboardInsight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159E3000F40E8FC3368E1C5B /* DashboardInsight.swift */; };
 		C6303A281026F39942A4D9C8 /* PortfolioAllocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10113EA0262BAA2A9516BAC1 /* PortfolioAllocationTests.swift */; };
 		C6F59223F5C0FCC610255AA4 /* PersonalAssetComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = F044E6D3DA3AB78595C81414 /* PersonalAssetComparison.swift */; };
 		C6F8DAE7BA1E613FBEC8C61B /* PlatformSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 786316F801976A11FFF8D771 /* PlatformSectionView.swift */; };
@@ -468,7 +467,7 @@
 		10113EA0262BAA2A9516BAC1 /* PortfolioAllocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAllocationTests.swift; sourceTree = "<group>"; };
 		10261990A06907CE00648829 /* PersonalWatchlistActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistActions.swift; sourceTree = "<group>"; };
 		10BE0B21528A9F9EBB172169 /* TrendAssetTaggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAssetTaggingTests.swift; sourceTree = "<group>"; };
-		159E3000F40E8FC3368E1C5B /* DashboardInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardInsight.swift; sourceTree = "<group>"; };
+		1145C8EAE0103E9A065951A1 /* QiemanDashboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = QiemanDashboard.entitlements; sourceTree = "<group>"; };
 		16183BF53D1CD8606A2E8445 /* SECOfficialSourceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SECOfficialSourceClient.swift; sourceTree = "<group>"; };
 		161AFF3AF6FB52DE9E5D246B /* StrategyRadar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyRadar.swift; sourceTree = "<group>"; };
 		170741708EC672A9F1BBB0A6 /* SubModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubModels.swift; sourceTree = "<group>"; };
@@ -591,6 +590,7 @@
 		7DD264DB06C56596F8D3EA39 /* TrendTrackingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendTrackingStore.swift; sourceTree = "<group>"; };
 		7E411C1BC93E51DE77E73643 /* TrendPlainLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendPlainLanguage.swift; sourceTree = "<group>"; };
 		7F2A15FE7909BF5A45A4216C /* QiemanNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanNativeClient.swift; sourceTree = "<group>"; };
+		7F5D858117DAB47FB4818C6C /* AppStorageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStorageKeys.swift; sourceTree = "<group>"; };
 		8329AC91EE523930D0E2A19C /* TrendAnalysisValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAnalysisValidatorTests.swift; sourceTree = "<group>"; };
 		83EB1E171B5EC94C27F27C83 /* TrendAnalysisContextBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAnalysisContextBuilder.swift; sourceTree = "<group>"; };
 		8411DDB8E68F4CC63AB4FBB5 /* SnapshotPayloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotPayloads.swift; sourceTree = "<group>"; };
@@ -723,7 +723,6 @@
 		F33E7C568C78E2F45DD4E9C4 /* OpenAICompatibleAgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleAgentClientTests.swift; sourceTree = "<group>"; };
 		F39C5DC5B3FF582252B9D940 /* PortfolioValuationAlertSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioValuationAlertSection.swift; sourceTree = "<group>"; };
 		F3D8B7F323E9DB31D9FA3025 /* FundSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundSearchField.swift; sourceTree = "<group>"; };
-		F45F2269D49BA3FA4BDD3EE3 /* DashboardInsightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardInsightTests.swift; sourceTree = "<group>"; };
 		F56E9CBCC1E7917CA11466AD /* AlphaVantageResearchTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlphaVantageResearchTool.swift; sourceTree = "<group>"; };
 		F62B6BD2A7C1B3C4B4511B1F /* FundSearchClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundSearchClient.swift; sourceTree = "<group>"; };
 		FA6B534E69CCFF15E4595B2D /* PendingTradesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingTradesStore.swift; sourceTree = "<group>"; };
@@ -864,9 +863,9 @@
 				3D98CEE649A5B1722F3898F0 /* ApplicationDataController.swift */,
 				067C30E8084C8D8B7279EE90 /* AppModel.swift */,
 				008836329F1ED75AF157CDF1 /* AppSelfUpdater.swift */,
+				7F5D858117DAB47FB4818C6C /* AppStorageKeys.swift */,
 				06E1919467E10BB273CE758E /* AppUpdateChecker.swift */,
 				2DC04B71B8DADC02172F1AC5 /* AppUpdateReleaseNotesFormatter.swift */,
-				159E3000F40E8FC3368E1C5B /* DashboardInsight.swift */,
 				43D4DF9DDCE531523194A919 /* FundLookThrough.swift */,
 				F62B6BD2A7C1B3C4B4511B1F /* FundSearchClient.swift */,
 				D8583AC91A5BDFB86CFBD8FE /* InvestmentPlansStore.swift */,
@@ -1055,6 +1054,7 @@
 			children = (
 				A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */,
 				2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */,
+				1145C8EAE0103E9A065951A1 /* QiemanDashboard.entitlements */,
 				DD9D295F50B3A85EA8C8289A /* ValueFormatting.swift */,
 			);
 			path = Support;
@@ -1165,7 +1165,6 @@
 				0528DA8BCB9CBE3767F79053 /* CLIContractSnapshotTests.swift */,
 				3C1AAFD23F96BC89D5554C90 /* ContentViewPerformanceTests.swift */,
 				6CBA52FC065B7FC760AFF3EC /* ContractFixtureTests.swift */,
-				F45F2269D49BA3FA4BDD3EE3 /* DashboardInsightTests.swift */,
 				0FA928404F040EC5472BBA85 /* DisclosureInteractionPresentationTests.swift */,
 				5FE0A0FFD1535866A4A70373 /* DownloadProgressTests.swift */,
 				6B4DB057F76EE3CDE84496DC /* EnhancementRoutingTests.swift */,
@@ -1378,6 +1377,7 @@
 				0D498DC52BC65A7D357511CE /* AppModel.swift in Sources */,
 				CDD1091C2BFB565E0CD973B3 /* AppPalette.swift in Sources */,
 				48232DAE1E98164E49CF2BB3 /* AppSelfUpdater.swift in Sources */,
+				BD7CC64E7B3BE43791B0AB04 /* AppStorageKeys.swift in Sources */,
 				A06323771C5969FA99F5C3F7 /* AppUpdateChecker.swift in Sources */,
 				E2B45F77995AD5CFB6C59067 /* AppUpdateReleaseNotesFormatter.swift in Sources */,
 				3E3A3B418BAC57BA155BB5ED /* ApplicationDataController.swift in Sources */,
@@ -1388,7 +1388,6 @@
 				11A3FE688C89C72AD3F81415 /* Components.swift in Sources */,
 				276D16B83FEBCE94CB44BBF6 /* ComputedProperties.swift in Sources */,
 				79A8554E3C22C320B0A7A66B /* ContentView.swift in Sources */,
-				C61418B7DC11C947D860FDD6 /* DashboardInsight.swift in Sources */,
 				0303882B7A2F6DE493E99492 /* EnhancementCenter.swift in Sources */,
 				2EED13AE3AEECA30FEA3ABE9 /* EnhancementSectionView.swift in Sources */,
 				8E0E679CE162769A3A2913A0 /* FundLookThrough.swift in Sources */,
@@ -1545,6 +1544,7 @@
 				18AFD68538DF8EE0EA713A41 /* AppModel.swift in Sources */,
 				BF8CC5FD26221BAF37BDC66F /* AppPalette.swift in Sources */,
 				087C76F502901BF02593EF95 /* AppSelfUpdater.swift in Sources */,
+				7796BA4187A1672F808D2F8F /* AppStorageKeys.swift in Sources */,
 				B33060DC843423BDA51F5D97 /* AppUpdateChecker.swift in Sources */,
 				4FE58945E05A6F9BA59C3106 /* AppUpdateReleaseNotesFormatter.swift in Sources */,
 				5C7C662EDD7DD879B0E000CB /* ApplicationDataController.swift in Sources */,
@@ -1557,7 +1557,6 @@
 				741DD582687C317791AAA89C /* ContentView.swift in Sources */,
 				35AA52D0585958B5D2921D9A /* Contract.swift in Sources */,
 				ECB1B3AE92C9C7E367E304ED /* DTOs.swift in Sources */,
-				BE5D948698F73C40B9DA5CAA /* DashboardInsight.swift in Sources */,
 				E70865B7887281BC172E0505 /* DonutChart.swift in Sources */,
 				E1D894E95BF7F3DFCC24CF00 /* EnhancementCenter.swift in Sources */,
 				AB526A11F17539AB42E9F5AF /* EnhancementCenterView.swift in Sources */,
@@ -1741,7 +1740,6 @@
 				E9D1DD1FA48A40234E2B4AB5 /* CLIContractSnapshotTests.swift in Sources */,
 				E5B3B42C61113B1F222D24EF /* ContentViewPerformanceTests.swift in Sources */,
 				EBE12050C709800BFE189096 /* ContractFixtureTests.swift in Sources */,
-				BD19C8B4BE9AB12BD6F2F548 /* DashboardInsightTests.swift in Sources */,
 				138CFCABEE4C72001CC1143A /* DisclosureInteractionPresentationTests.swift in Sources */,
 				03709C298C460DA221E9B794 /* DownloadProgressTests.swift in Sources */,
 				27AAAB74B1C1B7DD5E3CAE33 /* EnhancementRoutingTests.swift in Sources */,
@@ -1838,6 +1836,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "macos-app/Support/QiemanDashboard.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1943,7 +1942,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.14.2;
+				MARKETING_VERSION = 3.15.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1959,6 +1958,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "macos-app/Support/QiemanDashboard.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -2042,7 +2042,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.14.2;
+				MARKETING_VERSION = 3.15.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

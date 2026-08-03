@@ -35,8 +35,18 @@ enum KeychainHelper {
         var attributes = query
         attributes[kSecValueData as String] = data
         #if os(macOS)
-        // macOS: 允许 app 访问(不弹授权对话框)
-        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // macOS 非沙盒 app:用 SecAccessControl 设置「不弹窗」的访问策略。
+        let access = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleAfterFirstUnlock,
+            [],
+            nil
+        )
+        if let access {
+            attributes[kSecAttrAccessControl as String] = access
+        } else {
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        }
         #else
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         #endif
