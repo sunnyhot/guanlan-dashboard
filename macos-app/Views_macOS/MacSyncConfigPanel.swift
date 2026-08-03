@@ -148,7 +148,11 @@ struct MacSyncConfigPanel: View {
     private var statusCard: some View {
         SettingsCardGroup(title: "同步状态", subtitle: "当前同步信息", icon: "checkmark.seal", tint: AppPalette.positive) {
             if let gid = SyncClient.shared.groupId {
-                SettingsRow(title: "同步组", value: gid, detail: "组标识", icon: "number", tint: AppPalette.muted)
+                SettingsRow(title: "同步组", value: gid, detail: "组标识(给其他设备填)", icon: "number", tint: AppPalette.muted)
+                SettingsDivider()
+            }
+            if let tok = SyncClient.shared.accessToken {
+                SettingsRow(title: "访问令牌", value: tok, detail: "accessToken(给其他设备填)", icon: "key", tint: AppPalette.muted)
                 SettingsDivider()
             }
             if let time = SyncClient.shared.lastSyncTime {
@@ -156,6 +160,21 @@ struct MacSyncConfigPanel: View {
                 SettingsDivider()
             }
             SettingsRow(title: "版本", value: "rev \(SyncClient.shared.lastKnownRevision)", detail: "服务端版本号", icon: "tag", tint: AppPalette.muted)
+            SettingsDivider()
+            SettingsActionRow {
+                if let gid = SyncClient.shared.groupId, let tok = SyncClient.shared.accessToken {
+                    VStack(alignment: .center, spacing: 8) {
+                        Text("其他设备扫码加入").font(AppPalette.appFont(.caption)).foregroundStyle(AppPalette.muted)
+                        if let qr = QRCodeHelper.generateQRImage(from: QRCodeHelper.encodeSyncCredentials(groupId: gid, accessToken: tok), scale: 10) {
+                            Image(nsImage: qr)
+                                .resizable()
+                                .interpolation(.none)
+                                .frame(width: 160, height: 160)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
     }
 

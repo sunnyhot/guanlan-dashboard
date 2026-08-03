@@ -22,6 +22,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>用于扫描同步二维码,快速加入同步组。</string>
 	<!-- SwiftUI generative launch screen (no storyboard, per HIG guidance). -->
 	<key>UILaunchScreen</key>
 	<dict/>

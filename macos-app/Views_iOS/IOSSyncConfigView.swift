@@ -15,6 +15,7 @@ struct IOSSyncConfigView: View {
     @State private var isJoining = false
     @State private var isUploading = false
     @State private var isDownloading = false
+    @State private var showScanner = false
     @State private var joinGroupId = ""
     @State private var joinToken = ""
     @State private var joinPassword = ""
@@ -93,6 +94,11 @@ struct IOSSyncConfigView: View {
 
     private var joinSection: some View {
         Section {
+            Button {
+                showScanner = true
+            } label: {
+                Label("扫码加入", systemImage: "qrcode.viewfinder")
+            }
             TextField("同步组 ID (g_xxx)", text: $joinGroupId)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
             SecureField("访问令牌 (tok_xxx)", text: $joinToken)
@@ -108,7 +114,16 @@ struct IOSSyncConfigView: View {
         } header: {
             Text("加入已有同步组")
         } footer: {
-            Text("从其他设备加入。填入第一台设备的 groupId、accessToken 和同步密码。")
+            Text("扫码或手动填入第一台设备的 groupId、accessToken 和同步密码。")
+        }
+        .sheet(isPresented: $showScanner) {
+            IOSQRScannerView { raw in
+                if let cred = QRCodeHelper.decodeSyncCredentials(raw) {
+                    joinGroupId = cred.groupId
+                    joinToken = cred.accessToken
+                }
+                showScanner = false
+            }
         }
     }
 
