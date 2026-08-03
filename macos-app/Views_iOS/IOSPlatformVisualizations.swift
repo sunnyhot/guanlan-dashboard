@@ -62,8 +62,11 @@ struct IOSPlatformMonthlyChart: View {
                 Text("暂无月度数据").font(IOSDesign.sansBody(13)).foregroundStyle(IOSDesign.muted)
             } else {
                 legend
-                summaryStats(months)
                 chart(months)
+                summaryStats(months)
+                if let sel = selectedMonth {
+                    tooltip(sel)
+                }
             }
         }
     }
@@ -116,46 +119,51 @@ struct IOSPlatformMonthlyChart: View {
 
     private func chartBody(_ months: [PlatformMonthSummary]) -> some View {
         let maxCount = max(months.map(\.totalCount).max() ?? 1, 1)
-        return Chart(months, content: chartMarks)
-            .chartXAxis {
-                AxisMarks(values: .automatic) { value in
-                    AxisValueLabel {
-                        if let s = value.as(String.self) { Text(s).font(.system(size: 9)) }
+        // 扁平数据:买入/卖出各自一条记录,Charts 用 foregroundStyle(by:) 自动并排分组
+        let rows = months.flatMap { m -> [(month: String, kind: String, value: Int, isSel: Bool)] in
+            let sel = selectedMonth?.month == m.month
+            return [
+                (monthLabel(m.month), "买入", m.buyCount, sel),
+                (monthLabel(m.month), "卖出", m.sellCount, sel)
+            ]
+        }
+        return Chart(rows, id: \.month) { r in
+            BarMark(
+                x: .value("月", r.month),
+                y: .value("笔", r.value)
+            )
+            .foregroundStyle(by: .value("类型", r.kind))
+            .opacity(r.isSel ? 1.0 : (selectedMonth == nil ? 0.9 : 0.35))
+        }
+        .chartForegroundStyleScale([
+            "买入": AppPalette.marketLoss,
+            "卖出": AppPalette.marketGain
+        ])
+        .chartXAxis {
+            AxisMarks(values: .automatic) { value in
+                AxisValueLabel {
+                    if let s = value.as(String.self) { Text(s).font(.system(size: 9)) }
+                }
+                AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                AxisValueLabel().font(.system(size: 10))
+                AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
+            }
+        }
+        .chartYScale(domain: 0...(maxCount + 1))
+        .chartLegend(.hidden) // 用自定义 legend
+        .frame(height: 180)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .onTapGesture { location in
+                        handleTap(location, proxy: proxy, geo: geo, months: months)
                     }
-                    AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
-                }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                    AxisValueLabel().font(.system(size: 10))
-                    AxisGridLine().foregroundStyle(IOSDesign.ink.opacity(0.08))
-                }
-            }
-            .chartYScale(domain: 0...(maxCount + 1))
-            .frame(height: 200)
-            .chartOverlay { proxy in
-                GeometryReader { geo in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onTapGesture { location in
-                            handleTap(location, proxy: proxy, geo: geo, months: months)
-                        }
-                }
-            }
-    }
-
-    @ChartContentBuilder
-    private func chartMarks(_ m: PlatformMonthSummary) -> some ChartContent {
-        BarMark(
-            x: .value("月", monthLabel(m.month)),
-            y: .value("买入", m.buyCount)
-        )
-        .foregroundStyle(AppPalette.marketLoss.opacity(0.85))
-
-        BarMark(
-            x: .value("月", monthLabel(m.month)),
-            y: .value("卖出", m.sellCount)
-        )
-        .foregroundStyle(AppPalette.marketGain.opacity(0.85))
+        }
     }
 
     private func handleTap(_ location: CGPoint, proxy: ChartProxy, geo: GeometryProxy, months: [PlatformMonthSummary]) {
