@@ -125,6 +125,7 @@ struct MacSyncConfigPanel: View {
     private var undoSection: some View {
         Section {
             Button("撤销上次下载", role: .destructive) { showUndoConfirm = true }
+            Button("重置同步配置", role: .destructive) { resetConfig() }
         }
     }
 
@@ -181,6 +182,15 @@ struct MacSyncConfigPanel: View {
             try model.undoLastSyncDownload()
             noticeMessage = "已恢复到下载前的状态。"
         } catch { errorMessage = (error as? SyncError)?.errorDescription ?? "撤销失败" }
+    }
+
+    private func resetConfig() {
+        SyncClient.shared.groupId = nil
+        SyncClient.shared.syncPassword = nil
+        KeychainHelper.delete(account: KeychainHelper.Account.syncAccessToken)
+        UserDefaults.standard.removeObject(forKey: "qieman.sync.deviceId")
+        UserDefaults.standard.removeObject(forKey: "qieman.sync.lastRevision")
+        noticeMessage = "已重置同步配置,请重新注册。"
     }
 
     private func clearMessages() { errorMessage = ""; noticeMessage = "" }
