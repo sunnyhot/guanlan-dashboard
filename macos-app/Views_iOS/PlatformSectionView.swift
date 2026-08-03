@@ -104,7 +104,7 @@ struct PlatformSectionView: View {
                     subtitle: "刷新拉取最新的主理人调仓记录。",
                     actionTitle: "刷新"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest(updateNotice: false) }
                 }
                 .padding(.top, IOSDesign.spaceS)
             } else {
@@ -234,7 +234,7 @@ struct PlatformSectionView: View {
                     subtitle: "刷新拉取主理人最新的发言和记录。",
                     actionTitle: "刷新"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest(updateNotice: false) }
                 }
                 .padding(.top, IOSDesign.spaceXL)
             } else {

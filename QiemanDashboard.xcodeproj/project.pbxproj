@@ -467,7 +467,6 @@
 		10113EA0262BAA2A9516BAC1 /* PortfolioAllocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAllocationTests.swift; sourceTree = "<group>"; };
 		10261990A06907CE00648829 /* PersonalWatchlistActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistActions.swift; sourceTree = "<group>"; };
 		10BE0B21528A9F9EBB172169 /* TrendAssetTaggingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAssetTaggingTests.swift; sourceTree = "<group>"; };
-		1145C8EAE0103E9A065951A1 /* QiemanDashboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = QiemanDashboard.entitlements; sourceTree = "<group>"; };
 		16183BF53D1CD8606A2E8445 /* SECOfficialSourceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SECOfficialSourceClient.swift; sourceTree = "<group>"; };
 		161AFF3AF6FB52DE9E5D246B /* StrategyRadar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyRadar.swift; sourceTree = "<group>"; };
 		170741708EC672A9F1BBB0A6 /* SubModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubModels.swift; sourceTree = "<group>"; };
@@ -1054,7 +1053,6 @@
 			children = (
 				A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */,
 				2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */,
-				1145C8EAE0103E9A065951A1 /* QiemanDashboard.entitlements */,
 				DD9D295F50B3A85EA8C8289A /* ValueFormatting.swift */,
 			);
 			path = Support;
@@ -1836,7 +1834,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = "macos-app/Support/QiemanDashboard.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1942,7 +1939,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.15.1;
+				MARKETING_VERSION = 3.15.7;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1958,7 +1955,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = "macos-app/Support/QiemanDashboard.entitlements";
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -2042,7 +2038,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.15.1;
+				MARKETING_VERSION = 3.15.7;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
