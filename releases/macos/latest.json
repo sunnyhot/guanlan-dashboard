@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.2/QiemanDashboard-3.15.2.zip",
-    "name" : "QiemanDashboard-3.15.2.zip",
-    "sha256" : "30d240183e3d132cd6041462d052b2488a33abf174ef9e4923a8b1f601a7471c",
-    "size" : 6979560
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.3/QiemanDashboard-3.15.3.zip",
+    "name" : "QiemanDashboard-3.15.3.zip",
+    "sha256" : "1c5684118ee16ae49a8d30364eb0a7b2a05d13862f63961c4ebe4e495cfc9a50",
+    "size" : 6979556
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.2/QiemanDashboard-3.15.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.3/QiemanDashboard-3.15.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.2.zip",
-      "size" : 6979560
+      "name" : "QiemanDashboard-3.15.3.zip",
+      "size" : 6979556
     }
   ],
-  "body" : "release: v3.15.2 Keychain 授权弹窗优化\nKeychain 存储用 SecAccessControl 减少 macOS 授权弹窗",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.2",
-  "name" : "QiemanDashboard v3.15.2",
-  "notes" : "release: v3.15.2 Keychain 授权弹窗优化\nKeychain 存储用 SecAccessControl 减少 macOS 授权弹窗",
+  "body" : "release: v3.15.3 ATS 例外修复自签名 SSL 错误",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.3",
+  "name" : "QiemanDashboard v3.15.3",
+  "notes" : "release: v3.15.3 ATS 例外修复自签名 SSL 错误",
   "published_at" : "",
-  "sha256" : "30d240183e3d132cd6041462d052b2488a33abf174ef9e4923a8b1f601a7471c",
-  "tag" : "v3.15.2",
-  "tag_name" : "v3.15.2",
-  "version" : "3.15.2"
+  "sha256" : "1c5684118ee16ae49a8d30364eb0a7b2a05d13862f63961c4ebe4e495cfc9a50",
+  "tag" : "v3.15.3",
+  "tag_name" : "v3.15.3",
+  "version" : "3.15.3"
 }
