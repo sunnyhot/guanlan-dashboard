@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.6/QiemanDashboard-3.15.6.zip",
-    "name" : "QiemanDashboard-3.15.6.zip",
-    "sha256" : "4cc7599ca7ed0cd9dcf94af9dc47ae805a335b1d424b5a2b954d5f935aef98d9",
-    "size" : 6980013
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.7/QiemanDashboard-3.15.7.zip",
+    "name" : "QiemanDashboard-3.15.7.zip",
+    "sha256" : "0d4b43490e6aba796f6050d78111287916cd0521fbed828fe3f7df1fd7f98518",
+    "size" : 6988676
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.6/QiemanDashboard-3.15.6.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.7/QiemanDashboard-3.15.7.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.6.zip",
-      "size" : 6980013
+      "name" : "QiemanDashboard-3.15.7.zip",
+      "size" : 6988676
     }
   ],
-  "body" : "release: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)\nrelease: v3.15.5 加重置同步配置按钮",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.6",
-  "name" : "QiemanDashboard v3.15.6",
-  "notes" : "release: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)\nrelease: v3.15.5 加重置同步配置按钮",
+  "body" : "release: v3.15.7 macOS 数据同步面板风格统一 + 设置同步配置重置 + token fallback\nrelease: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.7",
+  "name" : "QiemanDashboard v3.15.7",
+  "notes" : "release: v3.15.7 macOS 数据同步面板风格统一 + 设置同步配置重置 + token fallback\nrelease: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)",
   "published_at" : "",
-  "sha256" : "4cc7599ca7ed0cd9dcf94af9dc47ae805a335b1d424b5a2b954d5f935aef98d9",
-  "tag" : "v3.15.6",
-  "tag_name" : "v3.15.6",
-  "version" : "3.15.6"
+  "sha256" : "0d4b43490e6aba796f6050d78111287916cd0521fbed828fe3f7df1fd7f98518",
+  "tag" : "v3.15.7",
+  "tag_name" : "v3.15.7",
+  "version" : "3.15.7"
 }
