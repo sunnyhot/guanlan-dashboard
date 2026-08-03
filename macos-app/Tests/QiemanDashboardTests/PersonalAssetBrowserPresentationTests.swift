@@ -50,12 +50,12 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         let source = try String(contentsOf: portfolioSectionSourceURL(), encoding: .utf8)
 
         XCTAssertTrue(source.contains("SectionCard(title: \"组合诊断\", subtitle: summary.headline"))
-        XCTAssertTrue(source.contains("Text(summary.headline)"))
         XCTAssertFalse(source.contains("ToolbarBadge(title: summary.totalExposureText"))
     }
 
     func testProfitAttributionUsesTwoDonutChartsAndKeepsDetailsCollapsible() throws {
         let source = try String(contentsOf: portfolioSectionSourceURL(), encoding: .utf8)
+        let donutSource = try String(contentsOf: donutChartSourceURL(), encoding: .utf8)
 
         XCTAssertTrue(source.contains("import Charts"))
         XCTAssertTrue(source.contains("@State private var isAttributionDetailExpanded = false"))
@@ -63,8 +63,8 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertTrue(source.contains("struct ProfitAttributionDonutCard: View"))
         XCTAssertTrue(source.contains("title: \"收益贡献\""))
         XCTAssertTrue(source.contains("title: \"收益拖累\""))
-        XCTAssertTrue(source.contains("SectorMark("))
-        XCTAssertTrue(source.contains("innerRadius: .ratio(0.64)"))
+        XCTAssertTrue(donutSource.contains("SectorMark("))
+        XCTAssertTrue(donutSource.contains("innerRadius: .ratio(innerRadius)"))
         XCTAssertTrue(source.contains("let primaryEntries = Array(entries.prefix(4))"))
         XCTAssertTrue(source.contains("title: \"其他 \\(remaining.count) 项\""))
         XCTAssertTrue(source.contains("ViewThatFits(in: .horizontal)"))
@@ -331,6 +331,14 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Views/PortfolioSectionView.swift")
+    }
+
+    private func donutChartSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Views/DonutChart.swift")
     }
 
     private func personalAssetBrowserSourceURL() -> URL {

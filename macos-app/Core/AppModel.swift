@@ -149,7 +149,6 @@ final class AppModel: ObservableObject {
     var trendCapabilityProbe: @Sendable (TrendAIProviderSettings) async throws -> TrendProviderCapabilities = { settings in
         try await OpenAICompatibleAgentClient().checkToolCallingCapability(settings: settings)
     }
-    var trendProgressHeartbeatIntervalNanoseconds: UInt64 = 15_000_000_000
     let portfolioAutoRefreshIntervalSeconds: UInt64 = 60
     let refreshThrottle = RefreshThrottle()
 
@@ -605,7 +604,7 @@ final class AppModel: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
                 do {
-                    try await self.refreshLatest(persist: false, updateNotice: false)
+                    try await self.refreshLatest(updateNotice: false)
                 } catch {
                     if self.currentSnapshot == nil {
                         self.errorMessage = error.localizedDescription
@@ -638,7 +637,7 @@ final class AppModel: ObservableObject {
         scheduleAutomaticUpdateCheckIfNeeded()
     }
 
-    func refreshLatest(persist: Bool, updateNotice: Bool = true) async throws {
+    func refreshLatest(updateNotice: Bool = true) async throws {
         let telemetryStart = PerformanceTelemetry.start()
         var telemetryResult = "completed"
         defer {
@@ -646,7 +645,6 @@ final class AppModel: ObservableObject {
                 "refresh.latest",
                 startedAt: telemetryStart,
                 metadata: [
-                    "persist": "\(persist)",
                     "result": telemetryResult,
                     "snapshotRecords": "\(currentSnapshot?.records.count ?? 0)",
                     "platformActions": "\(platformPayload?.actions?.count ?? 0)"
@@ -657,7 +655,7 @@ final class AppModel: ObservableObject {
         errorMessage = ""
         defer { isRefreshing = false }
 
-        async let snapshotTask = nativeClient.fetchSnapshot(form: form, persist: false, outputDirectory: nil)
+        async let snapshotTask = nativeClient.fetchSnapshot(form: form)
         async let platformTask = fetchPlatformIfPossible()
 
         var refreshedSnapshot: SnapshotPayload?
@@ -713,8 +711,4 @@ final class AppModel: ObservableObject {
 
         await refreshMarketIndicesIfNeeded()
     }
-
-    /// 按 filterMode 决定如何拉取论坛快照：
-    /// - `.managerSubscription`：根据选中的主理人聚合多小组。
-    /// - `.preciseParams`：沿用既有 fetchSnapshot 的精确参数模式。
 }

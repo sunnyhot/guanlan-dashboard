@@ -1,9 +1,5 @@
 import Foundation
 
-struct FetchResponsePayload: Decodable {
-    let snapshot: SnapshotPayload
-}
-
 struct SnapshotPayload: Decodable, Identifiable, Hashable {
     let fileName: String?
     let filePath: String?
@@ -19,7 +15,6 @@ struct SnapshotPayload: Decodable, Identifiable, Hashable {
     let meta: SnapshotMetaPayload?
     let stats: SnapshotStatsPayload?
     let records: [SnapshotRecordPayload]
-    let persisted: Bool?
 
     var id: String {
         fileName ?? "\(title)-\(createdAt)"

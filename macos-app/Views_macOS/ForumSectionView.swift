@@ -17,7 +17,7 @@ struct ForumSectionView: View {
                             subtitle: "我已经补上了切到论坛页时的自动补拉。点一次刷新后，会优先回到帖子流并恢复发言列表。",
                             actionTitle: "刷新发言"
                         ) {
-                            Task { try? await model.refreshLatest(persist: false) }
+                            Task { try? await model.refreshLatest() }
                         }
                     }
                 }
@@ -218,7 +218,7 @@ struct ForumSectionView: View {
                     subtitle: "先选一条发言，或者执行一次刷新，这里就会显示正文和评论入口。",
                     actionTitle: "刷新发言"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest() }
                 }
             }
         }

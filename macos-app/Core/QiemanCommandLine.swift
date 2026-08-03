@@ -236,7 +236,6 @@ struct QiemanCommandLine {
                 prodCode: prodCode,
                 assetCount: payload.holdings?.assetCount ?? 0,
                 totalUnits: payload.holdings?.totalUnits ?? 0,
-                pricingSummary: CLIPricingSummaryPlaceholder(),
                 count: items.count,
                 items: Array(items)
             )
@@ -356,8 +355,6 @@ struct QiemanCommandLine {
                 currentValuation: NullDouble(row.currentPrice ?? row.officialNav),
                 currentSource: row.priceSource ?? "未知",
                 currentTime: row.priceTime ?? row.officialNavDate ?? "",
-                valuationAtDate: NullDouble(nil),
-                valuationAtActualDate: "",
                 changePct: NullDouble(row.estimateChangePct)
             )
         }
@@ -367,12 +364,8 @@ struct QiemanCommandLine {
     private func updatesWatch() async throws -> Data {
         let prodCode = arguments.string("prod-code", default: "LONG_WIN")
         let managerName = arguments.string("manager-name", default: "ETF拯救世界")
-        let forumMode = arguments.string("forum-mode", default: "auto")
-        guard ["auto", "following", "public"].contains(forumMode) else {
-            throw QiemanCommandLineError.usage("--forum-mode 已废弃（登录态移除），所有取值都会回退到 public")
-        }
         async let platformTask = QiemanPlatformNativeClient().fetchPlatformPayload(prodCode: prodCode)
-        let forumResult = try await watchForumSnapshot(mode: forumMode)
+        let forumResult = try await watchForumSnapshot()
         let platform = try await platformTask
         let forum = forumResult.payload
         let trades = Array((platform.actions ?? []).prefix(max(1, arguments.int("max-trades", default: 120)))).map(actionRow)
@@ -459,10 +452,8 @@ struct QiemanCommandLine {
                 eventCount: items.count,
                 counts: counts,
                 topActions: topActions,
-                topAssets: [],
                 latest: limited.first ?? .empty,
-                items: limited,
-                timeline: []
+                items: limited
             )
         )
     }
@@ -503,17 +494,11 @@ struct QiemanCommandLine {
         form.until = arguments.string("until")
         form.pages = String(max(1, arguments.int("pages", default: 5)))
         form.pageSize = String(max(1, arguments.int("page-size", default: 20)))
-        return try await nativeClient().fetchSnapshot(form: form, persist: false, outputDirectory: nil)
+        return try await nativeClient().fetchSnapshot(form: form)
     }
 
-    private func watchForumSnapshot(
-        mode: String
-    ) async throws -> (payload: SnapshotPayload, source: String, note: String) {
-        let effective = mode.lowercased()
-        if effective != "public" {
-            FileHandle.standardError.write("forum-mode '\(mode)' 已废弃（登录态移除），回退到 public。\n".data(using: .utf8)!)
-        }
-        return (
+    private func watchForumSnapshot() async throws -> (payload: SnapshotPayload, source: String, note: String) {
+        (
             try await fetchSnapshot(mode: .groupManager, userNameOverride: nil),
             "public-group",
             ""

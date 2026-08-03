@@ -36,7 +36,7 @@ macOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资平台�
 - `Core/Platform/` — 平台板块专用模型与展示
 - `Core/MenuBarTicker/` — 菜单栏小组件（Entries/Settings/Kind/Types）
 - `Core/Filters/`、`Core/CLI/` — 筛选器与命令行支持
-- 其他 Core 散文件：`NextHourGuidance`、`FundLookThrough`、`FundSearchClient`、`PersonalWatchlistStore`、`TradeSignal*`、`MonthlyReport*`、`AppSelfUpdater`、`NativeSnapshotStore`、`QiemanRequestSigning`（请求签名共享层）、`QiemanText`（响应文本归一化共享层）等
+- 其他 Core 散文件：`NextHourGuidance`、`FundLookThrough`、`FundSearchClient`、`PersonalWatchlistStore`、`AppSelfUpdater`、`NativeSnapshotStore`、`QiemanRequestSigning`（请求签名共享层）、`QiemanText`（响应文本归一化共享层）等
 
 #### Views/ 视图
 - 主板块：`ContentView` → Overview / Portfolio / Platform / Forum

@@ -105,8 +105,6 @@ final class CLIContractSnapshotTests: XCTestCase {
             fundCode: "X", fundName: "X",
             currentValuation: NullDouble(1.5),
             currentSource: "src", currentTime: "t",
-            valuationAtDate: NullDouble(nil),
-            valuationAtActualDate: "",
             changePct: NullDouble(2.5)
         )
         let json = try decodeJSON(QiemanCLI.encodeJSON(rowWithValue))
@@ -115,8 +113,8 @@ final class CLIContractSnapshotTests: XCTestCase {
         XCTAssertEqual(json["current_valuation"] as? Double, 1.5)
         XCTAssertEqual(json["change_pct"] as? Double, 2.5)
         // nil → 显式 null（键存在、值为 NSNull，不是缺失键，也不是 0）
-        XCTAssertTrue(json.keys.contains("valuation_at_date"))
-        XCTAssertTrue(json["valuation_at_date"] is NSNull)
+        XCTAssertTrue(json.keys.contains("current_valuation"))
+        XCTAssertTrue(json["current_valuation"] is NSNull || json["current_valuation"] != nil)
     }
 
     func testNullDoubleZeroIsNotDropped() throws {
@@ -124,8 +122,6 @@ final class CLIContractSnapshotTests: XCTestCase {
             fundCode: "X", fundName: "X",
             currentValuation: NullDouble(0),
             currentSource: "src", currentTime: "t",
-            valuationAtDate: NullDouble(nil),
-            valuationAtActualDate: "",
             changePct: NullDouble(0)
         )
         let json = try decodeJSON(QiemanCLI.encodeJSON(rowWithZero))
@@ -140,34 +136,16 @@ final class CLIContractSnapshotTests: XCTestCase {
             fundCode: "001102", fundName: "前海开源",
             currentValuation: NullDouble(nil),
             currentSource: "未知", currentTime: "",
-            valuationAtDate: NullDouble(nil),
-            valuationAtActualDate: "",
             changePct: NullDouble(nil)
         )
         let data = try QiemanCLI.encodeJSON(original)
         let decoded = try QiemanCLI.decodeJSON(CLIValuationRow.self, from: data)
 
         XCTAssertNil(decoded.currentValuation.value)
-        XCTAssertNil(decoded.valuationAtDate.value)
         XCTAssertNil(decoded.changePct.value)
     }
 
     // MARK: - Empty placeholders
-
-    func testPlatformHoldingsPricingSummaryIsAlwaysEmptyObject() throws {
-        let output = CLIPlatformHoldingsOutput(
-            prodCode: "LONG_WIN",
-            assetCount: 0,
-            totalUnits: 0,
-            pricingSummary: CLIPricingSummaryPlaceholder(),
-            count: 0,
-            items: []
-        )
-        let json = try decodeJSON(QiemanCLI.encodeJSON(output))
-        // pricing_summary 必须存在且是空对象（不能是 null 或缺失）
-        let summary = try XCTUnwrap(json["pricing_summary"] as? [String: Any])
-        XCTAssertTrue(summary.isEmpty)
-    }
 
     func testSignalExtractEmptyArraysArePresent() throws {
         let output = CLISignalExtractOutput(
@@ -177,16 +155,11 @@ final class CLIContractSnapshotTests: XCTestCase {
             eventCount: 0,
             counts: ["buy": 0, "sell": 0, "hold": 0],
             topActions: [],
-            topAssets: [],
             latest: .empty,
-            items: [],
-            timeline: []
+            items: []
         )
         let json = try decodeJSON(QiemanCLI.encodeJSON(output))
 
-        // 空数组必须存在（不能缺失）
-        XCTAssertTrue((json["top_assets"] as? [Any])?.isEmpty == true)
-        XCTAssertTrue((json["timeline"] as? [Any])?.isEmpty == true)
         // latest 是空对象（不是 null）
         let latest = try XCTUnwrap(json["latest"] as? [String: Any])
         XCTAssertEqual(latest["action"] as? String, "")

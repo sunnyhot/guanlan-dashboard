@@ -123,16 +123,6 @@ extension EnhancementCenterView {
         }
     }
 
-    // ③ 核验：证据来源 + 边界与提示
-    func verificationSection(_ report: TrendAnalysisReport) -> some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            trendReportSectionTitle("核验", icon: "shield.checkered")
-            trendSourceStatusList(report.sourceStatuses)
-            trendEvidenceList(report.evidence)
-            trendWarnings(report)
-        }
-    }
-
     func trendReportSectionTitle(_ title: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 7) {

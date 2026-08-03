@@ -46,7 +46,7 @@ final class ApplicationDataController {
         let fileManager = FileManager.default
         let directory: URL
 
-        if let customPath = UserDefaults.standard.string(forKey: "qieman.dashboard.customDataDirectory"),
+        if let customPath = UserDefaults.standard.string(forKey: AppStorageKey.customDataDirectory),
            !customPath.isEmpty {
             directory = URL(fileURLWithPath: customPath, isDirectory: true)
         } else {

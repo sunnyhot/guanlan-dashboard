@@ -10,8 +10,7 @@ final class ContractFixtureTests: XCTestCase {
             from: raw,
             fileURL: fixtureURL,
             createdAt: "2026-06-12 12:00:00",
-            includeRecords: true,
-            persisted: false
+            includeRecords: true
         )
 
         XCTAssertEqual(payload.snapshotType, "posts")

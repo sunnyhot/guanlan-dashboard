@@ -18,8 +18,7 @@ export QIEMAN_PROJECT_DIR=/path/to/qieman-manager-dashboard
 
 ```bash
 QIEMAN="$QIEMAN_PROJECT_DIR/scripts/qieman"
-$QIEMAN auth-status
-$QIEMAN following-posts --user-name "ETF拯救世界" --pages 5
+$QIEMAN group-lookup --prod-code LONG_WIN --with-group-info
 $QIEMAN group-posts --prod-code LONG_WIN --pages 3
 $QIEMAN platform-actions --prod-code LONG_WIN --limit 20
 $QIEMAN platform-holdings --prod-code LONG_WIN

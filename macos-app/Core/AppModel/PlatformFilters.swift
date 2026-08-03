@@ -28,20 +28,4 @@ extension AppModel {
         )
         return presentation
     }
-
-    var filteredPlatformActions: [PlatformActionPayload] {
-        platformActionPresentation.filteredActions
-    }
-
-    var platformActionCounts: PlatformActionCounts {
-        platformActionPresentation.counts
-    }
-
-    var paginatedPlatformActions: [PlatformActionPayload] {
-        platformActionPresentation.pageActions
-    }
-
-    var totalPlatformPages: Int {
-        platformActionPresentation.totalPages
-    }
 }

@@ -376,7 +376,6 @@ final class TrendDashboardSummaryTests: XCTestCase {
         // 趋势报告：整页重构为三分区聚拢骨架（市场视图/重点标的/核验）
         XCTAssertTrue(trendSource.contains("marketSection"))
         XCTAssertTrue(trendSource.contains("actionSection"))
-        XCTAssertTrue(trendSource.contains("verificationSection"))
         XCTAssertTrue(trendSource.contains("trendReportSectionTitle"))
         XCTAssertTrue(trendSource.contains("trendDirectionDot"))
         XCTAssertTrue(trendSource.contains("trendDirectionBadge"))

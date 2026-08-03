@@ -96,27 +96,6 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(permissions?.intValue, 0o600)
     }
 
-    func testMarketFreshnessRequiresTimestampWithinTwentyMinutes() {
-        XCTAssertTrue(
-            NextHourGuidanceFreshness.isFresh(
-                quoteTime: "2026-07-27 10:02:00",
-                generatedAt: "2026-07-27 10:15:00"
-            )
-        )
-        XCTAssertFalse(
-            NextHourGuidanceFreshness.isFresh(
-                quoteTime: "2026-07-27 09:30:00",
-                generatedAt: "2026-07-27 10:15:00"
-            )
-        )
-        XCTAssertFalse(
-            NextHourGuidanceFreshness.isFresh(
-                quoteTime: "2026-07-26 15:00:00",
-                generatedAt: "2026-07-27 09:15:00"
-            )
-        )
-    }
-
     func testFocusedAgentDecodesSubmittedGuidance() async throws {
         let arguments = """
         {

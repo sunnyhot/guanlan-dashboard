@@ -372,7 +372,6 @@ final class FundLookThroughTests: XCTestCase {
         let disclosure = try XCTUnwrap(batch.disclosures["163402"])
         // 兜底用的是缓存完整披露：披露证券占基金仍为 6.45%，而不是被债券数据冒充。
         XCTAssertEqual(disclosure.disclosedSecurityWeightPct, 6.45, accuracy: 0.0001)
-        XCTAssertTrue(disclosure.warnings.contains { $0.contains("已使用") && $0.contains("缓存完整披露") })
 
         // 残缺结果不得覆盖磁盘上已有的完整披露。
         let decoder = JSONDecoder()
@@ -380,7 +379,8 @@ final class FundLookThroughTests: XCTestCase {
             [String: FundLookThroughClient.CachedDisclosure].self,
             from: Data(contentsOf: cacheFile)
         )
-        XCTAssertEqual(reread["163402"]?.disclosure.disclosedSecurityWeightPct, 6.45, accuracy: 0.0001)
+        let rereadDisclosure = try XCTUnwrap(reread["163402"]?.disclosure)
+        XCTAssertEqual(rereadDisclosure.disclosedSecurityWeightPct, 6.45, accuracy: 0.0001)
     }
 
     func testPartialFailureWithoutCacheIsExcluded() async throws {

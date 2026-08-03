@@ -1,6 +1,6 @@
 ---
 name: qieman-alpha-signals
-description: Native macOS Qieman toolkit with atomic Swift CLI commands for auth, followed users, group/space feeds, comments, platform actions, holdings, valuations, incremental updates, and signal extraction.
+description: Native macOS Qieman toolkit with atomic Swift CLI commands for public group-manager feeds, comments, platform actions, alfa advisory rebalancing, holdings, valuations, incremental updates, and signal extraction.
 ---
 
 # Qieman Alpha Signals
@@ -21,19 +21,15 @@ The launcher builds `dist/bin/qieman-cli` on first use. Every data command emits
 ## Commands
 
 ```bash
-$QIEMAN auth-status
-$QIEMAN following-users --pages 5 --page-size 50
-$QIEMAN my-groups
 $QIEMAN group-lookup --prod-code LONG_WIN --with-group-info
-$QIEMAN following-posts --user-name "ETF拯救世界" --pages 5
 $QIEMAN group-posts --prod-code LONG_WIN --pages 5
-$QIEMAN space-items --space-user-id 123456 --pages 5
 $QIEMAN public-items --prod-code LONG_WIN --query "长赢计划"
 $QIEMAN post-comments --post-id 73567 --sort-type hot
 $QIEMAN platform-actions --prod-code LONG_WIN --side all --limit 20
 $QIEMAN platform-holdings --prod-code LONG_WIN
 $QIEMAN platform-timeline --prod-code LONG_WIN
 $QIEMAN platform-monthly --prod-code LONG_WIN --months 12
+$QIEMAN alfa-actions --po-code ZH157591
 $QIEMAN valuation --fund-codes 021550,001052
 $QIEMAN updates-watch --prod-code LONG_WIN --manager-name "ETF拯救世界"
 $QIEMAN signal-extract --json-path /path/to/posts.json
@@ -47,18 +43,19 @@ $QIEMAN app-open
 
 ## Routing
 
-1. Identity and login: `auth-status`.
-2. People and group context: `following-users`, `my-groups`, `group-lookup`.
-3. Speech sources: `following-posts`, `group-posts`, `space-items`, `public-items`.
-4. Comments: `post-comments`.
-5. Platform data: `platform-actions`, `platform-holdings`, `platform-timeline`, `platform-monthly`.
-6. Current estimates: `valuation`.
-7. Incremental polling: `updates-watch`; first run builds a baseline unless `--emit-initial` is supplied.
-8. Local JSON inference: `signal-extract`.
+1. Group context: `group-lookup`.
+2. Public manager feeds: `group-posts`, `public-items`.
+3. Comments: `post-comments`.
+4. Platform data: `platform-actions`, `platform-holdings`, `platform-timeline`, `platform-monthly`, `alfa-actions`.
+5. Current estimates: `valuation`.
+6. Incremental polling: `updates-watch`; first run builds a baseline unless `--emit-initial` is supplied.
+7. Local JSON inference: `signal-extract`.
+
+Login-state commands (`auth-status`, `following-users`, `my-groups`, `following-posts`, `space-items`) and `--forum-mode`/`--cookie-file` were removed with the login-state migration; do not issue them.
 
 ## Safety
 
-- Prefer `--cookie-file` or `~/Library/Application Support/QiemanDashboard/qieman.cookie`.
+- The Cookie lives at `~/Library/Application Support/QiemanDashboard/qieman.cookie`; there is no `--cookie-file` option.
 - Never print or summarize raw Cookie values.
 - Use absolute dates in user-facing summaries.
 - Treat valuation as an estimate unless the returned source indicates a confirmed official NAV.

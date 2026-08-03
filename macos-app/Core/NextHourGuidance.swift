@@ -473,22 +473,6 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     }
 }
 
-enum NextHourGuidanceFreshness {
-    static func isFresh(
-        quoteTime: String?,
-        generatedAt: String,
-        maxAgeMinutes: Double = 20,
-        quoteType: TrendQuoteType = .lastTrade
-    ) -> Bool {
-        TrendSourceFreshnessPolicy.assess(
-            quoteType: quoteType,
-            asOf: quoteTime,
-            receivedAt: generatedAt,
-            maxIntradayAgeMinutes: maxAgeMinutes
-        ).isFreshForExecution
-    }
-}
-
 // MARK: - Focused AI agent
 
 protocol NextHourGuidanceAgentProtocol: Sendable {

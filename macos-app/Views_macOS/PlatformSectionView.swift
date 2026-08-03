@@ -152,7 +152,7 @@ struct PlatformSectionView: View {
                         subtitle: "我已经把平台和论坛改成了独立刷新。现在点一次刷新，就算其中一项失败，另一项也会照常显示。",
                         actionTitle: "刷新调仓"
                     ) {
-                        Task { try? await model.refreshLatest(persist: false) }
+                        Task { try? await model.refreshLatest() }
                     }
                 }
             }
@@ -217,7 +217,7 @@ struct PlatformSectionView: View {
                     subtitle: "如果最近没有拉到调仓数据，这里会先留空；刷新后会自动恢复。",
                     actionTitle: "立即刷新"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest() }
                 }
             } else {
                 VStack(alignment: .leading, spacing: 10) {

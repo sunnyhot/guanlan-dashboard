@@ -13,11 +13,10 @@ Use the SwiftUI application for interactive portfolio, forum, platform, settings
 ## Community
 
 ```bash
-scripts/qieman following-posts --user-name "ETF拯救世界"
+scripts/qieman group-lookup --prod-code LONG_WIN --with-group-info
 scripts/qieman group-posts --prod-code LONG_WIN
-scripts/qieman following-users
-scripts/qieman my-groups
-scripts/qieman space-items --space-user-id 123456
+scripts/qieman public-items --prod-code LONG_WIN --query "长赢计划"
+scripts/qieman post-comments --post-id 73567
 ```
 
 ## Platform and valuation
@@ -32,8 +31,8 @@ scripts/qieman valuation --fund-codes 021550,001052
 
 ## Authentication
 
-The default Cookie path is `~/Library/Application Support/QiemanDashboard/qieman.cookie`. Override it with `--cookie-file`. Never expose the Cookie content.
+The Cookie path is `~/Library/Application Support/QiemanDashboard/qieman.cookie`; there is no `--cookie-file` option. Never expose the Cookie content.
 
 ## Removed modes
 
-There is no localhost dashboard, HTTP route, Python crawler, OCR, image import, or spreadsheet import.
+There is no localhost dashboard, HTTP route, Python crawler, OCR, image import, or spreadsheet import. Login-state commands (`auth-status`, `following-users`, `my-groups`, `following-posts`, `space-items`) and `--forum-mode` were removed with the login-state migration.
