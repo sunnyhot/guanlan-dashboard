@@ -95,6 +95,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
   <string>__UPDATE_REPOSITORY__</string>
   <key>QiemanUpdateFeedURL</key>
   <string>__UPDATE_FEED_URL__</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
 </dict>
 </plist>
 PLIST
