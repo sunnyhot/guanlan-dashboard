@@ -27,7 +27,7 @@ struct EnhancementSectionView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .refreshable {
-            try? await model.refreshLatest(persist: false)
+            try? await model.refreshLatest(updateNotice: false)
         }
     }
 

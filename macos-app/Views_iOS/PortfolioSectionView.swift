@@ -25,7 +25,7 @@ struct PortfolioSectionView: View {
         }
         .background(IOSDesign.paper)
         .refreshable {
-            try? await model.refreshLatest(persist: false)
+            try? await model.refreshLatest(updateNotice: false)
         }
         .sheet(item: $detailRow) { row in
             IOSPersonalAssetDetailSheet(row: row)

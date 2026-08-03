@@ -24,7 +24,7 @@ struct OverviewSectionView: View {
         .background(IOSDesign.paper)
         .scrollDismissesKeyboard(.interactively)
         .refreshable {
-            try? await model.refreshLatest(persist: false)
+            try? await model.refreshLatest(updateNotice: false)
         }
     }
 
@@ -204,7 +204,7 @@ struct OverviewSectionView: View {
                     subtitle: "点击刷新拉取最新的调仓和社区动态。",
                     actionTitle: "刷新"
                 ) {
-                    Task { try? await model.refreshLatest(persist: false) }
+                    Task { try? await model.refreshLatest(updateNotice: false) }
                 }
             } else {
                 if !actions.isEmpty {

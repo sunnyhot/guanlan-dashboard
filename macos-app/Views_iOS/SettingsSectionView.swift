@@ -88,7 +88,7 @@ struct SettingsSectionView: View {
                 }
             }
             Button("立即刷新数据") {
-                Task { try? await model.refreshLatest(persist: false) }
+                Task { try? await model.refreshLatest(updateNotice: false) }
             }
         }
     }
