@@ -14,10 +14,17 @@ extension AppModel {
     /// 注意:trendSettings 的 API Key 从 Keychain 读取后填入(内存短暂存在)。
     func makeSyncPayload(sourceDeviceName: String) -> SyncPayload {
         var settings = trendSettings
-        // 从 Keychain 填充 API Key(内存短暂存在,随 payload 加密传输)
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.openAIKey) { settings.provider.apiKey = key }
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey) { settings.webSearch.apiKey = key }
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey) { settings.alphaVantage.apiKey = key }
+        // API Key:优先从 Keychain 读,Keychain 没有则用内存值(Keychain 弹窗被拒时 fallback)
+        let kcOpenAI = KeychainHelper.get(account: KeychainHelper.Account.openAIKey)
+        let kcTavily = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey)
+        let kcAlpha = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey)
+        if let key = kcOpenAI, !key.isEmpty { settings.provider.apiKey = key }
+        if let key = kcTavily, !key.isEmpty { settings.webSearch.apiKey = key }
+        if let key = kcAlpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
+        // 如果内存里的 key 非空(用户通过 UI 填的),也确保不丢
+        if settings.provider.apiKey.isEmpty, let key = UserDefaults.standard.string(forKey: "qieman.trend.openai.key"), !key.isEmpty {
+            settings.provider.apiKey = key
+        }
 
         return SyncPayload(
             schemaVersion: SyncPayload.currentSchemaVersion,
@@ -66,15 +73,18 @@ extension AppModel {
         // 2. 备份当前同步文件
         let backupURL = try backupCurrentSyncFiles()
 
-        // 3. 先把 API Key 存入 Keychain(从 payload 剥离)
+        // 3. 先把 API Key 存入 Keychain + UserDefaults(双写 fallback)
         if !payload.trendSettings.provider.apiKey.isEmpty {
             KeychainHelper.set(payload.trendSettings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
+            UserDefaults.standard.set(payload.trendSettings.provider.apiKey, forKey: "qieman.trend.openai.key")
         }
         if !payload.trendSettings.webSearch.apiKey.isEmpty {
             KeychainHelper.set(payload.trendSettings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
+            UserDefaults.standard.set(payload.trendSettings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
         }
         if !payload.trendSettings.alphaVantage.apiKey.isEmpty {
             KeychainHelper.set(payload.trendSettings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
+            UserDefaults.standard.set(payload.trendSettings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
         }
 
         // 4. 逐项持久化(失败则恢复备份)

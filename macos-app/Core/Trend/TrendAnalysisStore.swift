@@ -41,15 +41,16 @@ struct TrendAnalysisSettingsStore {
 
     /// 从 Keychain 填充 API Key 到 settings(覆盖空串)。
     private func fillAPIKeysFromKeychain(into settings: inout TrendAnalysisSettings) {
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.openAIKey), !key.isEmpty {
-            settings.provider.apiKey = key
-        }
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey), !key.isEmpty {
-            settings.webSearch.apiKey = key
-        }
-        if let key = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey), !key.isEmpty {
-            settings.alphaVantage.apiKey = key
-        }
+        // 优先 Keychain，fallback UserDefaults(Keychain 弹窗被拒时)
+        let openAI = KeychainHelper.get(account: KeychainHelper.Account.openAIKey)
+            ?? UserDefaults.standard.string(forKey: "qieman.trend.openai.key")
+        let tavily = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey)
+            ?? UserDefaults.standard.string(forKey: "qieman.trend.tavily.key")
+        let alpha = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey)
+            ?? UserDefaults.standard.string(forKey: "qieman.trend.alphavantage.key")
+        if let key = openAI, !key.isEmpty { settings.provider.apiKey = key }
+        if let key = tavily, !key.isEmpty { settings.webSearch.apiKey = key }
+        if let key = alpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
     }
 
     /// 迁移:若 Keychain 无值但 settings 里仍有明文 key(旧版本遗留),存进 Keychain。
@@ -72,12 +73,15 @@ struct TrendAnalysisSettingsStore {
     private func saveAPIKeysToKeychain(_ settings: TrendAnalysisSettings) {
         if !settings.provider.apiKey.isEmpty {
             KeychainHelper.set(settings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
+            UserDefaults.standard.set(settings.provider.apiKey, forKey: "qieman.trend.openai.key")
         }
         if !settings.webSearch.apiKey.isEmpty {
             KeychainHelper.set(settings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
+            UserDefaults.standard.set(settings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
         }
         if !settings.alphaVantage.apiKey.isEmpty {
             KeychainHelper.set(settings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
+            UserDefaults.standard.set(settings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
         }
     }
 }
