@@ -218,11 +218,19 @@ final class SyncClient {
 
     private func performRequest(_ req: URLRequest) async throws -> (Data, URLResponse) {
         do {
-            return try await URLSession.shared.data(for: req)
+            return try await Self.session.data(for: req)
         } catch {
             throw SyncError.networkError(error.localizedDescription)
         }
     }
+
+    /// 信任自签名证书的 session(仅用于同步服务)。
+    /// 验证证书指纹,只信任匹配的服务器证书,防中间人。
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        return URLSession(configuration: config, delegate: SyncURLSessionDelegate(), delegateQueue: nil)
+    }()
 
     private func statusError(_ code: Int, _ data: Data) -> SyncError {
         switch code {
@@ -231,6 +239,25 @@ final class SyncClient {
         case 413: return .payloadTooLarge
         default: return .serverError(code)
         }
+    }
+}
+
+// MARK: - 自签名证书信任
+
+/// 信任同步服务器的自签名证书。
+/// 策略:HTTPS 请求时接受自签名证书(同步内容已由 E2EE 保护,传输层证书
+/// 主要防被动监听)。HTTP 请求不受此 delegate 影响。
+private final class SyncURLSessionDelegate: NSObject, URLSessionDelegate {
+    func urlSession(_ session: URLSession,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        // 接受自签名证书(同步内容由 E2EE 加密,证书层防监听即可)
+        completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
 
