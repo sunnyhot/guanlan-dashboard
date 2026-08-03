@@ -160,21 +160,17 @@ struct IOSPlatformMonthlyChart: View {
             GeometryReader { geo in
                 Rectangle().fill(.clear).contentShape(Rectangle())
                     .onTapGesture { location in
-                        handleTap(location, proxy: proxy, geo: geo, months: months)
+                        // 用 plotArea 而非 plotFrame(后者在某些布局下为 nil)
+                        let plotOrigin = geo[proxy.plotAreaFrame].origin
+                        let x = location.x - plotOrigin.x
+                        if let raw = proxy.value(atX: x, as: String.self),
+                           let m = months.first(where: { monthLabel($0.month) == raw }) {
+                            selectedMonth = (selectedMonth?.month == m.month) ? nil : m
+                        } else {
+                            selectedMonth = nil
+                        }
                     }
             }
-        }
-    }
-
-    private func handleTap(_ location: CGPoint, proxy: ChartProxy, geo: GeometryProxy, months: [PlatformMonthSummary]) {
-        guard let plotFrame = proxy.plotFrame else { return }
-        let origin = geo[plotFrame].origin
-        let x = location.x - origin.x
-        if let raw = proxy.value(atX: x, as: String.self),
-           let m = months.first(where: { monthLabel($0.month) == raw }) {
-            selectedMonth = (selectedMonth?.month == m.month) ? nil : m
-        } else {
-            selectedMonth = nil
         }
     }
 
