@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.1/QiemanDashboard-3.16.1.zip",
-    "name" : "QiemanDashboard-3.16.1.zip",
-    "sha256" : "4ff2844c97693741bfb95a75594965f0aa083a7062bac4e8a7e4548f912d6c98",
-    "size" : 7003071
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.2/QiemanDashboard-3.16.2.zip",
+    "name" : "QiemanDashboard-3.16.2.zip",
+    "sha256" : "5db84e6ea8493c4fa4059a0d3e3cff734da475dddc322bfeeb263f174ec2e919",
+    "size" : 7000601
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.1/QiemanDashboard-3.16.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.2/QiemanDashboard-3.16.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.16.1.zip",
-      "size" : 7003071
+      "name" : "QiemanDashboard-3.16.2.zip",
+      "size" : 7000601
     }
   ],
-  "body" : "release: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)\nrelease: v3.16.0 API Key 同步修复(Keychain + UserDefaults 双写)\niOS Info-iOS.plist 加 ATS 例外(允许 HTTP 同步服务)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.1",
-  "name" : "QiemanDashboard v3.16.1",
-  "notes" : "release: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)\nrelease: v3.16.0 API Key 同步修复(Keychain + UserDefaults 双写)\niOS Info-iOS.plist 加 ATS 例外(允许 HTTP 同步服务)",
+  "body" : "修复跨设备同步 AI API Key\nrelease: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.2",
+  "name" : "QiemanDashboard v3.16.2",
+  "notes" : "修复跨设备同步 AI API Key\nrelease: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)",
   "published_at" : "",
-  "sha256" : "4ff2844c97693741bfb95a75594965f0aa083a7062bac4e8a7e4548f912d6c98",
-  "tag" : "v3.16.1",
-  "tag_name" : "v3.16.1",
-  "version" : "3.16.1"
+  "sha256" : "5db84e6ea8493c4fa4059a0d3e3cff734da475dddc322bfeeb263f174ec2e919",
+  "tag" : "v3.16.2",
+  "tag_name" : "v3.16.2",
+  "version" : "3.16.2"
 }
