@@ -64,11 +64,36 @@ struct IOSPlatformMonthlyChart: View {
                 legend
                 chart(months)
                 summaryStats(months)
-                if let sel = selectedMonth {
-                    tooltip(sel)
-                }
+                detailBar
             }
         }
+    }
+
+    /// 固定高度详情条:未选中显示提示,选中显示该月数据。高度恒定,卡片不跳动。
+    private var detailBar: some View {
+        HStack {
+            if let sel = selectedMonth {
+                Text("\(sel.month)")
+                    .font(IOSDesign.sansBody(13, weight: .semibold))
+                    .foregroundStyle(IOSDesign.ink)
+                Text("买入 \(sel.buyCount)")
+                    .font(IOSDesign.sansBody(12))
+                    .foregroundStyle(AppPalette.marketLoss)
+                Text("卖出 \(sel.sellCount)")
+                    .font(IOSDesign.sansBody(12))
+                    .foregroundStyle(AppPalette.marketGain)
+                Text("活跃 \(sel.activeDays) 天")
+                    .font(IOSDesign.sansBody(12))
+                    .foregroundStyle(IOSDesign.muted)
+            } else {
+                Text("点击柱子查看当月详情")
+                    .font(IOSDesign.sansBody(12))
+                    .foregroundStyle(IOSDesign.muted)
+            }
+            Spacer()
+        }
+        .frame(height: 20)
+        .padding(.top, IOSDesign.spaceS)
     }
 
     private var legend: some View {
@@ -130,7 +155,8 @@ struct IOSPlatformMonthlyChart: View {
         return Chart(rows, id: \.month) { r in
             BarMark(
                 x: .value("月", r.month),
-                y: .value("笔", r.value)
+                y: .value("笔", r.value),
+                width: .fixed(10)   // 固定柱宽,月份少时也不会变粗
             )
             .foregroundStyle(by: .value("类型", r.kind))
             .opacity(r.isSel ? 1.0 : (selectedMonth == nil ? 0.9 : 0.35))
@@ -176,16 +202,6 @@ struct IOSPlatformMonthlyChart: View {
         } else {
             selectedMonth = nil
         }
-    }
-
-    private func tooltip(_ m: PlatformMonthSummary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(m.month).font(IOSDesign.sansBody(12, weight: .semibold)).foregroundStyle(IOSDesign.ink)
-            Text("买入 \(m.buyCount) · 卖出 \(m.sellCount)").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
-            Text("共 \(m.totalCount) 笔 · 活跃 \(m.activeDays) 天").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
-        }
-        .padding(IOSDesign.spaceS)
-        .background(IOSDesign.card, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
     }
 
     private func monthLabel(_ month: String) -> String {
