@@ -40,16 +40,24 @@ final class SyncClient {
     // MARK: - Keychain 敏感配置
 
     var accessToken: String? {
-        get { KeychainHelper.get(account: KeychainHelper.Account.syncAccessToken) }
+        get {
+            KeychainHelper.get(account: KeychainHelper.Account.syncAccessToken)
+                ?? UserDefaults.standard.string(forKey: "qieman.sync.accessToken")
+        }
     }
 
     var syncPassword: String? {
-        get { KeychainHelper.get(account: KeychainHelper.Account.syncPassword) }
+        get {
+            KeychainHelper.get(account: KeychainHelper.Account.syncPassword)
+                ?? UserDefaults.standard.string(forKey: "qieman.sync.password")
+        }
         set {
             if let pw = newValue, !pw.isEmpty {
                 KeychainHelper.set(pw, account: KeychainHelper.Account.syncPassword)
+                UserDefaults.standard.set(pw, forKey: "qieman.sync.password") // fallback
             } else {
                 KeychainHelper.delete(account: KeychainHelper.Account.syncPassword)
+                UserDefaults.standard.removeObject(forKey: "qieman.sync.password")
             }
         }
     }
@@ -79,6 +87,7 @@ final class SyncClient {
         groupId = result.groupId
         deviceId = result.deviceId
         KeychainHelper.set(result.accessToken, account: KeychainHelper.Account.syncAccessToken)
+        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken") // Keychain 弹窗拒绝时的 fallback
         syncPassword = password
         lastKnownRevision = 0
     }
