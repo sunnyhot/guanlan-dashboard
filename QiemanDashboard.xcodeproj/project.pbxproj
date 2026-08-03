@@ -101,6 +101,7 @@
 		373E3F382487F6DCA7FEB521 /* TrendTrackingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD264DB06C56596F8D3EA39 /* TrendTrackingStore.swift */; };
 		3748890F795382FC34B6FC7B /* QiemanAlfaClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530593A423E9175A7555D5FD /* QiemanAlfaClient.swift */; };
 		379B6E2F39505CBEDCF42633 /* PortfolioAllocationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D8196FAF082E6214209B057 /* PortfolioAllocationPanel.swift */; };
+		38105154603D23C7A4225FAC /* SyncConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8638F66599A59F18B1E1726 /* SyncConfigView.swift */; };
 		3884DAC218D3856D85D79AB3 /* TodayBriefBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739545B5920B9779C63521B9 /* TodayBriefBuilderTests.swift */; };
 		3AB7332988BE40348727CD81 /* NativePlatformDTOs.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC9C2C4E61BDC3AFBEDF210F /* NativePlatformDTOs.swift */; };
 		3AE74A2A27C295CDCAAE892F /* TrendResearchToolRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F4669E07B218BB34165C58 /* TrendResearchToolRegistry.swift */; };
@@ -281,6 +282,7 @@
 		AD49FCD6EB90DBFE04E1244F /* TrendAnalysisAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AE2E8917D91041899627C87 /* TrendAnalysisAppModelTests.swift */; };
 		AE1D18180B7F995248C52FE7 /* Import.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EE11EDC65846E69ACB43C34 /* Import.swift */; };
 		AE446B7E1CAD22DA269648F5 /* Alfa.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7962FC074FF496C2C2C66EF1 /* Alfa.swift */; };
+		AEA44A8D1BF80196092BD01D /* SyncConfigView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8638F66599A59F18B1E1726 /* SyncConfigView.swift */; };
 		AEAC18B3BB9807DE24FE7A67 /* PersonalWatchlistActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10261990A06907CE00648829 /* PersonalWatchlistActions.swift */; };
 		AEB0605049624AB500516816 /* AlfaPortfolioCatalogItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = B43DA54E7C75A7D9A0F9F6DF /* AlfaPortfolioCatalogItem.swift */; };
 		AEDAA2C368D05BEDB419FF4C /* MenuBarTickerTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F9EA0093362A367524807A0 /* MenuBarTickerTypes.swift */; };
@@ -627,6 +629,7 @@
 		A611ECD5B10B0A1E06A9383A /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		A674FFA4D1049BB31FA5C8A5 /* SettingsWatchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWatchPanel.swift; sourceTree = "<group>"; };
 		A716ED78F4AE53696E128B89 /* PersonalWatchlistAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistAlertTests.swift; sourceTree = "<group>"; };
+		A8638F66599A59F18B1E1726 /* SyncConfigView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncConfigView.swift; sourceTree = "<group>"; };
 		A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		AACB723BAA59C85709DD4813 /* NextHourGuidanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextHourGuidanceTests.swift; sourceTree = "<group>"; };
 		AAF6649E2C7E51D642E61DCF /* MenuBarTickerEntriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarTickerEntriesTests.swift; sourceTree = "<group>"; };
@@ -794,6 +797,7 @@
 				EB40CD4B04C6B037855667ED /* SyncArchive.swift */,
 				66BB7AF02F4B65547320F095 /* SyncArchiveActions.swift */,
 				5108E5398AB51D4818878DED /* SyncClient.swift */,
+				A8638F66599A59F18B1E1726 /* SyncConfigView.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -1467,6 +1471,7 @@
 				E0E874A0F6D18B1FA8FFF7FE /* SyncArchive.swift in Sources */,
 				A002CF4F2816602B481BF0C1 /* SyncArchiveActions.swift in Sources */,
 				FF10485EA494D92E51143B1E /* SyncClient.swift in Sources */,
+				38105154603D23C7A4225FAC /* SyncConfigView.swift in Sources */,
 				3C4B26BAB7628E2C75D76586 /* TavilySearchClient.swift in Sources */,
 				7B06FD25D2F82E5981A02C1E /* TavilyWebSearchTool.swift in Sources */,
 				4ABB0C54F9BF5384D7B27D15 /* TodayBrief.swift in Sources */,
@@ -1664,6 +1669,7 @@
 				1E5FDA97B38630DF1F63FC1D /* SyncArchive.swift in Sources */,
 				350E29A13A28F7409F4D72E1 /* SyncArchiveActions.swift in Sources */,
 				89D3AD4C211A5B4B49CD6BE9 /* SyncClient.swift in Sources */,
+				AEA44A8D1BF80196092BD01D /* SyncConfigView.swift in Sources */,
 				BA34D49B1586EF757F5BD0AA /* TavilySearchClient.swift in Sources */,
 				AB27BB5A8C9647420A40DDA6 /* TavilyWebSearchTool.swift in Sources */,
 				CC0073B8F9DD5DD2F5386D88 /* TodayBrief.swift in Sources */,

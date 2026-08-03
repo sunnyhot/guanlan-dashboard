@@ -21,6 +21,7 @@ struct SettingsSectionView: View {
             managerSection
             trendSection
             alertSection
+            syncSection
             aboutSection
         }
         .listStyle(.insetGrouped)
@@ -142,6 +143,26 @@ struct SettingsSectionView: View {
             get: { model.form.prodCode },
             set: { model.form.prodCode = $0 }
         )
+    }
+
+    // MARK: - 数据同步
+
+    private var syncSection: some View {
+        Section("数据同步") {
+            NavigationLink {
+                SyncConfigView()
+            } label: {
+                HStack {
+                    Label("跨设备同步", systemImage: "icloud.and.arrow.up.and.down")
+                    Spacer()
+                    if SyncClient.shared.isConfigured {
+                        Text("已配置").foregroundStyle(IOSDesign.muted)
+                    } else {
+                        Text("未配置").foregroundStyle(AppPalette.marketGain)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - 关于

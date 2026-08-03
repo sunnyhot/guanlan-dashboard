@@ -11,6 +11,7 @@ enum SettingsFocus: CaseIterable, Identifiable {
     case trend
     case menuBar
     case valuationAlert
+    case sync
 
     var id: Self { self }
 
@@ -26,6 +27,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "菜单栏"
         case .valuationAlert:
             return "估值预警"
+        case .sync:
+            return "数据同步"
         }
     }
 
@@ -41,6 +44,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "摘要样式与内容"
         case .valuationAlert:
             return "持仓目标买卖提醒"
+        case .sync:
+            return "跨设备同步数据"
         }
     }
 
@@ -56,6 +61,8 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "menubar.rectangle"
         case .valuationAlert:
             return "target"
+        case .sync:
+            return "icloud.and.arrow.up.and.down"
         }
     }
 }
@@ -269,6 +276,8 @@ struct SettingsSectionView: View {
             return model.portfolioValuationAlertSettings.isEnabled
                 ? "\(model.portfolioValuationAlertProfiles.values.reduce(0) { $0 + $1.rules.filter(\.isEnabled).count }) 条规则"
                 : "已关闭"
+        case .sync:
+            return SyncClient.shared.isConfigured ? "已配置" : "未配置"
         }
     }
 
@@ -284,6 +293,8 @@ struct SettingsSectionView: View {
             return model.menuBarTickerSettings.isEnabled ? AppPalette.info : AppPalette.muted
         case .valuationAlert:
             return model.portfolioValuationAlertSettings.isEnabled ? AppPalette.warning : AppPalette.muted
+        case .sync:
+            return SyncClient.shared.isConfigured ? AppPalette.positive : AppPalette.muted
         }
     }
 
@@ -300,6 +311,8 @@ struct SettingsSectionView: View {
             menuBarPanel
         case .valuationAlert:
             valuationAlertPanel
+        case .sync:
+            SyncConfigView()
         }
     }
 }
