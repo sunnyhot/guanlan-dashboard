@@ -20,6 +20,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 PAYLOAD_DIR="$RESOURCES_DIR/project"
 ICONSET_DIR="$DIST_DIR/${APP_NAME}.iconset"
 ICON_FILE="$RESOURCES_DIR/${APP_NAME}.icns"
+ICON_MASTER="$ROOT_DIR/macos-app/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-iOS-1024.png"
 ZIP_FILE="/tmp/${APP_NAME}-${APP_VERSION}.zip"
 SWIFT_SOURCES=()
 
@@ -34,7 +35,7 @@ rm -f "$ZIP_FILE"
 mkdir -p "$MACOS_DIR" "$PAYLOAD_DIR" "$PAYLOAD_DIR/output" "$RESOURCES_DIR"
 
 echo "[2/8] 生成 App 图标"
-swift "$ROOT_DIR/scripts/render_macos_icon.swift" "$ICONSET_DIR"
+swift "$ROOT_DIR/scripts/render_macos_icon.swift" "$ICON_MASTER" "$ICONSET_DIR"
 iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 
 echo "[3/8] 编译原生 macOS 应用"

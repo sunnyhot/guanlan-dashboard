@@ -54,6 +54,7 @@
 		18AFD68538DF8EE0EA713A41 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 067C30E8084C8D8B7279EE90 /* AppModel.swift */; };
 		195640FD18832E19A56A83D0 /* IOSPendingTradeAndPlanSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B131986ABF90706A2D5EF4CD /* IOSPendingTradeAndPlanSheets.swift */; };
 		1A20207B6A591990215553C7 /* TrendAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2753E72DACA7B6A25E7ED552 /* TrendAnalysis.swift */; };
+		1A39AF0BE574D9848F878400 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 78E72A370A125D88F9A8BF90 /* Assets.xcassets */; };
 		1A92D40377BD007F6658A075 /* PersonalWatchlistAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D3AB67CDCA071F31CFB88B /* PersonalWatchlistAlert.swift */; };
 		1D02DA8B2D999DE342484419 /* TrendTrackingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896CB1FBAEEDEA2A5EDAEDBD /* TrendTrackingModels.swift */; };
 		1D23018CF3BEAB883332E7C6 /* TrendSourceStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54464D476D112BD2F980CD9 /* TrendSourceStatus.swift */; };
@@ -354,6 +355,7 @@
 		D7037E2CD1076E616EA75073 /* MacAppUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA730B3039CDD30F85940FB8 /* MacAppUpdateService.swift */; };
 		D79524AC6B3F3371008FBF21 /* AlphaVantageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E8FDF78041BF6158B7A7E09 /* AlphaVantageClient.swift */; };
 		D8AE4B55A0AD7FF827101E09 /* Automation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C4DF9CEBB9EC22DAF7FE09 /* Automation.swift */; };
+		D9B800E24D55F7EB12AE114E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 78E72A370A125D88F9A8BF90 /* Assets.xcassets */; };
 		DA5F5CA4C222E67577728AD4 /* AppUpdateReleaseNotesFormatterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56BA48DC1B3E0445FFFE6E4D /* AppUpdateReleaseNotesFormatterTests.swift */; };
 		DA9A02D42EAE0586AA3E2205 /* MenuBarTickerSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BCB55BE6D1A6ACE6EF3AF99 /* MenuBarTickerSettings.swift */; };
 		DBA7877FE1990FE47D9E42FD /* IOSValuationAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA0CF04F30665B08255A355 /* IOSValuationAlertSheet.swift */; };
@@ -581,6 +583,7 @@
 		74E42CE25E03550FEA35C796 /* QiemanDashboardApp_iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanDashboardApp_iOS.swift; sourceTree = "<group>"; };
 		76E1C6DC3D4671EC6FCE2D8E /* TrendResearchToolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendResearchToolTests.swift; sourceTree = "<group>"; };
 		786316F801976A11FFF8D771 /* PlatformSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformSectionView.swift; sourceTree = "<group>"; };
+		78E72A370A125D88F9A8BF90 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		7962FC074FF496C2C2C66EF1 /* Alfa.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Alfa.swift; sourceTree = "<group>"; };
 		7B29F0174A065154D631D371 /* TodayBriefPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayBriefPanel.swift; sourceTree = "<group>"; };
 		7B90832B36D08858B7DADA22 /* EnhancementTodayPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancementTodayPanel.swift; sourceTree = "<group>"; };
@@ -921,12 +924,21 @@
 				4902A0C13E1B98A24CDE6003 /* QiemanDashboardApp.swift */,
 				5F8DA67D8EF4DC842C8EDC8B /* Core */,
 				6DD1F6CF818D320DF4947614 /* Design */,
+				687B21A6381E290D2B409FC9 /* Resources */,
 				87F93868168FC12D92C19A76 /* Support */,
 				116894AFADDF8CB866A8589A /* Tests */,
 				85C30239C59CC301278C4D3C /* Views_iOS */,
 				D844BC98E2FB5DDC75098D8C /* Views_macOS */,
 			);
 			path = "macos-app";
+			sourceTree = "<group>";
+		};
+		687B21A6381E290D2B409FC9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				78E72A370A125D88F9A8BF90 /* Assets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		6DD1F6CF818D320DF4947614 /* Design */ = {
@@ -1326,6 +1338,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1A39AF0BE574D9848F878400 /* Assets.xcassets in Resources */,
 				DFCC4388C01CE3E3B4747D85 /* brand-spec.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1334,6 +1347,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D9B800E24D55F7EB12AE114E /* Assets.xcassets in Resources */,
 				53288AD081791EEB4B7BFF8E /* brand-spec.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

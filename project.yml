@@ -35,6 +35,7 @@ targets:
           - "Info-macOS.plist"
           - "Info-iOS.plist"
       - path: macos-app/Design
+      - path: macos-app/Resources/Assets.xcassets
       - path: macos-app/Views_macOS
       - path: macos-app/QiemanDashboardApp.swift
     settings:
@@ -42,6 +43,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.sunnyhot.qieman.dashboard
         PRODUCT_NAME: QiemanDashboard
         INFOPLIST_FILE: macos-app/Support/Info-macOS.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Automatic
@@ -68,6 +70,7 @@ targets:
           - "Info-macOS.plist"
           - "Info-iOS.plist"
       - path: macos-app/Design
+      - path: macos-app/Resources/Assets.xcassets
       - path: macos-app/Views_iOS
       - path: macos-app/QiemanDashboardApp_iOS.swift
     settings:
