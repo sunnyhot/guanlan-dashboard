@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.4/QiemanDashboard-3.14.4.zip",
-    "name" : "QiemanDashboard-3.14.4.zip",
-    "sha256" : "0104f844f859aa9b50430292a888077d33e213996d5bdc9e09eedfea69f86fd7",
-    "size" : 6306888
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.0/QiemanDashboard-3.15.0.zip",
+    "name" : "QiemanDashboard-3.15.0.zip",
+    "sha256" : "e605e271b2d9659c7715b17fff0ba5aacd94289062f4c6cc334cd1bfd8218d22",
+    "size" : 6978178
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.14.4/QiemanDashboard-3.14.4.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.0/QiemanDashboard-3.15.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.14.4.zip",
-      "size" : 6306888
+      "name" : "QiemanDashboard-3.15.0.zip",
+      "size" : 6978178
     }
   ],
-  "body" : "清理死代码、修正技能文档、统一存储键 (v3.14.4)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.14.4",
-  "name" : "QiemanDashboard v3.14.4",
-  "notes" : "清理死代码、修正技能文档、统一存储键 (v3.14.4)",
+  "body" : "release: v3.15.0 跨平台 iOS + 数据同步 + API Key Keychain\n补充 Assets.xcassets 图标资源 + project.yml 配置\n同步 UI 拆成两端各自独立(遵守「完全两套 Views」)\n数据同步 UI(macOS+iOS 设置页,同步步骤 6-7)\nSyncClient 客户端同步层(同步步骤 5)\nNode.js 同步服务端(同步步骤 4)\nPBKDF2 + AES-GCM 密文容器(同步步骤 3)\nSyncDTO + 运行态清洗 + 事务式导入(同步步骤 2)\nAPI Key 迁 Keychain + 冻结数据同步协议(同步功能前置)\n设置页去掉下拉刷新\n关于页只保留版本号,去掉平台和更新方式\n配置模型按钮无反应(此前一律调 startTrendAnalysis)\n月度调仓去掉冗余的累计汇总行\n月度图表点击柱子无反应(plotFrame 为 nil)\n月度调仓底部固定位置切换(累计↔详情),去掉重复提示\n月度调仓去掉未选中时的冗余提示行\n月度调仓合并重复信息(汇总+详情二合一)\n月度柱状图柱宽固定+详情条高度恒定(卡片不跳动)\n月度调仓柱状图并排分组+点击高亮详情\n删除总览页「今日简报」报头(与导航栏大标题重复)\n压缩大标题与内容之间的空白\n去掉全局刷新按钮,统一用下拉刷新\n平台页标题改 inline 显示(此前 safeAreaInset 把大标题挤没了)\n平台页大标题滚动联动伸缩(分段控件改用 safeAreaInset 钉顶)\n月度调仓柱状图支持左右拖动(月份多时底部标尺不再挤)\n平台页模式切换 + 月度图表重新设计(回应交互反馈)\n平台动态页重新设计信息架构(分析优先,不再功能堆砌)\n持仓添加/关注列表入口移到卡片内(此前被 toolbar 覆盖看不到)\niOS 平台页重型可视化 + alfa 投顾组合面板\niOS 补齐 P2 功能(主理人关注巡检 + 关注列表)\niOS 补齐 P1 管理功能(待确认交易 + 投资计划 + 估值告警)\niOS 补齐核心管理功能(持仓 CRUD + AI 模型配置)\niOS 平台动态页对齐 macOS 产品逻辑\niOS dark mode 适配(暖色调自适应)\ndesign: iOS 采用编辑杂志型设计(暖砖红 + serif,反 AI-slop)\niOS 交互打磨(阶段 3)\niOS 版 5 个板块全部实现(阶段 2)\n建 QiemanDashboard.xcodeproj,iOS 版首次在模拟器跑起来(阶段 1 完成)\nView 层拆为完全两套 Views_macOS/ + Views_iOS/(阶段 1 重做)\n修复远端 v3.14.x 遗留的测试失败\n拆分应用入口为双平台,新建 iOS 入口(阶段 1 纯代码部分)\n抽取平台边界为跨平台协议,为 iOS target 做准备(阶段 0)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.0",
+  "name" : "QiemanDashboard v3.15.0",
+  "notes" : "release: v3.15.0 跨平台 iOS + 数据同步 + API Key Keychain\n补充 Assets.xcassets 图标资源 + project.yml 配置\n同步 UI 拆成两端各自独立(遵守「完全两套 Views」)\n数据同步 UI(macOS+iOS 设置页,同步步骤 6-7)\nSyncClient 客户端同步层(同步步骤 5)\nNode.js 同步服务端(同步步骤 4)\nPBKDF2 + AES-GCM 密文容器(同步步骤 3)\nSyncDTO + 运行态清洗 + 事务式导入(同步步骤 2)\nAPI Key 迁 Keychain + 冻结数据同步协议(同步功能前置)\n设置页去掉下拉刷新\n关于页只保留版本号,去掉平台和更新方式\n配置模型按钮无反应(此前一律调 startTrendAnalysis)\n月度调仓去掉冗余的累计汇总行\n月度图表点击柱子无反应(plotFrame 为 nil)\n月度调仓底部固定位置切换(累计↔详情),去掉重复提示\n月度调仓去掉未选中时的冗余提示行\n月度调仓合并重复信息(汇总+详情二合一)\n月度柱状图柱宽固定+详情条高度恒定(卡片不跳动)\n月度调仓柱状图并排分组+点击高亮详情\n删除总览页「今日简报」报头(与导航栏大标题重复)\n压缩大标题与内容之间的空白\n去掉全局刷新按钮,统一用下拉刷新\n平台页标题改 inline 显示(此前 safeAreaInset 把大标题挤没了)\n平台页大标题滚动联动伸缩(分段控件改用 safeAreaInset 钉顶)\n月度调仓柱状图支持左右拖动(月份多时底部标尺不再挤)\n平台页模式切换 + 月度图表重新设计(回应交互反馈)\n平台动态页重新设计信息架构(分析优先,不再功能堆砌)\n持仓添加/关注列表入口移到卡片内(此前被 toolbar 覆盖看不到)\niOS 平台页重型可视化 + alfa 投顾组合面板\niOS 补齐 P2 功能(主理人关注巡检 + 关注列表)\niOS 补齐 P1 管理功能(待确认交易 + 投资计划 + 估值告警)\niOS 补齐核心管理功能(持仓 CRUD + AI 模型配置)\niOS 平台动态页对齐 macOS 产品逻辑\niOS dark mode 适配(暖色调自适应)\ndesign: iOS 采用编辑杂志型设计(暖砖红 + serif,反 AI-slop)\niOS 交互打磨(阶段 3)\niOS 版 5 个板块全部实现(阶段 2)\n建 QiemanDashboard.xcodeproj,iOS 版首次在模拟器跑起来(阶段 1 完成)\nView 层拆为完全两套 Views_macOS/ + Views_iOS/(阶段 1 重做)\n修复远端 v3.14.x 遗留的测试失败\n拆分应用入口为双平台,新建 iOS 入口(阶段 1 纯代码部分)\n抽取平台边界为跨平台协议,为 iOS target 做准备(阶段 0)",
   "published_at" : "",
-  "sha256" : "0104f844f859aa9b50430292a888077d33e213996d5bdc9e09eedfea69f86fd7",
-  "tag" : "v3.14.4",
-  "tag_name" : "v3.14.4",
-  "version" : "3.14.4"
+  "sha256" : "e605e271b2d9659c7715b17fff0ba5aacd94289062f4c6cc334cd1bfd8218d22",
+  "tag" : "v3.15.0",
+  "tag_name" : "v3.15.0",
+  "version" : "3.15.0"
 }
