@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.4/QiemanDashboard-3.15.4.zip",
-    "name" : "QiemanDashboard-3.15.4.zip",
-    "sha256" : "07e808105b29990d23c4fa23ecedad410aa31d8a55dd8a103f6d79ef221d1ae2",
-    "size" : 6979526
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.5/QiemanDashboard-3.15.5.zip",
+    "name" : "QiemanDashboard-3.15.5.zip",
+    "sha256" : "fb6a66d0c721859c57063dace32430260a0f0b4b4fddf828e62bbd91b8f18fde",
+    "size" : 6979911
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.4/QiemanDashboard-3.15.4.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.5/QiemanDashboard-3.15.5.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.4.zip",
-      "size" : 6979526
+      "name" : "QiemanDashboard-3.15.5.zip",
+      "size" : 6979911
     }
   ],
-  "body" : "release: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)\nrelease: v3.15.3 ATS 例外修复自签名 SSL 错误",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.4",
-  "name" : "QiemanDashboard v3.15.4",
-  "notes" : "release: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)\nrelease: v3.15.3 ATS 例外修复自签名 SSL 错误",
+  "body" : "release: v3.15.5 加重置同步配置按钮\nrelease: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.5",
+  "name" : "QiemanDashboard v3.15.5",
+  "notes" : "release: v3.15.5 加重置同步配置按钮\nrelease: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)",
   "published_at" : "",
-  "sha256" : "07e808105b29990d23c4fa23ecedad410aa31d8a55dd8a103f6d79ef221d1ae2",
-  "tag" : "v3.15.4",
-  "tag_name" : "v3.15.4",
-  "version" : "3.15.4"
+  "sha256" : "fb6a66d0c721859c57063dace32430260a0f0b4b4fddf828e62bbd91b8f18fde",
+  "tag" : "v3.15.5",
+  "tag_name" : "v3.15.5",
+  "version" : "3.15.5"
 }
