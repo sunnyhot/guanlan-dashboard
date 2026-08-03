@@ -63,34 +63,26 @@ struct IOSPlatformMonthlyChart: View {
             } else {
                 legend
                 chart(months)
-                summaryStats(months)
-                detailBar
+                statsBar(months)
             }
         }
     }
 
-    /// 固定高度详情条:未选中显示提示,选中显示该月数据。高度恒定,卡片不跳动。
-    private var detailBar: some View {
-        HStack {
+    /// 统计/详情条(固定高度):未选中显示累计汇总,选中显示该月明细。
+    private func statsBar(_ months: [PlatformMonthSummary]) -> some View {
+        HStack(spacing: IOSDesign.spaceM) {
             if let sel = selectedMonth {
-                Text("\(sel.month)")
-                    .font(IOSDesign.sansBody(13, weight: .semibold))
-                    .foregroundStyle(IOSDesign.ink)
-                Text("买入 \(sel.buyCount)")
-                    .font(IOSDesign.sansBody(12))
-                    .foregroundStyle(AppPalette.marketLoss)
-                Text("卖出 \(sel.sellCount)")
-                    .font(IOSDesign.sansBody(12))
-                    .foregroundStyle(AppPalette.marketGain)
-                Text("活跃 \(sel.activeDays) 天")
-                    .font(IOSDesign.sansBody(12))
-                    .foregroundStyle(IOSDesign.muted)
+                Text("\(sel.month)").font(IOSDesign.sansBody(13, weight: .semibold)).foregroundStyle(IOSDesign.ink)
+                Spacer()
+                Text("买 \(sel.buyCount)").font(IOSDesign.monoNumber(12)).foregroundStyle(AppPalette.marketLoss)
+                Text("卖 \(sel.sellCount)").font(IOSDesign.monoNumber(12)).foregroundStyle(AppPalette.marketGain)
+                Text("\(sel.activeDays) 天").font(IOSDesign.monoNumber(12)).foregroundStyle(IOSDesign.muted)
             } else {
-                Text("点击柱子查看当月详情")
-                    .font(IOSDesign.sansBody(12))
-                    .foregroundStyle(IOSDesign.muted)
+                let total = months.reduce(0) { $0 + $1.totalCount }
+                Text("累计 \(total) 笔").font(IOSDesign.sansBody(12)).foregroundStyle(IOSDesign.ink)
+                Spacer()
+                Text("点柱看详情").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
             }
-            Spacer()
         }
         .frame(height: 20)
         .padding(.top, IOSDesign.spaceS)
@@ -108,25 +100,6 @@ struct IOSPlatformMonthlyChart: View {
             }
             Spacer()
         }
-    }
-
-    private func summaryStats(_ months: [PlatformMonthSummary]) -> some View {
-        let total = months.reduce(0) { $0 + $1.totalCount }
-        let buys = months.reduce(0) { $0 + $1.buyCount }
-        let sells = months.reduce(0) { $0 + $1.sellCount }
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: IOSDesign.spaceS) {
-            statTile("累计", "\(total)")
-            statTile("买入", "\(buys)", tone: AppPalette.marketLoss)
-            statTile("卖出", "\(sells)", tone: AppPalette.marketGain)
-        }
-    }
-
-    private func statTile(_ title: String, _ value: String, tone: Color = IOSDesign.ink) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(IOSDesign.monoNumber(16)).foregroundStyle(tone)
-            Text(title).font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
-        }
-        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
