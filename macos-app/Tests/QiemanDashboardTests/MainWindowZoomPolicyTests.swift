@@ -46,7 +46,7 @@ final class MainWindowZoomPolicyTests: XCTestCase {
 
     func testBothDoubleClickEntryPointsUseWorkspaceFillingZoom() throws {
         let appSource = try String(contentsOf: sourceURL("QiemanDashboardApp.swift"), encoding: .utf8)
-        let contentSource = try String(contentsOf: sourceURL("Views/ContentView.swift"), encoding: .utf8)
+        let contentSource = try String(contentsOf: sourceURL("Views_macOS/ContentView.swift"), encoding: .utf8)
 
         XCTAssertTrue(appSource.contains("toggleMainWindowZoom(win)"))
         XCTAssertTrue(contentSource.contains("delegate.toggleMainWindowZoom(mainWin)"))

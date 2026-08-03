@@ -234,13 +234,13 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertEqual(summary.detail, "等待模型返回：模型分析 已等待 1m")
     }
 
-    /// Overview 板块源码已按子视图拆到 Views/Overview/ 目录，断言汇总该目录下所有 .swift 文件。
+    /// Overview 板块源码已按子视图拆到 Views_macOS/Overview/ 目录，断言汇总该目录下所有 .swift 文件。
     private func overviewSectionSources() throws -> String {
         let overviewDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/Overview")
+            .appendingPathComponent("Views_macOS/Overview")
         let urls = try FileManager.default
             .contentsOfDirectory(at: overviewDir, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "swift" }
@@ -301,7 +301,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views", isDirectory: true)
+            .appendingPathComponent("Views_macOS", isDirectory: true)
         let trendSource = try String(
             contentsOf: viewsURL.appendingPathComponent("EnhancementTrendPanel.swift"),
             encoding: .utf8
@@ -336,15 +336,15 @@ final class TrendDashboardSummaryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let centerSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/EnhancementCenterView.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/EnhancementCenterView.swift"),
             encoding: .utf8
         )
         let trendSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/EnhancementTrendPanel.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/EnhancementTrendPanel.swift"),
             encoding: .utf8
         )
         let evidenceSheetSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/TrendEvidenceDetailSheet.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/TrendEvidenceDetailSheet.swift"),
             encoding: .utf8
         )
 
@@ -430,7 +430,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/EnhancementCenterView.swift")
+            .appendingPathComponent("Views_macOS/EnhancementCenterView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertFalse(source.contains("statusCardGrid(summary)"))
@@ -448,15 +448,15 @@ final class TrendDashboardSummaryTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let settingsSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/SettingsSectionView.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/SettingsSectionView.swift"),
             encoding: .utf8
         )
         let trendSettingsSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/SettingsTrendPanel.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/SettingsTrendPanel.swift"),
             encoding: .utf8
         )
         let trendPanelSource = try String(
-            contentsOf: rootURL.appendingPathComponent("Views/EnhancementTrendPanel.swift"),
+            contentsOf: rootURL.appendingPathComponent("Views_macOS/EnhancementTrendPanel.swift"),
             encoding: .utf8
         )
 

@@ -330,7 +330,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PortfolioSectionView.swift")
+            .appendingPathComponent("Views_macOS/PortfolioSectionView.swift")
     }
 
     private func donutChartSourceURL() -> URL {
@@ -338,7 +338,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/DonutChart.swift")
+            .appendingPathComponent("Views_macOS/DonutChart.swift")
     }
 
     private func personalAssetBrowserSourceURL() -> URL {
@@ -346,7 +346,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PersonalAssetBrowser.swift")
+            .appendingPathComponent("Views_macOS/PersonalAssetBrowser.swift")
     }
 
     private func personalAssetCardsSourceURL() -> URL {
@@ -354,7 +354,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PersonalAssetCards.swift")
+            .appendingPathComponent("Views_macOS/PersonalAssetCards.swift")
     }
 
     private func personalAssetDetailSourceURL() -> URL {
@@ -362,7 +362,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PersonalAsset/PersonalAssetDetailSheet.swift")
+            .appendingPathComponent("Views_macOS/PersonalAsset/PersonalAssetDetailSheet.swift")
     }
 
     private func personalAssetTrendChartSourceURL() -> URL {
@@ -370,7 +370,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PersonalAsset/PersonalAssetPriceTrendChart.swift")
+            .appendingPathComponent("Views_macOS/PersonalAsset/PersonalAssetPriceTrendChart.swift")
     }
 
     private func personalAssetTableRowSourceURL() -> URL {
@@ -378,7 +378,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/PersonalAsset/PersonalAssetTableRow.swift")
+            .appendingPathComponent("Views_macOS/PersonalAsset/PersonalAssetTableRow.swift")
     }
 
     private func row(

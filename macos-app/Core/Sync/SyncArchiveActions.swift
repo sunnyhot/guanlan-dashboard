@@ -130,21 +130,29 @@ extension AppModel {
         payload.managerWatch.merge(into: &managerWatchSettings)
         alfaPortfolios = payload.alfaPortfolios
 
-        // trendSettings:从 payload 填充(API Key 已存 Keychain,内存里清空)
-        var settings = trendSettings
-        settings.provider = payload.trendSettings.provider
-        settings.webSearch = payload.trendSettings.webSearch
-        settings.alphaVantage = payload.trendSettings.alphaVantage
-        settings.provider.apiKey = ""  // 内存不留明文 key
-        settings.webSearch.apiKey = ""
-        settings.alphaVantage.apiKey = ""
-        trendSettings = settings
+        // AI 请求和设置界面都直接读取内存中的 API Key。
+        // 明文只不落 JSON 文件，不能在应用同步后把运行态也清空。
+        trendSettings = Self.trendSettingsByApplyingSync(
+            payload.trendSettings,
+            to: trendSettings
+        )
+    }
+
+    /// 纯数据合并：同步三类外部服务配置，保留本机不在同步协议中的运行设置。
+    static func trendSettingsByApplyingSync(
+        _ synced: TrendSettingsSyncDTO,
+        to current: TrendAnalysisSettings
+    ) -> TrendAnalysisSettings {
+        var settings = current
+        settings.provider = synced.provider
+        settings.webSearch = synced.webSearch
+        settings.alphaVantage = synced.alphaVantage
+        return settings
     }
 
     // MARK: - 持久化到文件
 
     private func persistSyncedData(_ payload: SyncPayload) throws {
-        let fm = FileManager.default
         guard let dir = dataDirectoryURL else {
             throw SyncError.dataDirectoryUnavailable
         }

@@ -407,6 +407,7 @@
 		ED59F133B06DD40B7ECA8B69 /* PlatformFilterState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415245D1231E4A371932900E /* PlatformFilterState.swift */; };
 		EE20B55CC4C6B411ABB22D59 /* PersonalAssetTableRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F8BE34CE47401DEED8765EB /* PersonalAssetTableRow.swift */; };
 		EE55CDF560F1B4407D1DDC5E /* PlatformBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */; };
+		EEEEB5553C0D1952127AB0DA /* SyncArchiveActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BE927FC10D9F49FC1F18EB /* SyncArchiveActionsTests.swift */; };
 		EF6B95466D945D57B0779798 /* ArchiveCipher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F5C9ED4C58CECA861EB4CF /* ArchiveCipher.swift */; };
 		EF7B53B418687A4CF3FB1070 /* PersonalAssetEnums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53401FEF3619A5F8D3242CF3 /* PersonalAssetEnums.swift */; };
 		EFB2073C2647FB1679C23D34 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E4F04C80C765D21924489E /* LaunchAtLogin.swift */; };
@@ -547,6 +548,7 @@
 		567C573F33E92B623DC4F61B /* QiemanDashboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QiemanDashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		567FFF197FEDE74061603126 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		56BA48DC1B3E0445FFFE6E4D /* AppUpdateReleaseNotesFormatterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateReleaseNotesFormatterTests.swift; sourceTree = "<group>"; };
+		57BE927FC10D9F49FC1F18EB /* SyncArchiveActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncArchiveActionsTests.swift; sourceTree = "<group>"; };
 		588902303AECA49AB1FB739B /* PersonalAssetSortingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAssetSortingTests.swift; sourceTree = "<group>"; };
 		58F14280623FC5051614ECAC /* PortfolioMenuBarTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioMenuBarTitleTests.swift; sourceTree = "<group>"; };
 		596C61E08816DEBFD1D7A979 /* PortfolioValuationAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioValuationAlert.swift; sourceTree = "<group>"; };
@@ -1208,6 +1210,7 @@
 				0E4A171FAE07B3C1F625100A /* RefreshDecisionTests.swift */,
 				4BA7C40A85E84C73799CEA2B /* SECOfficialResearchToolTests.swift */,
 				23D694D380386539B3898654 /* StrategyRadarTests.swift */,
+				57BE927FC10D9F49FC1F18EB /* SyncArchiveActionsTests.swift */,
 				2A0B3073643C8A2AC60DBDCF /* TavilySearchClientTests.swift */,
 				739545B5920B9779C63521B9 /* TodayBriefBuilderTests.swift */,
 				6AE2E8917D91041899627C87 /* TrendAnalysisAppModelTests.swift */,
@@ -1786,6 +1789,7 @@
 				96014A09EE64B1A3B1234E30 /* RefreshDecisionTests.swift in Sources */,
 				33C5C787798E9D65DA730D62 /* SECOfficialResearchToolTests.swift in Sources */,
 				5412789BC194C3AB1C548DFE /* StrategyRadarTests.swift in Sources */,
+				EEEEB5553C0D1952127AB0DA /* SyncArchiveActionsTests.swift in Sources */,
 				C91BE1B5CBE88B0D77723F6F /* TavilySearchClientTests.swift in Sources */,
 				3884DAC218D3856D85D79AB3 /* TodayBriefBuilderTests.swift in Sources */,
 				AD49FCD6EB90DBFE04E1244F /* TrendAnalysisAppModelTests.swift in Sources */,

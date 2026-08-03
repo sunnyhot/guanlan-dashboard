@@ -3,11 +3,25 @@ import Foundation
 struct TrendAnalysisSettingsStore {
     private let decoder = JSONDecoder()
     private let encoder: JSONEncoder
+    private let readSecret: (String) -> String?
+    private let writeSecret: (String, String) -> Void
+    private let userDefaults: UserDefaults
 
-    init() {
+    init(
+        readSecret: @escaping (String) -> String? = {
+            KeychainHelper.get(account: $0)
+        },
+        writeSecret: @escaping (String, String) -> Void = { value, account in
+            KeychainHelper.set(value, account: account)
+        },
+        userDefaults: UserDefaults = .standard
+    ) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         self.encoder = encoder
+        self.readSecret = readSecret
+        self.writeSecret = writeSecret
+        self.userDefaults = userDefaults
     }
 
     func load(from fileURL: URL) throws -> TrendAnalysisSettings {
@@ -41,47 +55,66 @@ struct TrendAnalysisSettingsStore {
 
     /// 从 Keychain 填充 API Key 到 settings(覆盖空串)。
     private func fillAPIKeysFromKeychain(into settings: inout TrendAnalysisSettings) {
-        // 优先 Keychain，fallback UserDefaults(Keychain 弹窗被拒时)
-        let openAI = KeychainHelper.get(account: KeychainHelper.Account.openAIKey)
-            ?? UserDefaults.standard.string(forKey: "qieman.trend.openai.key")
-        let tavily = KeychainHelper.get(account: KeychainHelper.Account.tavilyKey)
-            ?? UserDefaults.standard.string(forKey: "qieman.trend.tavily.key")
-        let alpha = KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey)
-            ?? UserDefaults.standard.string(forKey: "qieman.trend.alphavantage.key")
+        // 优先 Keychain，fallback UserDefaults(Keychain 弹窗被拒时)。
+        // 只要成功读到旧 Keychain 值就自动回填 fallback，
+        // 避免后续 App 签名变化或授权被拒时上传空 key。
+        let openAI = resolvedAPIKey(
+            account: KeychainHelper.Account.openAIKey,
+            userDefaultsKey: "qieman.trend.openai.key"
+        )
+        let tavily = resolvedAPIKey(
+            account: KeychainHelper.Account.tavilyKey,
+            userDefaultsKey: "qieman.trend.tavily.key"
+        )
+        let alpha = resolvedAPIKey(
+            account: KeychainHelper.Account.alphaVantageKey,
+            userDefaultsKey: "qieman.trend.alphavantage.key"
+        )
         if let key = openAI, !key.isEmpty { settings.provider.apiKey = key }
         if let key = tavily, !key.isEmpty { settings.webSearch.apiKey = key }
         if let key = alpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
     }
 
+    private func resolvedAPIKey(account: String, userDefaultsKey: String) -> String? {
+        if let key = readSecret(account), !key.isEmpty {
+            userDefaults.set(key, forKey: userDefaultsKey)
+            return key
+        }
+        if let key = userDefaults.string(forKey: userDefaultsKey), !key.isEmpty {
+            return key
+        }
+        return nil
+    }
+
     /// 迁移:若 Keychain 无值但 settings 里仍有明文 key(旧版本遗留),存进 Keychain。
     private func migrateAPIKeysIfNeeded(into settings: inout TrendAnalysisSettings) {
-        if KeychainHelper.get(account: KeychainHelper.Account.openAIKey) == nil,
+        if readSecret(KeychainHelper.Account.openAIKey) == nil,
            !settings.provider.apiKey.isEmpty {
-            KeychainHelper.set(settings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
+            writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
         }
-        if KeychainHelper.get(account: KeychainHelper.Account.tavilyKey) == nil,
+        if readSecret(KeychainHelper.Account.tavilyKey) == nil,
            !settings.webSearch.apiKey.isEmpty {
-            KeychainHelper.set(settings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
+            writeSecret(settings.webSearch.apiKey, KeychainHelper.Account.tavilyKey)
         }
-        if KeychainHelper.get(account: KeychainHelper.Account.alphaVantageKey) == nil,
+        if readSecret(KeychainHelper.Account.alphaVantageKey) == nil,
            !settings.alphaVantage.apiKey.isEmpty {
-            KeychainHelper.set(settings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
+            writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)
         }
     }
 
     /// 把 settings 的 API Key 存进 Keychain。
     private func saveAPIKeysToKeychain(_ settings: TrendAnalysisSettings) {
         if !settings.provider.apiKey.isEmpty {
-            KeychainHelper.set(settings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
-            UserDefaults.standard.set(settings.provider.apiKey, forKey: "qieman.trend.openai.key")
+            writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
+            userDefaults.set(settings.provider.apiKey, forKey: "qieman.trend.openai.key")
         }
         if !settings.webSearch.apiKey.isEmpty {
-            KeychainHelper.set(settings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
-            UserDefaults.standard.set(settings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
+            writeSecret(settings.webSearch.apiKey, KeychainHelper.Account.tavilyKey)
+            userDefaults.set(settings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
         }
         if !settings.alphaVantage.apiKey.isEmpty {
-            KeychainHelper.set(settings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
-            UserDefaults.standard.set(settings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
+            writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)
+            userDefaults.set(settings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
         }
     }
 }

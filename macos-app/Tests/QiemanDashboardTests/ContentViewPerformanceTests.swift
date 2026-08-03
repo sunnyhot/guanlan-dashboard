@@ -7,7 +7,7 @@ final class ContentViewPerformanceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Views/ContentView.swift")
+            .appendingPathComponent("Views_macOS/ContentView.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertFalse(source.contains(".id(model.selectedSection)"))

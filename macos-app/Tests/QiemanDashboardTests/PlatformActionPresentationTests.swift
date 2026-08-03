@@ -49,8 +49,8 @@ final class PlatformActionPresentationTests: XCTestCase {
     }
 
     func testAdjustmentHistoryUsesOneSectionHeadingAndLabelsItsSummaryAndChart() throws {
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let overview = try source(at: "Views/Platform/PlatformMonthlyOverview.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let overview = try source(at: "Views_macOS/Platform/PlatformMonthlyOverview.swift")
 
         XCTAssertFalse(platform.contains("交易时间总览"))
         XCTAssertFalse(platform.contains("isMonthlyExpanded"))

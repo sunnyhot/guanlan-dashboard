@@ -3,9 +3,9 @@ import XCTest
 
 final class UIExperienceRegressionTests: XCTestCase {
     func testPresentedAssetSheetDisablesBackgroundInteractionAndHover() throws {
-        let browser = try source(at: "Views/PersonalAssetBrowser.swift")
-        let row = try source(at: "Views/PersonalAsset/PersonalAssetTableRow.swift")
-        let components = try source(at: "Views/SharedComponents.swift")
+        let browser = try source(at: "Views_macOS/PersonalAssetBrowser.swift")
+        let row = try source(at: "Views_macOS/PersonalAsset/PersonalAssetTableRow.swift")
+        let components = try source(at: "Views_macOS/SharedComponents.swift")
 
         XCTAssertTrue(browser.contains("let allowsInteraction = selectedDetailRow == nil"))
         XCTAssertTrue(browser.contains(".allowsHitTesting(allowsInteraction)"))
@@ -16,7 +16,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testSharedInteractionPrimitivesSupportStaticSurfacesDismissibleToastsAndReducedMotion() throws {
-        let source = try source(at: "Views/SharedComponents.swift")
+        let source = try source(at: "Views_macOS/SharedComponents.swift")
 
         XCTAssertTrue(source.contains("func staticSurface("))
         XCTAssertTrue(source.contains("accessibilityReduceMotion"))
@@ -24,7 +24,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testResponsiveCardHoverDoesNotExpandPastScrollBounds() throws {
-        let source = try source(at: "Views/SharedComponents.swift")
+        let source = try source(at: "Views_macOS/SharedComponents.swift")
 
         XCTAssertTrue(source.contains("configuration.isPressed ? 0.965 : 1"))
         XCTAssertTrue(source.contains(".brightness(isHovering ? 0.025 : 0)"))
@@ -32,8 +32,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testVisibleActionsUseTheUnifiedAppButtonSystem() throws {
-        let components = try source(at: "Views/SharedComponents.swift")
-        let views = try sourceTree(at: "Views")
+        let components = try source(at: "Views_macOS/SharedComponents.swift")
+        let views = try sourceTree(at: "Views_macOS")
 
         XCTAssertTrue(components.contains("enum AppActionButtonKind: Equatable"))
         XCTAssertTrue(components.contains("struct AppActionButtonStyle: ButtonStyle"))
@@ -51,10 +51,10 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPrimaryModuleTabsUseOneSharedVisualSystem() throws {
-        let components = try source(at: "Views/SharedComponents.swift")
-        let portfolio = try source(at: "Views/PortfolioSectionView.swift")
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let enhancement = try source(at: "Views/EnhancementCenterView.swift")
+        let components = try source(at: "Views_macOS/SharedComponents.swift")
+        let portfolio = try source(at: "Views_macOS/PortfolioSectionView.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let enhancement = try source(at: "Views_macOS/EnhancementCenterView.swift")
 
         XCTAssertTrue(components.contains("struct ModuleTabBar<"))
         XCTAssertTrue(components.contains("private func moduleTabButton"))
@@ -72,7 +72,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testAssetAddControlUsesACustomPopoverInsteadOfTheSystemMenu() throws {
-        let source = try source(at: "Views/PersonalAssetCards.swift")
+        let source = try source(at: "Views_macOS/PersonalAssetCards.swift")
         let addStart = try XCTUnwrap(source.range(of: "struct PersonalAssetAddButtons"))
         let emptyStateStart = try XCTUnwrap(
             source.range(of: "struct PersonalPortfolioEmptyState", range: addStart.upperBound..<source.endIndex)
@@ -89,7 +89,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPersonalAssetPrimaryContentOpensDetailWithoutRequiringIconButton() throws {
-        let source = try source(at: "Views/PersonalAsset/PersonalAssetTableRow.swift")
+        let source = try source(at: "Views_macOS/PersonalAsset/PersonalAssetTableRow.swift")
 
         XCTAssertTrue(source.contains("Button {\n                onOpenDetail?()"))
         XCTAssertTrue(source.contains(".accessibilityLabel(\"查看 \\(row.fundName) 详情\")"))
@@ -106,9 +106,9 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testSettingsControlsHaveSemanticsKeyboardSortingAndSafeResetConfirmation() throws {
-        let components = try source(at: "Views/SettingsComponents.swift")
-        let menuBar = try source(at: "Views/SettingsMenuBarPanel.swift")
-        let watch = try source(at: "Views/SettingsWatchPanel.swift")
+        let components = try source(at: "Views_macOS/SettingsComponents.swift")
+        let menuBar = try source(at: "Views_macOS/SettingsMenuBarPanel.swift")
+        let watch = try source(at: "Views_macOS/SettingsWatchPanel.swift")
 
         XCTAssertTrue(components.contains("Toggle(title, isOn: isOn)"))
         XCTAssertTrue(menuBar.contains("isConfirmingMenuBarReset"))
@@ -137,10 +137,10 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         XCTAssertEqual(model.appearance, .dark)
 
-        let settings = try source(at: "Views/SettingsSectionView.swift")
-        let appSettings = try source(at: "Views/SettingsAppPanel.swift")
-        let content = try source(at: "Views/ContentView.swift")
-        let menuBar = try source(at: "Views/MenuBarPortfolioView.swift")
+        let settings = try source(at: "Views_macOS/SettingsSectionView.swift")
+        let appSettings = try source(at: "Views_macOS/SettingsAppPanel.swift")
+        let content = try source(at: "Views_macOS/ContentView.swift")
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
         let appModel = try source(at: "Core/AppModel.swift")
         XCTAssertTrue(settings.contains("case general"))
         XCTAssertTrue(settings.contains("return \"通用\""))
@@ -160,7 +160,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testSettingsHierarchyUsesDistinctPanelHeaderGroupHeaderAndContentSurfaces() throws {
-        let components = try source(at: "Views/SettingsComponents.swift")
+        let components = try source(at: "Views_macOS/SettingsComponents.swift")
 
         XCTAssertTrue(components.contains(".font(AppPalette.appFont(.largeTitle, weight: .bold))"))
         XCTAssertTrue(components.contains(".background(AppPalette.surfaceVariant.opacity(0.28))"))
@@ -172,9 +172,9 @@ final class UIExperienceRegressionTests: XCTestCase {
 
     func testEditorsKeepValidationFeedbackInsideThePresentedSheet() throws {
         let sources = try [
-            source(at: "Views/PersonalAsset/PersonalPendingTradeEditSheet.swift"),
-            source(at: "Views/PersonalAsset/PersonalInvestmentPlanEditor.swift"),
-            source(at: "Views/PersonalAssetCards.swift"),
+            source(at: "Views_macOS/PersonalAsset/PersonalPendingTradeEditSheet.swift"),
+            source(at: "Views_macOS/PersonalAsset/PersonalInvestmentPlanEditor.swift"),
+            source(at: "Views_macOS/PersonalAssetCards.swift"),
         ]
 
         for source in sources {
@@ -183,8 +183,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testHiddenHorizontalOverflowIsNotUsedForPrimaryInformation() throws {
-        let content = try source(at: "Views/ContentView.swift")
-        let forum = try source(at: "Views/ForumSectionView.swift")
+        let content = try source(at: "Views_macOS/ContentView.swift")
+        let forum = try source(at: "Views_macOS/ForumSectionView.swift")
 
         XCTAssertFalse(content.contains("ScrollView(.horizontal, showsIndicators: false)"))
         XCTAssertFalse(forum.contains("ScrollView(.horizontal, showsIndicators: false)"))
@@ -192,8 +192,8 @@ final class UIExperienceRegressionTests: XCTestCase {
 
     func testWorkspaceListsUseBoundedScrollViewportsWithoutDrawingPastTheirCards() throws {
         let fixedViewportSources = try [
-            source(at: "Views/PlatformSectionView.swift"),
-            source(at: "Views/Platform/AlfaPlatformPanel.swift"),
+            source(at: "Views_macOS/PlatformSectionView.swift"),
+            source(at: "Views_macOS/Platform/AlfaPlatformPanel.swift"),
         ]
 
         for source in fixedViewportSources {
@@ -202,7 +202,7 @@ final class UIExperienceRegressionTests: XCTestCase {
             XCTAssertTrue(source.contains(".clipped()"))
         }
 
-        let forum = try source(at: "Views/ForumSectionView.swift")
+        let forum = try source(at: "Views_macOS/ForumSectionView.swift")
         XCTAssertFalse(forum.contains(".fixedSize(horizontal: false, vertical: true)"))
         XCTAssertTrue(forum.contains("availableHeight: proxy.size.height"))
         XCTAssertTrue(forum.contains(".frame(height: PlatformWorkspaceLayout.forumListHeight(for: availableHeight))"))
@@ -210,8 +210,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testAdjustmentWorkspaceKeepsColumnsAlignedAndDetailConcise() throws {
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let detail = try source(at: "Views/Platform/PlatformActionDetailCard.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let detail = try source(at: "Views_macOS/Platform/PlatformActionDetailCard.swift")
 
         XCTAssertTrue(platform.contains("PlatformWorkspaceLayout.adjustmentWorkspaceHeight"))
         XCTAssertTrue(platform.contains("platformDetailPanel(isCompact: false)"))
@@ -228,8 +228,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPlatformAdjustmentListUsesWiderFourColumnCards() throws {
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let actionRow = try source(at: "Views/Platform/PlatformActionRow.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let actionRow = try source(at: "Views_macOS/Platform/PlatformActionRow.swift")
 
         XCTAssertTrue(platform.contains("availableWidth * 0.36"))
         XCTAssertTrue(platform.contains("showsFourColumnMetrics: !isCompact"))
@@ -239,8 +239,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPlatformHoldingsShowsAssetClassAndAssetTypeAllocationByUnits() throws {
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let chart = try source(at: "Views/Platform/PlatformHoldingsPieChart.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let chart = try source(at: "Views_macOS/Platform/PlatformHoldingsPieChart.swift")
         let holdingsSectionStart = try XCTUnwrap(platform.range(of: "// MARK: - Current Holdings"))
         let listSectionStart = try XCTUnwrap(platform.range(of: "// MARK: - List Panel"))
         let holdingsSection = String(platform[holdingsSectionStart.lowerBound..<listSectionStart.lowerBound])
@@ -264,8 +264,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testAlfaPanelUsesThePlatformWorkspaceScrollAndWidthContext() throws {
-        let platform = try source(at: "Views/PlatformSectionView.swift")
-        let alfa = try source(at: "Views/Platform/AlfaPlatformPanel.swift")
+        let platform = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let alfa = try source(at: "Views_macOS/Platform/AlfaPlatformPanel.swift")
 
         XCTAssertTrue(platform.contains("AlfaPlatformPanel("))
         XCTAssertTrue(platform.contains("isCompact: isCompact"))
@@ -277,8 +277,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testAlfaPanelUsesSinglePortfolioDataAndAdaptiveHoldingCards() throws {
-        let panel = try source(at: "Views/Platform/AlfaPlatformPanel.swift")
-        let holding = try source(at: "Views/Platform/AlfaHoldingCard.swift")
+        let panel = try source(at: "Views_macOS/Platform/AlfaPlatformPanel.swift")
+        let holding = try source(at: "Views_macOS/Platform/AlfaHoldingCard.swift")
         let model = try source(at: "Core/AppModel/Alfa.swift")
 
         XCTAssertTrue(panel.contains("model.selectedAlfaPoCode == portfolio.poCode"))
@@ -313,9 +313,9 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPlatformAdjustmentsAndForumShareOneTopLevelActivityTab() throws {
-        let content = try source(at: "Views/ContentView.swift")
-        let activity = try source(at: "Views/PlatformSectionView.swift")
-        let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
+        let content = try source(at: "Views_macOS/ContentView.swift")
+        let activity = try source(at: "Views_macOS/PlatformSectionView.swift")
+        let overview = try source(at: "Views_macOS/Overview/OverviewSectionView.swift")
         let managerWatch = try source(at: "Core/AppModel/ManagerWatch.swift")
 
         XCTAssertEqual(
@@ -335,8 +335,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testOverviewUsesCompactRecentPlatformActionCards() throws {
-        let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
-        let actionRow = try source(at: "Views/Platform/PlatformActionRow.swift")
+        let overview = try source(at: "Views_macOS/Overview/OverviewSectionView.swift")
+        let actionRow = try source(at: "Views_macOS/Platform/PlatformActionRow.swift")
 
         XCTAssertTrue(overview.contains("isCompact: true"))
         XCTAssertTrue(overview.contains("showsCompactArticleLink: true"))
@@ -348,7 +348,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testOverviewGroupsManagerActivityIntoOneSection() throws {
-        let overview = try source(at: "Views/Overview/OverviewSectionView.swift")
+        let overview = try source(at: "Views_macOS/Overview/OverviewSectionView.swift")
 
         XCTAssertEqual(overview.components(separatedBy: "SectionCard(").count - 1, 1)
         XCTAssertTrue(overview.contains("title: \"主理人动态\""))
@@ -364,8 +364,8 @@ final class UIExperienceRegressionTests: XCTestCase {
 
     func testQuitApplicationIsReachableFromMenuBarPopoverAndSettings() throws {
         let appModel = try source(at: "Core/AppModel/Auth.swift")
-        let menuBar = try source(at: "Views/MenuBarPortfolioView.swift")
-        let settings = try source(at: "Views/SettingsAppPanel.swift")
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
+        let settings = try source(at: "Views_macOS/SettingsAppPanel.swift")
 
         XCTAssertTrue(appModel.contains("func quitApplication()"))
         XCTAssertTrue(appModel.contains("NSApplication.shared.terminate(nil)"))
@@ -379,7 +379,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testMenuBarPopoverShowsAndRefreshesPersonalWatchlist() throws {
-        let menuBar = try source(at: "Views/MenuBarPortfolioView.swift")
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
 
         XCTAssertTrue(menuBar.contains("Text(\"我的关注\")"))
         XCTAssertTrue(menuBar.contains("MenuBarWatchlistRow(row: row)"))
@@ -398,7 +398,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testMenuBarPopoverChecksForUpdatesInsteadOfOpeningTheDataDirectory() throws {
-        let menuBar = try source(at: "Views/MenuBarPortfolioView.swift")
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
         let updateButtonStart = try XCTUnwrap(
             menuBar.range(of: "Button(model.isCheckingForUpdates ? \"检测中…\" : \"检测更新\")")
         )
@@ -415,7 +415,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testWatchlistLookupKeepsLocalResolutionWhileRefreshingTheName() throws {
-        let watchlist = try source(at: "Views/PersonalWatchlistView.swift")
+        let watchlist = try source(at: "Views_macOS/PersonalWatchlistView.swift")
 
         XCTAssertTrue(watchlist.contains("model.preparePersonalWatchlistCode("))
         XCTAssertTrue(watchlist.contains(".onChange(of: lookupKey, initial: true)"))
@@ -426,7 +426,7 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testPortfolioAllocationPanelUsesReadableRankedBreakdown() throws {
-        let panel = try source(at: "Views/PortfolioAllocationPanel.swift")
+        let panel = try source(at: "Views_macOS/PortfolioAllocationPanel.swift")
 
         // 主视图先交代数据口径，再直接展示直接 + 间接证券暴露和基金披露行业
         XCTAssertTrue(panel.contains("PortfolioLookThroughMetricStrip"))
@@ -458,7 +458,7 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         // 行业饼图用 Charts 框架；证券暴露改用块状图（Treemap）
         XCTAssertTrue(panel.contains("import Charts"))
-        XCTAssertTrue(try source(at: "Views/DonutChart.swift").contains("SectorMark"))
+        XCTAssertTrue(try source(at: "Views_macOS/DonutChart.swift").contains("SectorMark"))
         XCTAssertTrue(panel.contains("PortfolioTreemap"))
 
         // 旧的大环形图 / 相对最大项进度条 / StatChip 仍不存在

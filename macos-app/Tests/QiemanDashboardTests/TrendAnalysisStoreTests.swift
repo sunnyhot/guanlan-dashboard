@@ -54,7 +54,7 @@ final class TrendAnalysisStoreTests: XCTestCase {
         let directory = try temporaryDirectory()
         let url = directory.appendingPathComponent("trend-settings.json")
 
-        let settings = try TrendAnalysisSettingsStore().load(from: url)
+        let settings = try isolatedSettingsStore().load(from: url)
 
         XCTAssertFalse(settings.provider.isConfigured)
         XCTAssertEqual(settings.provider.timeoutSeconds, 300)
@@ -96,8 +96,9 @@ final class TrendAnalysisStoreTests: XCTestCase {
             lastAutoAnalysisSlotKey: "2026-06-22 15:10"
         )
 
-        try TrendAnalysisSettingsStore().save(settings, to: url)
-        let loaded = try TrendAnalysisSettingsStore().load(from: url)
+        let store = try isolatedSettingsStore()
+        try store.save(settings, to: url)
+        let loaded = try store.load(from: url)
 
         XCTAssertEqual(loaded.provider.providerName, "智谱")
         XCTAssertEqual(loaded.provider.baseURL, "https://open.bigmodel.cn/api/coding/paas/v4")
@@ -135,7 +136,7 @@ final class TrendAnalysisStoreTests: XCTestCase {
         }
         """.write(to: url, atomically: true, encoding: .utf8)
 
-        let loaded = try TrendAnalysisSettingsStore().load(from: url)
+        let loaded = try isolatedSettingsStore().load(from: url)
 
         XCTAssertEqual(loaded.provider.baseURL, "https://open.bigmodel.cn/api/coding/paas/v4")
         XCTAssertEqual(loaded.provider.model, "glm-5.2")
@@ -163,7 +164,7 @@ final class TrendAnalysisStoreTests: XCTestCase {
         }
         """.write(to: url, atomically: true, encoding: .utf8)
 
-        let loaded = try TrendAnalysisSettingsStore().load(from: url)
+        let loaded = try isolatedSettingsStore().load(from: url)
 
         XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["15:10"])
     }
@@ -247,6 +248,21 @@ final class TrendAnalysisStoreTests: XCTestCase {
 
         XCTAssertTrue(settings.hasAutoAnalyzed(on: "2026-06-22"))
         XCTAssertFalse(settings.hasAutoAnalyzed(on: "2026-06-23"))
+    }
+
+    private func isolatedSettingsStore() throws -> TrendAnalysisSettingsStore {
+        let suiteName = "com.sunnyhot.qieman.dashboard.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        var secrets: [String: String] = [:]
+        return TrendAnalysisSettingsStore(
+            readSecret: { secrets[$0] },
+            writeSecret: { value, account in secrets[account] = value },
+            userDefaults: defaults
+        )
     }
 
     private func temporaryDirectory() throws -> URL {

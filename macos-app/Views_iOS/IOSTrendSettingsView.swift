@@ -63,7 +63,7 @@ struct IOSTrendSettingsView: View {
         } header: {
             Text("AI 模型")
         } footer: {
-            Text("兼容 OpenAI 接口的模型供应商。API Key 仅存本机,不上传。")
+            Text("兼容 OpenAI 接口的模型供应商。API Key 在设备上使用安全存储；手动同步时会随端到端加密数据传输，服务端不能读取。")
         }
     }
 

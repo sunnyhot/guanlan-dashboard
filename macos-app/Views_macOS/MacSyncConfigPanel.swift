@@ -100,7 +100,7 @@ struct MacSyncConfigPanel: View {
                     if isRegistering { HStack { ProgressView(); Text("注册中…") } }
                     else { Text("注册同步组") }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appPrimary)
                 .tint(AppPalette.brand)
                 .disabled(isRegistering || password.isEmpty || password != confirmPassword)
             }
@@ -136,7 +136,7 @@ struct MacSyncConfigPanel: View {
                     if isJoining { HStack { ProgressView(); Text("加入中…") } }
                     else { Text("加入同步组") }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appPrimary)
                 .tint(AppPalette.info)
                 .disabled(isJoining || joinGroupId.isEmpty || joinToken.isEmpty || joinPassword.isEmpty)
             }
@@ -189,7 +189,7 @@ struct MacSyncConfigPanel: View {
                     if isUploading { HStack { ProgressView(); Text("上传中…") } }
                     else { Label("上传并覆盖云端", systemImage: "icloud.and.arrow.up") }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.appPrimary)
                 .tint(AppPalette.brand)
                 .disabled(isUploading || isDownloading)
 
@@ -199,7 +199,7 @@ struct MacSyncConfigPanel: View {
                     if isDownloading { HStack { ProgressView(); Text("下载中…") } }
                     else { Label("下载并覆盖本机", systemImage: "icloud.and.arrow.down") }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.appSecondary)
                 .tint(AppPalette.brand)
                 .disabled(isUploading || isDownloading)
             }
@@ -220,13 +220,13 @@ struct MacSyncConfigPanel: View {
                 Button("撤销上次下载", role: .destructive) {
                     showUndoConfirm = true
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.appDanger)
                 .tint(AppPalette.warning)
 
                 Button("重置同步配置", role: .destructive) {
                     resetConfig()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.appDanger)
                 .tint(AppPalette.danger)
             }
         }

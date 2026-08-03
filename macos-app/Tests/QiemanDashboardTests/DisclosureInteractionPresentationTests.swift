@@ -3,7 +3,7 @@ import XCTest
 
 final class DisclosureInteractionPresentationTests: XCTestCase {
     func testSharedDisclosureStyleMakesTheWholeHeaderToggleExpansion() throws {
-        let source = try source(at: "Views/SharedComponents.swift")
+        let source = try source(at: "Views_macOS/SharedComponents.swift")
         let styleStart = try XCTUnwrap(source.range(of: "struct FullRowDisclosureGroupStyle: DisclosureGroupStyle"))
         let styleEnd = try XCTUnwrap(
             source.range(of: "private struct PressResponsiveButtonLabel", range: styleStart.upperBound..<source.endIndex)
@@ -17,13 +17,13 @@ final class DisclosureInteractionPresentationTests: XCTestCase {
     }
 
     func testEveryAppDisclosureGroupUsesTheFullRowInteractionStyle() throws {
-        try assertEveryDisclosureUsesFullRowStyle(in: "Views/SettingsMenuBarPanel.swift")
-        try assertEveryDisclosureUsesFullRowStyle(in: "Views/SettingsTrendPanel.swift")
-        try assertEveryDisclosureUsesFullRowStyle(in: "Views/EnhancementTrendPanel.swift")
+        try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/SettingsMenuBarPanel.swift")
+        try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/SettingsTrendPanel.swift")
+        try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/EnhancementTrendPanel.swift")
     }
 
     func testInlineDisclosureButtonOwnsTheSharedVisualAndInteractionStyle() throws {
-        let source = try source(at: "Views/SharedComponents.swift")
+        let source = try source(at: "Views_macOS/SharedComponents.swift")
         let styleStart = try XCTUnwrap(source.range(of: "struct InlineDisclosureButton: View"))
         let styleEnd = try XCTUnwrap(
             source.range(of: "private struct PressResponsiveButtonLabel", range: styleStart.upperBound..<source.endIndex)
