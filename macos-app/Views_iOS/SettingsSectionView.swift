@@ -150,7 +150,7 @@ struct SettingsSectionView: View {
     private var syncSection: some View {
         Section("数据同步") {
             NavigationLink {
-                SyncConfigView()
+                IOSSyncConfigView()
             } label: {
                 HStack {
                     Label("跨设备同步", systemImage: "icloud.and.arrow.up.and.down")

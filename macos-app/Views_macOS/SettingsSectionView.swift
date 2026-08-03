@@ -312,7 +312,7 @@ struct SettingsSectionView: View {
         case .valuationAlert:
             valuationAlertPanel
         case .sync:
-            SyncConfigView()
+            MacSyncConfigPanel()
         }
     }
 }
