@@ -206,18 +206,9 @@ final class SyncClient {
         let base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !base.isEmpty else { throw SyncError.networkError("未配置同步服务地址") }
 
-        // HTTPS 校验(Debug 允许 localhost HTTP)
-        let isLocalhost = base.contains("localhost") || base.contains("127.0.0.1")
-        #if DEBUG
-        // Debug 允许 localhost HTTP
-        if !base.lowercased().hasPrefix("https://") && !isLocalhost {
-            throw SyncError.networkError("同步服务地址必须是 HTTPS")
-        }
-        #else
-        if !base.lowercased().hasPrefix("https://") {
-            throw SyncError.networkError("同步服务地址必须是 HTTPS")
-        }
-        #endif
+        // HTTPS 校验:当前同步服务部署在 HTTP 上(安全组仅开放 80 端口),
+        // 内容安全由 E2EE 保证(密码加密,服务端只存密文),传输层允许 HTTP。
+        // 后续开放 443 端口后可恢复 HTTPS 强制校验。
 
         guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
             throw SyncError.networkError("同步服务地址格式无效")
