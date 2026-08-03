@@ -212,6 +212,7 @@
 		79AA923F8D75E00B6F690F2C /* ManagerWatchTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1C2370C014B842C73807DF4 /* ManagerWatchTimelineTests.swift */; };
 		7B06FD25D2F82E5981A02C1E /* TavilyWebSearchTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA671E22B82F4E28AF9902D /* TavilyWebSearchTool.swift */; };
 		7B828195F5CF07D7B1F26D74 /* TrendTrackingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD264DB06C56596F8D3EA39 /* TrendTrackingStore.swift */; };
+		7B834303FDAF9D3791E3156F /* QRCodeHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45110893FACC3834A0F63A79 /* QRCodeHelper.swift */; };
 		7BFB6EBFB7D1DC88478BA89D /* NextHourGuidanceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748CD27ABC0428A9450EFEC6 /* NextHourGuidanceController.swift */; };
 		7D7780B118B760330A99BC60 /* TrendResearchAgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B1E3827CB31450CB927C157 /* TrendResearchAgentModels.swift */; };
 		7F585A07789A83AD6B307692 /* SettingsTrendPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3983050F726371F4EDC120E8 /* SettingsTrendPanel.swift */; };
@@ -314,6 +315,7 @@
 		BCCC5556A703B94E675FCEA0 /* LaunchAtLoginAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B49BD5EA76F592A1AF0350 /* LaunchAtLoginAgent.swift */; };
 		BD14B6C73AA4A6787BAD1C83 /* QiemanCommandLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC6C611B96990046748ABFC /* QiemanCommandLineTests.swift */; };
 		BD7CC64E7B3BE43791B0AB04 /* AppStorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F5D858117DAB47FB4818C6C /* AppStorageKeys.swift */; };
+		BDDA6429E33B4035848B1864 /* QRCodeHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45110893FACC3834A0F63A79 /* QRCodeHelper.swift */; };
 		BF8CC5FD26221BAF37BDC66F /* AppPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FCB72CD118C144C196EFED3 /* AppPalette.swift */; };
 		C13061E4AD4EE0D0222E0CCE /* PersonalAssetBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D7B7CD483AA78C59505F661 /* PersonalAssetBrowser.swift */; };
 		C201C420940F01B2A780853F /* NativePlatformError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FA1654700150B392F28F67 /* NativePlatformError.swift */; };
@@ -335,6 +337,7 @@
 		CA47E17E568F4D54F944F847 /* TrendWebSearchGovernor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03E1E8D5635F0192BA9507D /* TrendWebSearchGovernor.swift */; };
 		CA56823AC6C9DFB3DD6F5757 /* PlatformFilterState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 415245D1231E4A371932900E /* PlatformFilterState.swift */; };
 		CA76ABF9F2990685DFE9D047 /* PortfolioValuationAlertSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39C5DC5B3FF582252B9D940 /* PortfolioValuationAlertSection.swift */; };
+		CB1362ABDEF7D98A86F3B85B /* IOSQRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2546828433154852AB5E211E /* IOSQRScannerView.swift */; };
 		CC0073B8F9DD5DD2F5386D88 /* TodayBrief.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1C6FAFA43F84FD04884CE1 /* TodayBrief.swift */; };
 		CC14E9FF125A7C0394AC89D3 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 567FFF197FEDE74061603126 /* UpdateService.swift */; };
 		CC6F58645F7A05DC55737D3E /* PersonalAssetCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = C650DCEF52EBE0637180EBCD /* PersonalAssetCards.swift */; };
@@ -479,6 +482,7 @@
 		22F5C9ED4C58CECA861EB4CF /* ArchiveCipher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveCipher.swift; sourceTree = "<group>"; };
 		23D694D380386539B3898654 /* StrategyRadarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StrategyRadarTests.swift; sourceTree = "<group>"; };
 		2471A0A5F30EADA5B29FB8F9 /* PersonalAssetDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAssetDetailSummary.swift; sourceTree = "<group>"; };
+		2546828433154852AB5E211E /* IOSQRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSQRScannerView.swift; sourceTree = "<group>"; };
 		26995997AD91F374DC7B3A2D /* TrendDashboardSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendDashboardSummaryTests.swift; sourceTree = "<group>"; };
 		26C264872F20282920B9715B /* PortfolioMenuBarTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioMenuBarTitle.swift; sourceTree = "<group>"; };
 		2753E72DACA7B6A25E7ED552 /* TrendAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendAnalysis.swift; sourceTree = "<group>"; };
@@ -521,6 +525,7 @@
 		432E46A1D2DCDDA7EC528103 /* InvestmentPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvestmentPlan.swift; sourceTree = "<group>"; };
 		43D4DF9DDCE531523194A919 /* FundLookThrough.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundLookThrough.swift; sourceTree = "<group>"; };
 		44FA1654700150B392F28F67 /* NativePlatformError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePlatformError.swift; sourceTree = "<group>"; };
+		45110893FACC3834A0F63A79 /* QRCodeHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRCodeHelper.swift; sourceTree = "<group>"; };
 		4654D36B5E8DAE0B81C57C1C /* PlatformActionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformActionRow.swift; sourceTree = "<group>"; };
 		47F88603BCC9BEC7BDF4D52B /* FundLookThroughTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FundLookThroughTests.swift; sourceTree = "<group>"; };
 		4902A0C13E1B98A24CDE6003 /* QiemanDashboardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanDashboardApp.swift; sourceTree = "<group>"; };
@@ -597,7 +602,7 @@
 		867205479264A872AC4769C9 /* QiemanPlatformNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanPlatformNativeClient.swift; sourceTree = "<group>"; };
 		87506C84FFB208D52F743BA0 /* Contract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contract.swift; sourceTree = "<group>"; };
 		885C23281EBF64729B8027FE /* PortfolioSnapshotInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioSnapshotInsight.swift; sourceTree = "<group>"; };
-		886101E1F9CD62483B19CC45 /* QiemanDashboard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "QiemanDashboard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		886101E1F9CD62483B19CC45 /* QiemanDashboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = QiemanDashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		88A97B71995E10C93BB70F97 /* TrendDashboardSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendDashboardSummary.swift; sourceTree = "<group>"; };
 		88B49BD5EA76F592A1AF0350 /* LaunchAtLoginAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginAgent.swift; sourceTree = "<group>"; };
 		896CB1FBAEEDEA2A5EDAEDBD /* TrendTrackingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendTrackingModels.swift; sourceTree = "<group>"; };
@@ -814,7 +819,7 @@
 		4F897B900828DCEA1EBAC8FD /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				886101E1F9CD62483B19CC45 /* QiemanDashboard-iOS.app */,
+				886101E1F9CD62483B19CC45 /* QiemanDashboard.app */,
 				567C573F33E92B623DC4F61B /* QiemanDashboard.app */,
 				70A12BAB6C1660E83F2CB571 /* QiemanDashboardTests.xctest */,
 			);
@@ -1037,6 +1042,7 @@
 				0E560BA395B4DD4760EA0B7D /* IOSPersonalWatchlistSheet.swift */,
 				F0407FE1ECE1D79D23D09480 /* IOSPlatformActionDetailSheet.swift */,
 				A568605B11A6687A68C197D2 /* IOSPlatformVisualizations.swift */,
+				2546828433154852AB5E211E /* IOSQRScannerView.swift */,
 				C3354EA2F70417F2DBA3BE28 /* IOSSyncConfigView.swift */,
 				EEE93839027A567F03CFF9DC /* IOSTrendSettingsView.swift */,
 				4AA0CF04F30665B08255A355 /* IOSValuationAlertSheet.swift */,
@@ -1053,6 +1059,7 @@
 			children = (
 				A86637C6B2AB6C002ABA39B0 /* KeychainHelper.swift */,
 				2BB06B82927F7EFCCAA155BF /* PlatformBridge.swift */,
+				45110893FACC3834A0F63A79 /* QRCodeHelper.swift */,
 				DD9D295F50B3A85EA8C8289A /* ValueFormatting.swift */,
 			);
 			path = Support;
@@ -1252,7 +1259,7 @@
 			packageProductDependencies = (
 			);
 			productName = "QiemanDashboard-iOS";
-			productReference = 886101E1F9CD62483B19CC45 /* QiemanDashboard-iOS.app */;
+			productReference = 886101E1F9CD62483B19CC45 /* QiemanDashboard.app */;
 			productType = "com.apple.product-type.application";
 		};
 		7375946CF2EAC89002605E74 /* QiemanDashboardTests */ = {
@@ -1400,6 +1407,7 @@
 				A226FC24F052D6425B7522C0 /* IOSPersonalWatchlistSheet.swift in Sources */,
 				6AA684CB467733F9C891433A /* IOSPlatformActionDetailSheet.swift in Sources */,
 				277D58C78475B0B25DFB3C77 /* IOSPlatformVisualizations.swift in Sources */,
+				CB1362ABDEF7D98A86F3B85B /* IOSQRScannerView.swift in Sources */,
 				596C3349283856DAD2AA8227 /* IOSSyncConfigView.swift in Sources */,
 				B5B02750EE44C9EF83ED9BF8 /* IOSTrendSettingsView.swift in Sources */,
 				DBA7877FE1990FE47D9E42FD /* IOSValuationAlertSheet.swift in Sources */,
@@ -1465,6 +1473,7 @@
 				4496F6F550E6E934D8D8EA75 /* PortfolioValuationAlertEvaluator.swift in Sources */,
 				77F49B34097EB72672C47B2B /* PortfolioValuationAlertStore.swift in Sources */,
 				E8BDB0DEC1C96A82C5DE2511 /* ProfitAttribution.swift in Sources */,
+				7B834303FDAF9D3791E3156F /* QRCodeHelper.swift in Sources */,
 				3748890F795382FC34B6FC7B /* QiemanAlfaClient.swift in Sources */,
 				ACBD4E28F8A6CD4598A1028B /* QiemanDashboardApp_iOS.swift in Sources */,
 				D5C8E0D5C9BEE1A036F3B51E /* QiemanNativeClient.swift in Sources */,
@@ -1654,6 +1663,7 @@
 				CA76ABF9F2990685DFE9D047 /* PortfolioValuationAlertSection.swift in Sources */,
 				EA5A3044CD55BC0D0EBACEEA /* PortfolioValuationAlertStore.swift in Sources */,
 				349C2C35504FCACCA8F7209C /* ProfitAttribution.swift in Sources */,
+				BDDA6429E33B4035848B1864 /* QRCodeHelper.swift in Sources */,
 				6006583FDDF032852305C302 /* QiemanAlfaClient.swift in Sources */,
 				69E96D15DAADE089A70A8934 /* QiemanCommandLine.swift in Sources */,
 				B7904384B139D36879C74540 /* QiemanDashboardApp.swift in Sources */,
@@ -1815,7 +1825,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = MC99KR4LSF;
 				INFOPLIST_FILE = "macos-app/Support/Info-iOS.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1840,7 +1852,10 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "macos-app/Support/Info-macOS.plist";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunnyhot.qieman.dashboard;
 				PRODUCT_NAME = QiemanDashboard;
@@ -1939,7 +1954,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.15.7;
+				MARKETING_VERSION = 3.15.8;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1961,7 +1976,10 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "macos-app/Support/Info-macOS.plist";
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunnyhot.qieman.dashboard;
 				PRODUCT_NAME = QiemanDashboard;
@@ -1974,7 +1992,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "-";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = MC99KR4LSF;
 				INFOPLIST_FILE = "macos-app/Support/Info-iOS.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2038,7 +2058,7 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 3.15.7;
+				MARKETING_VERSION = 3.15.8;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
