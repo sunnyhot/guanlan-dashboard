@@ -71,22 +71,17 @@ struct IOSPlatformMonthlyChart: View {
     /// 统计/详情条(固定高度):未选中显示累计汇总,选中显示该月明细。
     @ViewBuilder
     private func statsBar(_ months: [PlatformMonthSummary]) -> some View {
-        // 固定高度:未选中显示累计汇总,选中直接在此位置切换为该月详情。
-        HStack(spacing: IOSDesign.spaceM) {
-            if let sel = selectedMonth {
+        // 仅选中时显示该月详情(未选中时空,不显示冗余汇总/提示)。
+        if let sel = selectedMonth {
+            HStack(spacing: IOSDesign.spaceM) {
                 Text("\(sel.month)").font(IOSDesign.sansBody(13, weight: .semibold)).foregroundStyle(IOSDesign.ink)
                 Spacer()
                 Text("买 \(sel.buyCount)").font(IOSDesign.monoNumber(12)).foregroundStyle(AppPalette.marketLoss)
                 Text("卖 \(sel.sellCount)").font(IOSDesign.monoNumber(12)).foregroundStyle(AppPalette.marketGain)
                 Text("\(sel.activeDays) 天").font(IOSDesign.monoNumber(12)).foregroundStyle(IOSDesign.muted)
-            } else {
-                let total = months.reduce(0) { $0 + $1.totalCount }
-                Text("累计 \(total) 笔").font(IOSDesign.sansBody(12)).foregroundStyle(IOSDesign.ink)
-                Spacer()
             }
+            .padding(.top, IOSDesign.spaceS)
         }
-        .frame(height: 20)
-        .padding(.top, IOSDesign.spaceS)
     }
 
     private var legend: some View {
