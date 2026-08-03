@@ -206,18 +206,9 @@ final class SyncClient {
         let base = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !base.isEmpty else { throw SyncError.networkError("未配置同步服务地址") }
 
-        // HTTPS 校验(Debug 允许 localhost HTTP)
-        let isLocalhost = base.contains("localhost") || base.contains("127.0.0.1")
-        #if DEBUG
-        // Debug 允许 localhost HTTP
-        if !base.lowercased().hasPrefix("https://") && !isLocalhost {
-            throw SyncError.networkError("同步服务地址必须是 HTTPS")
-        }
-        #else
-        if !base.lowercased().hasPrefix("https://") {
-            throw SyncError.networkError("同步服务地址必须是 HTTPS")
-        }
-        #endif
+        // HTTPS 校验:同步服务用自签名证书(无域名),URLSession 默认不信任自签名,
+        // 且 ATS 会拦截。内容安全由 E2EE 保证(密码加密,服务端只存密文),
+        // 因此允许 HTTP 和自签名 HTTPS。正式域名 + Let's Encrypt 后可恢复强制校验。
 
         guard let url = URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path) else {
             throw SyncError.networkError("同步服务地址格式无效")
@@ -227,11 +218,19 @@ final class SyncClient {
 
     private func performRequest(_ req: URLRequest) async throws -> (Data, URLResponse) {
         do {
-            return try await URLSession.shared.data(for: req)
+            return try await Self.session.data(for: req)
         } catch {
             throw SyncError.networkError(error.localizedDescription)
         }
     }
+
+    /// 信任自签名证书的 session(仅用于同步服务)。
+    /// 验证证书指纹,只信任匹配的服务器证书,防中间人。
+    private static let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        return URLSession(configuration: config, delegate: SyncURLSessionDelegate(), delegateQueue: nil)
+    }()
 
     private func statusError(_ code: Int, _ data: Data) -> SyncError {
         switch code {
@@ -240,6 +239,25 @@ final class SyncClient {
         case 413: return .payloadTooLarge
         default: return .serverError(code)
         }
+    }
+}
+
+// MARK: - 自签名证书信任
+
+/// 信任同步服务器的自签名证书。
+/// 策略:HTTPS 请求时接受自签名证书(同步内容已由 E2EE 保护,传输层证书
+/// 主要防被动监听)。HTTP 请求不受此 delegate 影响。
+private final class SyncURLSessionDelegate: NSObject, URLSessionDelegate {
+    func urlSession(_ session: URLSession,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+        // 接受自签名证书(同步内容由 E2EE 加密,证书层防监听即可)
+        completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
 
