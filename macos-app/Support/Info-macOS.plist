@@ -34,5 +34,13 @@
 	<string>sunnyhot/qieman-manager-dashboard</string>
 	<key>QiemanUpdateFeedURL</key>
 	<string>https://github.com/sunnyhot/qieman-manager-dashboard/releases/latest/download/latest.json</string>
+	<!-- ATS 例外:同步服务用自签名证书(无域名),系统默认 ATS 拦截。
+	允许同步服务器的 HTTP/HTTPS,其余请求仍受 ATS 保护。
+	正式域名 + Let's Encrypt 后可移除此例外。 -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
