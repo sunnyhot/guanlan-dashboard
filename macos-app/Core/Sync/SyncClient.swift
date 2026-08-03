@@ -87,9 +87,39 @@ final class SyncClient {
         groupId = result.groupId
         deviceId = result.deviceId
         KeychainHelper.set(result.accessToken, account: KeychainHelper.Account.syncAccessToken)
-        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken") // Keychain 弹窗拒绝时的 fallback
+        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken")
         syncPassword = password
         lastKnownRevision = 0
+    }
+
+    /// 加入已有同步组（第二台设备用）。需要第一台设备的 groupId + accessToken + 同步密码。
+    func joinGroup(existingGroupId: String, accessToken: String, password: String) async throws {
+        let url = try makeURL(path: "/v1/groups")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = [
+            "existingGroupId": existingGroupId,
+            "accessToken": accessToken,
+        ]
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await performRequest(req)
+        guard let http = response as? HTTPURLResponse else {
+            throw SyncError.serverError(0)
+        }
+        if http.statusCode == 404 { throw SyncError.groupNotFound }
+        if http.statusCode == 401 { throw SyncError.authFailed }
+        guard http.statusCode == 200 else {
+            throw statusError(http.statusCode, data)
+        }
+
+        let result = try JSONDecoder().decode(RegisterResponse.self, from: data)
+        groupId = result.groupId
+        deviceId = result.deviceId
+        KeychainHelper.set(result.accessToken, account: KeychainHelper.Account.syncAccessToken)
+        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken")
+        syncPassword = password
     }
 
     // MARK: - 上传(推送)

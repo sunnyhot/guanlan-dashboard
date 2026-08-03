@@ -12,8 +12,12 @@ struct IOSSyncConfigView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isRegistering = false
+    @State private var isJoining = false
     @State private var isUploading = false
     @State private var isDownloading = false
+    @State private var joinGroupId = ""
+    @State private var joinToken = ""
+    @State private var joinPassword = ""
     @State private var downloadPreview: SyncImportPreview?
     @State private var pendingPayload: SyncPayload?
     @State private var errorMessage = ""
@@ -28,6 +32,7 @@ struct IOSSyncConfigView: View {
             configSection
             if SyncClient.shared.groupId == nil {
                 registerSection
+                joinSection
             } else {
                 statusSection
                 actionsSection
@@ -81,6 +86,29 @@ struct IOSSyncConfigView: View {
             Text("注册")
         } footer: {
             Text("密码用于加密同步数据,丢失后无法恢复。密码不会上传服务端。")
+        }
+    }
+
+    // MARK: - 加入同步组
+
+    private var joinSection: some View {
+        Section {
+            TextField("同步组 ID (g_xxx)", text: $joinGroupId)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecureField("访问令牌 (tok_xxx)", text: $joinToken)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            SecureField("同步密码", text: $joinPassword)
+            Button {
+                Task { await joinGroup() }
+            } label: {
+                if isJoining { HStack { ProgressView(); Text("加入中…") } }
+                else { Text("加入同步组") }
+            }
+            .disabled(isJoining || joinGroupId.isEmpty || joinToken.isEmpty || joinPassword.isEmpty)
+        } header: {
+            Text("加入已有同步组")
+        } footer: {
+            Text("从其他设备加入。填入第一台设备的 groupId、accessToken 和同步密码。")
         }
     }
 
@@ -145,6 +173,17 @@ struct IOSSyncConfigView: View {
         } catch { errorMessage = (error as? SyncError)?.errorDescription ?? error.localizedDescription }
         isRegistering = false
         password = ""; confirmPassword = ""
+    }
+
+    private func joinGroup() async {
+        clearMessages()
+        isJoining = true
+        do {
+            try await SyncClient.shared.joinGroup(existingGroupId: joinGroupId, accessToken: joinToken, password: joinPassword)
+            noticeMessage = "已加入同步组,可以下载云端数据了。"
+        } catch { errorMessage = (error as? SyncError)?.errorDescription ?? error.localizedDescription }
+        isJoining = false
+        joinGroupId = ""; joinToken = ""; joinPassword = ""
     }
 
     private func upload() async {
