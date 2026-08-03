@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.5/QiemanDashboard-3.15.5.zip",
-    "name" : "QiemanDashboard-3.15.5.zip",
-    "sha256" : "fb6a66d0c721859c57063dace32430260a0f0b4b4fddf828e62bbd91b8f18fde",
-    "size" : 6979911
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.6/QiemanDashboard-3.15.6.zip",
+    "name" : "QiemanDashboard-3.15.6.zip",
+    "sha256" : "4cc7599ca7ed0cd9dcf94af9dc47ae805a335b1d424b5a2b954d5f935aef98d9",
+    "size" : 6980013
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.5/QiemanDashboard-3.15.5.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.15.6/QiemanDashboard-3.15.6.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.15.5.zip",
-      "size" : 6979911
+      "name" : "QiemanDashboard-3.15.6.zip",
+      "size" : 6980013
     }
   ],
-  "body" : "release: v3.15.5 加重置同步配置按钮\nrelease: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.5",
-  "name" : "QiemanDashboard v3.15.5",
-  "notes" : "release: v3.15.5 加重置同步配置按钮\nrelease: v3.15.4 ATS 例外真正进构建产物(release 脚本模板修复)",
+  "body" : "release: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)\nrelease: v3.15.5 加重置同步配置按钮",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.15.6",
+  "name" : "QiemanDashboard v3.15.6",
+  "notes" : "release: v3.15.6 token/password 加 UserDefaults fallback(Keychain 弹窗拒绝时仍可用)\nrelease: v3.15.5 加重置同步配置按钮",
   "published_at" : "",
-  "sha256" : "fb6a66d0c721859c57063dace32430260a0f0b4b4fddf828e62bbd91b8f18fde",
-  "tag" : "v3.15.5",
-  "tag_name" : "v3.15.5",
-  "version" : "3.15.5"
+  "sha256" : "4cc7599ca7ed0cd9dcf94af9dc47ae805a335b1d424b5a2b954d5f935aef98d9",
+  "tag" : "v3.15.6",
+  "tag_name" : "v3.15.6",
+  "version" : "3.15.6"
 }
