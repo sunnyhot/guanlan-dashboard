@@ -107,27 +107,29 @@ struct DecisionReview: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-// MARK: - 复盘时间计算
+// MARK: - 复盘时间计算(Schema V2:显式 reviewDueAt,不用 updatedAt)
 
 extension DecisionCase {
-    /// 计算复查时间(monitoring 状态下,从 updatedAt + horizonDays)。
-    /// 不同决策状态用不同周期:watch 7 天,prepare 3 天,adjustReview/exitReview 1 天。
-    var nextReviewAt: String? {
-        guard lifecycle == .monitoring || lifecycle == .reviewDue else { return nil }
+    /// 显式存储的复查时间(Schema V2)。
+    /// 进入 monitoring 时由 computeReviewDueAt 设定,到期不改。
+    var nextReviewAt: String? { reviewDueAt }
+
+    /// 是否到达复查时间(用显式 reviewDueAt,不用 updatedAt)。
+    func isReviewDue(asOf now: String) -> Bool {
+        guard let reviewDueAt else { return false }
+        return now >= reviewDueAt
+    }
+
+    /// 计算复查时间(进入 monitoring 时调用一次,存入 reviewDueAt)。
+    static func computeReviewDueAt(decisionState: PortfolioDecisionState, from timestamp: String) -> String? {
         let days: Int
         switch decisionState {
         case .watch: days = 7
-        case .prepare: days = 3
+        case .prepare, .insufficientEvidence: days = 3
         case .adjustReview, .exitReview: days = 1
-        case .stable, .insufficientEvidence: return nil
+        case .stable: return nil
         }
-        return Self.dateString(addingDays: days, to: updatedAt)
-    }
-
-    /// 是否到达复查时间。
-    func isReviewDue(asOf now: String) -> Bool {
-        guard let nextReviewAt else { return false }
-        return now >= nextReviewAt
+        return dateString(addingDays: days, to: timestamp)
     }
 
     private static func dateString(addingDays days: Int, to timestamp: String) -> String? {

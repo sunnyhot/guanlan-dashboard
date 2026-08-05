@@ -37,32 +37,39 @@ extension AppModel {
         migrateLegacyTrackingIfNeeded()
     }
 
-    /// 从旧 trend-tracking-items.json 迁移到 DecisionCase。
-    /// 只迁移一次:已有 legacy: 前缀 caseKey 的 Case 不会重复迁移。
+    /// 从旧 trend-tracking-items.json 增量迁移到 DecisionCase。
+    /// per-item 去重:按每个 tracking item 的 caseKey 判断是否已迁移(不用全局 contains)。
+    /// 新增的 tracking item 仍能增量迁移。
     /// 旧文件保留不删除(sunset 三阶段:N 版双读)。
     private func migrateLegacyTrackingIfNeeded() {
         guard let trackingURL = trendTrackingItemsFileURL else { return }
         guard FileManager.default.fileExists(atPath: trackingURL.path) else { return }
 
-        // 检查是否已迁移过(有 legacy: 前缀的 Case)
-        let alreadyMigrated = decisionCases.contains { $0.caseKey.hasPrefix("legacy:") }
-        guard !alreadyMigrated else { return }
-
         do {
             let trackingItems = try TrendTrackingStore().load(from: trackingURL)
             guard !trackingItems.isEmpty else { return }
 
-            let before = decisionCases.count
-            decisionCases = TrendTrackingMigration.mergeMigrated(
-                existingCases: decisionCases,
-                trackingItems: trackingItems
-            )
+            // 已有的 caseKey 集合(per-item 去重)
+            let existingKeys = Set(decisionCases.map(\.caseKey))
+            var newCases: [DecisionCase] = []
 
-            if decisionCases.count > before {
-                persistDecisionCases()
+            for item in trackingItems {
+                if item.status == .ended { continue }  // ended 不迁移
+
+                // 构造迁移后的 caseKey(与 TrendTrackingMigration 一致)
+                let subjectID = item.assetCode?.lowercased() ?? item.assetName.lowercased()
+                let caseKey = "legacy:\(item.action.rawValue)|\(subjectID)"
+
+                if existingKeys.contains(caseKey) { continue }  // 已迁移跳过
+
+                let migrated = TrendTrackingMigration.migrate(item)
+                newCases.append(migrated)
             }
+
+            guard !newCases.isEmpty else { return }
+            decisionCases.append(contentsOf: newCases)
+            persistDecisionCases()
         } catch {
-            // 迁移失败不影响主流程,旧 Tracking 仍可用
             errorMessage = "旧跟踪清单迁移失败:\(error.localizedDescription)"
         }
     }
@@ -178,9 +185,16 @@ extension AppModel {
             }
         }
 
-        // 2. 保留不再出现但用户仍关注的旧 Case(标记为 stale,不删除)
+        // 2. 保留不再出现的旧 Case(不删除,保留历史)。
+        // resolved/closed 的 Case 也保留(进历史,不丢弃)——修复缺陷:旧代码只保留 acknowledged/pending。
         for oldCase in existing where !consumedKeys.contains(oldCase.caseKey) {
-            if oldCase.userDisposition == .acknowledged || oldCase.userDisposition == .pending {
+            if oldCase.userDisposition == .closed || oldCase.lifecycle == .closed {
+                // 已关闭的 Case 原样保留(不更新状态,只是不丢弃)
+                merged.append(oldCase)
+            } else if oldCase.userDisposition == .resolved {
+                merged.append(oldCase)
+            } else {
+                // acknowledged/pending 的:指标回到阈值内,标记 stale
                 var stale = oldCase
                 stale.applyTransition(
                     to: oldCase.lifecycle,
@@ -192,7 +206,6 @@ extension AppModel {
                 )
                 merged.append(stale)
             }
-            // resolved/closed 的旧 Case 不保留(已处理)
         }
 
         return merged

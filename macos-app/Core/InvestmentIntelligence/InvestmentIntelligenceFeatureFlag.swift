@@ -12,6 +12,6 @@ import Foundation
 //
 // 详见 docs/ai-pipeline-baseline.md 第 9 节「投资智能改造的复用边界」。
 enum InvestmentIntelligence {
-    /// 当前是否启用投资智能系统。Slice 0 固定为 false。
-    static let enabled: Bool = false
+    /// 当前是否启用投资智能系统。临时开启用于预览(Slice 0-7 已完成)。
+    static let enabled: Bool = true
 }

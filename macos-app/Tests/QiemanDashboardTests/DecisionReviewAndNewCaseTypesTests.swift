@@ -11,15 +11,16 @@ final class DecisionReviewAndNewCaseTypesTests: XCTestCase {
     // MARK: - 复盘时间
 
     func testNextReviewAtForWatchState() {
+        // Schema V2:reviewDueAt 是显式存储的,不再从 updatedAt 计算
         let cs = DecisionCase(
             caseKey: "test|watch", kind: .concentrationRisk, dimension: .directHolding,
             subjectName: "A", subjectCode: "001",
             lifecycle: .monitoring, decisionState: .watch,
             metricValue: 40, metricLabel: "40%", metricDescription: "test",
             title: "T", detail: "D",
-            createdAt: timestamp, updatedAt: timestamp
+            createdAt: timestamp, updatedAt: timestamp,
+            reviewDueAt: "2026-08-12 10:00:00"
         )
-        // watch → 7 天后复查
         XCTAssertEqual(cs.nextReviewAt, "2026-08-12 10:00:00")
     }
 
@@ -30,10 +31,27 @@ final class DecisionReviewAndNewCaseTypesTests: XCTestCase {
             lifecycle: .monitoring, decisionState: .prepare,
             metricValue: 47, metricLabel: "47%", metricDescription: "test",
             title: "T", detail: "D",
-            createdAt: timestamp, updatedAt: timestamp
+            createdAt: timestamp, updatedAt: timestamp,
+            reviewDueAt: "2026-08-08 10:00:00"
         )
-        // prepare → 3 天后
         XCTAssertEqual(cs.nextReviewAt, "2026-08-08 10:00:00")
+    }
+
+    func testComputeReviewDueAt() {
+        // 测静态计算方法(进入 monitoring 时调用)
+        XCTAssertEqual(
+            DecisionCase.computeReviewDueAt(decisionState: .watch, from: "2026-08-05 10:00:00"),
+            "2026-08-12 10:00:00"
+        )
+        XCTAssertEqual(
+            DecisionCase.computeReviewDueAt(decisionState: .prepare, from: "2026-08-05 10:00:00"),
+            "2026-08-08 10:00:00"
+        )
+        XCTAssertEqual(
+            DecisionCase.computeReviewDueAt(decisionState: .adjustReview, from: "2026-08-05 10:00:00"),
+            "2026-08-06 10:00:00"
+        )
+        XCTAssertNil(DecisionCase.computeReviewDueAt(decisionState: .stable, from: "2026-08-05 10:00:00"))
     }
 
     func testIsReviewDue() {
@@ -43,7 +61,8 @@ final class DecisionReviewAndNewCaseTypesTests: XCTestCase {
             lifecycle: .monitoring, decisionState: .watch,
             metricValue: 40, metricLabel: "40%", metricDescription: "test",
             title: "T", detail: "D",
-            createdAt: "2026-07-20 10:00:00", updatedAt: "2026-07-20 10:00:00"
+            createdAt: "2026-07-20 10:00:00", updatedAt: "2026-07-20 10:00:00",
+            reviewDueAt: "2026-07-27 10:00:00"
         )
         // updatedAt 7/20 + 7 天 = 7/27,8/5 已过期
         XCTAssertTrue(cs.isReviewDue(asOf: "2026-08-05 10:00:00"))

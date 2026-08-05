@@ -65,8 +65,9 @@ extension AppModel {
         researchingDecisionCaseID = case_.id
         lastDecisionCaseResearchError = ""
 
+        // defer 只清 researchingDecisionCaseID,不重置 state。
+        // succeeded/failed 保持到下次运行(修复缺陷:旧代码 defer 把 state 重置为 idle)。
         defer {
-            decisionCaseResearchState = .idle
             researchingDecisionCaseID = nil
         }
 
@@ -222,55 +223,107 @@ extension AppModel {
         }
     }
 
-    /// 执行复盘:重新评估 Case 的当前指标,对比原判断,记录结论。
+    /// 执行复盘:用 MetricResolver 算正确指标,持久化 Review,执行状态转换。
     /// 复核方案硬约束:不用涨跌简单判对错(第 12.4 节)。
     func performReview(for caseID: UUID, conclusion: DecisionReviewConclusion, lessons: String = "") {
         guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return }
         let cs = decisionCases[index]
+        let now = Self.timestampString()
 
-        // 重新评估当前指标(用最新 rows)
-        let currentMetric = currentMetricValue(for: cs)
+        // 用 MetricResolver 算当前指标(修复缺陷:旧代码对 lookThrough/sector 读 topPositions.first)
+        let resolver = DecisionMetricResolver()
+        let resolution = resolver.resolve(
+            decisionCase: cs,
+            rows: personalAssetRows,
+            lookThroughSnapshot: portfolioLookThroughSnapshot,
+            profile: userDecisionProfile,
+            timestamp: now
+        )
+        let currentMetric = resolution.value ?? cs.metricValue
 
-        // 生成复盘记录
+        // 生成并持久化复盘记录
         let review = DecisionReview(
             caseID: caseID,
-            reviewedAt: Self.timestampString(),
+            reviewedAt: now,
             reviewHorizon: reviewHorizonText(for: cs),
             originalDecisionState: cs.decisionState,
             originalMetricValue: cs.metricValue,
             currentMetricValue: currentMetric,
-            portfolioOutcome: "指标从 \(cs.metricLabel) 变为 \(String(format: "%.1f%%", currentMetric))",
+            portfolioOutcome: "指标从 \(cs.metricLabel) 变为 \(String(format: "%.1f", currentMetric))",
             processQuality: conclusion.displayName,
             conclusion: conclusion,
             lessons: lessons
         )
+        persistReview(review)
+        decisionCases[index].latestReviewID = review.id
 
-        // 存储 review(嵌入 events)
-        var reports = lastDecisionCaseResearchReports  // 复用现有存储?
-        _ = reports  // suppress unused
-        decisionCases[index].applyTransition(
-            to: .reviewDue,
-            decisionState: cs.decisionState,  // 保持当前状态(复盘不改状态,只记录)
-            at: Self.timestampString(),
-            type: .reassessed,
-            reason: "复盘完成:\(conclusion.displayName)" + (lessons.isEmpty ? "" : "(\(lessons))"),
-            actor: .system
-        )
+        // 状态转换(根据结论)
+        switch conclusion {
+        case .supported, .partiallySupported, .unresolved:
+            // 风险仍存在 → 回到 monitoring,生成新 reviewDueAt
+            decisionCases[index].applyTransition(
+                to: .monitoring,
+                decisionState: cs.decisionState,
+                at: now,
+                type: .reassessed,
+                reason: "复盘:\(conclusion.displayName)",
+                actor: .system
+            )
+            decisionCases[index].reviewDueAt = DecisionCase.computeReviewDueAt(
+                decisionState: cs.decisionState, from: now
+            )
 
-        // 如果复盘结论是 contradicted/invalidatedBeforeEvaluation → 关闭 Case
-        if conclusion == .contradicted || conclusion == .invalidatedBeforeEvaluation {
+        case .contradicted, .invalidatedBeforeEvaluation:
+            // 判断被推翻 → 关闭
             decisionCases[index].applyTransition(
                 to: .closed,
                 decisionState: .stable,
-                at: Self.timestampString(),
+                at: now,
                 type: .userResolved,
                 reason: "复盘后关闭:\(conclusion.displayName)",
                 actor: .system
             )
             decisionCases[index].userDisposition = .resolved
+            decisionCases[index].resolvedAt = now
+            decisionCases[index].reviewDueAt = nil
+
+        case .insufficientData:
+            // 数据不足 → 回到 monitoring,缩短复查周期(3 天)
+            decisionCases[index].applyTransition(
+                to: .monitoring,
+                decisionState: .insufficientEvidence,
+                at: now,
+                type: .reassessed,
+                reason: "复盘:数据不足,缩短复查周期",
+                actor: .system
+            )
+            decisionCases[index].reviewDueAt = DecisionCase.computeReviewDueAt(
+                decisionState: .insufficientEvidence, from: now
+            )
         }
 
         persistDecisionCases()
+    }
+
+    /// 持久化 Review 到文件。
+    private func persistReview(_ review: DecisionReview) {
+        guard let dir = dataDirectoryURL?
+                .appendingPathComponent("investment-intelligence", isDirectory: true)
+                .appendingPathComponent("cases", isDirectory: true)
+                .appendingPathComponent(review.caseID.uuidString, isDirectory: true)
+                .appendingPathComponent("reviews", isDirectory: true)
+        else { return }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let file = dir.appendingPathComponent("\(review.id.uuidString).json", isDirectory: false)
+            let data = try encoder.encode(review)
+            try data.write(to: file, options: [.atomic])
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            errorMessage = "复盘记录保存失败:\(error.localizedDescription)"
+        }
     }
 
     /// 检查并标记到期复查的 Case(在刷新后调用)。
@@ -281,7 +334,8 @@ extension AppModel {
             if decisionCases[i].lifecycle == .monitoring,
                decisionCases[i].isReviewDue(asOf: now) {
                 decisionCases[i].lifecycle = .reviewDue
-                decisionCases[i].updatedAt = now
+                // 不改 updatedAt(Schema V2:reviewDueAt 是显式的,
+                // 改 updatedAt 会导致旧代码重新推迟复查时间)
                 changed = true
             }
         }
@@ -289,17 +343,6 @@ extension AppModel {
     }
 
     // MARK: - 复盘辅助
-
-    /// 获取 Case 当前指标值(重新计算)。
-    private func currentMetricValue(for cs: DecisionCase) -> Double {
-        let metrics = ConcentrationRiskEngine.computeDirectMetrics(rows: personalAssetRows)
-        switch cs.dimension {
-        case .directHolding:
-            return metrics?.topShare ?? 0
-        case .lookThrough, .lookThroughOverlap, .sector:
-            return portfolioLookThroughSnapshot?.topPositions.first?.portfolioWeightPct ?? 0
-        }
-    }
 
     private func reviewHorizonText(for cs: DecisionCase) -> String {
         switch cs.decisionState {

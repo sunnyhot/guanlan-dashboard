@@ -146,10 +146,10 @@ enum DecisionCaseActor: String, Codable, Hashable, Sendable {
 // MARK: - DecisionCase 主体
 
 struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     var id: UUID
-    let schemaVersion: Int
+    var schemaVersion: Int
     /// 稳定去重键:kind | dimension | subjectType | subjectID | horizon
     let caseKey: String
     let kind: DecisionCaseKind
@@ -176,6 +176,16 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
     var createdAt: String
     var updatedAt: String
 
+    // Schema V2 新增(显式存储,不用 updatedAt 算)
+    var lastEvaluatedAt: String       // 最近一次指标评估时间
+    var reviewDueAt: String?          // 显式复查时间(monitoring 时设定)
+    var resolvedAt: String?           // 关闭时间
+    var baselineMetricSnapshotID: UUID?  // 进入监控时的基准快照
+    var latestResearchRunID: UUID?    // 最近研究运行 ID
+    var latestReviewID: UUID?         // 最近复盘 ID
+    var triggerCondition: DecisionCondition?    // 结构化触发条件(可自动判断)
+    var invalidationCondition: DecisionCondition?  // 结构化失效条件
+
     // 追加式事件历史
     var events: [DecisionCaseEvent]
 
@@ -199,6 +209,14 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         detail: String,
         createdAt: String,
         updatedAt: String,
+        lastEvaluatedAt: String? = nil,
+        reviewDueAt: String? = nil,
+        resolvedAt: String? = nil,
+        baselineMetricSnapshotID: UUID? = nil,
+        latestResearchRunID: UUID? = nil,
+        latestReviewID: UUID? = nil,
+        triggerCondition: DecisionCondition? = nil,
+        invalidationCondition: DecisionCondition? = nil,
         events: [DecisionCaseEvent] = [],
         userDisposition: DecisionCaseUserDisposition = .pending
     ) {
@@ -218,8 +236,49 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         self.detail = detail
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.lastEvaluatedAt = lastEvaluatedAt ?? createdAt
+        self.reviewDueAt = reviewDueAt
+        self.resolvedAt = resolvedAt
+        self.baselineMetricSnapshotID = baselineMetricSnapshotID
+        self.latestResearchRunID = latestResearchRunID
+        self.latestReviewID = latestReviewID
+        self.triggerCondition = triggerCondition
+        self.invalidationCondition = invalidationCondition
         self.events = events
         self.userDisposition = userDisposition
+    }
+
+    // MARK: - V1 兼容解码
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        caseKey = try c.decodeIfPresent(String.self, forKey: .caseKey) ?? ""
+        kind = try c.decodeIfPresent(DecisionCaseKind.self, forKey: .kind) ?? .concentrationRisk
+        dimension = try c.decodeIfPresent(ConcentrationDimension.self, forKey: .dimension) ?? .directHolding
+        subjectName = try c.decodeIfPresent(String.self, forKey: .subjectName) ?? ""
+        subjectCode = try c.decodeIfPresent(String.self, forKey: .subjectCode)
+        lifecycle = try c.decodeIfPresent(DecisionCaseLifecycle.self, forKey: .lifecycle) ?? .decisionReady
+        decisionState = try c.decodeIfPresent(PortfolioDecisionState.self, forKey: .decisionState) ?? .watch
+        metricValue = try c.decodeIfPresent(Double.self, forKey: .metricValue) ?? 0
+        metricLabel = try c.decodeIfPresent(String.self, forKey: .metricLabel) ?? ""
+        metricDescription = try c.decodeIfPresent(String.self, forKey: .metricDescription) ?? ""
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
+        detail = try c.decodeIfPresent(String.self, forKey: .detail) ?? ""
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? ""
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt) ?? createdAt
+        // V2 新增(缺失时默认值)
+        lastEvaluatedAt = try c.decodeIfPresent(String.self, forKey: .lastEvaluatedAt) ?? updatedAt
+        reviewDueAt = try c.decodeIfPresent(String.self, forKey: .reviewDueAt)
+        resolvedAt = try c.decodeIfPresent(String.self, forKey: .resolvedAt)
+        baselineMetricSnapshotID = try c.decodeIfPresent(UUID.self, forKey: .baselineMetricSnapshotID)
+        latestResearchRunID = try c.decodeIfPresent(UUID.self, forKey: .latestResearchRunID)
+        latestReviewID = try c.decodeIfPresent(UUID.self, forKey: .latestReviewID)
+        triggerCondition = try c.decodeIfPresent(DecisionCondition.self, forKey: .triggerCondition)
+        invalidationCondition = try c.decodeIfPresent(DecisionCondition.self, forKey: .invalidationCondition)
+        events = try c.decodeIfPresent([DecisionCaseEvent].self, forKey: .events) ?? []
+        userDisposition = try c.decodeIfPresent(DecisionCaseUserDisposition.self, forKey: .userDisposition) ?? .pending
     }
 }
 
