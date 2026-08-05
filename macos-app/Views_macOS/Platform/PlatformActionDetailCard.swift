@@ -55,7 +55,7 @@ struct PlatformActionDetailCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                     .fill(
                         LinearGradient(
                             colors: [sideColor, sideColor.opacity(0.3)],

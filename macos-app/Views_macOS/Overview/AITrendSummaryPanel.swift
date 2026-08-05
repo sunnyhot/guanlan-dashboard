@@ -36,7 +36,7 @@ struct AITrendSummaryPanel: View {
         }) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 10) {
-                    RoundedRectangle(cornerRadius: 2)
+                    RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                         .fill(summary.riskTone.color)
                         .frame(width: 3, height: 52)
                     VStack(alignment: .leading, spacing: 5) {

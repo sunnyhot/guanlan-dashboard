@@ -470,7 +470,7 @@ struct PersonalAssetGroupedTable: View {
         VStack(alignment: .leading, spacing: 8) {
             // ── Group header bar with colored accent ──
             HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                     .fill(tint)
                     .frame(width: 3, height: 18)
 

@@ -192,7 +192,7 @@ struct TrendLiveLogPanel: View {
                 if let detail = entry.detail?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !detail.isEmpty {
                     HStack(alignment: .top, spacing: 0) {
-                        RoundedRectangle(cornerRadius: 1.5)
+                        RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                             .fill(levelTint.opacity(0.65))
                             .frame(width: 2.5)
                             .padding(.vertical, 2)
@@ -205,9 +205,9 @@ struct TrendLiveLogPanel: View {
                             .padding(.vertical, 6)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .background(levelTint.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                    .background(levelTint.opacity(0.06), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: AppPalette.badgeRadius)
                             .stroke(levelTint.opacity(0.14), lineWidth: 1)
                     )
                 }

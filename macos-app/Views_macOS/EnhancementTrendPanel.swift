@@ -223,7 +223,7 @@ extension EnhancementCenterView {
                         .padding(.vertical, 8)
                         .background(
                             trendSourceStatusTint(status.status).opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 8)
+                            in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
                         )
                     }
                 }

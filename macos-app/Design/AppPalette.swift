@@ -14,6 +14,8 @@ enum AppPalette {
     static let controlRadius: CGFloat = 8
     static let badgeRadius: CGFloat = 6
     static let iconBoxRadius: CGFloat = 6
+    /// 色块 / 图例点 / 状态条等微型圆角（≤ 8x8 的纯色块）。
+    static let swatchRadius: CGFloat = 2
 
     // MARK: - Spacing Tokens
 

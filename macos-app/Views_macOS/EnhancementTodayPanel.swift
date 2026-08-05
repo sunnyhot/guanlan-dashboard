@@ -174,7 +174,7 @@ extension EnhancementCenterView {
                     Text("执行前复核")
                         .font(AppPalette.appFont(.footnote, weight: .bold))
                         .foregroundStyle(AppPalette.warning)
-                    ForEach(Array(report.riskChecks.enumerated()), id: \.offset) { _, item in
+                    ForEach(report.riskChecks, id: \.self) { item in
                         Label(item, systemImage: "checkmark.shield")
                             .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
@@ -194,7 +194,7 @@ extension EnhancementCenterView {
                 DisclosureGroup("判断依据与数据边界") {
                     VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                         trendSourceStatusList(report.sourceStatuses)
-                        ForEach(Array(report.warnings.enumerated()), id: \.offset) { _, warning in
+                        ForEach(report.warnings, id: \.self) { warning in
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
                                 .font(AppPalette.appFont(.caption))
                                 .foregroundStyle(AppPalette.warning)
@@ -410,8 +410,8 @@ extension EnhancementCenterView {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(tint.opacity(0.35), lineWidth: 1))
+            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
+            .overlay(RoundedRectangle(cornerRadius: AppPalette.badgeRadius).stroke(tint.opacity(0.35), lineWidth: 1))
         }
     }
 

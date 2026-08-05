@@ -22,7 +22,7 @@ struct PlatformActionRow: View {
 
     var body: some View {
         HStack(spacing: isCompact ? 8 : 12) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                 .fill(
                     LinearGradient(
                         colors: [sideColor, sideColor.opacity(0.4)],

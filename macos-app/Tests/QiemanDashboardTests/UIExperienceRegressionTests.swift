@@ -384,7 +384,8 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBar.contains("Text(\"我的关注\")"))
         XCTAssertTrue(menuBar.contains("MenuBarWatchlistRow(row: row)"))
         XCTAssertTrue(menuBar.contains("percentOptional(row.changeSinceFollowPct)"))
-        XCTAssertTrue(menuBar.contains("try? await model.refreshPersonalWatchlist(updateNotice: false)"))
+        // 关注刷新已迁移到 AppModel.onMenuBarPopoverPresented()，view 不再持有 .task 刷新逻辑。
+        XCTAssertFalse(menuBar.contains("try? await model.refreshPersonalWatchlist(updateNotice: false)"))
         XCTAssertTrue(menuBar.contains("@AppStorage(\"menu.bar.popover.top-section\")"))
         XCTAssertTrue(menuBar.contains("Text(\"\\(section.title)在上\")"))
         XCTAssertTrue(menuBar.contains("ForEach(orderedSections)"))
@@ -414,8 +415,39 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(menuBar.contains("model.openDataDirectory()"))
     }
 
+    func testMenuBarPopoverRefreshIsDrivenByAppDelegateEventNotByTaskModifier() throws {
+        // popover 的 hosting controller 只创建一次，SwiftUI .task 不会每次开都重跑；
+        // 刷新改由 AppDelegate.togglePopover → model.onMenuBarPopoverPresented() 触发。
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
+        XCTAssertFalse(menuBar.contains("MenuBarPortfolioRefreshDecision"))
+        XCTAssertFalse(menuBar.contains(".task {"))
+
+        let appDelegate = try source(at: "QiemanDashboardApp.swift")
+        XCTAssertTrue(appDelegate.contains("model?.onMenuBarPopoverPresented()"))
+
+        let refresh = try source(at: "Core/AppModel/PortfolioRefresh.swift")
+        XCTAssertTrue(refresh.contains("func onMenuBarPopoverPresented()"))
+        XCTAssertTrue(refresh.contains("throttle(key: \"menuBarPopover\""))
+    }
+
+    func testNoHardcodedCornerRadiusInMacOSViews() throws {
+        // 所有视图圆角必须走 AppPalette token；
+        // PlatformHoldingsPieChart 的 cornerRadius: 0 是饼图 slice 几何参数，不是 UI 圆角，允许。
+        let tree = try sourceTree(at: "Views_macOS")
+        // 精确匹配 `cornerRadius: N)`，避免误伤 12 / 10 等。
+        let forbidden = ["1", "1.5", "2", "6", "8"]
+        for value in forbidden {
+            let needle = "cornerRadius: \(value))"
+            XCTAssertFalse(
+                tree.contains(needle),
+                "Views_macOS/ 下出现硬编码 \(needle)，请改用 AppPalette.swatchRadius / badgeRadius / controlRadius"
+            )
+        }
+        XCTAssertTrue(tree.contains("AppPalette.swatchRadius"), "swatchRadius token 应被使用")
+    }
+
     func testWatchlistLookupKeepsLocalResolutionWhileRefreshingTheName() throws {
-        let watchlist = try source(at: "Views_macOS/PersonalWatchlistView.swift")
+        let watchlist = try source(at: "Views_macOS/PersonalWatchlist/PersonalWatchlistAddSheet.swift")
 
         XCTAssertTrue(watchlist.contains("model.preparePersonalWatchlistCode("))
         XCTAssertTrue(watchlist.contains(".onChange(of: lookupKey, initial: true)"))

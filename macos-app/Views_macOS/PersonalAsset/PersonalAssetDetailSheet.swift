@@ -199,7 +199,7 @@ struct PersonalAssetDetailSheet: View {
                 VStack(spacing: 8) {
                     ForEach(items) { item in
                         HStack(alignment: .center, spacing: 10) {
-                            RoundedRectangle(cornerRadius: 2)
+                            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                                 .fill(item.tone.color)
                                 .frame(width: 3, height: 34)
                             VStack(alignment: .leading, spacing: 3) {
@@ -271,7 +271,7 @@ struct PersonalAssetDetailSheet: View {
         let accent = tone.detailAccentColor
 
         return HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                 .fill(accent)
                 .frame(width: 3, height: 58)
 

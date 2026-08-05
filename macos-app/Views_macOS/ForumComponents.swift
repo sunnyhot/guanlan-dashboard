@@ -30,7 +30,7 @@ struct CommentBlock: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(comment.children) { reply in
                         HStack(spacing: 8) {
-                            RoundedRectangle(cornerRadius: 1)
+                            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                                 .fill(AppPalette.brand.opacity(0.28))
                                 .frame(width: 2)
                             VStack(alignment: .leading, spacing: 2) {

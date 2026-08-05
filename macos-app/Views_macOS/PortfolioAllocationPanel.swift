@@ -700,7 +700,7 @@ private struct PortfolioUnderlyingPositionList: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(sortedPositions.enumerated()), id: \.offset) { index, position in
+                    ForEach(Array(sortedPositions.enumerated()), id: \.element.id) { index, position in
                         PortfolioUnderlyingPositionRow(rank: index + 1, position: position)
                         if index < sortedPositions.count - 1 {
                             Divider().padding(.leading, 30)
@@ -760,7 +760,7 @@ private struct PortfolioUnderlyingPositionRow: View {
                 .monospacedDigit()
                 .frame(width: 22, alignment: .trailing)
 
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                 .fill(tint)
                 .frame(width: 4, height: 28)
                 .accessibilityHidden(true)
@@ -979,7 +979,7 @@ private struct PortfolioFundDisclosureTable: View {
 
                 Divider().gridCellColumns(5)
 
-                ForEach(Array(sortedFunds.enumerated()), id: \.offset) { index, fund in
+                ForEach(Array(sortedFunds.enumerated()), id: \.element) { index, fund in
                     GridRow {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(fund.fundName)

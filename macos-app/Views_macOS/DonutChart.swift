@@ -139,7 +139,7 @@ struct DonutLegend<Item: Identifiable, Label: View, Trailing: View>: View {
         case .circle:
             Circle().fill(swatchColor(item)).frame(width: 7, height: 7)
         case .roundedRect:
-            RoundedRectangle(cornerRadius: 2).fill(swatchColor(item)).frame(width: 8, height: 8)
+            RoundedRectangle(cornerRadius: AppPalette.swatchRadius).fill(swatchColor(item)).frame(width: 8, height: 8)
         }
     }
 }

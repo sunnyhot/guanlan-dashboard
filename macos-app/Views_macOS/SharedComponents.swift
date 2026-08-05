@@ -743,7 +743,7 @@ struct ToastBar: View {
 
     var body: some View {
         HStack(spacing: AppPalette.spaceS) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                 .fill(tint)
                 .frame(width: 3, height: 14)
             Text(text)

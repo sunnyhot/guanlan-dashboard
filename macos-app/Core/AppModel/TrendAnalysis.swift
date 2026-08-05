@@ -142,7 +142,24 @@ extension AppModel {
     // MARK: - 趋势分析主入口（内嵌 Agent）
 
     func generateTrendAnalysis(userInitiated: Bool, createdAt: String? = nil) async {
+        let telemetryStart = PerformanceTelemetry.start()
+        var telemetryResult = "completed"
+        var telemetryProvider = "unknown"
+        let telemetryTrigger = userInitiated ? "manual" : "scheduled"
+        defer {
+            PerformanceTelemetry.record(
+                "trend.generate",
+                startedAt: telemetryStart,
+                metadata: [
+                    "result": telemetryResult,
+                    "provider": telemetryProvider,
+                    "trigger": telemetryTrigger,
+                    "toolCalls": "\(trendProviderCapabilities?.supportsToolCalls ?? false)"
+                ]
+            )
+        }
         guard trendSettings.provider.isConfigured else {
+            telemetryResult = "notConfigured"
             trendGenerationState = .failed
             lastTrendError = OpenAICompatibleAgentClientError.missingConfiguration.localizedDescription
             return
@@ -150,6 +167,7 @@ extension AppModel {
         let generatedAt = createdAt ?? Self.timestampString()
         let autoAnalysisSlot = userInitiated ? nil : trendSettings.dueAutoAnalysisSlot(at: generatedAt)
         let provider = trendSettings.provider.upgradedForTrendGeneration
+        telemetryProvider = provider.model
         trendGenerationState = .generating
         lastTrendError = ""
         trendProgressLogs = []
@@ -178,6 +196,7 @@ extension AppModel {
                 let capabilities = try await trendCapabilityProbe(provider)
                 trendProviderCapabilities = capabilities
                 guard capabilities.supportsToolCalls else {
+                    telemetryResult = "unsupportedModel"
                     trendGenerationState = .failed
                     lastTrendError = "该模型不支持工具调用，无法启动趋势 Agent。\(capabilities.detail)"
                     appendTrendProgress("模型不支持 Agent 工具调用", detail: lastTrendError, level: .error)
@@ -189,6 +208,7 @@ extension AppModel {
                     level: .success
                 )
             } catch {
+                telemetryResult = "capabilityProbeFailed"
                 trendGenerationState = .failed
                 lastTrendError = "工具调用能力检测失败：\(error.localizedDescription)"
                 appendTrendProgress("工具调用能力检测失败", detail: lastTrendError, level: .error)
@@ -315,10 +335,12 @@ extension AppModel {
             trendGenerationState = .succeeded
             appendTrendProgress("趋势分析完成", level: .success)
         } catch is CancellationError {
+            telemetryResult = "cancelled"
             trendGenerationState = .failed
             lastTrendError = "趋势分析已取消。"
             appendTrendProgress("趋势分析已取消，保留上一次报告", level: .warning)
         } catch {
+            telemetryResult = "failed"
             trendGenerationState = .failed
             lastTrendError = error.localizedDescription
             let failureAlreadyLogged = trendProgressLogs.last.map {

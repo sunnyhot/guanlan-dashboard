@@ -52,7 +52,9 @@ struct ContentView: View {
         }
         .task {
             await model.start()
-            await model.runDailyTrendAnalysisIfNeeded()
+            // 趋势分析是 LLM 后台任务，与首屏无关，不阻塞 .task 完成；
+            // 必须在 start() 之后（依赖其加载的 trendSettings），用 fire-and-forget 解耦。
+            Task { await model.runDailyTrendAnalysisIfNeeded() }
             model.refreshDataForSectionIfNeeded(model.selectedSection)
         }
         .onChange(of: model.selectedSection) { _, section in
@@ -312,7 +314,7 @@ private struct SidebarSectionButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: AppPalette.spaceS) {
-                RoundedRectangle(cornerRadius: 1.5)
+                RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
                     .fill(isSelected ? AppPalette.brand : .clear)
                     .frame(width: AppPalette.selectionRailWidth, height: 24)
 
@@ -462,7 +464,7 @@ private struct AppUpdateSheet: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                            ForEach(Array(releaseNoteItems.enumerated()), id: \.offset) { _, item in
+                            ForEach(releaseNoteItems, id: \.self) { item in
                                 HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
                                     Text("•")
                                         .font(AppPalette.appFont(.headline, weight: .semibold))

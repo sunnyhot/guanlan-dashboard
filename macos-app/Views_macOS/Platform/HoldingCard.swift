@@ -58,7 +58,7 @@ struct HoldingCard: View {
     }
 
     private var accentBar: some View {
-        RoundedRectangle(cornerRadius: 2)
+        RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
             .fill(
                 LinearGradient(
                     colors: [profitTint, profitTint.opacity(0.3)],
