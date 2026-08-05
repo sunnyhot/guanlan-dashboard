@@ -147,6 +147,12 @@ final class EnhancementState: ObservableObject {
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
     @Published var isPresentingCommandPalette = false
+
+    // 投资智能(Slice 1):DecisionCase + UserDecisionProfile。
+    // 全部由 InvestmentIntelligence.enabled gate,enabled=false 时不加载不消费。
+    @Published var decisionCases: [DecisionCase] = []
+    @Published var userDecisionProfile: UserDecisionProfile = .default
+    @Published var isRefreshingDecisionCases = false
 }
 
 /// 「AI 研判」内部分段（原 config/report/signals 重构为 today/tracking）

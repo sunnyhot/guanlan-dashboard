@@ -3,22 +3,36 @@ import SwiftUI
 
 // MARK: - iOS AI 研判页
 //
-// 完整版趋势报告:状态/风险标签 + 标题详情 + 周期研判 + 板块研判 + 操作按钮。
-// 复用 trendDashboardSummary 和 startTrendAnalysis。
+// 三段切换：研判 / 跟踪 / 证据。
+// 复用 trendDashboardSummary、model.trendTrackingItems、model.trendReport?.evidence。
+// 跟踪清单、证据列表分别见 IOSTrendTrackingListView / IOSTrendEvidenceListView。
 
 struct EnhancementSectionView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var segment: ResearchSegment = .report
+
+    private enum ResearchSegment: String, CaseIterable, Identifiable {
+        case report = "研判"
+        case tracking = "跟踪"
+        case evidence = "证据"
+        var id: String { rawValue }
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                let summary = model.trendDashboardSummary
-                statusCard(summary)
-                if !summary.horizons.isEmpty {
-                    horizonsCard(summary)
+                Picker("", selection: $segment) {
+                    ForEach(ResearchSegment.allCases) { seg in
+                        Text(seg.rawValue).tag(seg)
+                    }
                 }
-                if !summary.sectors.isEmpty {
-                    sectorsCard(summary)
+                .pickerStyle(.segmented)
+                .padding(.bottom, 2)
+
+                switch segment {
+                case .report:  reportContent
+                case .tracking: trackingContent
+                case .evidence: evidenceContent
                 }
             }
             .padding(.horizontal, 16)
@@ -30,6 +44,40 @@ struct EnhancementSectionView: View {
             try? await model.refreshLatest(updateNotice: false)
         }
     }
+
+    // MARK: 研判
+
+    @ViewBuilder
+    private var reportContent: some View {
+        let summary = model.trendDashboardSummary
+        statusCard(summary)
+        // 投资智能(Slice 1):集中度决策事项。gate 在 InvestmentIntelligence.enabled。
+        if InvestmentIntelligence.enabled {
+            IOSInvestmentIntelligencePanel()
+        }
+        if !summary.horizons.isEmpty {
+            horizonsCard(summary)
+        }
+        if !summary.sectors.isEmpty {
+            sectorsCard(summary)
+        }
+    }
+
+    // MARK: 跟踪
+
+    @ViewBuilder
+    private var trackingContent: some View {
+        IOSTrendTrackingListView()
+    }
+
+    // MARK: 证据
+
+    @ViewBuilder
+    private var evidenceContent: some View {
+        IOSTrendEvidenceListView(evidence: model.trendReport?.evidence ?? [])
+    }
+
+    // MARK: 研判卡片
 
     private func statusCard(_ summary: TrendDashboardSummary) -> some View {
         IOSSectionCard(title: "AI 趋势研判", subtitle: summary.dataAsOf ?? "尚未生成", icon: "sparkles") {
@@ -95,6 +143,8 @@ struct EnhancementSectionView: View {
                         title: horizon.title,
                         direction: horizon.directionText,
                         rationale: horizon.rationale,
+                        confidence: horizon.confidence,
+                        exposureText: nil,
                         tone: horizon.tone
                     )
                 }
@@ -110,6 +160,8 @@ struct EnhancementSectionView: View {
                         title: sector.name,
                         direction: sector.directionText,
                         rationale: sector.rationale,
+                        confidence: sector.confidence,
+                        exposureText: sector.exposureText,
                         tone: sector.tone
                     )
                 }
@@ -117,21 +169,35 @@ struct EnhancementSectionView: View {
         }
     }
 
-    private func trendRow(title: String, direction: String, rationale: String, tone: TrendDashboardTone) -> some View {
+    /// 周期/板块研判行：色条 + 标题 + 方向 + 暴露占比 + 置信度 + 理由。
+    private func trendRow(
+        title: String,
+        direction: String,
+        rationale: String,
+        confidence: TrendConfidence,
+        exposureText: String?,
+        tone: TrendDashboardTone
+    ) -> some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(trendToneColor(tone))
                 .frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(title)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(AppPalette.ink)
+                    if let exposureText, !exposureText.isEmpty {
+                        Text(exposureText)
+                            .font(IOSDesign.monoNumber(10, weight: .regular))
+                            .foregroundStyle(AppPalette.muted)
+                    }
                     Spacer()
                     Text(direction)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(trendToneColor(tone))
                 }
+                confidenceMeter(confidence)
                 if !rationale.isEmpty {
                     Text(rationale)
                         .font(.system(size: 12))
@@ -140,14 +206,34 @@ struct EnhancementSectionView: View {
                 }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
+    }
+
+    /// 置信度细条：左标题右分数 + 进度胶囊。
+    private func confidenceMeter(_ confidence: TrendConfidence) -> some View {
+        HStack(spacing: IOSDesign.spaceS) {
+            Text("置信度 \(confidence.label)")
+                .font(IOSDesign.sansBody(10))
+                .foregroundStyle(AppPalette.muted)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(IOSDesign.ink.opacity(0.08))
+                    Capsule()
+                        .fill(trendToneColor(.info))
+                        .frame(width: geo.size.width * CGFloat(max(0, min(confidence.score, 100))) / 100)
+                }
+            }
+            .frame(height: 3)
+            Text("\(confidence.score)")
+                .font(IOSDesign.monoNumber(10, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+        }
     }
 
     private func handleTrendAction(_ action: TrendDashboardAction) {
         guard !action.isDisabled else { return }
         switch action.kind {
         case .configure:
-            // 未配置模型 → 跳设置页配置(对齐 macOS 逻辑)
             model.selectedSection = .settings
         case .generate, .refresh:
             Task { await model.startTrendAnalysis(userInitiated: true) }
@@ -158,9 +244,6 @@ struct EnhancementSectionView: View {
 }
 
 // MARK: - TrendDashboardTone → 颜色(iOS 版)
-// (定义在 OverviewSectionView.swift 同 module,这里为 AI 研判页复用)
-// 注意:OverviewSectionView.swift 里的 trendToneToColor 是 file-private 函数,
-// 这里提供 module 内可访问的版本。
 
 func trendToneColor(_ tone: TrendDashboardTone) -> Color {
     switch tone {

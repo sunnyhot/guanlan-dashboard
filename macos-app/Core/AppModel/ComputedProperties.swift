@@ -88,6 +88,15 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("fund-look-through-cache.json", isDirectory: false)
     }
 
+    // 投资智能(Slice 1)
+    var decisionCasesFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("decision-cases.json", isDirectory: false)
+    }
+
+    var userDecisionProfileFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("user-decision-profile.json", isDirectory: false)
+    }
+
     var hasLiveService: Bool {
         true
     }
