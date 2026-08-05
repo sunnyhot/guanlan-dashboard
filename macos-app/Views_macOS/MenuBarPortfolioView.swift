@@ -137,24 +137,8 @@ struct MenuBarPortfolioView: View {
         .buttonStyle(.appSecondary)
         .preferredColorScheme(model.appearance.colorScheme)
         .respectsReducedMotion()
-        .task {
-            for action in MenuBarPortfolioRefreshDecision.onAppear(
-                hasPortfolioSnapshot: model.userPortfolioSnapshot != nil,
-                hasPersonalPortfolio: model.hasPersonalPortfolio,
-                hasIncompletePortfolioValuation: model.userPortfolioSnapshot?.hasIncompleteValuationCoverage ?? false,
-                lastPortfolioRefreshAt: model.lastPortfolioRefreshAt
-            ) {
-                switch action {
-                case .refreshPortfolio:
-                    try? await model.refreshUserPortfolio(updateNotice: false)
-                case .refreshMarketIndicesIfNeeded:
-                    await model.refreshMarketIndicesIfNeeded()
-                }
-            }
-            if model.hasPersonalWatchlist {
-                try? await model.refreshPersonalWatchlist(updateNotice: false)
-            }
-        }
+        // 刷新由 AppDelegate.togglePopover → model.onMenuBarPopoverPresented() 驱动，
+        // 不再用 .task：popover 的 hosting controller 只创建一次，.task 不会每次开都重跑。
     }
 
     private var header: some View {

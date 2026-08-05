@@ -407,6 +407,8 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         } else {
             guard let button = statusItem.button else { return }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            // 每次打开触发一次刷新（5 秒节流防抖），不再依赖 SwiftUI .task 在常驻 view 上重跑。
+            model?.onMenuBarPopoverPresented()
         }
     }
 

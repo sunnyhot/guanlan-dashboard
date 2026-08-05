@@ -106,6 +106,28 @@ extension AppModel {
         }
     }
 
+    /// 用户打开菜单栏 popover 时触发：5 秒节流防抖，通过则刷新持仓/关注/指数。
+    /// 忽略 120 秒新鲜度——打开就是要新数据；节流兜底防止连点抖动。
+    func onMenuBarPopoverPresented() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // throttle 的 action 是 @Sendable 闭包，运行在 RefreshThrottle actor 上；
+            // 这里先在 main actor 取好判断值，闭包内只调 @MainActor 方法（编译器自动 hop）。
+            let hasPortfolio = self.hasPersonalPortfolio
+            let hasWatchlist = self.hasPersonalWatchlist
+            await self.refreshThrottle.throttle(key: "menuBarPopover") { [weak self] in
+                guard let self else { return }
+                if hasPortfolio {
+                    try? await self.refreshUserPortfolio(updateNotice: false)
+                }
+                if hasWatchlist {
+                    try? await self.refreshPersonalWatchlist(updateNotice: false)
+                }
+                await self.refreshMarketIndicesIfNeeded()
+            }
+        }
+    }
+
     var selectedMenuBarMarketIndexKinds: [MarketIndexKind] {
         var seen = Set<MarketIndexKind>()
         let selected = menuBarTickerSettings.selections.compactMap { selection -> MarketIndexKind? in
