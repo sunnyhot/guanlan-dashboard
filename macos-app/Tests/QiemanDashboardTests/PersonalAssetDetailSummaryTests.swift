@@ -36,10 +36,10 @@ final class PersonalAssetDetailSummaryTests: XCTestCase {
         XCTAssertEqual(summary.attentionItems.last?.metric, "¥200.00")
         XCTAssertEqual(
             summary.metrics.map(\.title),
-            ["总收益", row.changePeriodTitle, "净值 / 估值", "持仓成本", "待确认", "下次计划"]
+            ["总收益", row.changePeriodTitle, "单位净值", "持仓成本", "待确认", "下次计划"]
         )
-        XCTAssertEqual(summary.metrics[2].value, "1.3000 / 1.3100")
-        XCTAssertEqual(summary.metrics[2].detail, "更新于 2026-06-05 15:00")
+        XCTAssertEqual(summary.metrics[2].value, "1.3000")
+        XCTAssertEqual(summary.metrics[2].detail, "更新 06-05 15:00")
     }
 
     func testMakeSummaryIncludesArchivedHoldingAttentionForArchivedOnlyRow() {

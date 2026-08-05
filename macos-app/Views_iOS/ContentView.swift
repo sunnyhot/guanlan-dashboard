@@ -43,9 +43,7 @@ struct ContentView: View {
             get: { !hasCompletedOnboarding },
             set: { if !$0 { hasCompletedOnboarding = true } }
         )) {
-            // TODO(stage-3): iOS-native onboarding. macOS onboarding lives in
-            // Views_macOS/OnboardingView.swift and assumes a 420pt-wide sheet.
-            OnboardingPlaceholder()
+            IOSOnboardingView()
         }
         .task {
             await model.start()
@@ -132,33 +130,4 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Onboarding Placeholder
-
-private struct OnboardingPlaceholder: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: AppPalette.spaceL) {
-                Spacer()
-                Image(systemName: "rectangle.grid.2x2")
-                    .font(.system(size: 60))
-                    .foregroundStyle(IOSDesign.accent)
-                Text("且慢主理人")
-                    .font(.largeTitle.bold())
-                Text("iOS 版欢迎你。完整的引导流程将在后续阶段补全。")
-                    .font(.body)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(AppPalette.muted)
-                    .padding(.horizontal, 32)
-                Spacer()
-                Button("开始使用") { dismiss() }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .padding(.bottom, 32)
-            }
-            .padding()
-        }
-    }
-}
 #endif

@@ -88,17 +88,17 @@ struct PlatformSectionView: View {
     // MARK: - 调仓动态
 
     /// 长赢调仓:分析层为 hero(雷达→月度趋势→持仓饼图),始终可见;
-    /// 调仓明细分列默认折叠(带笔数徽章),点击展开。对齐 macOS 的"分析优先、日志钻取"。
+    /// 调仓明细默认折叠 + 买卖方/搜索筛选。复用 Core 的 PlatformFilterState。
     private var longWinContent: some View {
-        let actions = model.latestPlatformActions
+        let presentation = model.platformActionPresentation
         return VStack(alignment: .leading, spacing: IOSDesign.spaceS + 4) {
             // 分析层(hero,始终可见)
             IOSStrategyRadarPanel()
             IOSPlatformMonthlyChart()
             IOSPlatformHoldingsPie()
 
-            // 调仓明细(默认折叠,点击展开原始日志)
-            if actions.isEmpty {
+            // 调仓明细(带筛选,默认折叠)
+            if presentation.counts.all == 0 {
                 IOSEmptyState(
                     title: "暂无调仓动态",
                     subtitle: "刷新拉取最新的主理人调仓记录。",
@@ -108,18 +108,122 @@ struct PlatformSectionView: View {
                 }
                 .padding(.top, IOSDesign.spaceS)
             } else {
-                IOSDisclosureCard(title: "调仓明细", count: actions.count, unit: "笔") {
-                    ForEach(actions, id: \.id) { action in
-                        actionRow(action)
-                        if action.id != actions.last?.id {
-                            Divider().opacity(0.4)
-                        }
-                    }
+                IOSDisclosureCard(title: "调仓明细", count: presentation.counts.all, unit: "笔") {
+                    filterBar(presentation.counts)
+                    filteredList(presentation)
                 }
             }
         }
         .padding(.horizontal, IOSDesign.spaceM)
         .padding(.vertical, IOSDesign.spaceS + 4)
+    }
+
+    // MARK: 筛选条（买卖方 segmented + 搜索框）
+
+    private func filterBar(_ counts: PlatformActionCounts) -> some View {
+        VStack(spacing: IOSDesign.spaceS) {
+            Picker("", selection: sideFilterBinding) {
+                Text("全部 \(counts.all)").tag(PlatformSideFilter.all)
+                Text("买入 \(counts.buy)").tag(PlatformSideFilter.buy)
+                Text("卖出 \(counts.sell)").tag(PlatformSideFilter.sell)
+            }
+            .pickerStyle(.segmented)
+
+            HStack(spacing: IOSDesign.spaceS) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13))
+                    .foregroundStyle(IOSDesign.muted)
+                TextField("搜索基金名称 / 代码", text: searchBinding)
+                    .font(IOSDesign.sansBody(14))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !model.filterState.searchText.isEmpty {
+                    Button {
+                        model.filterState.searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(IOSDesign.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, IOSDesign.spaceS)
+            .padding(.vertical, 7)
+            .background(IOSDesign.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
+        }
+        .padding(.vertical, IOSDesign.spaceXS)
+    }
+
+    private var sideFilterBinding: Binding<PlatformSideFilter> {
+        Binding(
+            get: { model.filterState.sideFilter },
+            set: { model.filterState.sideFilter = $0 }
+        )
+    }
+
+    private var searchBinding: Binding<String> {
+        Binding(
+            get: { model.filterState.searchText },
+            set: { model.filterState.searchText = $0 }
+        )
+    }
+
+    // MARK: 筛选后列表
+
+    @ViewBuilder
+    private func filteredList(_ presentation: PlatformActionPresentation) -> some View {
+        if presentation.pageActions.isEmpty {
+            Text("没有匹配的调仓记录")
+                .font(IOSDesign.sansBody(13))
+                .foregroundStyle(IOSDesign.muted)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.vertical, IOSDesign.spaceM)
+        } else {
+            ForEach(presentation.pageActions, id: \.id) { action in
+                actionRow(action)
+                if action.id != presentation.pageActions.last?.id {
+                    Divider().opacity(0.4)
+                }
+            }
+            if presentation.totalPages > 1 {
+                paginationControls(presentation)
+            }
+        }
+    }
+
+    private func paginationControls(_ presentation: PlatformActionPresentation) -> some View {
+        HStack(spacing: IOSDesign.spaceM) {
+            Button {
+                if model.filterState.currentPage > 0 {
+                    model.filterState.currentPage -= 1
+                }
+            } label: {
+                Label("上一页", systemImage: "chevron.left")
+                    .font(IOSDesign.sansBody(13, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .disabled(presentation.currentPage <= 0)
+
+            Spacer()
+            Text("第 \(presentation.currentPage + 1) / \(presentation.totalPages) 页")
+                .font(IOSDesign.sansBody(12))
+                .foregroundStyle(IOSDesign.muted)
+            Spacer()
+
+            Button {
+                if presentation.currentPage < presentation.totalPages - 1 {
+                    model.filterState.currentPage += 1
+                }
+            } label: {
+                Label("下一页", systemImage: "chevron.right")
+                    .font(IOSDesign.sansBody(13, weight: .medium))
+            }
+            .buttonStyle(.bordered)
+            .labelStyle(.titleAndIcon)
+            .disabled(presentation.currentPage >= presentation.totalPages - 1)
+        }
+        .padding(.top, IOSDesign.spaceS)
     }
 
     private func actionRow(_ action: PlatformActionPayload) -> some View {
@@ -227,7 +331,8 @@ struct PlatformSectionView: View {
 
     private var forumList: some View {
         let posts = model.forumRecords
-        return VStack(alignment: .leading, spacing: IOSDesign.spaceS + 4) {
+        // LazyVStack:卡片按需构建,切到论坛 tab 不会一次性 parse 全部帖子正文。
+        return LazyVStack(alignment: .leading, spacing: IOSDesign.spaceS + 4) {
             if posts.isEmpty {
                 IOSEmptyState(
                     title: "暂无社区动态",

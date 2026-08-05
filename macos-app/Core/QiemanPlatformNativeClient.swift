@@ -554,10 +554,27 @@ final class QiemanPlatformNativeClient {
             ],
             headers: [:]
         )
-        guard let list = payload as? [[String: Any]] else {
-            throw NativePlatformError.invalidResponse
+        // 顶层直接是数组
+        if let list = payload as? [[String: Any]] {
+            return list
         }
-        return list
+        // 接口可能包了一层字典：尝试常见 key 解包
+        if let object = payload as? [String: Any] {
+            for key in ["data", "list", "rows", "result", "items", "records"] {
+                if let list = object[key] as? [[String: Any]] {
+                    return list
+                }
+            }
+            // 诊断：打印顶层 key 帮助定位结构变化
+            #if DEBUG
+            print("[Platform] adjustments 顶层为字典，keys=\(object.keys.sorted())")
+            #endif
+        } else {
+            #if DEBUG
+            print("[Platform] adjustments 顶层类型异常: \(Swift.type(of: payload))")
+            #endif
+        }
+        throw NativePlatformError.invalidResponse
     }
 
     private func buildPlatformPayload(prodCode: String, rawItems: [[String: Any]]) async throws -> PlatformPayload {

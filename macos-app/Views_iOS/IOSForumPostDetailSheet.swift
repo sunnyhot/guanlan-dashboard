@@ -3,53 +3,29 @@ import SwiftUI
 
 // MARK: - iOS 论坛帖子详情 Sheet
 //
-// 展示帖子完整正文 + 元信息(时间/小组/作者/互动) + 平台原文链接。
-// 评论线程(comments)暂不在此版实现(需要单独的评论加载 API + UI,后续阶段)。
+// 展示帖子完整正文 + 元信息(时间/小组/作者/互动) + 评论树 + 平台原文链接。
+// 评论通过 model.selectedPostID + loadCommentsForSelectedPost() 加载，
+// 结果在 model.commentsPayload.comments。渲染见 IOSForumCommentTree。
 
 struct IOSForumPostDetailSheet: View {
     let post: SnapshotRecordPayload
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
-                    // 标题
-                    Text(post.titleText)
-                        .font(IOSDesign.serifHeading(22))
-                        .foregroundStyle(IOSDesign.ink)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // 帖子主体(标题/正文/互动/原文)抽成独立子视图 —— post 是值常量,
+                    // 评论加载触发的 commentsPayload 变化不会让正文重新求值/重算。
+                    IOSForumPostDetailHeader(post: post)
 
-                    // 元信息 chips
-                    metaChips
-
+                    // 评论树(随 model.commentsPayload / isLoadingComments 刷新)
                     Divider().opacity(0.4)
-
-                    // 正文
-                    Text(post.bodyText)
-                        .font(IOSDesign.sansBody(15))
-                        .foregroundStyle(IOSDesign.ink)
-                        .lineSpacing(4)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    // 互动统计
-                    if hasInteraction {
-                        interactionRow
-                    }
-
-                    // 平台原文
-                    if let url = detailURL {
-                        Button {
-                            openURL(url)
-                        } label: {
-                            Label("查看平台原文", systemImage: "arrow.up.right.square")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(IOSDesign.accent)
-                        .padding(.top, IOSDesign.spaceS)
-                    }
+                    IOSForumCommentTree(
+                        comments: model.commentsPayload?.comments ?? [],
+                        isLoading: model.isLoadingComments
+                    )
                 }
                 .padding(.horizontal, IOSDesign.spaceM)
                 .padding(.vertical, IOSDesign.spaceM)
@@ -61,6 +37,59 @@ struct IOSForumPostDetailSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("关闭") { dismiss() }
                 }
+            }
+                .task {
+                // 进入详情时加载评论：设置 selectedPostID 后触发拉取
+                guard let postID = post.postId else { return }
+                let id = String(postID)
+                guard model.selectedPostID != id else { return }
+                model.selectedPostID = id
+                await model.loadCommentsForSelectedPost()
+            }
+        }
+    }
+}
+
+// MARK: - 帖子主体(标题/元信息/正文/互动/原文)
+//
+// 独立子视图:只依赖 post(值常量),不订阅 model。评论加载触发的
+// commentsPayload 变化只刷新评论树,不会让这里的正文重新求值。
+
+private struct IOSForumPostDetailHeader: View {
+    let post: SnapshotRecordPayload
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            Text(post.titleText)
+                .font(IOSDesign.serifHeading(22))
+                .foregroundStyle(IOSDesign.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            metaChips
+
+            Divider().opacity(0.4)
+
+            Text(post.bodyText)
+                .font(IOSDesign.sansBody(15))
+                .foregroundStyle(IOSDesign.ink)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if hasInteraction {
+                interactionRow
+            }
+
+            if let url = detailURL {
+                Button {
+                    openURL(url)
+                } label: {
+                    Label("查看平台原文", systemImage: "arrow.up.right.square")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(IOSDesign.accent)
+                .padding(.top, IOSDesign.spaceS)
             }
         }
     }

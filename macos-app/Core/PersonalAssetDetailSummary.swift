@@ -72,32 +72,18 @@ struct PersonalAssetDetailSummary: Hashable {
                 detail: dailyChangePercentText(row.estimateChangePct),
                 tone: marketTone(for: row.estimateChangeAmount)
             ),
-            PersonalAssetDetailMetric(
-                title: row.usesMarketTradeColumns ? "现价 / 估值" : "净值 / 估值",
-                value: "\(decimalOptional(row.currentPrice)) / \(decimalOptional(row.currentEstimatePrice))",
-                detail: row.holdingRow?.resolvedPriceTime.map { "更新于 \($0)" },
-                tone: .neutral
-            ),
+            // 现价/估值二选一：优先显示现价，没有才显示估值
+            currentPriceMetric(row: row),
             PersonalAssetDetailMetric(
                 title: "持仓成本",
                 value: decimalOptional(row.costPrice),
                 tone: .neutral
             ),
-            PersonalAssetDetailMetric(
-                title: "待确认",
-                value: row.pendingCashAmount > 0
-                    ? currencyText(row.pendingCashAmount, market: market)
-                    : (row.pendingUnitAmount > 0 ? "\(unitsText(row.pendingUnitAmount)) 份" : "—"),
-                detail: row.pendingTradeCount > 0 ? "\(row.pendingTradeCount) 笔" : nil,
-                tone: .warning
-            ),
-            PersonalAssetDetailMetric(
-                title: "下次计划",
-                value: row.estimatedNextPlanAmount > 0 ? currencyText(row.estimatedNextPlanAmount, market: market) : "—",
-                detail: row.nextExecutionDate,
-                tone: .info
-            )
-        ]
+            // 待确认：仅在有买入中交易时才显示
+            pendingMetric(row: row, market: market),
+            // 下次计划：仅在有计划金额时才显示
+            nextPlanMetric(row: row, market: market)
+        ].compactMap { $0 }
 
         return PersonalAssetDetailSummary(
             title: row.fundName,
@@ -107,6 +93,58 @@ struct PersonalAssetDetailSummary: Hashable {
             effectiveAmountText: effectiveAmountText,
             metrics: metrics,
             attentionItems: makeAttentionItems(row: row)
+        )
+    }
+
+    // MARK: - 条件性指标（现价/估值、待确认、下次计划）
+
+    /// 现价/估值二选一：优先显示现价；现价为空才显示估值；都没有返回 nil。
+    private static func currentPriceMetric(row: PersonalAssetAggregateRow) -> PersonalAssetDetailMetric? {
+        let title = row.usesMarketTradeColumns ? "现价" : "单位净值"
+        // 取日期+时分（yyyy-MM-dd HH:mm），去掉秒，避免过长撑爆卡片
+        let updateTime = row.holdingRow?.resolvedPriceTime?.shortDateTimePart
+        if let price = row.currentPrice, price > 0 {
+            return PersonalAssetDetailMetric(
+                title: title,
+                value: decimalOptional(price),
+                detail: updateTime.map { "更新 \($0)" },
+                tone: .neutral
+            )
+        }
+        if let estimate = row.currentEstimatePrice, estimate > 0 {
+            let estimateTitle = row.usesMarketTradeColumns ? "估值" : "盘中估值"
+            return PersonalAssetDetailMetric(
+                title: estimateTitle,
+                value: decimalOptional(estimate),
+                detail: updateTime.map { "更新 \($0)" },
+                tone: .neutral
+            )
+        }
+        return nil
+    }
+
+    /// 待确认：仅在有买入中交易（金额或份数 > 0）时显示，否则返回 nil。
+    private static func pendingMetric(row: PersonalAssetAggregateRow, market: StockMarket?) -> PersonalAssetDetailMetric? {
+        guard row.pendingCashAmount > 0 || row.pendingUnitAmount > 0 else { return nil }
+        let value = row.pendingCashAmount > 0
+            ? currencyText(row.pendingCashAmount, market: market)
+            : "\(unitsText(row.pendingUnitAmount)) 份"
+        return PersonalAssetDetailMetric(
+            title: "待确认",
+            value: value,
+            detail: row.pendingTradeCount > 0 ? "\(row.pendingTradeCount) 笔" : nil,
+            tone: .warning
+        )
+    }
+
+    /// 下次计划：仅在有计划金额时显示，否则返回 nil。
+    private static func nextPlanMetric(row: PersonalAssetAggregateRow, market: StockMarket?) -> PersonalAssetDetailMetric? {
+        guard row.estimatedNextPlanAmount > 0 else { return nil }
+        return PersonalAssetDetailMetric(
+            title: "下次计划",
+            value: currencyText(row.estimatedNextPlanAmount, market: market),
+            detail: row.nextExecutionDate,
+            tone: .info
         )
     }
 
@@ -179,5 +217,24 @@ struct PersonalAssetDetailSummary: Hashable {
             let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return text.isEmpty ? nil : text
         }
+    }
+}
+
+// MARK: - String 日期截断辅助
+
+extension String {
+    /// 取 yyyy-MM-dd 部分（前 10 字符）。用于在窄卡片里精简显示时间。
+    var shortDatePart: String {
+        guard count >= 10 else { return self }
+        return String(prefix(10))
+    }
+
+    /// 取 MM-dd HH:mm 部分（去掉年份和秒）。格式如「03-15 15:00」。
+    var shortDateTimePart: String {
+        // 期望格式 yyyy-MM-dd HH:mm:ss，取 MM-dd + 空格 + HH:mm
+        guard count >= 16 else { return shortDatePart }
+        let monthDay = String(self[index(startIndex, offsetBy: 5)..<index(startIndex, offsetBy: 10)])
+        let hourMin = String(self[index(startIndex, offsetBy: 11)..<index(startIndex, offsetBy: 16)])
+        return "\(monthDay) \(hourMin)"
     }
 }

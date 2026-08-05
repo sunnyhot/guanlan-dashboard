@@ -158,27 +158,68 @@ struct SnapshotRecordPayload: Decodable, Hashable, Identifiable {
     }
 
     private func plainText(_ value: String?) -> String? {
-        guard var text = value?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+        guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
             return nil
         }
+        // HTML 清洗代价高(5 条正则 + 14 次 replaceOccurrences),同一原始文本结果幂等,
+        // 用进程级缓存避免列表/详情页每次 body 重算都重新 parse。
+        return SnapshotPlainTextCache.plainText(for: raw)
+    }
+}
 
-        text = decodeCommonHTMLEntities(text)
-        text = text
-            .replacingOccurrences(of: #"(?i)<\s*br\s*/?\s*>"#, with: "\n", options: .regularExpression)
-            .replacingOccurrences(of: #"(?i)</\s*(p|div|li|h[1-6]|blockquote)\s*>"#, with: "\n", options: .regularExpression)
-            .replacingOccurrences(of: #"(?i)<\s*(p|div|li|h[1-6]|blockquote)[^>]*>"#, with: "", options: .regularExpression)
-            .replacingOccurrences(of: #"(?i)<img[^>]*>"#, with: "\n", options: .regularExpression)
-            .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+// MARK: - HTML 纯文本清洗(带缓存 + 预编译正则)
+//
+// 论坛帖子正文是 HTML,`titleText`/`bodyText` 每次 body 重算都会触发清洗。
+// 原实现每次现场编译 5 条正则 + 14 次 replaceOccurrences,详情页正文长时卡顿明显。
+// 这里把正则预编译为静态常量复用,并用 NSCache 按原始文本缓存结果(线程安全)。
 
-        text = decodeCommonHTMLEntities(text)
-            .replacingOccurrences(of: "\u{00a0}", with: " ")
+private enum SnapshotPlainTextCache {
+    private static let cache: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>()
+        cache.countLimit = 512
+        return cache
+    }()
+
+    // 预编译正则(避免每次 replacingOccurrences(.regularExpression) 现场编译)
+    private static let brRegex = try! NSRegularExpression(pattern: #"(?i)<\s*br\s*/?\s*>"#)
+    private static let blockCloseRegex = try! NSRegularExpression(pattern: #"(?i)</\s*(p|div|li|h[1-6]|blockquote)\s*>"#)
+    private static let blockOpenRegex = try! NSRegularExpression(pattern: #"(?i)<\s*(p|div|li|h[1-6]|blockquote)[^>]*>"#)
+    private static let imgRegex = try! NSRegularExpression(pattern: #"(?i)<img[^>]*>"#)
+    private static let tagRegex = try! NSRegularExpression(pattern: #"<[^>]+>"#)
+    private static let multiSpaceRegex = try! NSRegularExpression(pattern: #"[ \t]{2,}"#)
+
+    static func plainText(for raw: String) -> String? {
+        let key = raw as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached.length == 0 ? nil : cached as String
+        }
+
+        let computed = compute(raw)
+        // 用空串占位表示 nil(NSCache 不存 nil),读取时 length==0 还原为 nil
+        cache.setObject((computed ?? "") as NSString, forKey: key)
+        return computed
+    }
+
+    private static func compute(_ raw: String) -> String? {
+        var text = decodeHTMLEntities(raw)
+
+        text = brRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "\n")
+        text = blockCloseRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "\n")
+        text = blockOpenRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+        text = imgRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "\n")
+        text = tagRegex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+
+        text = decodeHTMLEntities(text).replacingOccurrences(of: "\u{00a0}", with: " ")
 
         let lines = text
             .components(separatedBy: .newlines)
-            .map {
-                $0
-                    .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            .map { line -> String in
+                let collapsed = multiSpaceRegex.stringByReplacingMatches(
+                    in: line,
+                    range: NSRange(line.startIndex..., in: line),
+                    withTemplate: " "
+                )
+                return collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             .filter { !$0.isEmpty }
 
@@ -186,7 +227,7 @@ struct SnapshotRecordPayload: Decodable, Hashable, Identifiable {
         return cleaned.isEmpty ? nil : cleaned
     }
 
-    private func decodeCommonHTMLEntities(_ value: String) -> String {
+    private static func decodeHTMLEntities(_ value: String) -> String {
         value
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: "&amp;", with: "&")
