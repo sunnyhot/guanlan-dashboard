@@ -35,22 +35,23 @@ struct DecisionCaseCard: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // 操作按钮(用户已关闭的不显示)
+            // 用项目统一的 AppActionButtonStyle(见 UIExperienceRegressionTests 约定)
             if decisionCase.userDisposition != .closed {
                 HStack(spacing: AppPalette.spaceS) {
                     if decisionCase.userDisposition == .pending {
                         Button("关注", action: onAcknowledge)
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.appSecondary)
                             .controlSize(.small)
                     }
                     Button("已处理", action: onResolve)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.appSecondary)
                         .controlSize(.small)
                     Spacer()
                     Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 10))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.appIcon)
                     .foregroundColor(AppPalette.muted)
                     .help("关闭(不再关注)")
                 }
