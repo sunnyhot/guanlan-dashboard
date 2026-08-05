@@ -131,6 +131,7 @@ enum DecisionCaseEventType: String, Codable, Hashable, Sendable {
     case userClosed
     case userReopened
     case profileUpdated
+    case migrated  // Slice 6:从旧 TrendTracking 迁移
 }
 
 enum DecisionCaseActor: String, Codable, Hashable, Sendable {

@@ -32,6 +32,39 @@ extension AppModel {
                 errorMessage = "决策事项加载失败：\(error.localizedDescription)"
             }
         }
+
+        // Slice 6:从旧 TrendTracking 迁移(一次性,用 legacy: 前缀去重)
+        migrateLegacyTrackingIfNeeded()
+    }
+
+    /// 从旧 trend-tracking-items.json 迁移到 DecisionCase。
+    /// 只迁移一次:已有 legacy: 前缀 caseKey 的 Case 不会重复迁移。
+    /// 旧文件保留不删除(sunset 三阶段:N 版双读)。
+    private func migrateLegacyTrackingIfNeeded() {
+        guard let trackingURL = trendTrackingItemsFileURL else { return }
+        guard FileManager.default.fileExists(atPath: trackingURL.path) else { return }
+
+        // 检查是否已迁移过(有 legacy: 前缀的 Case)
+        let alreadyMigrated = decisionCases.contains { $0.caseKey.hasPrefix("legacy:") }
+        guard !alreadyMigrated else { return }
+
+        do {
+            let trackingItems = try TrendTrackingStore().load(from: trackingURL)
+            guard !trackingItems.isEmpty else { return }
+
+            let before = decisionCases.count
+            decisionCases = TrendTrackingMigration.mergeMigrated(
+                existingCases: decisionCases,
+                trackingItems: trackingItems
+            )
+
+            if decisionCases.count > before {
+                persistDecisionCases()
+            }
+        } catch {
+            // 迁移失败不影响主流程,旧 Tracking 仍可用
+            errorMessage = "旧跟踪清单迁移失败:\(error.localizedDescription)"
+        }
     }
 
     // MARK: - 刷新(集中度评估)
