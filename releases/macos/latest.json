@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.2/QiemanDashboard-3.16.2.zip",
-    "name" : "QiemanDashboard-3.16.2.zip",
-    "sha256" : "5db84e6ea8493c4fa4059a0d3e3cff734da475dddc322bfeeb263f174ec2e919",
-    "size" : 7000601
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.3/QiemanDashboard-3.16.3.zip",
+    "name" : "QiemanDashboard-3.16.3.zip",
+    "sha256" : "ff9c7bec7db9c0374ddb32190c013c8f48a9a2bb600b685aeec11b81202e059d",
+    "size" : 7051541
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.2/QiemanDashboard-3.16.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.3/QiemanDashboard-3.16.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.16.2.zip",
-      "size" : 7000601
+      "name" : "QiemanDashboard-3.16.3.zip",
+      "size" : 7051541
     }
   ],
-  "body" : "修复跨设备同步 AI API Key\nrelease: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.2",
-  "name" : "QiemanDashboard v3.16.2",
-  "notes" : "修复跨设备同步 AI API Key\nrelease: v3.16.1 API Key 同步修复(不再用 nil 覆盖内存值)",
+  "body" : "拆分我的关注视图为独立组件文件\n启动解耦趋势分析、修复列表 diff、统一圆角 token\n菜单栏 popover 打开即刷新，5 秒内防抖\nDecisionCaseCard 改用统一 AppActionButtonStyle\niOS 能力补齐 + Core 性能/健壮性优化\nSlice 1 集中度风险完整闭环(投资智能)\nSlice 0 冻结 AI 研判链路行为 + 投资智能 Feature Flag",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.3",
+  "name" : "QiemanDashboard v3.16.3",
+  "notes" : "拆分我的关注视图为独立组件文件\n启动解耦趋势分析、修复列表 diff、统一圆角 token\n菜单栏 popover 打开即刷新，5 秒内防抖\nDecisionCaseCard 改用统一 AppActionButtonStyle\niOS 能力补齐 + Core 性能/健壮性优化\nSlice 1 集中度风险完整闭环(投资智能)\nSlice 0 冻结 AI 研判链路行为 + 投资智能 Feature Flag",
   "published_at" : "",
-  "sha256" : "5db84e6ea8493c4fa4059a0d3e3cff734da475dddc322bfeeb263f174ec2e919",
-  "tag" : "v3.16.2",
-  "tag_name" : "v3.16.2",
-  "version" : "3.16.2"
+  "sha256" : "ff9c7bec7db9c0374ddb32190c013c8f48a9a2bb600b685aeec11b81202e059d",
+  "tag" : "v3.16.3",
+  "tag_name" : "v3.16.3",
+  "version" : "3.16.3"
 }
