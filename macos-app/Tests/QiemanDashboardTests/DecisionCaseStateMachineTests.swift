@@ -145,6 +145,8 @@ final class DecisionCaseStateMachineTests: XCTestCase {
         XCTAssertEqual(policy.concentrationWatchThreshold, 30)
         XCTAssertEqual(policy.concentrationReviewThreshold, 50)
         XCTAssertEqual(policy.prepareProximity, 5)
+        XCTAssertEqual(policy.sectorWatchThreshold, 25)
+        XCTAssertEqual(policy.sectorReviewThreshold, 40)
         XCTAssertEqual(policy.minLookThroughCoverage, 70)
     }
 

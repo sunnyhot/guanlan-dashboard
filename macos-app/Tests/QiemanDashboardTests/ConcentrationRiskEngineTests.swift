@@ -144,6 +144,75 @@ final class ConcentrationRiskEngineTests: XCTestCase {
         XCTAssertEqual(overlapCase?.subjectName, "贵州茅台")
     }
 
+    // MARK: - 穿透行业集中度(Slice 2)
+
+    func testSectorWatchWhenTopIndustryExceedsWatch() {
+        // 第一大行业 28%(超过 watch 25,未到 review)。
+        // 用自定义 Profile 让 concentrationLimit=50,使 reviewThreshold=min(40,50)=40,
+        // 28 在 [25, 40-5=35) → watch(不受 prepare 压制)。
+        let profile = UserDecisionProfile(riskTolerance: .aggressive, concentrationLimit: 50, allowsActiveRebalancing: false, isCustomized: true)
+        let industries = [
+            PortfolioLookThroughIndustry(name: "白酒", portfolioWeightPct: 28),
+            PortfolioLookThroughIndustry(name: "银行", portfolioWeightPct: 12)
+        ]
+        let snapshot = makeSnapshot(topPositions: [], coveragePct: 80, industries: industries)
+        let rows = makeRows([
+            ("001", "A", 20000), ("002", "B", 20000),
+            ("003", "C", 20000), ("004", "D", 20000), ("005", "E", 20000)
+        ])
+        let cases = ConcentrationRiskEngine.evaluate(rows: rows, lookThroughSnapshot: snapshot, profile: profile, timestamp: timestamp)
+        let sectorCase = cases.first { $0.dimension == .sector }
+        XCTAssertNotNil(sectorCase, "行业超阈值应生成 Case")
+        XCTAssertEqual(sectorCase?.decisionState, .watch)
+        XCTAssertEqual(sectorCase?.subjectName, "白酒")
+        XCTAssertEqual(sectorCase?.metricValue ?? 0, 28, accuracy: 0.5)
+    }
+
+    func testSectorAdjustReviewWhenExceedsReviewAndProfileAllows() {
+        // 第一大行业 42%(超过 review 40),Profile 允许强行动
+        let profile = UserDecisionProfile(riskTolerance: .aggressive, concentrationLimit: 50, allowsActiveRebalancing: true, isCustomized: true)
+        let industries = [
+            PortfolioLookThroughIndustry(name: "医药", portfolioWeightPct: 42)
+        ]
+        let snapshot = makeSnapshot(topPositions: [], coveragePct: 80, industries: industries)
+        let rows = makeRows([
+            ("001", "A", 20000), ("002", "B", 20000),
+            ("003", "C", 20000), ("004", "D", 20000), ("005", "E", 20000)
+        ])
+        let cases = ConcentrationRiskEngine.evaluate(rows: rows, lookThroughSnapshot: snapshot, profile: profile, timestamp: timestamp)
+        let sectorCase = cases.first { $0.dimension == .sector }
+        XCTAssertEqual(sectorCase?.decisionState, .adjustReview)
+    }
+
+    func testSectorNotGeneratedWhenCoverageInsufficient() {
+        // 行业 30% 但覆盖率只有 50%(低于 70)→ 不生成行业 Case(insufficient 由穿透占位处理)
+        let industries = [PortfolioLookThroughIndustry(name: "白酒", portfolioWeightPct: 30)]
+        let snapshot = makeSnapshot(topPositions: [], coveragePct: 50, industries: industries)
+        let rows = makeRows([
+            ("001", "A", 20000), ("002", "B", 20000),
+            ("003", "C", 20000), ("004", "D", 20000), ("005", "E", 20000)
+        ])
+        let cases = ConcentrationRiskEngine.evaluate(rows: rows, lookThroughSnapshot: snapshot, profile: .default, timestamp: timestamp)
+        let sectorCase = cases.first { $0.dimension == .sector }
+        XCTAssertNil(sectorCase, "覆盖率不足时不应生成行业 Case(由穿透 insufficientEvidence 占位)")
+    }
+
+    func testSectorStableDoesNotGenerateCase() {
+        // 第一大行业 18%(低于 watch 25)→ 不生成 Case
+        let industries = [
+            PortfolioLookThroughIndustry(name: "银行", portfolioWeightPct: 18),
+            PortfolioLookThroughIndustry(name: "白酒", portfolioWeightPct: 15)
+        ]
+        let snapshot = makeSnapshot(topPositions: [], coveragePct: 80, industries: industries)
+        let rows = makeRows([
+            ("001", "A", 20000), ("002", "B", 20000),
+            ("003", "C", 20000), ("004", "D", 20000), ("005", "E", 20000)
+        ])
+        let cases = ConcentrationRiskEngine.evaluate(rows: rows, lookThroughSnapshot: snapshot, profile: .default, timestamp: timestamp)
+        let sectorCase = cases.first { $0.dimension == .sector }
+        XCTAssertNil(sectorCase, "行业在阈值内时不应生成 Case")
+    }
+
     // MARK: - constrainState
 
     func testConstrainStateDowngradesStrongActionWhenProfileDisallows() {
@@ -189,14 +258,18 @@ final class ConcentrationRiskEngineTests: XCTestCase {
         )
     }
 
-    private func makeSnapshot(topPositions: [PortfolioLookThroughPosition], coveragePct: Double) -> PortfolioLookThroughSnapshot {
+    private func makeSnapshot(
+        topPositions: [PortfolioLookThroughPosition],
+        coveragePct: Double,
+        industries: [PortfolioLookThroughIndustry] = []
+    ) -> PortfolioLookThroughSnapshot {
         PortfolioLookThroughSnapshot(
             expectedFundCount: 2, coveredFundCount: 2,
             fundDataCoveragePct: coveragePct,
             disclosedSecurityCoveragePct: coveragePct,
             unknownPortfolioWeightPct: 100 - coveragePct,
             topPositions: topPositions,
-            industries: [], assetClasses: [],
+            industries: industries, assetClasses: [],
             funds: [], disclosures: [:], warnings: []
         )
     }

@@ -82,6 +82,8 @@ enum ConcentrationDimension: String, Codable, Hashable, Sendable {
     case lookThrough
     /// 穿透后底层证券重叠(多只基金持有同一底层)。
     case lookThroughOverlap
+    /// 穿透后行业层面的集中度(Slice 2)。
+    case sector
 }
 
 // MARK: - 事件历史

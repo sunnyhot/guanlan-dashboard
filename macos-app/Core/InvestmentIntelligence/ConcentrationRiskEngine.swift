@@ -177,6 +177,36 @@ enum ConcentrationRiskEngine {
             }
         }
 
+        // 穿透行业集中度(Slice 2):单一行业占比过高
+        if let snapshot = snapshot, let topIndustry = snapshot.industries.first, hasData {
+            let reviewThreshold = min(policy.sectorReviewThreshold, profile.effectiveConcentrationLimit)
+            let watchThreshold = policy.sectorWatchThreshold
+            let preliminary = policy.preliminaryState(
+                value: topIndustry.portfolioWeightPct,
+                watch: watchThreshold,
+                review: reviewThreshold,
+                hasData: hasData
+            )
+            let finalState = constrainState(preliminary, profile: profile)
+
+            if finalState != .stable {
+                cases.append(makeCase(
+                    dimension: .sector,
+                    subjectName: topIndustry.name,
+                    subjectCode: topIndustry.name,  // 行业用 name 作 code
+                    metricValue: topIndustry.portfolioWeightPct,
+                    metricDescription: "第一大行业暴露",
+                    watchThreshold: watchThreshold,
+                    reviewThreshold: reviewThreshold,
+                    state: finalState,
+                    profile: profile,
+                    policy: policy,
+                    timestamp: timestamp,
+                    coverage: coverage
+                ))
+            }
+        }
+
         return cases
     }
 
@@ -366,6 +396,7 @@ enum ConcentrationRiskEngine {
         case .directHolding: dimensionText = "持仓集中度"
         case .lookThrough: dimensionText = "穿透集中度"
         case .lookThroughOverlap: dimensionText = "穿透重叠"
+        case .sector: dimensionText = "行业集中度"
         }
         switch state {
         case .adjustReview: return "\(subjectName) · \(dimensionText)超限,建议复核"

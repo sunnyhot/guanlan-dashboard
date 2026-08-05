@@ -31,6 +31,14 @@ struct PortfolioDecisionPolicy: Sendable {
     /// 穿透重叠 review 阈值(百分比)。
     let overlapReviewThreshold: Double
 
+    /// 穿透行业集中度 watch 阈值(百分比)。
+    /// 单一行业占比 ≥ 此值 → watch。
+    let sectorWatchThreshold: Double
+
+    /// 穿透行业集中度 review 阈值(百分比)。
+    /// 单一行业占比 ≥ 此值 → adjustReview(需 Profile 允许)。
+    let sectorReviewThreshold: Double
+
     /// 穿透覆盖率最低要求(百分比)。
     /// 低于此值时,穿透相关评估降级为 insufficientEvidence。
     let minLookThroughCoverage: Double
@@ -44,6 +52,8 @@ struct PortfolioDecisionPolicy: Sendable {
         lookThroughReviewThreshold: 35,
         overlapWatchThreshold: 15,
         overlapReviewThreshold: 25,
+        sectorWatchThreshold: 25,
+        sectorReviewThreshold: 40,
         minLookThroughCoverage: 70
     )
 }
