@@ -420,14 +420,20 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
             // Ledger 不存在的 → 静默丢弃(防伪造)
         }
 
-        // 4. exitReview 门槛:需 ≥2 个独立反向证据(用 contributor fundCode 去重,Slice 3 简化版)
+        // 4. exitReview 门槛:用 ClaimAssessmentEngine 评估反证独立性(Slice 4 升级)
         if submission.suggestedState == .exitReview {
             let counterEvidenceIDs = Set(submission.counterFindings.flatMap(\.evidenceIDs))
             let counterEvidence = canonicalEvidence.filter { counterEvidenceIDs.contains($0.id) }
-            // 简化独立性:用 evidence 的 metadata.entityNames 或 sourceName 去重
-            let independentGroups = Set(counterEvidence.map { $0.sourceName })
-            if independentGroups.count < 2 {
-                errors.append("exitReview 需要至少 2 个独立来源的反向证据,当前只有 \(independentGroups.count) 个")
+            let supportingEvidenceIDs = Set(submission.findings.flatMap(\.evidenceIDs))
+            let supportingEvidence = canonicalEvidence.filter { supportingEvidenceIDs.contains($0.id) }
+
+            let assessment = ClaimAssessmentEngine.assess(
+                supportingEvidence: supportingEvidence,
+                counterEvidence: counterEvidence,
+                targetName: nil  // Agent 的 finding 不绑定特定标的代码
+            )
+            if !assessment.meetsExitReviewThreshold {
+                errors.append("exitReview 需要至少 2 个独立来源的反向证据,当前独立来源数:\(assessment.counterIndependentGroupCount)")
             }
         }
 
