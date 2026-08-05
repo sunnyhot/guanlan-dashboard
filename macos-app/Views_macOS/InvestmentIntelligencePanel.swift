@@ -35,9 +35,12 @@ struct InvestmentIntelligencePanel: View {
                 ForEach(activeCases) { cs in
                     DecisionCaseCard(
                         decisionCase: cs,
+                        isResearching: model.researchingDecisionCaseID == cs.id,
+                        researchReport: model.lastDecisionCaseResearchReports[cs.id],
                         onAcknowledge: { model.acknowledgeDecisionCase(cs.id) },
                         onResolve: { model.resolveDecisionCase(cs.id) },
-                        onClose: { model.closeDecisionCase(cs.id) }
+                        onClose: { model.closeDecisionCase(cs.id) },
+                        onResearch: { Task { await model.researchDecisionCase(cs.id) } }
                     )
                 }
             }

@@ -38,6 +38,7 @@ extension AppModel {
         guard trendSettings.provider.isConfigured else { return }
         guard trendGenerationState != .generating else { return }
         guard nextHourGuidanceGenerationState != .generating else { return }
+        guard decisionCaseResearchState != .generating else { return }
 
         let timestamp = createdAt ?? Self.timestampString()
         guard let slot = NextHourGuidanceSchedule.default.dueSlot(
@@ -64,7 +65,8 @@ extension AppModel {
             return
         }
         guard trendGenerationState != .generating,
-              nextHourGuidanceGenerationState != .generating else {
+              nextHourGuidanceGenerationState != .generating,
+              decisionCaseResearchState != .generating else {
             return
         }
 

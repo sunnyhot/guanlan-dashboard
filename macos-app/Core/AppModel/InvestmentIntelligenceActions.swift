@@ -64,10 +64,13 @@ extension AppModel {
         // 用新评估的 Case 替换/新增 pending 的。
         decisionCases = mergeDecisionCases(existing: decisionCases, incoming: newCases, timestamp: timestamp)
         persistDecisionCases()
+
+        // Slice 3:自动触发专项研究(对 watch/prepare Case,后台启动)
+        await autoTriggerDecisionCaseResearchIfNeeded()
     }
 
-    /// 独立刷新穿透快照(供集中度评估用,不依赖趋势分析流程)。
-    private func refreshLookThroughForConcentration() async {
+    /// 独立刷新穿透快照(供集中度评估和研究用,不依赖趋势分析流程)。
+    func refreshLookThroughForConcentration() async {
         let fundCodes = personalAssetRows
             .filter { $0.assetType == .fund }
             .compactMap { $0.fundCode }

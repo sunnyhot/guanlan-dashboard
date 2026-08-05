@@ -153,6 +153,11 @@ final class EnhancementState: ObservableObject {
     @Published var decisionCases: [DecisionCase] = []
     @Published var userDecisionProfile: UserDecisionProfile = .default
     @Published var isRefreshingDecisionCases = false
+    // Slice 3:专项研究状态
+    @Published var decisionCaseResearchState: TrendGenerationState = .idle
+    @Published var lastDecisionCaseResearchError = ""
+    @Published var researchingDecisionCaseID: UUID?
+    @Published var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] = [:]
 }
 
 /// 「AI 研判」内部分段（原 config/report/signals 重构为 today/tracking）

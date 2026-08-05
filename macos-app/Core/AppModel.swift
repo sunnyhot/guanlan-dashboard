@@ -132,6 +132,7 @@ final class AppModel: ObservableObject {
     var fundLookThroughClient: any FundLookThroughClientProtocol = FundLookThroughClient()
     var trendResearchAgent: any TrendResearchAgentProtocol = TrendResearchAgent()
     var nextHourGuidanceAgent: any NextHourGuidanceAgentProtocol = NextHourGuidanceAgent()
+    var decisionCaseResearchAgent: any DecisionCaseResearchAgentProtocol = DecisionCaseResearchAgent()
     var nextHourGuidanceNotificationSender: @Sendable (NextHourGuidanceReport) async -> Void = { report in
         let manager = LocalNotificationManager()
         guard await manager.requestAuthorizationIfNeeded() else { return }
@@ -463,6 +464,27 @@ final class AppModel: ObservableObject {
     var isRefreshingDecisionCases: Bool {
         get { enhancementState.isRefreshingDecisionCases }
         set { enhancementState.isRefreshingDecisionCases = newValue }
+    }
+
+    // Slice 3:专项研究 proxy
+    var decisionCaseResearchState: TrendGenerationState {
+        get { enhancementState.decisionCaseResearchState }
+        set { enhancementState.decisionCaseResearchState = newValue }
+    }
+
+    var lastDecisionCaseResearchError: String {
+        get { enhancementState.lastDecisionCaseResearchError }
+        set { enhancementState.lastDecisionCaseResearchError = newValue }
+    }
+
+    var researchingDecisionCaseID: UUID? {
+        get { enhancementState.researchingDecisionCaseID }
+        set { enhancementState.researchingDecisionCaseID = newValue }
+    }
+
+    var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] {
+        get { enhancementState.lastDecisionCaseResearchReports }
+        set { enhancementState.lastDecisionCaseResearchReports = newValue }
     }
 
     var isPresentingCommandPalette: Bool {

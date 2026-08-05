@@ -184,6 +184,37 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
         )
     }
 
+    /// DecisionCase 研究 Agent 的审计产物(Slice 3)。
+    static func makeDecisionCase(
+        snapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        report: DecisionCaseResearchReport,
+        trigger: String
+    ) -> TrendAgentRunArtifact {
+        TrendAgentRunArtifact(
+            runID: UUID(),
+            agentKind: "decision-case-research",
+            startedAt: snapshot.createdAt,
+            completedAt: ISO8601DateFormatter().string(from: Date()),
+            trigger: trigger,
+            modelFingerprint: settings.fingerprint,
+            promptVersion: "decision-case-research-v1",
+            reportSchemaVersion: DecisionCaseResearchReport.currentSchemaVersion,
+            policyVersion: policyVersion,
+            snapshotHash: snapshotHash(snapshot),
+            sourceStatuses: [],
+            redactedToolCalls: [],
+            canonicalEvidenceLedger: report.evidence.map(redactedEvidence),
+            claimEvidenceLinks: [],
+            validatorResults: [
+                TrendValidatorAuditResult(accepted: true, messages: [])
+            ],
+            confidenceNormalizationResults: [],
+            verifierResults: [],
+            reportDisposition: .analysisOnly
+        )
+    }
+
     static func makeFailure(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,

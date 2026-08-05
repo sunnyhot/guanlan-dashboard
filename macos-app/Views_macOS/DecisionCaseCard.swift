@@ -8,9 +8,12 @@ import SwiftUI
 
 struct DecisionCaseCard: View {
     let decisionCase: DecisionCase
+    let isResearching: Bool
+    let researchReport: DecisionCaseResearchReport?
     let onAcknowledge: () -> Void
     let onResolve: () -> Void
     let onClose: () -> Void
+    let onResearch: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceS) {
@@ -34,6 +37,21 @@ struct DecisionCaseCard: View {
                 .foregroundColor(AppPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
+            // 研究报告展示(Slice 3)
+            if let report = researchReport {
+                researchReportView(report)
+            }
+
+            // 研究中进度(Slice 3)
+            if isResearching {
+                HStack(spacing: AppPalette.spaceS) {
+                    ProgressView().controlSize(.small)
+                    Text("深度研究中…")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppPalette.muted)
+                }
+            }
+
             // 操作按钮(用户已关闭的不显示)
             // 用项目统一的 AppActionButtonStyle(见 UIExperienceRegressionTests 约定)
             if decisionCase.userDisposition != .closed {
@@ -46,6 +64,13 @@ struct DecisionCaseCard: View {
                     Button("已处理", action: onResolve)
                         .buttonStyle(.appSecondary)
                         .controlSize(.small)
+                    // Slice 3:深度研究按钮(只在有 AI Provider 时有意义,UI 统一显示)
+                    Button(action: onResearch) {
+                        Label("深度研究", systemImage: "brain.head.profile")
+                    }
+                    .buttonStyle(.appSecondary)
+                    .controlSize(.small)
+                    .disabled(isResearching)
                     Spacer()
                     Button(action: onClose) {
                         Image(systemName: "xmark")
@@ -66,6 +91,38 @@ struct DecisionCaseCard: View {
     }
 
     // MARK: - 子视图
+
+    @ViewBuilder
+    private func researchReportView(_ report: DecisionCaseResearchReport) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: AppPalette.spaceS) {
+                Image(systemName: "lightbulb")
+                    .foregroundColor(AppPalette.brand)
+                    .font(.system(size: 10))
+                Text("AI 研究建议:\(report.suggestedState.rawValue)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(AppPalette.ink)
+            }
+            if !report.findings.isEmpty {
+                Text("支持:\(report.findings.map(\.claim).joined(separator: "、"))")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppPalette.muted)
+                    .lineLimit(2)
+            }
+            if !report.counterFindings.isEmpty {
+                Text("反证:\(report.counterFindings.map(\.claim).joined(separator: "、"))")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppPalette.muted)
+                    .lineLimit(2)
+            }
+            Text(report.rationale)
+                .font(.system(size: 11))
+                .foregroundColor(AppPalette.muted)
+                .lineLimit(3)
+        }
+        .padding(AppPalette.spaceS)
+        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+    }
 
     private var stateBadge: some View {
         Text(stateLabel)

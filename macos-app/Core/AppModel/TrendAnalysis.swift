@@ -377,6 +377,7 @@ extension AppModel {
         guard trendSettings.provider.isConfigured else { return }
         guard trendGenerationState != .generating else { return }
         guard nextHourGuidanceGenerationState != .generating else { return }
+        guard decisionCaseResearchState != .generating else { return }
 
         let generatedAt = createdAt ?? Self.timestampString()
         trendSettings.normalizeDailyAutoAnalysisTimes()
