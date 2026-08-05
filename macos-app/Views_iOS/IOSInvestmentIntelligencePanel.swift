@@ -1,30 +1,39 @@
 import SwiftUI
 
-// iOS 端:投资智能板块(集中度风险)。
-// 嵌入 EnhancementSectionView.reportContent,展示活跃的 DecisionCase。
+// iOS 端:投资智能板块(集中度风险 + 决策事项 + 偏好设置)。
+// 嵌入 EnhancementSectionView.reportContent。
 // 由 InvestmentIntelligence.enabled gate。
 
 struct IOSInvestmentIntelligencePanel: View {
     @EnvironmentObject var model: AppModel
+    @State private var showProfileEditor = false
 
     var body: some View {
         let activeCases = model.decisionCases
             .filter { $0.userDisposition != .closed && $0.lifecycle != .closed }
 
-        if !activeCases.isEmpty {
-            VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
-                HStack(spacing: IOSDesign.spaceS) {
-                    Image(systemName: "brain.head.profile")
-                        .foregroundColor(IOSDesign.accent)
+        VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+            HStack(spacing: IOSDesign.spaceS) {
+                Image(systemName: "brain.head.profile")
+                    .foregroundColor(IOSDesign.accent)
+                VStack(alignment: .leading, spacing: 1) {
                     Text("组合决策事项")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(IOSDesign.ink)
-                    Spacer()
-                    Text("\(activeCases.count) 项")
-                        .font(.system(size: 13))
+                    Text("\(activeCases.count) 项" + (model.userDecisionProfile.isCustomized ? " · 已配置偏好" : " · 默认偏好"))
+                        .font(.system(size: 12))
                         .foregroundColor(IOSDesign.muted)
                 }
+                Spacer()
+                Button(action: { showProfileEditor.toggle() }) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(IOSDesign.muted)
+            }
 
+            if !activeCases.isEmpty {
                 ForEach(activeCases) { cs in
                     IOSDecisionCaseCard(
                         decisionCase: cs,
@@ -36,6 +45,10 @@ struct IOSInvestmentIntelligencePanel: View {
                         onResearch: { Task { await model.researchDecisionCase(cs.id) } }
                     )
                 }
+            }
+
+            if showProfileEditor {
+                IOSUserDecisionProfileEditor()
             }
         }
     }
