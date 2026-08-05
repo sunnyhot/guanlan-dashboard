@@ -62,14 +62,17 @@ enum PortfolioDecisionState: String, Codable, Hashable, Sendable, CaseIterable {
 
 // MARK: - Case 类型
 
-/// Slice 1 只有一种;后续 Slice 会扩展(sectorConcentrationRisk / drawdown 等)。
+/// Slice 1 起 concentrationRisk;Slice 7 扩展 drawdown / deviation。
 enum DecisionCaseKind: String, Codable, Hashable, Sendable {
     case concentrationRisk
+    case drawdownExpansion     // 回撤扩大(Slice 7)
+    case targetDeviation       // 目标配置偏离(Slice 7)
 
     var displayName: String {
         switch self {
-        case .concentrationRisk:
-            return "集中度风险"
+        case .concentrationRisk: return "集中度风险"
+        case .drawdownExpansion: return "回撤扩大"
+        case .targetDeviation: return "目标配置偏离"
         }
     }
 }

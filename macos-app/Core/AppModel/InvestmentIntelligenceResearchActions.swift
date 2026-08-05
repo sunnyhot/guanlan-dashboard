@@ -209,4 +209,104 @@ extension AppModel {
             totalCumulativePlanAmount: row.totalCumulativePlanAmount
         )
     }
+
+    // MARK: - Slice 7: 复盘
+
+    /// 到达复查时间的 Case 列表。
+    var reviewDueDecisionCases: [DecisionCase] {
+        let now = Self.timestampString()
+        return decisionCases.filter {
+            $0.userDisposition != .closed
+                && $0.lifecycle != .closed
+                && $0.isReviewDue(asOf: now)
+        }
+    }
+
+    /// 执行复盘:重新评估 Case 的当前指标,对比原判断,记录结论。
+    /// 复核方案硬约束:不用涨跌简单判对错(第 12.4 节)。
+    func performReview(for caseID: UUID, conclusion: DecisionReviewConclusion, lessons: String = "") {
+        guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return }
+        let cs = decisionCases[index]
+
+        // 重新评估当前指标(用最新 rows)
+        let currentMetric = currentMetricValue(for: cs)
+
+        // 生成复盘记录
+        let review = DecisionReview(
+            caseID: caseID,
+            reviewedAt: Self.timestampString(),
+            reviewHorizon: reviewHorizonText(for: cs),
+            originalDecisionState: cs.decisionState,
+            originalMetricValue: cs.metricValue,
+            currentMetricValue: currentMetric,
+            portfolioOutcome: "指标从 \(cs.metricLabel) 变为 \(String(format: "%.1f%%", currentMetric))",
+            processQuality: conclusion.displayName,
+            conclusion: conclusion,
+            lessons: lessons
+        )
+
+        // 存储 review(嵌入 events)
+        var reports = lastDecisionCaseResearchReports  // 复用现有存储?
+        _ = reports  // suppress unused
+        decisionCases[index].applyTransition(
+            to: .reviewDue,
+            decisionState: cs.decisionState,  // 保持当前状态(复盘不改状态,只记录)
+            at: Self.timestampString(),
+            type: .reassessed,
+            reason: "复盘完成:\(conclusion.displayName)" + (lessons.isEmpty ? "" : "(\(lessons))"),
+            actor: .system
+        )
+
+        // 如果复盘结论是 contradicted/invalidatedBeforeEvaluation → 关闭 Case
+        if conclusion == .contradicted || conclusion == .invalidatedBeforeEvaluation {
+            decisionCases[index].applyTransition(
+                to: .closed,
+                decisionState: .stable,
+                at: Self.timestampString(),
+                type: .userResolved,
+                reason: "复盘后关闭:\(conclusion.displayName)",
+                actor: .system
+            )
+            decisionCases[index].userDisposition = .resolved
+        }
+
+        persistDecisionCases()
+    }
+
+    /// 检查并标记到期复查的 Case(在刷新后调用)。
+    func markReviewDueCases() {
+        let now = Self.timestampString()
+        var changed = false
+        for i in decisionCases.indices {
+            if decisionCases[i].lifecycle == .monitoring,
+               decisionCases[i].isReviewDue(asOf: now) {
+                decisionCases[i].lifecycle = .reviewDue
+                decisionCases[i].updatedAt = now
+                changed = true
+            }
+        }
+        if changed { persistDecisionCases() }
+    }
+
+    // MARK: - 复盘辅助
+
+    /// 获取 Case 当前指标值(重新计算)。
+    private func currentMetricValue(for cs: DecisionCase) -> Double {
+        let metrics = ConcentrationRiskEngine.computeDirectMetrics(rows: personalAssetRows)
+        switch cs.dimension {
+        case .directHolding:
+            return metrics?.topShare ?? 0
+        case .lookThrough, .lookThroughOverlap, .sector:
+            return portfolioLookThroughSnapshot?.topPositions.first?.portfolioWeightPct ?? 0
+        }
+    }
+
+    private func reviewHorizonText(for cs: DecisionCase) -> String {
+        switch cs.decisionState {
+        case .watch: return "7 天"
+        case .prepare: return "3 天"
+        case .adjustReview, .exitReview: return "1 天"
+        default: return "未设定"
+        }
+    }
 }

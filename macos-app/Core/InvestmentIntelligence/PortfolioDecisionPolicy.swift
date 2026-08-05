@@ -43,6 +43,18 @@ struct PortfolioDecisionPolicy: Sendable {
     /// 低于此值时,穿透相关评估降级为 insufficientEvidence。
     let minLookThroughCoverage: Double
 
+    // Slice 7:回撤扩大阈值(百分比,绝对值)
+    /// 回撤 ≥ 此值 → watch。
+    let drawdownWatchThreshold: Double
+    /// 回撤 ≥ 此值 → adjustReview。
+    let drawdownReviewThreshold: Double
+
+    // Slice 7:目标配置偏离阈值(百分点)
+    /// 实际占比超上限的偏离 ≥ 此值 → 生成 Case。
+    let deviationWatchThreshold: Double
+    /// 偏离 ≥ 此值 → adjustReview。
+    let deviationReviewThreshold: Double
+
     /// 默认阈值。
     static let `default` = PortfolioDecisionPolicy(
         concentrationWatchThreshold: 30,
@@ -54,7 +66,11 @@ struct PortfolioDecisionPolicy: Sendable {
         overlapReviewThreshold: 25,
         sectorWatchThreshold: 25,
         sectorReviewThreshold: 40,
-        minLookThroughCoverage: 70
+        minLookThroughCoverage: 70,
+        drawdownWatchThreshold: 15,
+        drawdownReviewThreshold: 25,
+        deviationWatchThreshold: 5,
+        deviationReviewThreshold: 15
     )
 }
 

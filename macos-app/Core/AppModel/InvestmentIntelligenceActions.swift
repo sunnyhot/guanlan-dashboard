@@ -98,6 +98,9 @@ extension AppModel {
         decisionCases = mergeDecisionCases(existing: decisionCases, incoming: newCases, timestamp: timestamp)
         persistDecisionCases()
 
+        // Slice 7:检查到期复查的 Case
+        markReviewDueCases()
+
         // Slice 3:自动触发专项研究(对 watch/prepare Case,后台启动)
         await autoTriggerDecisionCaseResearchIfNeeded()
     }

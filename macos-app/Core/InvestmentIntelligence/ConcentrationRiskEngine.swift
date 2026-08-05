@@ -37,6 +37,16 @@ enum ConcentrationRiskEngine {
         let lookThroughCases = evaluateLookThrough(snapshot: snapshot, profile: profile, policy: policy, timestamp: timestamp)
         cases.append(contentsOf: lookThroughCases)
 
+        // 3. 回撤扩大(Slice 7):基于 profitPct
+        if let drawdownCase = evaluateDrawdown(rows: rows, profile: profile, policy: policy, timestamp: timestamp) {
+            cases.append(drawdownCase)
+        }
+
+        // 4. 目标配置偏离(Slice 7):实际集中度 vs Profile 上限
+        if let deviationCase = evaluateTargetDeviation(rows: rows, profile: profile, policy: policy, timestamp: timestamp) {
+            cases.append(deviationCase)
+        }
+
         // 按 metricValue 降序(最严重在前);insufficientEvidence 的排最后
         return cases.sorted { lhs, rhs in
             if lhs.decisionState == .insufficientEvidence && rhs.decisionState != .insufficientEvidence {
@@ -260,6 +270,98 @@ enum ConcentrationRiskEngine {
             contributorCount: topPosition.contributors.count,
             isAvailable: true
         )
+    }
+
+    // MARK: - 回撤扩大(Slice 7)
+
+    private static func evaluateDrawdown(
+        rows: [PersonalAssetAggregateRow],
+        profile: UserDecisionProfile,
+        policy: PortfolioDecisionPolicy,
+        timestamp: String
+    ) -> DecisionCase? {
+        // 找最大回撤(profitPct 最负的标的)
+        let holdingRows = rows.filter { $0.hasHolding }
+        guard let worst = holdingRows.min(by: { ($0.profitPct ?? 0) < ($1.profitPct ?? 0) }) else { return nil }
+        guard let drawdown = worst.profitPct, drawdown < -policy.drawdownWatchThreshold else { return nil }
+
+        let preliminary = policy.preliminaryState(
+            value: abs(drawdown),
+            watch: policy.drawdownWatchThreshold,
+            review: policy.drawdownReviewThreshold,
+            hasData: true
+        )
+        let finalState = constrainState(preliminary, profile: profile)
+        guard finalState != .stable else { return nil }
+
+        // 直接构造(不用 makeCase,因为它硬编码 concentrationRisk kind)
+        let caseKey = DecisionCase.makeCaseKey(
+            kind: .drawdownExpansion, dimension: .directHolding,
+            subjectCode: worst.fundCode, subjectName: worst.fundName
+        )
+        var cs = DecisionCase(
+            caseKey: caseKey,
+            kind: .drawdownExpansion,
+            dimension: .directHolding,
+            subjectName: worst.fundName,
+            subjectCode: worst.fundCode,
+            lifecycle: .decisionReady,
+            decisionState: finalState,
+            metricValue: abs(drawdown),
+            metricLabel: String(format: "%.1f%%", abs(drawdown)),
+            metricDescription: "最大回撤",
+            title: "\(worst.fundName) · 回撤 \(String(format: "%.1f", abs(drawdown)))%",
+            detail: "该标的回撤 \(String(format: "%.1f", abs(drawdown)))%,超过观察阈值 \(Int(policy.drawdownWatchThreshold))%。",
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+        cs.applyTransition(to: .decisionReady, decisionState: finalState, at: timestamp,
+                           type: .created, reason: "回撤扩大检测", actor: .system)
+        return cs
+    }
+
+    // MARK: - 目标配置偏离(Slice 7)
+
+    private static func evaluateTargetDeviation(
+        rows: [PersonalAssetAggregateRow],
+        profile: UserDecisionProfile,
+        policy: PortfolioDecisionPolicy,
+        timestamp: String
+    ) -> DecisionCase? {
+        // 实际 top1 占比 vs Profile 上限的偏离
+        guard let metrics = computeDirectMetrics(rows: rows) else { return nil }
+        let limit = profile.effectiveConcentrationLimit
+        let deviation = metrics.topShare - limit
+        guard deviation > policy.deviationWatchThreshold else { return nil }  // 偏离 > 阈值才生成
+
+        // 偏离本身就是超标,直接用 constrainState
+        let preliminary: PortfolioDecisionState = deviation > policy.deviationReviewThreshold ? .adjustReview : .watch
+        let finalState = constrainState(preliminary, profile: profile)
+        guard finalState != .stable else { return nil }
+
+        let caseKey = DecisionCase.makeCaseKey(
+            kind: .targetDeviation, dimension: .directHolding,
+            subjectCode: metrics.topCode, subjectName: metrics.topName
+        )
+        var cs = DecisionCase(
+            caseKey: caseKey,
+            kind: .targetDeviation,
+            dimension: .directHolding,
+            subjectName: metrics.topName,
+            subjectCode: metrics.topCode,
+            lifecycle: .decisionReady,
+            decisionState: finalState,
+            metricValue: deviation,
+            metricLabel: String(format: "+%.1fpp", deviation),
+            metricDescription: "超出上限 \(Int(limit))%",
+            title: "\(metrics.topName) · 超配 \(String(format: "%.1f", deviation))pp",
+            detail: "第一大标的占比 \(String(format: "%.1f", metrics.topShare))%,超出你的上限 \(Int(limit))% 共 \(String(format: "%.1f", deviation)) 个百分点。",
+            createdAt: timestamp,
+            updatedAt: timestamp
+        )
+        cs.applyTransition(to: .decisionReady, decisionState: finalState, at: timestamp,
+                           type: .created, reason: "目标配置偏离检测", actor: .system)
+        return cs
     }
 
     // MARK: - Profile 约束
