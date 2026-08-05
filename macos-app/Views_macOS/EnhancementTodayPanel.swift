@@ -5,6 +5,10 @@ extension EnhancementCenterView {
     var todayContent: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             nextHourGuidanceModule
+            // 投资智能(Slice 1):集中度决策事项。gate 在 InvestmentIntelligence.enabled。
+            if InvestmentIntelligence.enabled {
+                InvestmentIntelligencePanel()
+            }
             Group {
                 if let report = model.trendReport {
                     todayReportView(report)

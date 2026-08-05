@@ -449,6 +449,22 @@ final class AppModel: ObservableObject {
         set { enhancementState.selectedTrendTrackingItemID = newValue }
     }
 
+    // 投资智能(Slice 1)proxy
+    var decisionCases: [DecisionCase] {
+        get { enhancementState.decisionCases }
+        set { enhancementState.decisionCases = newValue }
+    }
+
+    var userDecisionProfile: UserDecisionProfile {
+        get { enhancementState.userDecisionProfile }
+        set { enhancementState.userDecisionProfile = newValue }
+    }
+
+    var isRefreshingDecisionCases: Bool {
+        get { enhancementState.isRefreshingDecisionCases }
+        set { enhancementState.isRefreshingDecisionCases = newValue }
+    }
+
     var isPresentingCommandPalette: Bool {
         get { enhancementState.isPresentingCommandPalette }
         set { enhancementState.isPresentingCommandPalette = newValue }
