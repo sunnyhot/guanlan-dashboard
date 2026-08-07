@@ -36,7 +36,7 @@ struct TrendResearchPromptBuilder: Sendable {
             : "当前为完整明细模式：工具会返回金额字段，可用于分析。"
         let lookThroughRule: String
         if snapshot.lookThrough != nil {
-            lookThroughRule = "本次快照包含基金穿透数据：提交前必须调用 get_fund_lookthrough。板块、集中度和底层证券判断应优先使用穿透结果，不得继续把「场内基金/场外基金」当作真实行业。"
+            lookThroughRule = "本次快照包含基金穿透数据：提交前必须调用 get_fund_lookthrough。statistical_industries 是东方财富 F10 的宽泛统计行业（例如制造业），不能直接作为投资板块名称或板块仓位；板块必须结合底层证券、ETF/基金主题和持仓来源归纳，不得继续把「场内基金/场外基金」或 F10 宽行业当作真实投资板块。"
         } else {
             lookThroughRule = "本次快照没有可用的基金穿透数据：必须明确披露缺口，不得根据基金名称臆测完整底层持仓。"
         }
@@ -46,9 +46,13 @@ struct TrendResearchPromptBuilder: Sendable {
         let alphaVantageRule = alphaVantageConfigured
             ? "本次存在 Alpha Vantage 可识别标的：在官方源之后至少调用一次 alpha_vantage_research。ETF 优先 etfProfile，个股事件优先 earningsCalendar，趋势缺口优先 dailyAnalytics；不要重复调用供应商技术指标接口，收益、均线、波动率和回撤已由 App 本地计算。"
             : "本次未配置 Alpha Vantage 或没有可识别标的，不调用 alpha_vantage_research。"
+        let opportunityUniverseRule = MarketOpportunityUniverse.promptDescription
 
         let text = """
-你是且慢（Qieman）组合的趋势研究分析师，基于 App 提供的只读快照工具做结构化研究，最后按 App 开放的顺序分模块提交报告。你的输出不是投资建议。
+你是且慢（Qieman）的投资研究分析师，最终报告同时包含两条互不替代的研究线：
+1. 组合长期研判：解释用户当前持仓、穿透暴露、周期趋势与行动候选。
+2. 全市场机会发现：独立扫描用户未持有也可能值得关注的大类资产、大盘/宽基和行业/主题板块，只写入 opportunities。
+全市场机会不得从组合缺口、marketOutlook 或 sectors 机械复制；你的输出不是投资建议。
 
 【工具与调用顺序】
 1. get_portfolio_overview：取得组合基线。提交报告前必须至少调用一次（运行时强制，未调用会被拒绝）。
@@ -57,7 +61,7 @@ struct TrendResearchPromptBuilder: Sendable {
 4. get_market_snapshot：读取大盘指数与基金估值行情（可选）。
 5. official_sec_research：直接查询 SEC EDGAR 官方 Submissions 和 XBRL Company Facts。只用于当前直接持仓或基金穿透出的美股；有可识别标的且已配置时为必调，并且优先于 web_search。
 6. alpha_vantage_research：第三方结构化市场数据补充。只能研究当前直接持仓或基金穿透标的；它不是官方一手来源。已配置且有可识别标的时至少调用一次。美股先查 SEC；中国标的先用 web_search 限定交易所、监管机构或政府官方域名，再用它补充结构化行情。
-7. web_search：通过 Tavily 补充最新行业、宏观、政策和事件信息。每次必须填写与当前快照匹配的 research_target；政策/监管检索先用 include_domains 限定官方域名，SEC 已覆盖的事实不得再用二手网页替代。已配置时至少取得一次非空、未重复的有效搜索；查询中不得包含组合名称、个人信息或金额。
+7. web_search：通过 Tavily 补充最新行业、宏观、政策和事件信息。组合研究目标需匹配当前快照；全市场机会目标可从下方受控研究池选择，不要求用户已经持有。政策/监管检索先用 include_domains 限定官方域名，SEC 已覆盖的事实不得再用二手网页替代。已配置时必须分别完成 assetClass、index，并逐一完成「科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值」六个 sector 分组扫描；板块分组搜索的 research_target.key 使用分组名，sectorKeys 必须完整填写该组板块。查询中不得包含组合名称、个人信息或金额。
 8. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
    - submit_trend_overview_module：组合总判断 + short/medium/long 三周期。
    - submit_trend_market_module：大盘/大类资产 + 行业板块 + 机会。
@@ -67,6 +71,7 @@ struct TrendResearchPromptBuilder: Sendable {
 每个工具结果都包含 harness 字段，记录持仓覆盖度、去重后的网页证据数和剩余工具/搜索预算。必须遵循 harness.next_step_hint：
 - 搜索前先检查已有网页证据，避免只改写措辞的重复查询；只有存在明确行业、政策或宏观证据缺口时才继续搜索。
 - web_searches_remaining 是真实 Tavily 请求余额，缓存命中不消耗该余额。
+- opportunity_search_coverage_complete=false 时不得进入提交；按 next_step_hint 补齐 assetClass、index 以及六个 sector 分组。只有完整扫描全部板块分组后，才能在全市场范围比较机会；扫描对象独立于用户当前持仓。
 - fund_look_through_required=true 时，必须等 fund_look_through_read=true 后再提交。
 - official_source_required=true 时，必须先完成 official_sec_research；即使官方查询为空或失败，也要保留该缺口，再用网页搜索补充，不得伪造官方结论。
 - alpha_vantage_required=true 时，在官方源之后调用 alpha_vantage_research；其证据 ID 以 vendor:alphavantage: 开头，只能作为供应商结构化补充。
@@ -84,7 +89,7 @@ claimEvidence 的固定结构为 {\"supportingEvidenceIDs\":[],\"counterEvidence
 {\"portfolio\":{\"headline\":\"\",\"riskLevel\":\"low\"|\"medium\"|\"high\"|\"unknown\",\"summary\":\"\",\"claimEvidence\":{}},\"horizons\":[horizon,horizon,horizon]}
 
 2. submit_trend_market_module
-{\"marketOutlook\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"sectors\":[{\"id\":\"\",\"name\":\"\",\"exposureText\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"opportunities\":[{\"id\":\"\",\"name\":\"\",\"category\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}]}
+{\"marketOutlook\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"sectors\":[{\"id\":\"\",\"name\":\"\",\"exposureText\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"opportunities\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\"|\"sector\",\"scope\":\"marketWide\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}]}
 
 3. submit_trend_asset_batch
 {\"assetTrends\":[asset]}；每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。
@@ -105,10 +110,12 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - Alpha Vantage 证据引用 vendor:alphavantage:*；它可支持 ETF 结构、财报日历和历史日线统计，但不得描述为监管、交易所或发行人官方披露，也不得冒充实时行情。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
 - marketOutlook 与 sectors 互斥：同一主题只能出现在其中一个数组。指数/大类资产（沪深300、黄金、债券、原油…）只放 marketOutlook；行业板块（消费、科技、医药、新能源…）只放 sectors。不要在两边写同一个主题（例如「消费」不能同时出现在两个数组里）。
+- opportunities 是完整扫描后的全市场机会排序，不是当前持仓分析摘要，每一项 scope 必须固定为 marketWide。category 用 index 表示大盘/宽基指数，assetClass 表示大类资产，sector 表示行业/主题板块；index 与 assetClass 各输出 1～3 个，sector 从六个分组全部扫描完后跨组比较，输出 3～6 个最值得继续研究的板块。候选无需已持有，也无需出现在组合穿透结果中。每项必须有独立外部证据、触发条件和失效条件；不得为了填满数量编造机会，证据不足可以少报或留空并披露缺口。
+- opportunities 不得把 marketOutlook 或 sectors 的同名结论原样复制过来；同名方向只有在全市场搜索取得额外证据，并给出独立的触发/失效条件时才可进入机会清单。
 - marketOutlook 与 sectors 不能同时为空；即使证据不足，也要基于已读取的数据给出至少一项 uncertain 判断并说明证据边界。
 - keyAssets 与 actions 建议各不超过 5 条。
 - confidence.score 必须在 0~100。
-- 基金穿透数据按「基金在组合中的权重 × 底层披露权重」计算。sectors 应优先使用穿透后的行业暴露，组合集中度应识别多只基金重复持有的同一证券。
+- 基金穿透数据按「基金在组合中的权重 × 底层披露权重」计算。get_fund_lookthrough 返回的 statistical_industries 是 F10 宽泛统计行业，仅用于披露结构说明，不得直接输出为 sectors；sectors 应结合底层证券、ETF/基金主题和持仓来源形成可投资板块，exposureText 必须写清具体持仓、来源基金和计算后的组合暴露。组合集中度应识别多只基金重复持有的同一证券。
 - 公开基金持仓是定期报告口径，不是实时仓位。引用底层证券或行业时必须同时考虑 disclosureDate、fund_data_coverage_pct、disclosed_security_coverage_pct 和 unknown_portfolio_weight_pct；覆盖不足或披露陈旧时降低 confidence，并在 warnings/反证条件中明确说明。
 - assetTrends 仍按用户直接持有的基金逐只输出；底层证券用于解释基金趋势和组合共同风险，不要用底层证券替代应覆盖的基金 code。
 
@@ -120,6 +127,7 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 \(lookThroughRule)
 \(officialSourceRule)
 \(alphaVantageRule)
+全市场机会受控研究池：\(opportunityUniverseRule)
 """
         return AgentChatMessage(role: .system, content: text)
     }
@@ -157,14 +165,14 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
             ? "\nAlpha Vantage 结构化标的：\(snapshot.eligibleAlphaVantageSymbols.joined(separator: "、"))；官方源之后选择最相关的一项补充。"
             : "\nAlpha Vantage：本次未配置或没有可识别标的。"
         return """
-本次研究目标：基于当前组合快照，给出短中长期趋势、板块与机会观点、每只持有基金的趋势，以及少量可执行的行动候选。
+本次研究有两个目标：其一，基于当前组合快照给出短中长期趋势、每只持有基金的趋势和少量行动候选；其二，独立于当前持仓扫描全市场，把值得继续研究的大类资产、大盘/宽基、行业/主题方向写入 opportunities。两部分不得互相复制。
 
 隐私模式：\(snapshot.privacyMode.rawValue)
 快照 ID：\(snapshot.runID.uuidString)
 资产数量：\(snapshot.portfolio.assetCount)
 数据截止时间：\(snapshot.dataAsOf)\(lookThrough)\(official)\(alphaVantage)\(warnings)
 
-请先调用 get_portfolio_overview 取得基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough。美股先查 SEC；中国标的先用 web_search 限定交易所、监管机构或政府官方域名；随后已配置 Alpha Vantage 时选择一项最相关的结构化补充，最后再用普通网页搜索补足新闻与市场解释。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
+请先调用 get_portfolio_overview 取得组合基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough。完成组合研究后，使用 web_search 完成 assetClass、index 和六个 sector 分组的全市场扫描，再跨分组挑选板块机会，候选不受当前持仓限制。美股持仓先查 SEC；中国持仓先用 web_search 限定交易所、监管机构或政府官方域名；随后已配置 Alpha Vantage 时选择一项最相关的结构化补充。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
 """
     }
 }

@@ -343,10 +343,12 @@ struct FundLookThroughTool: TrendResearchTool {
                 "disclosed_security_coverage_pct": snapshot.disclosedSecurityCoveragePct,
                 "unknown_portfolio_weight_pct": snapshot.unknownPortfolioWeightPct,
                 "calculation": "组合内基金权重 × 基金底层资产披露权重；直接股票按 100% 计入并与基金间接持仓合并",
-                "disclosure_boundary": "公开定期报告口径，不是实时完整持仓"
+                "disclosure_boundary": "公开定期报告口径，不是实时完整持仓",
+                "industry_taxonomy": "statisticalBroadIndustry",
+                "investment_sector_rule": "statistical_industries 是 F10 宽泛统计行业，只能描述披露结构；不得直接作为投资板块名称或板块仓位。投资板块需结合底层证券、ETF/基金主题和持仓来源另行归纳。"
             ],
             "top_positions": snapshot.topPositions.prefix(30).map { jsonObject($0) },
-            "industries": snapshot.industries.prefix(20).map { jsonObject($0) },
+            "statistical_industries": snapshot.industries.prefix(20).map { jsonObject($0) },
             "asset_classes": snapshot.assetClasses.map { jsonObject($0) },
             "funds": snapshot.funds.map { jsonObject($0) }
         ]

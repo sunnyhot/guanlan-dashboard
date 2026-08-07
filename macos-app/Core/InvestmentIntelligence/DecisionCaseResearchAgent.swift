@@ -100,7 +100,6 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
 
         let ledger = TrendEvidenceLedger()
         let governor = TrendWebSearchGovernor(maxNetworkSearches: 5)
-        let webSearchCache = TrendWebSearchResponseCache(ttlSeconds: 10 * 60)
         let started = Date()
 
         // 装配工具上下文(共享工具用)
@@ -282,8 +281,11 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         4. 有 web_search 时,搜索相关行业/政策/事件。
         5. 证据只能引用工具返回的 evidence_id,不得编造。
         6. 研究完成后调 submit_case_research 提交:
-           - findings:支持当前风险判断的发现
-           - counterFindings:削弱风险判断的发现
+           - findings:支持当前风险判断的发现(若结论为风险不成立可留空,改在 rationale 说明)
+             每条 finding 必须用这些字段值:
+             direction ∈ {supportive, counter, neutral}
+             significance ∈ {high, medium, low}
+           - counterFindings:削弱风险判断的发现(同样字段值)
            - uncertainties:数据缺口和不确定因素
            - suggestedState:建议的决策状态(stable/watch/prepare/adjustReview/exitReview/insufficientEvidence)
            - rationale:建议理由
@@ -318,16 +320,37 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
             parameters: [
                 "type": "object",
                 "properties": [
-                    "findings": ["type": "array", "description": "支持当前风险判断的发现"],
-                    "counterFindings": ["type": "array", "description": "削弱风险判断的发现"],
+                    "findings": [
+                        "type": "array",
+                        "description": "支持当前风险判断的发现（若结论为风险不成立可留空，在 rationale 说明）",
+                        "items": Self.findingItemSchema
+                    ],
+                    "counterFindings": [
+                        "type": "array",
+                        "description": "削弱风险判断的发现",
+                        "items": Self.findingItemSchema
+                    ],
                     "uncertainties": ["type": "array", "items": ["type": "string"], "description": "数据缺口和不确定因素"],
                     "suggestedState": ["type": "string", "description": "建议的决策状态:stable/watch/prepare/adjustReview/exitReview/insufficientEvidence"],
                     "rationale": ["type": "string", "description": "建议理由"]
                 ],
-                "required": ["findings", "suggestedState", "rationale"]
+                "required": ["suggestedState", "rationale"]
             ]
         )
     }
+
+    /// findings / counterFindings 数组元素的 JSON Schema。
+    /// 显式声明 direction / significance 的 enum 取值，避免模型输出同义词导致解码失败。
+    private static let findingItemSchema: AgentJSONValue = [
+        "type": "object",
+        "properties": [
+            "claim": ["type": "string", "description": "一句话发现"],
+            "direction": ["type": "string", "enum": ["supportive", "counter", "neutral"], "description": "方向：supportive 支持 / counter 反向 / neutral 中性"],
+            "significance": ["type": "string", "enum": ["high", "medium", "low"], "description": "重要性：high / medium / low"],
+            "evidenceIDs": ["type": "array", "items": ["type": "string"], "description": "引用的证据 ID（工具返回的真实 ID）"]
+        ],
+        "required": ["claim", "direction", "significance"]
+    ]
 
     // MARK: - Case 上下文证据
 
@@ -392,9 +415,12 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         let reportObject = (argsObject["report"] as? [String: Any]) ?? argsObject
         let reportData = (try? JSONSerialization.data(withJSONObject: reportObject)) ?? Data()
 
-        // 2. 解码 Submission
-        guard let submission = try? JSONDecoder().decode(DecisionCaseResearchSubmission.self, from: reportData) else {
-            return (nil, ["报告解码失败"])
+        // 2. 解码 Submission（不吞解码错误：失败时把具体原因回灌给模型，便于修正）
+        let submission: DecisionCaseResearchSubmission
+        do {
+            submission = try JSONDecoder().decode(DecisionCaseResearchSubmission.self, from: reportData)
+        } catch {
+            return (nil, ["报告解码失败：\(Self.describeDecodeError(error))"])
         }
 
         var errors: [String] = []
@@ -456,5 +482,22 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
             rationale: submission.rationale
         )
         return (report, [])
+    }
+
+    /// 把 DecodingError 翻译成模型可读的原因（参考 NextHourGuidance.describeDecodeError）。
+    private static func describeDecodeError(_ error: Error) -> String {
+        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
+        switch decodingError {
+        case .keyNotFound(let key, _):
+            return "缺少字段 \(key.stringValue)"
+        case .valueNotFound(_, let context):
+            return "缺少必要值（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
+        case .typeMismatch(_, let context):
+            return "字段类型不匹配（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
+        case .dataCorrupted(let context):
+            return context.debugDescription
+        @unknown default:
+            return error.localizedDescription
+        }
     }
 }

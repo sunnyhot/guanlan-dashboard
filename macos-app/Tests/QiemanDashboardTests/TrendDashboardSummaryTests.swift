@@ -318,10 +318,26 @@ final class TrendDashboardSummaryTests: XCTestCase {
             contentsOf: viewsURL.appendingPathComponent("EnhancementCenterView.swift"),
             encoding: .utf8
         )
+        let todaySource = try String(
+            contentsOf: viewsURL.appendingPathComponent("EnhancementTodayPanel.swift"),
+            encoding: .utf8
+        )
 
         XCTAssertFalse(trendSource.contains("trendProgressSummaryCard"))
         XCTAssertFalse(contentSource.contains("TrendLiveLogPanel()"))
-        XCTAssertTrue(centerSource.contains("TrendLiveLogPanel()"))
+        XCTAssertFalse(centerSource.contains("TrendLiveLogPanel()"))
+        XCTAssertTrue(todaySource.contains("TrendLiveLogPanel()"))
+        XCTAssertTrue(todaySource.contains("researchEvidenceDisclosure"))
+        let directionStart = try XCTUnwrap(todaySource.range(of: "var investmentDirectionSection"))
+        let directionEnd = try XCTUnwrap(
+            todaySource.range(
+                of: "// MARK: - ④ 长期趋势研判",
+                range: directionStart.upperBound..<todaySource.endIndex
+            )
+        )
+        let directionSource = todaySource[directionStart.lowerBound..<directionEnd.lowerBound]
+        XCTAssertTrue(directionSource.contains("TrendLiveLogPanel()"))
+        XCTAssertTrue(directionSource.contains("InvestmentDirectionView("))
         XCTAssertTrue(liveLogSource.contains("AI 分析实时日志"))
         XCTAssertTrue(liveLogSource.contains("ScrollViewReader"))
         XCTAssertTrue(liveLogSource.contains("scrollToBottom"))
@@ -348,22 +364,24 @@ final class TrendDashboardSummaryTests: XCTestCase {
             encoding: .utf8
         )
 
-        // 分段状态由 AppModel 持有（selectedWorkbenchSegment 迁至 EnhancementState，支持通知深链直达）
-        XCTAssertTrue(centerSource.contains("model.selectedWorkbenchSegment"))
-        XCTAssertTrue(centerSource.contains("workbenchSegmentBar"))
-        XCTAssertTrue(centerSource.contains("workbenchSegmentContent"))
-        XCTAssertTrue(centerSource.contains("case .today"))
-        XCTAssertTrue(centerSource.contains("case .tracking"))
-        // 巨型 trendPanel 已拆分为三个独立分段
+        // AI 研判页已合并为单页通览：不再有 tab 分段，也不再复用 ModuleTabBar。
+        XCTAssertFalse(centerSource.contains("model.selectedWorkbenchSegment"))
+        XCTAssertFalse(centerSource.contains("workbenchSegmentBar"))
+        XCTAssertFalse(centerSource.contains("workbenchSegmentContent"))
+        XCTAssertFalse(centerSource.contains("ModuleTabBar("))
+        XCTAssertFalse(centerSource.contains("case .viewpoint"))
+        XCTAssertFalse(centerSource.contains("case .portfolio"))
+        XCTAssertFalse(centerSource.contains("case .decisions"))
+        XCTAssertFalse(centerSource.contains("case .records"))
+        XCTAssertTrue(centerSource.contains("investmentDashboardContent"))
+        // 巨型 trendPanel 已拆分；标题卡与运行时 chips 不复存在
         XCTAssertFalse(centerSource.contains("trendPanel"))
-        // 顶部「理财工作台」标题卡与运行时 chips 已删除，分段栏直接作为工作台入口
         XCTAssertFalse(centerSource.contains("理财工作台"))
         XCTAssertFalse(centerSource.contains("dashboardHeader"))
         XCTAssertFalse(centerSource.contains("runtimeChip"))
         XCTAssertFalse(centerSource.contains("headerTitleBlock"))
-        // 三个主模块统一复用 ModuleTabBar，不再由 AI 工作台维护独立的大号按钮样式
+        // 不再用系统分段控件
         XCTAssertFalse(centerSource.contains(".pickerStyle(.segmented)"))
-        XCTAssertTrue(centerSource.contains("ModuleTabBar("))
         XCTAssertFalse(centerSource.contains("workbenchSegmentButton"))
         XCTAssertFalse(centerSource.contains("interactiveSurface"))
 

@@ -554,15 +554,9 @@ extension AppModel {
     func openWorkbenchTrend(targetID: String? = nil) {
         selectedSection = .enhancement
         if let targetID {
-            if targetID == "trade-signals" {
-                // 旧深链：打开跟踪清单
-                selectedWorkbenchSegment = .tracking
-            } else if selectTrackingItem(forTargetID: targetID) {
-                // 新深链：跟踪项 UUID → 跟踪清单并选中
-                selectedWorkbenchSegment = .tracking
-            } else {
-                selectedWorkbenchSegment = .today
-            }
+            // 通知深链跳到 AI 研判单页；命中跟踪项时设置 selectedTrendTrackingItemID，
+            // 页面会监听它并自动展开底部折叠的旧趋势跟踪清单。
+            _ = selectTrackingItem(forTargetID: targetID)
         }
     }
 

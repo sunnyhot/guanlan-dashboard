@@ -845,10 +845,19 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
     }
 }
 
+enum TrendOpportunityScope: String, Codable, Hashable {
+    /// 由独立于当前组合的全市场扫描产生，可展示在“值得关注的投资方向”。
+    case marketWide
+
+    /// 旧报告或围绕当前持仓产生的机会，只属于长期组合研判。
+    case portfolioRelated
+}
+
 struct TrendOpportunity: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let category: String
+    let scope: TrendOpportunityScope
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
@@ -862,6 +871,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         id: String,
         name: String,
         category: String,
+        scope: TrendOpportunityScope = .portfolioRelated,
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
@@ -874,6 +884,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         self.id = id
         self.name = name
         self.category = category
+        self.scope = scope
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
@@ -889,6 +900,12 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         name = try container.decode(String.self, forKey: .name)
         category = try container.decode(String.self, forKey: .category)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? "\(category)-\(name)"
+        // scope 是新增语义边界。旧报告缺少该字段时必须按“持仓相关”处理，
+        // 防止历史 opportunities 被误展示成全市场扫描结果。
+        scope = try container.decodeIfPresent(
+            TrendOpportunityScope.self,
+            forKey: .scope
+        ) ?? .portfolioRelated
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decode(String.self, forKey: .rationale)
@@ -906,6 +923,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         case id
         case name
         case category
+        case scope
         case direction
         case confidence
         case rationale

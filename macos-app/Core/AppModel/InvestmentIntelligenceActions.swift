@@ -10,6 +10,39 @@ import Foundation
 
 extension AppModel {
 
+    // MARK: - 派生数据(M4:View 不做业务计算)
+
+    /// 活跃的 DecisionCase(未关闭)。
+    var activeDecisionCases: [DecisionCase] {
+        decisionCases.filter { $0.userDisposition != .closed && $0.lifecycle != .closed }
+    }
+
+    /// 历史 Case(已关闭)。
+    var historicalDecisionCases: [DecisionCase] {
+        decisionCases.filter { $0.userDisposition == .closed || $0.lifecycle == .closed }
+    }
+
+    /// 最严重的 Case(用户第一眼看到的)。
+    var primaryDecisionCase: DecisionCase? {
+        let order: [PortfolioDecisionState] = [.exitReview, .adjustReview, .prepare, .watch, .insufficientEvidence, .stable]
+        for state in order {
+            if let cs = activeDecisionCases.first(where: { $0.decisionState == state }) {
+                return cs
+            }
+        }
+        return nil
+    }
+
+    /// 投资智能仪表盘摘要(Presenter 输出,View 直接消费)。
+    var investmentIntelligenceSummary: InvestmentIntelligenceDashboardSummary {
+        InvestmentIntelligencePresenter.makeSummary(
+            cases: decisionCases,
+            rows: personalAssetRows,
+            lookThroughSnapshot: portfolioLookThroughSnapshot,
+            evaluatedAt: decisionCases.map(\.lastEvaluatedAt).max() ?? ""
+        )
+    }
+
     // MARK: - 状态加载
 
     /// 加载 DecisionCase 和 UserDecisionProfile(Slice 1 gate)。
@@ -31,6 +64,88 @@ extension AppModel {
             } catch {
                 errorMessage = "决策事项加载失败：\(error.localizedDescription)"
             }
+        }
+
+        // 兼容 GLM 中间版本的目录式 Repository。旧目录只读保留，迁到当前唯一 Store/Journal。
+        if let baseDirectory = investmentIntelligenceDirectoryURL,
+           let journalDirectory = decisionCaseJournalDirectoryURL {
+            do {
+                let migration = LegacyDecisionCaseMigration(baseDirectory: baseDirectory)
+                if migration.needsMigration {
+                    let legacyCases = try migration.migrate(
+                        into: DecisionCaseJournalStore(baseDirectory: journalDirectory)
+                    )
+                    for legacyCase in legacyCases {
+                        if let index = decisionCases.firstIndex(where: {
+                            $0.id == legacyCase.id || $0.caseKey == legacyCase.caseKey
+                        }) {
+                            // 用户处置和更完整的事件历史优先保留；当前指标仍由随后刷新更新。
+                            if decisionCases[index].userDisposition == .pending,
+                               legacyCase.userDisposition != .pending {
+                                decisionCases[index] = legacyCase
+                            } else {
+                                let knownEventIDs = Set(decisionCases[index].events.map(\.id))
+                                let missingEvents = legacyCase.events.filter { !knownEventIDs.contains($0.id) }
+                                decisionCases[index].events.append(contentsOf: missingEvents)
+                                decisionCases[index].events.sort { $0.at < $1.at }
+                                decisionCases[index].createdAt = min(
+                                    decisionCases[index].createdAt,
+                                    legacyCase.createdAt
+                                )
+                                decisionCases[index].latestResearchRunID =
+                                    decisionCases[index].latestResearchRunID ?? legacyCase.latestResearchRunID
+                                decisionCases[index].latestReviewID =
+                                    decisionCases[index].latestReviewID ?? legacyCase.latestReviewID
+                            }
+                        } else {
+                            decisionCases.append(legacyCase)
+                        }
+                    }
+                    persistDecisionCases()
+                }
+            } catch {
+                errorMessage = "旧决策记录迁移失败：\(error.localizedDescription)"
+            }
+        }
+
+        // 加载可恢复的研究运行与复盘记录。
+        if let journalDir = decisionCaseJournalDirectoryURL {
+            let store = DecisionCaseJournalStore(baseDirectory: journalDir)
+            var reports: [UUID: DecisionCaseResearchReport] = [:]
+            var runs: [UUID: DecisionCaseResearchRunRecord] = [:]
+            var errors: [UUID: String] = [:]
+            var reviews: [UUID: [DecisionReview]] = [:]
+            for cs in decisionCases {
+                do {
+                    if var run = try store.loadLatestResearchRun(caseID: cs.id) {
+                        if run.status == .running {
+                            run = DecisionCaseResearchRunRecord(
+                                id: run.id,
+                                caseID: run.caseID,
+                                startedAt: run.startedAt,
+                                finishedAt: Self.timestampString(),
+                                trigger: run.trigger,
+                                status: .interrupted,
+                                report: run.report,
+                                errorMessage: "应用退出前研究尚未完成"
+                            )
+                            try store.saveResearchRun(run)
+                        }
+                        runs[cs.id] = run
+                        if let report = run.report { reports[cs.id] = report }
+                        if let message = run.errorMessage, !message.isEmpty { errors[cs.id] = message }
+                    } else if let legacyReport = store.loadLegacyLatestResearch(caseID: cs.id) {
+                        reports[cs.id] = legacyReport
+                    }
+                    reviews[cs.id] = try store.loadReviews(caseID: cs.id)
+                } catch {
+                    errorMessage = "决策历史加载失败：\(error.localizedDescription)"
+                }
+            }
+            lastDecisionCaseResearchReports = reports
+            latestDecisionCaseResearchRuns = runs
+            decisionCaseResearchErrors = errors
+            decisionCaseReviews = reviews
         }
 
         // Slice 6:从旧 TrendTracking 迁移(一次性,用 legacy: 前缀去重)
@@ -120,18 +235,13 @@ extension AppModel {
             .filter { !$0.isEmpty }
         guard !fundCodes.isEmpty else { return }
 
-        do {
-            let batch = await fundLookThroughClient.fetchDisclosures(fundCodes: fundCodes)
-            portfolioLookThroughSnapshot = PortfolioLookThroughCalculator.make(
-                rows: personalAssetRows,
-                disclosures: batch.disclosures,
-                generatedAt: Self.timestampString()
-            )
-            portfolioLookThroughSourceWarnings = batch.warnings
-        } catch {
-            // 静默失败:穿透缺失时引擎会降级 insufficientEvidence
-            portfolioLookThroughSourceWarnings = ["集中度穿透刷新失败：\(error.localizedDescription)"]
-        }
+        let batch = await fundLookThroughClient.fetchDisclosures(fundCodes: fundCodes)
+        portfolioLookThroughSnapshot = PortfolioLookThroughCalculator.make(
+            rows: personalAssetRows,
+            disclosures: batch.disclosures,
+            generatedAt: Self.timestampString()
+        )
+        portfolioLookThroughSourceWarnings = batch.warnings
     }
 
     // MARK: - 合并逻辑
@@ -151,33 +261,63 @@ extension AppModel {
         for newCase in incoming {
             consumedKeys.insert(newCase.caseKey)
             if let oldCase = existingByKey[newCase.caseKey] {
-                // 已存在:保留用户处置状态,更新指标和决策状态
-                var updated = newCase
-                updated.id = oldCase.id  // 保持 ID 稳定
-                updated.createdAt = oldCase.createdAt
-                updated.events = oldCase.events  // 保留历史事件
-                updated.userDisposition = oldCase.userDisposition
+                // 用户明确关闭的事项不自动复活；其余事项保留完整工作流与 Journal 引用。
+                if oldCase.userDisposition == .closed {
+                    merged.append(oldCase)
+                    continue
+                }
 
-                // 如果决策状态有变化,记录一次 reassessed 事件
+                if oldCase.userDisposition == .resolved || oldCase.lifecycle == .closed {
+                    var reopened = newCase
+                    reopened.id = oldCase.id
+                    reopened.createdAt = oldCase.createdAt
+                    reopened.events = oldCase.events
+                    reopened.userDisposition = .pending
+                    reopened.resolvedAt = nil
+                    reopened.latestResearchRunID = oldCase.latestResearchRunID
+                    reopened.latestReviewID = oldCase.latestReviewID
+                    reopened.applyTransition(
+                        to: .decisionReady,
+                        decisionState: newCase.decisionState,
+                        at: timestamp,
+                        type: .userReopened,
+                        reason: "风险指标再次进入关注区间",
+                        actor: .system
+                    )
+                    merged.append(reopened)
+                    continue
+                }
+
+                var updated = oldCase
+                updated.metricValue = newCase.metricValue
+                updated.metricLabel = newCase.metricLabel
+                updated.metricDescription = newCase.metricDescription
+                updated.title = newCase.title
+                updated.detail = newCase.detail
+                updated.lastEvaluatedAt = newCase.lastEvaluatedAt
+
+                let preservedLifecycle: DecisionCaseLifecycle = oldCase.userDisposition == .acknowledged
+                    ? (oldCase.lifecycle == .reviewDue ? .reviewDue : .monitoring)
+                    : .decisionReady
                 if oldCase.decisionState != newCase.decisionState {
                     updated.applyTransition(
-                        to: newCase.lifecycle,
+                        to: preservedLifecycle,
                         decisionState: newCase.decisionState,
                         at: timestamp,
                         type: .reassessed,
-                        reason: "指标更新:\(oldCase.metricLabel) → \(newCase.metricLabel)",
+                        reason: "指标更新：\(oldCase.metricLabel) → \(newCase.metricLabel)",
                         actor: .system
                     )
+                    if updated.userDisposition == .acknowledged {
+                        updated.reviewDueAt = DecisionCase.computeReviewDueAt(
+                            decisionState: newCase.decisionState,
+                            from: timestamp
+                        )
+                    }
                 } else {
-                    // 仅更新指标数值,不改状态
+                    updated.lifecycle = preservedLifecycle
                     updated.updatedAt = timestamp
                 }
-
-                // 用户已关闭的 Case 不重新激活
-                if oldCase.userDisposition == .closed {
-                    updated.lifecycle = .closed
-                }
-
                 merged.append(updated)
             } else {
                 // 新 Case
@@ -194,16 +334,19 @@ extension AppModel {
             } else if oldCase.userDisposition == .resolved {
                 merged.append(oldCase)
             } else {
-                // acknowledged/pending 的:指标回到阈值内,标记 stale
+                // 风险已回到阈值内，系统关闭事项并保留完整历史。
                 var stale = oldCase
                 stale.applyTransition(
-                    to: oldCase.lifecycle,
+                    to: .closed,
                     decisionState: .stable,
                     at: timestamp,
                     type: .reassessed,
-                    reason: "指标已回到阈值内",
+                    reason: "风险指标已回到阈值内，事项自动结束",
                     actor: .system
                 )
+                stale.userDisposition = .resolved
+                stale.resolvedAt = timestamp
+                stale.reviewDueAt = nil
                 merged.append(stale)
             }
         }
@@ -213,48 +356,60 @@ extension AppModel {
 
     // MARK: - 用户操作
 
-    /// 用户确认关注某个 Case(进入 monitoring)。
+    /// 用户确认关注某个 Case（进入 monitoring，并设置明确复查时间）。
     func acknowledgeDecisionCase(_ id: UUID) {
         guard let index = decisionCases.firstIndex(where: { $0.id == id }) else { return }
+        let now = Self.timestampString()
+        let state = decisionCases[index].decisionState
         decisionCases[index].applyTransition(
             to: .monitoring,
-            decisionState: decisionCases[index].decisionState,
-            at: Self.timestampString(),
+            decisionState: state,
+            at: now,
             type: .userAcknowledged,
             reason: "用户确认关注",
             actor: .user
         )
         decisionCases[index].userDisposition = .acknowledged
+        // 设显式复查时间(Schema V2:不用 updatedAt 算)
+        decisionCases[index].reviewDueAt = DecisionCase.computeReviewDueAt(
+            decisionState: state, from: now
+        )
         persistDecisionCases()
     }
 
     /// 用户标记 Case 已解决。
     func resolveDecisionCase(_ id: UUID, note: String = "") {
         guard let index = decisionCases.firstIndex(where: { $0.id == id }) else { return }
+        let now = Self.timestampString()
         decisionCases[index].applyTransition(
             to: .closed,
             decisionState: .stable,
-            at: Self.timestampString(),
+            at: now,
             type: .userResolved,
             reason: note.isEmpty ? "用户标记已解决" : note,
             actor: .user
         )
         decisionCases[index].userDisposition = .resolved
+        decisionCases[index].resolvedAt = now
+        decisionCases[index].reviewDueAt = nil
         persistDecisionCases()
     }
 
     /// 用户关闭 Case(不再关注)。
     func closeDecisionCase(_ id: UUID) {
         guard let index = decisionCases.firstIndex(where: { $0.id == id }) else { return }
+        let now = Self.timestampString()
         decisionCases[index].applyTransition(
             to: .closed,
             decisionState: decisionCases[index].decisionState,
-            at: Self.timestampString(),
+            at: now,
             type: .userClosed,
             reason: "用户关闭",
             actor: .user
         )
         decisionCases[index].userDisposition = .closed
+        decisionCases[index].resolvedAt = now
+        decisionCases[index].reviewDueAt = nil
         persistDecisionCases()
     }
 

@@ -61,6 +61,7 @@ struct TrendLiveLogPanel: View {
                     ProgressView()
                         .controlSize(.small)
                         .tint(stateTint)
+                        .accessibilityLabel("正在扫描市场")
                 } else {
                     Image(systemName: stateIcon)
                         .font(AppPalette.appFont(.headline, weight: .semibold))

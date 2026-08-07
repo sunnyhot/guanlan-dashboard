@@ -109,6 +109,11 @@ actor TrendReportDraftStore {
                 "「\(duplicate)」不能同时出现在 marketOutlook 与 sectors。"
             )
         }
+        if let invalidOpportunity = module.opportunities.first(where: { $0.scope != .marketWide }) {
+            throw TrendReportDraftError.invalidModule(
+                "机会「\(invalidOpportunity.name)」缺少 scope=marketWide；opportunities 只能提交独立全市场扫描结果。"
+            )
+        }
         market = module
     }
 
@@ -314,7 +319,7 @@ struct SubmitTrendOverviewModuleTool: TrendResearchTool {
 
 struct SubmitTrendMarketModuleTool: TrendResearchTool {
     let name = TrendReportModuleToolName.market
-    let description = "提交报告第 2 模块：大盘/大类资产、行业板块和机会。指数只放 marketOutlook，行业只放 sectors；两者不能同时为空。"
+    let description = "提交报告第 2 模块：组合大盘/板块判断和独立全市场机会。opportunities 必须标记 scope=marketWide；指数只放 marketOutlook，行业只放 sectors；两者不能同时为空。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [

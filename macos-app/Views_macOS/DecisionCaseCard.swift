@@ -1,167 +1,136 @@
 import SwiftUI
 
-// macOS 端:DecisionCase 卡片。
-//
-// 展示单个集中度风险决策事项:状态徽章、标题、指标、详情、操作按钮。
-// 遵循项目惯例:红涨绿跌用 AppPalette(本卡片主要用 warning/positive/muted)。
-// 见 docs/ai-pipeline-baseline.md 第 9 节。
-
+/// 单个决策事项卡片（紧凑布局）。
+///
+/// 两行结构：标题行（标题 + 状态徽章 + 指标 + 操作）+ 一行处置建议。
+/// 不再展开三栏「怎么做/影响对象/下一节点」（与标题行信息重复、占空间过大）。
+/// 完整理由和历史点「查看判断」进详情。
 struct DecisionCaseCard: View {
     let decisionCase: DecisionCase
     let isResearching: Bool
     let researchReport: DecisionCaseResearchReport?
+    let onOpen: () -> Void
     let onAcknowledge: () -> Void
     let onResolve: () -> Void
     let onClose: () -> Void
     let onResearch: () -> Void
 
+    private var tint: Color {
+        InvestmentIntelligenceStyle.tint(for: decisionCase.decisionState)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-            // 标题行:状态徽章 + 标题 + 指标
-            HStack(alignment: .top, spacing: AppPalette.spaceS) {
-                stateBadge
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(decisionCase.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(AppPalette.ink)
-                    Text(decisionCase.metricDescription + " " + decisionCase.metricLabel)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(metricColor)
+        VStack(alignment: .leading, spacing: 4) {
+            // 第一行：色点 + 标题（左）｜ 指标（中）｜ 操作按钮（右）
+            HStack(alignment: .center, spacing: AppPalette.spaceM) {
+                Button(action: onOpen) {
+                    HStack(spacing: AppPalette.spaceS) {
+                        Circle().fill(tint).frame(width: 8, height: 8)
+                        Text(decisionCase.title)
+                            .font(AppPalette.appFont(.body, weight: .semibold))
+                            .foregroundStyle(AppPalette.ink)
+                            .lineLimit(1)
+                    }
+                    .contentShape(Rectangle())
                 }
-                Spacer()
-            }
+                .buttonStyle(.plain)
 
-            // 详情
-            Text(decisionCase.detail)
-                .font(.system(size: 12))
-                .foregroundColor(AppPalette.muted)
-                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: AppPalette.spaceS)
 
-            // 研究报告展示(Slice 3)
-            if let report = researchReport {
-                researchReportView(report)
-            }
-
-            // 研究中进度(Slice 3)
-            if isResearching {
-                HStack(spacing: AppPalette.spaceS) {
-                    ProgressView().controlSize(.small)
-                    Text("深度研究中…")
-                        .font(.system(size: 11))
-                        .foregroundColor(AppPalette.muted)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(decisionCase.metricLabel)
+                        .font(AppPalette.appFont(.headline, weight: .bold, design: .rounded))
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                    Text(decisionCase.metricDescription)
+                        .font(AppPalette.appFont(.caption2))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
                 }
-            }
 
-            // 操作按钮(用户已关闭的不显示)
-            // 用项目统一的 AppActionButtonStyle(见 UIExperienceRegressionTests 约定)
-            if decisionCase.userDisposition != .closed {
-                HStack(spacing: AppPalette.spaceS) {
+                HStack(spacing: 4) {
                     if decisionCase.userDisposition == .pending {
-                        Button("关注", action: onAcknowledge)
+                        Button("关注") { onAcknowledge() }
                             .buttonStyle(.appSecondary)
                             .controlSize(.small)
                     }
-                    Button("已处理", action: onResolve)
-                        .buttonStyle(.appSecondary)
-                        .controlSize(.small)
-                    // Slice 3:深度研究按钮(只在有 AI Provider 时有意义,UI 统一显示)
-                    Button(action: onResearch) {
-                        Label("深度研究", systemImage: "brain.head.profile")
+                    Button {
+                        onResearch()
+                    } label: {
+                        Image(systemName: "brain.head.profile")
                     }
                     .buttonStyle(.appSecondary)
                     .controlSize(.small)
                     .disabled(isResearching)
-                    Spacer()
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10))
+                    .help("专项研究")
+
+                    Menu {
+                        Button("标记已解决", action: onResolve)
+                        Divider()
+                        Button("关闭事项", role: .destructive, action: onClose)
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
-                    .buttonStyle(.appIcon)
-                    .foregroundColor(AppPalette.muted)
-                    .help("关闭(不再关注)")
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("更多操作")
                 }
             }
+
+            // 第二行：处置建议
+            Text(decisionCase.decisionState.guidanceText)
+                .font(AppPalette.appFont(.caption))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(1)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, 16)
+
+            if isResearching {
+                HStack(spacing: 4) {
+                    ProgressView().controlSize(.mini)
+                    Text("AI 正在深入研究…")
+                        .font(AppPalette.appFont(.caption2))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                .padding(.leading, 16)
+            } else if let report = researchReport {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle")
+                            .font(AppPalette.appFont(.caption2))
+                            .foregroundStyle(AppPalette.positive)
+                        Text("AI 研究：\(report.rationale)")
+                            .font(AppPalette.appFont(.caption2))
+                            .foregroundStyle(AppPalette.ink)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack(spacing: 6) {
+                        Text("研究于 \(String(report.generatedAt.prefix(10)))")
+                            .font(AppPalette.appFont(.caption2))
+                            .foregroundStyle(AppPalette.muted)
+                        if !report.evidence.isEmpty {
+                            Text("引用 \(report.evidence.count) 条证据")
+                                .font(AppPalette.appFont(.caption2))
+                                .foregroundStyle(AppPalette.info)
+                        }
+                    }
+                }
+                .padding(.leading, 16)
+            } else {
+                Text("尚未研究，点「专项研究」让 AI 深入分析")
+                    .font(AppPalette.appFont(.caption2))
+                    .foregroundStyle(AppPalette.muted)
+                    .padding(.leading, 16)
+            }
         }
-        .padding(AppPalette.spaceM)
-        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .padding(.horizontal, AppPalette.spaceM)
+        .padding(.vertical, AppPalette.spaceS)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: AppPalette.cardRadius)
-                .stroke(stateColor.opacity(0.3), lineWidth: 1)
+                .stroke(AppPalette.muted.opacity(0.12), lineWidth: 1)
         )
-    }
-
-    // MARK: - 子视图
-
-    @ViewBuilder
-    private func researchReportView(_ report: DecisionCaseResearchReport) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: AppPalette.spaceS) {
-                Image(systemName: "lightbulb")
-                    .foregroundColor(AppPalette.brand)
-                    .font(.system(size: 10))
-                Text("AI 研究建议:\(report.suggestedState.rawValue)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(AppPalette.ink)
-            }
-            if !report.findings.isEmpty {
-                Text("支持:\(report.findings.map(\.claim).joined(separator: "、"))")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppPalette.muted)
-                    .lineLimit(2)
-            }
-            if !report.counterFindings.isEmpty {
-                Text("反证:\(report.counterFindings.map(\.claim).joined(separator: "、"))")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppPalette.muted)
-                    .lineLimit(2)
-            }
-            Text(report.rationale)
-                .font(.system(size: 11))
-                .foregroundColor(AppPalette.muted)
-                .lineLimit(3)
-        }
-        .padding(AppPalette.spaceS)
-        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-    }
-
-    private var stateBadge: some View {
-        Text(stateLabel)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(stateColor, in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
-    }
-
-    // MARK: - 派生
-
-    private var stateLabel: String {
-        switch decisionCase.decisionState {
-        case .stable: return "正常"
-        case .watch: return "观察"
-        case .prepare: return "准备"
-        case .adjustReview: return "建议复核"
-        case .exitReview: return "退出复核"
-        case .insufficientEvidence: return "数据不足"
-        }
-    }
-
-    private var stateColor: Color {
-        switch decisionCase.decisionState {
-        case .stable: return AppPalette.positive
-        case .watch: return AppPalette.warning
-        case .prepare: return AppPalette.warning
-        case .adjustReview: return AppPalette.warning
-        case .exitReview: return AppPalette.warning
-        case .insufficientEvidence: return AppPalette.muted
-        }
-    }
-
-    private var metricColor: Color {
-        switch decisionCase.decisionState {
-        case .stable: return AppPalette.positive
-        case .insufficientEvidence: return AppPalette.muted
-        default: return AppPalette.warning
-        }
     }
 }

@@ -9,6 +9,18 @@ extension AppModel {
         guard let nextHourGuidanceFileURL else { return }
         do {
             nextHourGuidanceArchive = try NextHourGuidanceStore().load(from: nextHourGuidanceFileURL)
+            // 兼容修复：旧报告的 action.evidenceIDs 可能是假 ID（Ledger 匹配不到），
+            // 用 auditEvidence 里的真实证据修复绑定，确保弹窗能展示依据。
+            if let report = nextHourGuidanceArchive.report,
+               !report.auditEvidence.isEmpty,
+               report.evidence.isEmpty || report.actions.contains(where: { action in
+                   Set(report.auditEvidence.map(\.id)).isDisjoint(with: Set(action.evidenceIDs))
+               }) {
+                nextHourGuidanceArchive.report = NextHourGuidanceAgent.repairEvidenceBinding(
+                    report: report,
+                    ledgerEvidence: report.auditEvidence
+                )
+            }
             if nextHourGuidanceReport != nil {
                 nextHourGuidanceGenerationState = .succeeded
             }
@@ -148,13 +160,25 @@ extension AppModel {
                 lookThrough: lookThroughResult.snapshot,
                 sourceWarnings: context.marketDataWarnings + lookThroughResult.warnings
             )
-            let report = try await nextHourGuidanceAgent.run(
-                context: context,
-                researchSnapshot: researchSnapshot,
-                settings: provider,
-                webSearchSettings: trendSettings.webSearch,
-                officialSourceSettings: trendSettings.officialSources
-            )
+            // 投资智能启用时走 V2（3+1 子 Agent 编排），否则走原 V1 单体循环
+            let report: NextHourGuidanceReport
+            if InvestmentIntelligence.enabled {
+                report = try await nextHourGuidanceAgent.runV2(
+                    context: context,
+                    researchSnapshot: researchSnapshot,
+                    settings: provider,
+                    webSearchSettings: trendSettings.webSearch,
+                    officialSourceSettings: trendSettings.officialSources
+                )
+            } else {
+                report = try await nextHourGuidanceAgent.run(
+                    context: context,
+                    researchSnapshot: researchSnapshot,
+                    settings: provider,
+                    webSearchSettings: trendSettings.webSearch,
+                    officialSourceSettings: trendSettings.officialSources
+                )
+            }
             saveTrendAgentRunArtifact(
                 TrendAgentRunArtifact.makeNextHour(
                     snapshot: researchSnapshot,
@@ -365,9 +389,9 @@ extension AppModel {
         return TrendResearchSnapshotBuilder().build(
             rows: rows,
             summary: nil,
-            platformPayload: nil,
-            alfaPayload: nil,
-            managerWatchEvents: [],
+            platformPayload: platformPayload,
+            alfaPayload: alfaPayload,
+            managerWatchEvents: managerWatchTimelineEvents,
             marketIndexQuotes: marketIndexQuotes,
             fundEstimates: fundEstimates,
             lookThrough: lookThrough,
@@ -462,18 +486,21 @@ extension AppModel {
             ),
             TrendSourceStatus(
                 source: .qiemanAdjustment,
-                status: .notRequested,
-                receivedAt: generatedAt
+                status: (platformPayload?.actions?.isEmpty ?? true) ? .successEmpty : .success,
+                receivedAt: generatedAt,
+                itemCount: platformPayload?.actions?.count
             ),
             TrendSourceStatus(
                 source: .alfaAdjustment,
-                status: .notRequested,
-                receivedAt: generatedAt
+                status: (alfaPayload?.actions?.isEmpty ?? true) ? .successEmpty : .success,
+                receivedAt: generatedAt,
+                itemCount: alfaPayload?.actions?.count
             ),
             TrendSourceStatus(
                 source: .managerWatch,
-                status: .notRequested,
-                receivedAt: generatedAt
+                status: managerWatchTimelineEvents.isEmpty ? .successEmpty : .success,
+                receivedAt: generatedAt,
+                itemCount: managerWatchTimelineEvents.count
             ),
             TrendSourceStatus(
                 source: .webSearch,

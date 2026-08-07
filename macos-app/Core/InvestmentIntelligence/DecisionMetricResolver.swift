@@ -1,26 +1,15 @@
 import Foundation
 
-// 决策指标解析器(Schema V2)。
-//
-// 解决缺陷:旧代码对所有非 directHolding 维度统一读 topPositions.first,
-// 忽略 Case 自己的 subjectCode/subjectName。
-// 本 Resolver 按 Case 的标的精确查找真实指标。
-//
-// ConcentrationRiskEngine 和 DecisionReviewEngine 共用此 Resolver。
+// 决策指标解析器。
+// 按 Case 的 subjectCode 精确查找真实指标(不是 topPositions.first)。
+// 数据不足返回 nil(不是 0)。
 
-// MARK: - 解析结果
-
-enum DecisionMetricResolution: Hashable {
-    case available(DecisionCaseMetricSnapshot)
-    case unavailable(reason: String)
-
-    var value: Double? {
-        if case .available(let snapshot) = self { return snapshot.value }
-        return nil
-    }
+struct DecisionMetricResolution: Hashable {
+    let value: Double?
+    let coverage: Double?
+    let reason: String?
+    var isAvailable: Bool { value != nil }
 }
-
-// MARK: - Resolver
 
 struct DecisionMetricResolver {
 
@@ -33,205 +22,101 @@ struct DecisionMetricResolver {
     ) -> DecisionMetricResolution {
         switch cs.kind {
         case .concentrationRisk:
-            return resolveConcentrationRisk(dimension: cs.dimension, cs: cs, rows: rows, snapshot: snapshot, timestamp: timestamp)
+            return resolveConcentration(dimension: cs.dimension, cs: cs, rows: rows, snapshot: snapshot)
         case .drawdownExpansion:
-            return resolveDrawdown(cs: cs, rows: rows, timestamp: timestamp)
+            return resolveDrawdown(cs: cs, rows: rows)
         case .targetDeviation:
-            return resolveTargetDeviation(cs: cs, rows: rows, profile: profile, timestamp: timestamp)
+            return resolveTargetDeviation(cs: cs, rows: rows, profile: profile)
         }
     }
 
-    // MARK: - 集中度风险
+    // MARK: - 集中度
 
-    private func resolveConcentrationRisk(
+    private func resolveConcentration(
         dimension: ConcentrationDimension,
         cs: DecisionCase,
         rows: [PersonalAssetAggregateRow],
-        snapshot: PortfolioLookThroughSnapshot?,
-        timestamp: String
+        snapshot: PortfolioLookThroughSnapshot?
     ) -> DecisionMetricResolution {
         switch dimension {
         case .directHolding:
-            // 按 subjectCode 精确查找该标的的占比
-            return resolveDirectHolding(cs: cs, rows: rows, timestamp: timestamp)
-
-        case .lookThrough:
-            // 在 snapshot.topPositions 按 subjectCode 查找该底层证券的穿透占比
-            return resolveLookThroughSecurity(cs: cs, snapshot: snapshot, timestamp: timestamp)
-
-        case .lookThroughOverlap:
-            // 查找该标的的重叠暴露(contributors 数量)
-            return resolveLookThroughOverlap(cs: cs, snapshot: snapshot, timestamp: timestamp)
-
+            return resolveDirectHolding(cs: cs, rows: rows)
+        case .lookThrough, .lookThroughOverlap:
+            return resolveLookThrough(cs: cs, snapshot: snapshot)
         case .sector:
-            // 在 snapshot.industries 按 subjectName 查找该行业的占比
-            return resolveSector(cs: cs, snapshot: snapshot, timestamp: timestamp)
+            return resolveSector(cs: cs, snapshot: snapshot)
         }
     }
 
-    // MARK: - 直接持仓
-
-    private func resolveDirectHolding(cs: DecisionCase, rows: [PersonalAssetAggregateRow], timestamp: String) -> DecisionMetricResolution {
+    private func resolveDirectHolding(cs: DecisionCase, rows: [PersonalAssetAggregateRow]) -> DecisionMetricResolution {
         let holdingRows = rows.filter { $0.effectiveHoldingAmount > 0 }
-        guard !holdingRows.isEmpty else {
-            return .unavailable(reason: "无有效持仓")
-        }
+        guard !holdingRows.isEmpty else { return .init(value: nil, coverage: nil, reason: "无有效持仓") }
         let total = holdingRows.reduce(0.0) { $0 + $1.effectiveHoldingAmount }
-        guard total > 0 else { return .unavailable(reason: "总暴露为零") }
+        guard total > 0 else { return .init(value: nil, coverage: nil, reason: "总暴露为零") }
 
-        // 按 subjectCode 精确查找(优先 code,兜底 name)
-        let target = holdingRows.first { row in
-            if let code = cs.subjectCode, let rowCode = row.fundCode {
-                return rowCode.lowercased() == code.lowercased()
-            }
-            return row.fundName.lowercased() == cs.subjectName.lowercased()
-        }
+        let target = findRow(in: holdingRows, subjectCode: cs.subjectCode, subjectName: cs.subjectName)
+        guard let target else { return .init(value: nil, coverage: nil, reason: "标的已不在持仓中") }
 
-        guard let target else {
-            return .unavailable(reason: "未找到标的 \(cs.subjectName)(可能已不在持仓中)")
-        }
-
-        let share = target.effectiveHoldingAmount / total * 100
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .directHoldingWeight, value: share, unit: .percent,
-            dataAsOf: timestamp
-        ))
+        return .init(value: target.effectiveHoldingAmount / total * 100, coverage: nil, reason: nil)
     }
 
-    // MARK: - 穿透证券
-
-    private func resolveLookThroughSecurity(cs: DecisionCase, snapshot: PortfolioLookThroughSnapshot?, timestamp: String) -> DecisionMetricResolution {
-        guard let snapshot, snapshot.disclosedSecurityCoveragePct >= 0 else {
-            return .unavailable(reason: "无穿透数据")
-        }
-
-        // 按 subjectCode 在 topPositions 查找
-        let position = snapshot.topPositions.first { pos in
-            if let code = cs.subjectCode {
-                return pos.code.lowercased() == code.lowercased()
-            }
-            return pos.name.lowercased() == cs.subjectName.lowercased()
-        }
-
-        guard let position else {
-            return .unavailable(reason: "穿透数据中未找到 \(cs.subjectName)")
-        }
-
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .lookThroughSecurityWeight, value: position.portfolioWeightPct, unit: .percent,
-            dataAsOf: timestamp, coverage: snapshot.disclosedSecurityCoveragePct
-        ))
+    private func resolveLookThrough(cs: DecisionCase, snapshot: PortfolioLookThroughSnapshot?) -> DecisionMetricResolution {
+        guard let snapshot else { return .init(value: nil, coverage: nil, reason: "无穿透数据") }
+        let position = snapshot.topPositions.first { matchesSubject($0.code, $0.name, cs.subjectCode, cs.subjectName) }
+        guard let position else { return .init(value: nil, coverage: snapshot.disclosedSecurityCoveragePct, reason: "穿透数据中未找到该标的") }
+        return .init(value: position.portfolioWeightPct, coverage: snapshot.disclosedSecurityCoveragePct, reason: nil)
     }
 
-    // MARK: - 穿透重叠
-
-    private func resolveLookThroughOverlap(cs: DecisionCase, snapshot: PortfolioLookThroughSnapshot?, timestamp: String) -> DecisionMetricResolution {
-        guard let snapshot else {
-            return .unavailable(reason: "无穿透数据")
-        }
-
-        // 找该标的的重叠暴露
-        let position = snapshot.topPositions.first { pos in
-            if let code = cs.subjectCode {
-                return pos.code.lowercased() == code.lowercased()
-            }
-            return pos.name.lowercased() == cs.subjectName.lowercased()
-        }
-
-        guard let position else {
-            return .unavailable(reason: "穿透数据中未找到 \(cs.subjectName)")
-        }
-
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .lookThroughOverlapWeight, value: position.portfolioWeightPct, unit: .percent,
-            dataAsOf: timestamp, coverage: snapshot.disclosedSecurityCoveragePct,
-            evidenceIDs: []
-        ))
-    }
-
-    // MARK: - 行业
-
-    private func resolveSector(cs: DecisionCase, snapshot: PortfolioLookThroughSnapshot?, timestamp: String) -> DecisionMetricResolution {
-        guard let snapshot else {
-            return .unavailable(reason: "无穿透数据")
-        }
-
-        // 在 industries 按 subjectName(name 作为行业名)查找
+    private func resolveSector(cs: DecisionCase, snapshot: PortfolioLookThroughSnapshot?) -> DecisionMetricResolution {
+        guard let snapshot else { return .init(value: nil, coverage: nil, reason: "无穿透数据") }
         let industry = snapshot.industries.first { $0.name.lowercased() == cs.subjectName.lowercased() }
-
-        guard let industry else {
-            return .unavailable(reason: "穿透行业数据中未找到 \(cs.subjectName)")
-        }
-
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .sectorWeight, value: industry.portfolioWeightPct, unit: .percent,
-            dataAsOf: timestamp, coverage: snapshot.disclosedSecurityCoveragePct
-        ))
+        guard let industry else { return .init(value: nil, coverage: snapshot.disclosedSecurityCoveragePct, reason: "行业数据中未找到") }
+        return .init(value: industry.portfolioWeightPct, coverage: snapshot.disclosedSecurityCoveragePct, reason: nil)
     }
 
     // MARK: - 回撤
 
-    private func resolveDrawdown(cs: DecisionCase, rows: [PersonalAssetAggregateRow], timestamp: String) -> DecisionMetricResolution {
+    private func resolveDrawdown(cs: DecisionCase, rows: [PersonalAssetAggregateRow]) -> DecisionMetricResolution {
         let holdingRows = rows.filter { $0.hasHolding }
-
-        // 按 subjectCode 查找该标的
-        let target = holdingRows.first { row in
-            if let code = cs.subjectCode, let rowCode = row.fundCode {
-                return rowCode.lowercased() == code.lowercased()
-            }
-            return row.fundName.lowercased() == cs.subjectName.lowercased()
-        }
-
-        guard let target else {
-            return .unavailable(reason: "未找到标的 \(cs.subjectName)")
-        }
-
-        guard let profitPct = target.profitPct else {
-            return .unavailable(reason: "无收益数据")
-        }
-
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .drawdown, value: abs(profitPct), unit: .percent,
-            dataAsOf: timestamp
-        ))
+        let target = findRow(in: holdingRows, subjectCode: cs.subjectCode, subjectName: cs.subjectName)
+        guard let target else { return .init(value: nil, coverage: nil, reason: "标的已不在持仓中") }
+        guard let profitPct = target.profitPct else { return .init(value: nil, coverage: nil, reason: "无收益数据") }
+        // 只有负收益才是回撤(正收益不是回撤)
+        guard profitPct < 0 else { return .init(value: 0, coverage: nil, reason: nil) }
+        return .init(value: abs(profitPct), coverage: nil, reason: nil)
     }
 
-    // MARK: - 目标配置偏离
+    // MARK: - 目标偏离
 
-    private func resolveTargetDeviation(cs: DecisionCase, rows: [PersonalAssetAggregateRow], profile: UserDecisionProfile, timestamp: String) -> DecisionMetricResolution {
-        guard profile.isCustomized else {
-            return .unavailable(reason: "用户未配置目标")
-        }
-
+    private func resolveTargetDeviation(cs: DecisionCase, rows: [PersonalAssetAggregateRow], profile: UserDecisionProfile) -> DecisionMetricResolution {
+        guard profile.isCustomized else { return .init(value: nil, coverage: nil, reason: "未配置目标") }
         let holdingRows = rows.filter { $0.effectiveHoldingAmount > 0 }
-        guard !holdingRows.isEmpty else { return .unavailable(reason: "无有效持仓") }
+        guard !holdingRows.isEmpty else { return .init(value: nil, coverage: nil, reason: "无有效持仓") }
         let total = holdingRows.reduce(0.0) { $0 + $1.effectiveHoldingAmount }
-        guard total > 0 else { return .unavailable(reason: "总暴露为零") }
+        guard total > 0 else { return .init(value: nil, coverage: nil, reason: "总暴露为零") }
 
-        // 按 subjectCode 查找该标的
-        let target = holdingRows.first { row in
-            if let code = cs.subjectCode, let rowCode = row.fundCode {
-                return rowCode.lowercased() == code.lowercased()
-            }
-            return row.fundName.lowercased() == cs.subjectName.lowercased()
-        }
-
-        guard let target else {
-            return .unavailable(reason: "未找到标的 \(cs.subjectName)")
-        }
+        let target = findRow(in: holdingRows, subjectCode: cs.subjectCode, subjectName: cs.subjectName)
+        guard let target else { return .init(value: nil, coverage: nil, reason: "标的已不在持仓中") }
 
         let share = target.effectiveHoldingAmount / total * 100
-        let deviation = share - profile.effectiveConcentrationLimit
+        return .init(value: share - profile.effectiveConcentrationLimit, coverage: nil, reason: nil)
+    }
 
-        return .available(DecisionCaseMetricSnapshot(
-            caseID: cs.id, recordedAt: timestamp,
-            metric: .targetDeviation, value: deviation, unit: .percentagePoint,
-            dataAsOf: timestamp
-        ))
+    // MARK: - 辅助
+
+    private func findRow(in rows: [PersonalAssetAggregateRow], subjectCode: String?, subjectName: String) -> PersonalAssetAggregateRow? {
+        rows.first { row in
+            if let code = subjectCode, let rowCode = row.fundCode {
+                return rowCode.lowercased() == code.lowercased()
+            }
+            return row.fundName.lowercased() == subjectName.lowercased()
+        }
+    }
+
+    private func matchesSubject(_ code: String, _ name: String, _ subjectCode: String?, _ subjectName: String) -> Bool {
+        if let sc = subjectCode {
+            return code.lowercased() == sc.lowercased()
+        }
+        return name.lowercased() == subjectName.lowercased()
     }
 }

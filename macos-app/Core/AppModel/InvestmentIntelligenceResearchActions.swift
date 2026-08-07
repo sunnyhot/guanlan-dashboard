@@ -51,19 +51,31 @@ extension AppModel {
               nextHourGuidanceGenerationState != .generating,
               decisionCaseResearchState != .generating
         else {
-            lastDecisionCaseResearchError = "其他 AI 任务正在运行,请稍后再试。"
+            setDecisionCaseResearchError("其他 AI 任务正在运行，请稍后再试。", for: case_.id)
             return
         }
 
         // 需要配置 AI Provider
         guard trendSettings.provider.isConfigured else {
-            lastDecisionCaseResearchError = "未配置 AI 模型,无法启动研究。"
+            setDecisionCaseResearchError("未配置 AI 模型，无法启动研究。", for: case_.id)
             return
         }
 
+        let runID = UUID()
+        let startedAt = Self.timestampString()
         decisionCaseResearchState = .generating
         researchingDecisionCaseID = case_.id
         lastDecisionCaseResearchError = ""
+        decisionCaseResearchErrors[case_.id] = nil
+        let runningRecord = DecisionCaseResearchRunRecord(
+            id: runID,
+            caseID: case_.id,
+            startedAt: startedAt,
+            trigger: trigger,
+            status: .running
+        )
+        latestDecisionCaseResearchRuns[case_.id] = runningRecord
+        persistResearchRun(runningRecord)
 
         // defer 只清 researchingDecisionCaseID,不重置 state。
         // succeeded/failed 保持到下次运行(修复缺陷:旧代码 defer 把 state 重置为 idle)。
@@ -77,7 +89,15 @@ extension AppModel {
             snapshot = try await makeResearchSnapshot()
         } catch {
             decisionCaseResearchState = .failed
-            lastDecisionCaseResearchError = "研究快照构建失败:\(error.localizedDescription)"
+            let message = "研究快照构建失败：\(error.localizedDescription)"
+            setDecisionCaseResearchError(message, for: case_.id)
+            persistResearchFailure(
+                runID: runID,
+                caseID: case_.id,
+                startedAt: startedAt,
+                trigger: trigger,
+                message: message
+            )
             return
         }
 
@@ -92,7 +112,13 @@ extension AppModel {
             )
 
             // 本地 Policy 校验 + 应用
-            applyResearchReport(report, to: case_.id)
+            applyResearchReport(
+                report,
+                to: case_.id,
+                runID: runID,
+                startedAt: startedAt,
+                trigger: trigger
+            )
 
             // 落审计产物
             saveTrendAgentRunArtifact(
@@ -108,7 +134,15 @@ extension AppModel {
             decisionCaseResearchState = .succeeded
         } catch {
             decisionCaseResearchState = .failed
-            lastDecisionCaseResearchError = error.localizedDescription
+            let message = error.localizedDescription
+            setDecisionCaseResearchError(message, for: case_.id)
+            persistResearchFailure(
+                runID: runID,
+                caseID: case_.id,
+                startedAt: startedAt,
+                trigger: trigger,
+                message: message
+            )
             // 失败保留上一次有效结果(不删除 Case)
         }
     }
@@ -117,33 +151,65 @@ extension AppModel {
 
     /// 用本地 Profile 校验 Agent 的建议状态,更新 Case。
     /// 强行动(adjustReview/exitReview)在 Profile 不允许时降级为 watch。
-    func applyResearchReport(_ report: DecisionCaseResearchReport, to caseID: UUID) {
+    /// 即使状态不变也保存研究报告(Step 2 要求)。
+    func applyResearchReport(
+        _ report: DecisionCaseResearchReport,
+        to caseID: UUID,
+        runID: UUID = UUID(),
+        startedAt: String? = nil,
+        trigger: String = "研究完成"
+    ) {
         guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return }
 
-        // 记录研究报告(供 UI 展示)
+        // 1. 保存研究报告到内存 + 文件(重启恢复)
         var reports = lastDecisionCaseResearchReports
         reports[caseID] = report
         lastDecisionCaseResearchReports = reports
 
-        // 本地 Policy 校验:强行动降级
+        let completedAt = Self.timestampString()
+        let record = DecisionCaseResearchRunRecord(
+            id: runID,
+            caseID: caseID,
+            startedAt: startedAt ?? report.generatedAt,
+            finishedAt: completedAt,
+            trigger: trigger,
+            status: .succeeded,
+            report: report
+        )
+        lastDecisionCaseResearchError = ""
+        decisionCaseResearchErrors[caseID] = nil
+        persistResearchRun(record)
+        latestDecisionCaseResearchRuns[caseID] = record
+        decisionCases[index].latestResearchRunID = runID
+
+        // 2. 本地 Policy 校验:强行动降级
         let finalState = ConcentrationRiskEngine.constrainState(
             report.suggestedState,
             profile: userDecisionProfile
         )
 
-        // 只在状态变化时更新
-        let oldState = decisionCases[index].decisionState
-        guard oldState != finalState else { return }
-
-        let timestamp = Self.timestampString()
-        decisionCases[index].applyTransition(
-            to: decisionCases[index].lifecycle == .closed ? .closed : .monitoring,
-            decisionState: finalState,
-            at: timestamp,
-            type: .reassessed,
-            reason: "专项研究建议:\(report.rationale)" + (finalState != report.suggestedState ? "(已降级:\(report.suggestedState.rawValue)→\(finalState.rawValue))" : ""),
-            actor: .system
-        )
+        // 3. 更新状态(即使不变也保存 Case,记录研究完成事件)
+        let timestamp = completedAt
+        if decisionCases[index].decisionState != finalState {
+            decisionCases[index].applyTransition(
+                to: decisionCases[index].lifecycle == .closed ? .closed : .monitoring,
+                decisionState: finalState,
+                at: timestamp,
+                type: .reassessed,
+                reason: "专项研究建议:\(report.rationale)" + (finalState != report.suggestedState ? "(已降级:\(report.suggestedState.rawValue)→\(finalState.rawValue))" : ""),
+                actor: .system
+            )
+        } else {
+            // 状态不变,但仍记录事件 + 持久化
+            decisionCases[index].applyTransition(
+                to: decisionCases[index].lifecycle == .closed ? .closed : .monitoring,
+                decisionState: finalState,
+                at: timestamp,
+                type: .reassessed,
+                reason: "专项研究完成,建议维持当前状态:\(report.suggestedState.rawValue)",
+                actor: .system
+            )
+        }
         persistDecisionCases()
     }
 
@@ -158,6 +224,15 @@ extension AppModel {
 
         let runID = UUID()
         let createdAt = Self.timestampString()
+        let totalHolding = personalAssetRows.reduce(0) { $0 + max(0, $1.effectiveHoldingAmount) }
+        let sectorContext = (portfolioLookThroughSnapshot?.industries ?? []).prefix(12).map { industry in
+            TrendContextSector(
+                name: industry.name,
+                assetCount: 0,
+                exposureText: String(format: "%.1f%%", industry.portfolioWeightPct),
+                exposureAmount: nil
+            )
+        }
 
         return TrendResearchSnapshot(
             runID: runID,
@@ -174,8 +249,8 @@ extension AppModel {
                 totalEstimatedNextPlanAmount: personalAssetSummary?.totalEstimatedNextPlanAmount,
                 totalEffectiveHoldingAmount: personalAssetSummary?.totalEffectiveHoldingAmount
             ),
-            assets: personalAssetRows.map { Self.researchAsset(from: $0) },
-            sectors: [],
+            assets: personalAssetRows.map { Self.researchAsset(from: $0, totalHolding: totalHolding) },
+            sectors: Array(sectorContext),
             platformSignals: [],
             managerSignals: [],
             marketQuotes: [],
@@ -187,15 +262,18 @@ extension AppModel {
     }
 
     /// 从 PersonalAssetAggregateRow 构造研究用的 TrendContextAsset。
-    private static func researchAsset(from row: PersonalAssetAggregateRow) -> TrendContextAsset {
-        TrendContextAsset(
+    private static func researchAsset(from row: PersonalAssetAggregateRow, totalHolding: Double) -> TrendContextAsset {
+        let weightText = totalHolding > 0
+            ? String(format: "%.1f%%", max(0, row.effectiveHoldingAmount) / totalHolding * 100)
+            : nil
+        return TrendContextAsset(
             id: row.key,
             name: row.fundName,
             code: row.fundCode,
             assetType: row.assetType.displayName,
             sector: "—",
             statusText: row.combinedStatusText,
-            weightText: nil,
+            weightText: weightText,
             profitPct: row.profitPct,
             estimateChangePct: row.estimateChangePct,
             pendingTradeCount: row.pendingTradeCount,
@@ -225,8 +303,9 @@ extension AppModel {
 
     /// 执行复盘:用 MetricResolver 算正确指标,持久化 Review,执行状态转换。
     /// 复核方案硬约束:不用涨跌简单判对错(第 12.4 节)。
-    func performReview(for caseID: UUID, conclusion: DecisionReviewConclusion, lessons: String = "") {
-        guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return }
+    @discardableResult
+    func performReview(for caseID: UUID, conclusion: DecisionReviewConclusion, lessons: String = "") -> Bool {
+        guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return false }
         let cs = decisionCases[index]
         let now = Self.timestampString()
 
@@ -254,7 +333,7 @@ extension AppModel {
             conclusion: conclusion,
             lessons: lessons
         )
-        persistReview(review)
+        guard persistReview(review) else { return false }
         decisionCases[index].latestReviewID = review.id
 
         // 状态转换(根据结论)
@@ -302,27 +381,68 @@ extension AppModel {
             )
         }
 
+        var reviews = decisionCaseReviews
+        reviews[caseID, default: []].append(review)
+        decisionCaseReviews = reviews
+        lastDecisionReviewError = ""
         persistDecisionCases()
+        return true
     }
 
-    /// 持久化 Review 到文件。
-    private func persistReview(_ review: DecisionReview) {
-        guard let dir = dataDirectoryURL?
-                .appendingPathComponent("investment-intelligence", isDirectory: true)
-                .appendingPathComponent("cases", isDirectory: true)
-                .appendingPathComponent(review.caseID.uuidString, isDirectory: true)
-                .appendingPathComponent("reviews", isDirectory: true)
-        else { return }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    /// 持久化 Review 到 JournalStore。
+    private func persistReview(_ review: DecisionReview) -> Bool {
+        guard let journalDir = decisionCaseJournalDirectoryURL else {
+            lastDecisionReviewError = "决策历史目录不可用，复盘未保存。"
+            return false
+        }
         do {
-            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            let file = dir.appendingPathComponent("\(review.id.uuidString).json", isDirectory: false)
-            let data = try encoder.encode(review)
-            try data.write(to: file, options: [.atomic])
-            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            try DecisionCaseJournalStore(baseDirectory: journalDir).saveReview(review)
+            return true
         } catch {
-            errorMessage = "复盘记录保存失败:\(error.localizedDescription)"
+            lastDecisionReviewError = "复盘保存失败：\(error.localizedDescription)"
+            errorMessage = lastDecisionReviewError
+            return false
+        }
+    }
+
+    // MARK: - 研究运行持久化
+
+    private func setDecisionCaseResearchError(_ message: String, for caseID: UUID) {
+        lastDecisionCaseResearchError = message
+        decisionCaseResearchErrors[caseID] = message
+    }
+
+    private func persistResearchFailure(
+        runID: UUID,
+        caseID: UUID,
+        startedAt: String,
+        trigger: String,
+        message: String
+    ) {
+        let record = DecisionCaseResearchRunRecord(
+            id: runID,
+            caseID: caseID,
+            startedAt: startedAt,
+            finishedAt: Self.timestampString(),
+            trigger: trigger,
+            status: .failed,
+            errorMessage: message
+        )
+        persistResearchRun(record)
+        latestDecisionCaseResearchRuns[caseID] = record
+    }
+
+    private func persistResearchRun(_ record: DecisionCaseResearchRunRecord) {
+        guard let journalDir = decisionCaseJournalDirectoryURL else {
+            setDecisionCaseResearchError("研究历史目录不可用，结果仅保留在本次运行中。", for: record.caseID)
+            return
+        }
+        do {
+            try DecisionCaseJournalStore(baseDirectory: journalDir).saveResearchRun(record)
+        } catch {
+            let message = "研究历史保存失败：\(error.localizedDescription)"
+            setDecisionCaseResearchError(message, for: record.caseID)
+            errorMessage = message
         }
     }
 

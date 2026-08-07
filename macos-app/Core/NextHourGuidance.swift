@@ -483,6 +483,16 @@ protocol NextHourGuidanceAgentProtocol: Sendable {
         webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> NextHourGuidanceReport
+
+    /// V2：3+1 子 Agent 编排（行情/新闻/持仓 并行 → 汇总决策）。
+    /// 投资智能启用时优先使用，提升输出准确性。
+    func runV2(
+        context: NextHourGuidanceContext,
+        researchSnapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        webSearchSettings: TavilySearchSettings,
+        officialSourceSettings: OfficialSourceSettings
+    ) async throws -> NextHourGuidanceReport
 }
 
 enum NextHourGuidanceAgentError: Error, LocalizedError {
@@ -525,6 +535,16 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             case summary
             case actions
             case riskChecks = "risk_checks"
+        }
+
+        /// 编程构造（供 enforceEvidenceFloor 用）。
+        init(headline: String, posture: NextHourGuidancePosture, summary: String,
+             actions: [ActionSubmission], riskChecks: [String]) {
+            self.headline = headline
+            self.posture = posture
+            self.summary = summary
+            self.actions = actions
+            self.riskChecks = riskChecks
         }
     }
 
@@ -573,6 +593,24 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             if invalidation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { missing.append("invalidation") }
             if confidence == nil { missing.append("confidence") }
             missingFields = missing
+        }
+
+        /// 编程构造（供 enforceEvidenceFloor 降级用）。
+        init(
+            targetID: String?, targetName: String, action: NextHourGuidanceActionKind?,
+            instruction: String, rationale: String, trigger: String, invalidation: String,
+            confidence: Int?, evidenceIDs: [String], missingFields: [String] = []
+        ) {
+            self.targetID = targetID
+            self.targetName = targetName
+            self.action = action
+            self.instruction = instruction
+            self.rationale = rationale
+            self.trigger = trigger
+            self.invalidation = invalidation
+            self.confidence = confidence
+            self.evidenceIDs = evidenceIDs
+            self.missingFields = missingFields
         }
     }
 
@@ -894,6 +932,333 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         }
 
         throw NextHourGuidanceAgentError.turnLimitExceeded
+    }
+
+    // MARK: - V2：3+1 子 Agent 编排
+
+    /// V2 入口：3 个并行分析子 Agent + 1 个汇总决策 Agent。
+    ///
+    /// 替代原单体 run() 的多轮循环。拆分动机：原循环注意力分散 + 11 个 AND 风控门槛
+    /// 导致默认退回 hold。V2 每个子 Agent 聚焦一个维度，汇总时用分级标注替代强制 hold。
+    func runV2(
+        context: NextHourGuidanceContext,
+        researchSnapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        webSearchSettings: TavilySearchSettings = .empty,
+        officialSourceSettings: OfficialSourceSettings = .empty
+    ) async throws -> NextHourGuidanceReport {
+        guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
+
+        let ledger = TrendEvidenceLedger()
+        let orchestrator = NextHourGuidanceSubAgentOrchestrator(client: client, registry: registry)
+
+        // 1. 并行运行 3 个分析子 Agent
+        let (marketAssessment, newsAssessment, portfolioAssessment) = try await orchestrator.runAnalysisAgents(
+            context: context,
+            snapshot: researchSnapshot,
+            settings: settings,
+            webSearchSettings: webSearchSettings,
+            officialSourceSettings: officialSourceSettings
+        )
+
+        // 1.5 把三方分析结论注入 Ledger 作为证据，供决策 Agent 引用 + 报告展示
+        await injectAnalysisEvidence(
+            ledger: ledger,
+            market: marketAssessment,
+            news: newsAssessment,
+            portfolio: portfolioAssessment,
+            context: context
+        )
+
+        // 2. 汇总决策 Agent：综合三方结论，输出最终买卖建议
+        var submission = try await runDecisionAgent(
+            context: context,
+            researchSnapshot: researchSnapshot,
+            market: marketAssessment,
+            news: newsAssessment,
+            portfolio: portfolioAssessment,
+            settings: settings
+        )
+
+        // 2.5 本地风控：依据不足的买卖建议强制降级为 hold
+        // 规则：buy/sell 但 evidenceIDs < 3 或 confidence < 55 → 降为 hold
+        submission = enforceEvidenceFloor(submission)
+
+        // 3. 用现有 makeReport 组装报告
+        var report = await Self.makeReport(
+            submission: submission,
+            context: context,
+            researchSnapshot: researchSnapshot,
+            officialSourceConfigured: officialSourceSettings.isSECConfigured,
+            webSearchConfigured: webSearchSettings.isConfigured,
+            ledger: ledger,
+            toolCalls: []
+        )
+
+        // 3.5 修复证据绑定：决策 Agent 可能编造了假 evidenceID（Ledger 里不存在）。
+        // 用 targetID 从 Ledger 匹配真实的 analysis:* 证据 ID，替换无效 ID。
+        let allLedgerEvidence = await ledger.allEvidence()
+        if !allLedgerEvidence.isEmpty {
+            report = Self.repairEvidenceBinding(report: report, ledgerEvidence: allLedgerEvidence)
+        }
+        return report
+    }
+
+    /// 修复报告里的证据绑定：
+    /// 1. 检查每个 action 的 evidenceIDs 是否在 ledgerEvidence 里真实存在
+    /// 2. 不存在的（假 ID）用 targetID 匹配真实的 analysis:* 证据替换
+    /// 3. 把真实证据补进 report.evidence（makeReport 按假 ID 匹配会得到空）
+    static func repairEvidenceBinding(
+        report: NextHourGuidanceReport,
+        ledgerEvidence: [TrendEvidence]
+    ) -> NextHourGuidanceReport {
+        let validIDs = Set(ledgerEvidence.map(\.id))
+
+        let repairedActions = report.actions.map { action -> NextHourGuidanceAction in
+            // 检查现有 evidenceIDs 是否都真实
+            let knownIDs = action.evidenceIDs.filter { validIDs.contains($0) }
+            if !knownIDs.isEmpty {
+                // 有真实 ID，只保留真实的
+                return NextHourGuidanceAction(
+                    targetID: action.targetID, targetName: action.targetName,
+                    action: action.action, instruction: action.instruction,
+                    rationale: action.rationale, trigger: action.trigger,
+                    invalidation: action.invalidation, confidence: action.confidence,
+                    evidenceIDs: knownIDs
+                )
+            }
+            // 全是假 ID 或为空：用 targetID 匹配真实的 analysis:* 证据
+            let matchedIDs: [String]
+            if let targetID = action.targetID {
+                matchedIDs = ledgerEvidence
+                    .filter { $0.id.contains(":\(targetID):") || $0.id.hasSuffix(":\(targetID)") }
+                    .map(\.id)
+            } else {
+                // targetID 也匹配不到，按 targetName 匹配
+                matchedIDs = ledgerEvidence
+                    .filter { $0.metadata.entityNames.contains(action.targetName) }
+                    .map(\.id)
+            }
+            return NextHourGuidanceAction(
+                targetID: action.targetID, targetName: action.targetName,
+                action: action.action, instruction: action.instruction,
+                rationale: action.rationale, trigger: action.trigger,
+                invalidation: action.invalidation, confidence: action.confidence,
+                evidenceIDs: matchedIDs.isEmpty ? action.evidenceIDs : matchedIDs
+            )
+        }
+
+        // 把所有真实证据补进 report.evidence
+        let reportEvidenceIDs = Set(repairedActions.flatMap(\.evidenceIDs))
+        let matchedEvidence = ledgerEvidence.filter { reportEvidenceIDs.contains($0.id) }
+        let finalEvidence = matchedEvidence.isEmpty ? ledgerEvidence : matchedEvidence
+
+        return NextHourGuidanceReport(
+            runID: report.runID, generatedAt: report.generatedAt,
+            validUntil: report.validUntil, slotKey: report.slotKey, scope: report.scope,
+            headline: report.headline, posture: report.posture, summary: report.summary,
+            actions: repairedActions, riskChecks: report.riskChecks,
+            assetCount: report.assetCount,
+            disposition: report.disposition,
+            sourceStatuses: report.sourceStatuses, evidence: finalEvidence,
+            auditToolCalls: report.auditToolCalls, auditEvidence: report.auditEvidence,
+            warnings: report.warnings
+        )
+    }
+
+    /// 把三方分析结论注入 Ledger 作为证据。
+    /// 每个标的的每个维度（行情/新闻/持仓）生成一条证据，让决策 Agent 可引用、报告可展示。
+    private func injectAnalysisEvidence(
+        ledger: TrendEvidenceLedger,
+        market: MarketSignalAssessment,
+        news: NewsEventAssessment,
+        portfolio: PortfolioContextAssessment,
+        context: NextHourGuidanceContext
+    ) async {
+        var evidence: [TrendEvidence] = []
+        for asset in context.assets {
+            // 行情信号
+            if let signal = market.perAssetSignals.first(where: { $0.targetID == asset.id }) {
+                evidence.append(TrendEvidence(
+                    id: "analysis:market:\(asset.id)",
+                    sourceName: "行情信号分析",
+                    title: "\(signal.targetName)：\(signal.trend)",
+                    url: nil, publishedAt: nil, retrievedAt: context.generatedAt,
+                    summary: signal.rationale,
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .portfolioSnapshot,
+                        sourceTier: .primary,
+                        entityNames: [signal.targetName],
+                        metadataConfidence: .deterministic
+                    )
+                ))
+            }
+            // 新闻事件
+            if let event = news.perAssetEvents.first(where: { $0.targetID == asset.id }) {
+                evidence.append(TrendEvidence(
+                    id: "analysis:news:\(asset.id)",
+                    sourceName: "新闻事件分析",
+                    title: "\(event.targetName)：\(event.sentiment)（\(event.keyEvents.joined(separator: "、"))）",
+                    url: event.sources.first, publishedAt: nil, retrievedAt: context.generatedAt,
+                    summary: "来源：\(event.sources.isEmpty ? "未取得" : event.sources.joined(separator: "、"))",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .webSearch,
+                        sourceTier: .secondary,
+                        entityNames: [event.targetName],
+                        metadataConfidence: .semanticDerived
+                    )
+                ))
+            }
+            // 持仓结构
+            if let ctx = portfolio.perAssetContext.first(where: { $0.targetID == asset.id }) {
+                evidence.append(TrendEvidence(
+                    id: "analysis:portfolio:\(asset.id)",
+                    sourceName: "持仓结构分析",
+                    title: "\(ctx.targetName)：\(ctx.position)（\(ctx.riskExposure)）",
+                    url: nil, publishedAt: nil, retrievedAt: context.generatedAt,
+                    summary: ctx.recommendation + (ctx.overlapNote.map { "；\($0)" } ?? ""),
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .portfolioSnapshot,
+                        sourceTier: .primary,
+                        entityNames: [ctx.targetName],
+                        metadataConfidence: .deterministic
+                    )
+                ))
+            }
+        }
+        await ledger.record(evidence)
+    }
+
+    /// 汇总决策 Agent：拿三个分析团队的结论，综合判断每个标的的买卖持有。
+    ///
+    /// 与原 run() 的关键差异：
+    /// - prompt 重平衡：不再单边倒"宁可持有"，而是"有明确信号就给建议，标注把握程度"
+    /// - 风控分级：不再用 11 个 AND 门槛强制退回 hold，改为让模型自行标注 confidence
+    /// - 温度 0.2（原 0.1），让模型更愿意给出明确判断
+    private func runDecisionAgent(
+        context: NextHourGuidanceContext,
+        researchSnapshot: TrendResearchSnapshot,
+        market: MarketSignalAssessment,
+        news: NewsEventAssessment,
+        portfolio: PortfolioContextAssessment,
+        settings: TrendAIProviderSettings
+    ) async throws -> NextHourGuidanceAgent.Submission {
+        let marketJSON = jsonString(market) ?? "{}"
+        let newsJSON = jsonString(news) ?? "{}"
+        let portfolioJSON = jsonString(portfolio) ?? "{}"
+
+        let systemMessage = """
+        你是中国市场投资决策专家。以下是三个分析团队的独立结论，请综合判断每个标的下一小时的操作建议。
+
+        【行情信号团队结论】
+        \(marketJSON)
+
+        【新闻事件团队结论】
+        \(newsJSON)
+
+        【持仓结构团队结论】
+        \(portfolioJSON)
+
+        决策原则：
+        1. 综合三个维度的信号做判断，不要只看一个维度。
+        2. 有明确正向信号（行情强势+新闻利好+适合加仓）时，给出 buy 建议。
+        3. 有明确负向信号（行情弱势+新闻利空+适合减仓）时，给出 sell 建议。
+        4. 信号矛盾或不足时，给出 hold 并说明原因。
+        5. instruction 必须说明仓位方式（如"小仓试水""减仓1/3"）和触发/失效条件。
+
+        confidence（把握度）必须和依据数量挂钩——依据越多把握越高，依据少就老实标低：
+        - 85-95：三个维度都有明确信号且方向一致，至少引用 5 条以上证据
+        - 70-85：两个维度有明确信号且一致，至少引用 4 条证据
+        - 55-70：一个维度有明确信号，引用 3 条证据，其他维度证据不足
+        - 40-55：证据少于 3 条，信号矛盾或微弱，倾向 hold
+        - 低于 40：几乎没有可靠证据，必须 hold
+
+        重要：买卖建议（buy/sell）的 confidence 低于 55 时，改为 hold。
+        依据不足 3 条时不要给买卖建议，先 hold。
+        不要在依据只有 2 条的情况下给出中等偏高的把握度。
+        """
+
+        let userMessage = """
+        研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)。
+        候选标的 \(context.assets.count) 个，选择最需要决策的 1-5 个。
+        请综合三方分析结论，提交买卖持有建议。
+        """
+
+        let tools: [AgentToolDefinition] = [Self.submitTool()]
+        var messages: [AgentChatMessage] = [
+            .init(role: .system, content: systemMessage),
+            .init(role: .user, content: userMessage)
+        ]
+
+        let decoder = JSONDecoder()
+        let maxTurns = 4
+        for _ in 0..<maxTurns {
+            try Task.checkCancellation()
+            let result = try await client.complete(
+                messages: messages,
+                tools: tools,
+                toolChoice: .required,
+                temperature: 0.2,
+                settings: settings,
+                timeout: min(90, settings.timeoutSeconds),
+                streamProgress: nil
+            )
+            messages.append(result.assistantMessage)
+
+            if let submitCall = result.toolCalls.first(where: { $0.function.name == Self.submitToolName }) {
+                if let data = submitCall.function.arguments.data(using: .utf8),
+                   let submission = try? decoder.decode(NextHourGuidanceAgent.Submission.self, from: data) {
+                    return submission
+                }
+                messages.append(.init(
+                    role: .user,
+                    content: "提交参数解码失败，请检查字段完整性后重新提交。"
+                ))
+            }
+        }
+        throw NextHourGuidanceAgentError.invalidSubmission(["决策 Agent 多次未通过校验"])
+    }
+
+    /// 把 Codable 对象编码为 JSON 字符串（给决策 Agent 注入子结论）。
+    private func jsonString<T: Encodable>(_ value: T) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// 本地风控：依据不足的买卖建议降级为 hold。
+    /// 规则：action 是 buy/sell 但 evidenceIDs < 3 或 confidence < 55 → 改为 hold。
+    /// 防止模型在证据不充分时给出不可靠的买卖建议。
+    private func enforceEvidenceFloor(_ submission: Submission) -> Submission {
+        let minEvidenceCount = 3
+        let minConfidenceForTrade = 55
+        let downgradedActions = submission.actions.map { action -> ActionSubmission in
+            let isTrade = action.action == .buy || action.action == .sell
+            let evidenceTooFew = action.evidenceIDs.count < minEvidenceCount
+            let confidenceTooLow = (action.confidence ?? 0) < minConfidenceForTrade
+            if isTrade && (evidenceTooFew || confidenceTooLow) {
+                return ActionSubmission(
+                    targetID: action.targetID,
+                    targetName: action.targetName,
+                    action: .hold,
+                    instruction: action.instruction,
+                    rationale: "依据不足（\(action.evidenceIDs.count)条证据），降级为持有：" + action.rationale,
+                    trigger: action.trigger,
+                    invalidation: action.invalidation,
+                    confidence: action.confidence,
+                    evidenceIDs: action.evidenceIDs
+                )
+            }
+            return action
+        }
+        return Submission(
+            headline: submission.headline,
+            posture: submission.posture,
+            summary: submission.summary,
+            actions: downgradedActions,
+            riskChecks: submission.riskChecks
+        )
     }
 
     private static func missingResearchRequirements(

@@ -280,6 +280,10 @@ extension AppModel {
                 )
             }
         }
+        // 让投资方向模块复用本次冻结前生成的同一份穿透快照，避免 UI 再次抓取，
+        // 也避免把报告中的一般板块观点误判成用户已持有板块。
+        portfolioLookThroughSnapshot = lookThrough
+        portfolioLookThroughSourceWarnings = lookThroughWarnings
 
         let snapshot = makeTrendResearchSnapshot(
             generatedAt: generatedAt,

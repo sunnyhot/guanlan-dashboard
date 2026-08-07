@@ -3,14 +3,18 @@ import SwiftUI
 
 // MARK: - iOS AI 研判页
 //
-// 三段切换：研判 / 跟踪 / 证据。
-// 复用 trendDashboardSummary、model.trendTrackingItems、model.trendReport?.evidence。
-// 跟踪清单、证据列表分别见 IOSTrendTrackingListView / IOSTrendEvidenceListView。
+// 投资智能主路径：AI 观点 / 我的组合 / 决策中心 / 决策记录。
+// 原趋势研判、跟踪和证据保留为按需展开的研究依据。
 
 struct EnhancementSectionView: View {
     @EnvironmentObject private var model: AppModel
     @State private var segment: ResearchSegment = .report
+    @State private var intelligenceSegment: IntelligenceSegment = .viewpoint
+    @State private var selectedCase: DecisionCase?
+    @State private var reviewCase: DecisionCase?
+    @State private var isShowingProfile = false
 
+    // 旧分段(投资智能未启用时)
     private enum ResearchSegment: String, CaseIterable, Identifiable {
         case report = "研判"
         case tracking = "跟踪"
@@ -18,21 +22,48 @@ struct EnhancementSectionView: View {
         var id: String { rawValue }
     }
 
+    // 新分段与 macOS 保持同一产品语言。
+    private enum IntelligenceSegment: String, CaseIterable, Identifiable {
+        case viewpoint = "观点"
+        case portfolio = "组合"
+        case decisions = "决策"
+        case records = "记录"
+        var id: String { rawValue }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Picker("", selection: $segment) {
-                    ForEach(ResearchSegment.allCases) { seg in
-                        Text(seg.rawValue).tag(seg)
+                if InvestmentIntelligence.enabled {
+                    Picker("", selection: $intelligenceSegment) {
+                        ForEach(IntelligenceSegment.allCases) { seg in
+                            Text(seg.rawValue).tag(seg)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .padding(.bottom, 2)
+                    .pickerStyle(.segmented)
+                    .padding(.bottom, 2)
 
-                switch segment {
-                case .report:  reportContent
-                case .tracking: trackingContent
-                case .evidence: evidenceContent
+                    switch intelligenceSegment {
+                    case .viewpoint: intelligenceViewpointContent
+                    case .portfolio: intelligencePortfolioContent
+                    case .decisions: intelligenceCasesContent
+                    case .records: intelligenceRecordsContent
+                    }
+                } else {
+                    // 旧分段(兼容)
+                    Picker("", selection: $segment) {
+                        ForEach(ResearchSegment.allCases) { seg in
+                            Text(seg.rawValue).tag(seg)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.bottom, 2)
+
+                    switch segment {
+                    case .report:  reportContent
+                    case .tracking: trackingContent
+                    case .evidence: evidenceContent
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -43,18 +74,287 @@ struct EnhancementSectionView: View {
         .refreshable {
             try? await model.refreshLatest(updateNotice: false)
         }
+        .sheet(item: $selectedCase) { decisionCase in
+            IOSDecisionCaseDetailView(caseID: decisionCase.id, onReview: { reviewCase = decisionCase })
+                .environmentObject(model)
+        }
+        .sheet(item: $reviewCase) { decisionCase in
+            IOSDecisionReviewView(caseID: decisionCase.id)
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $isShowingProfile) {
+            NavigationStack {
+                ScrollView { IOSUserDecisionProfileEditor().padding(16) }
+                    .navigationTitle("投资偏好")
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+            .environmentObject(model)
+        }
     }
 
-    // MARK: 研判
+    // MARK: 投资智能 - 观点
+
+    @ViewBuilder
+    private var intelligenceViewpointContent: some View {
+        let review = model.marketCloseReview
+        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            Text("今日收盘复盘")
+                .font(.caption.weight(.bold))
+                .tracking(0.8)
+                .foregroundStyle(IOSDesign.accent)
+
+            Text(review.headline)
+                .font(.title2.weight(.bold))
+                .foregroundStyle(IOSDesign.ink)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(review.summary)
+                .font(.subheadline)
+                .foregroundStyle(IOSDesign.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if review.state == .scanning {
+                HStack(spacing: IOSDesign.spaceS) {
+                    ProgressView()
+                    Text(model.trendProgressLogs.last?.message ?? "正在扫描市场…")
+                        .font(.subheadline)
+                        .foregroundStyle(IOSDesign.muted)
+                }
+            }
+
+            if !review.marketPulse.isEmpty {
+                Divider()
+                Text("市场温度").font(.headline).foregroundStyle(IOSDesign.ink)
+                ForEach(review.marketPulse) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text(item.name).font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text(item.direction.dashboardText)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(iosCloseReviewTint(item.direction))
+                        }
+                        Text("\(item.category) · 置信度 \(item.confidenceText)")
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                        Text(item.rationale)
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                            .lineLimit(3)
+                    }
+                }
+            }
+
+            if !review.strongThemes.isEmpty || !review.weakThemes.isEmpty {
+                Divider()
+                Text("主线与风险").font(.headline).foregroundStyle(IOSDesign.ink)
+                ForEach(review.strongThemes) { item in
+                    Label {
+                        Text("\(item.name) · \(item.rationale)")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: "arrow.up.right.circle.fill")
+                            .foregroundStyle(AppPalette.positive)
+                    }
+                }
+                ForEach(review.weakThemes) { item in
+                    Label {
+                        Text("\(item.name) · \(item.rationale)")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(AppPalette.warning)
+                    }
+                }
+            }
+
+            if !review.tomorrowWatch.isEmpty {
+                Divider()
+                Text("次日观察").font(.headline).foregroundStyle(IOSDesign.ink)
+                ForEach(Array(review.tomorrowWatch.enumerated()), id: \.offset) { _, item in
+                    Label(item, systemImage: "circle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(IOSDesign.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Label(review.dataBoundary, systemImage: "shield.lefthalf.filled")
+                .font(.caption)
+                .foregroundStyle(IOSDesign.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            DisclosureGroup("研究依据") {
+                VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+                    reportContent
+                    if let evidence = model.trendReport?.evidence, !evidence.isEmpty {
+                        IOSTrendEvidenceListView(evidence: evidence)
+                    }
+                }
+                .padding(.top, IOSDesign.spaceS)
+            }
+            .font(.subheadline.weight(.semibold))
+            .tint(IOSDesign.accent)
+        }
+    }
+
+    private func iosCloseReviewTint(_ direction: TrendDirection) -> Color {
+        switch direction {
+        case .bullish, .neutralPositive:
+            return AppPalette.positive
+        case .neutral:
+            return IOSDesign.accent
+        case .neutralNegative, .bearish:
+            return AppPalette.warning
+        case .uncertain:
+            return IOSDesign.muted
+        }
+    }
+
+    // MARK: 投资智能 - 我的组合
+
+    private var intelligencePortfolioContent: some View {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            Text("AI 眼中的组合")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(IOSDesign.ink)
+            Text("先看资金暴露，再决定需要研究什么。")
+                .font(.subheadline)
+                .foregroundStyle(IOSDesign.muted)
+
+            iosPortfolioMetric("第一大持仓", model.investmentIntelligenceSummary.topDirectHoldingText ?? "待计算")
+            Divider()
+            iosPortfolioMetric("第一大行业", model.investmentIntelligenceSummary.topSectorText ?? "待穿透")
+            Divider()
+            iosPortfolioMetric("基金穿透覆盖", model.investmentIntelligenceSummary.lookThroughCoverageText ?? "数据未就绪")
+
+            if !model.activeDecisionCases.isEmpty {
+                Text("当前结构问题")
+                    .font(.headline)
+                    .padding(.top, IOSDesign.spaceS)
+                ForEach(model.activeDecisionCases.prefix(6)) { decisionCase in
+                    Button { selectedCase = decisionCase } label: {
+                        HStack {
+                            Circle().fill(iosDecisionTint(decisionCase.decisionState)).frame(width: 7, height: 7)
+                            Text(decisionCase.title)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(IOSDesign.ink)
+                            Spacer()
+                            Text(decisionCase.metricLabel)
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(IOSDesign.muted)
+                        }
+                        .padding(.vertical, IOSDesign.spaceS)
+                    }
+                    .buttonStyle(.plain)
+                    Divider()
+                }
+            }
+
+            Button("编辑投资偏好") { isShowingProfile = true }
+                .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: 投资智能 - 事项(M4)
+
+    @ViewBuilder
+    private var intelligenceCasesContent: some View {
+        if model.activeDecisionCases.isEmpty {
+            Text("当前无活跃决策事项")
+                .font(.system(size: 14))
+                .foregroundColor(IOSDesign.muted)
+                .padding()
+        } else {
+            ForEach(model.activeDecisionCases) { cs in
+                IOSDecisionCaseCard(
+                    decisionCase: cs,
+                    isResearching: model.researchingDecisionCaseID == cs.id,
+                    researchReport: model.lastDecisionCaseResearchReports[cs.id],
+                    onOpen: { selectedCase = cs },
+                    onAcknowledge: { model.acknowledgeDecisionCase(cs.id) },
+                    onResolve: { model.resolveDecisionCase(cs.id) },
+                    onClose: { model.closeDecisionCase(cs.id) },
+                    onResearch: { Task { await model.researchDecisionCase(cs.id) } }
+                )
+            }
+        }
+    }
+
+    // MARK: 投资智能 - 决策记录
+
+    @ViewBuilder
+    private var intelligenceRecordsContent: some View {
+        let reviewDue = model.reviewDueDecisionCases
+        let history = model.historicalDecisionCases
+
+        if reviewDue.isEmpty && history.isEmpty {
+            Text("暂无复盘记录")
+                .font(.system(size: 14))
+                .foregroundColor(IOSDesign.muted)
+                .padding()
+        } else {
+            if !reviewDue.isEmpty {
+                Text("待复盘 (\(reviewDue.count))")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(IOSDesign.ink)
+                ForEach(reviewDue) { cs in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(cs.title).font(.subheadline.weight(.medium))
+                            if let due = cs.reviewDueAt {
+                                Text("到期：\(due.prefix(10))").font(.caption).foregroundStyle(IOSDesign.muted)
+                            }
+                        }
+                        Spacer()
+                        Button("复盘") { reviewCase = cs }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                    }
+                    .padding(IOSDesign.spaceS)
+                    .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
+                }
+            }
+
+            if !history.isEmpty {
+                Text("历史 (\(history.count))")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(IOSDesign.ink)
+                    .padding(.top)
+                ForEach(history.prefix(10)) { cs in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(cs.title).font(.system(size: 13, weight: .medium))
+                        Text("关闭:\(String(cs.resolvedAt ?? cs.updatedAt).prefix(10))")
+                            .font(.system(size: 11)).foregroundColor(IOSDesign.muted)
+                    }
+                    .padding(IOSDesign.spaceS)
+                    .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
+                }
+            }
+
+            DisclosureGroup("旧趋势跟踪清单") {
+                trackingContent.padding(.top, IOSDesign.spaceS)
+            }
+            .font(.subheadline.weight(.semibold))
+            .tint(IOSDesign.muted)
+        }
+    }
+
+    private func iosPortfolioMetric(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(title).font(.subheadline).foregroundStyle(IOSDesign.muted)
+            Spacer()
+            Text(value).font(.headline).foregroundStyle(IOSDesign.ink)
+        }
+        .padding(.vertical, IOSDesign.spaceS)
+    }
+
+    // MARK: 研判(旧,降级为"依据")
 
     @ViewBuilder
     private var reportContent: some View {
         let summary = model.trendDashboardSummary
         statusCard(summary)
-        // 投资智能(Slice 1):集中度决策事项。gate 在 InvestmentIntelligence.enabled。
-        if InvestmentIntelligence.enabled {
-            IOSInvestmentIntelligencePanel()
-        }
         if !summary.horizons.isEmpty {
             horizonsCard(summary)
         }

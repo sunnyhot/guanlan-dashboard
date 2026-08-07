@@ -79,7 +79,8 @@ final class DecisionCaseResearchActionsTests: XCTestCase {
 
     // MARK: - 状态不变时不追加事件
 
-    func testApplyReportDoesNotUpdateWhenStateUnchanged() {
+    func testApplyReportSavesEvenWhenStateUnchanged() {
+        // Step 2:状态不变也保存研究报告 + 追加事件
         let model = makeModel()
         model.decisionCases = [makeCase(state: .watch)]
         let initialEventCount = model.decisionCases[0].events.count
@@ -92,7 +93,9 @@ final class DecisionCaseResearchActionsTests: XCTestCase {
         )
         model.applyResearchReport(report, to: model.decisionCases[0].id)
 
-        XCTAssertEqual(model.decisionCases[0].events.count, initialEventCount, "状态不变时不应追加事件")
+        // 状态不变,但仍追加事件 + 保存报告
+        XCTAssertEqual(model.decisionCases[0].events.count, initialEventCount + 1, "状态不变也应记录研究完成事件")
+        XCTAssertNotNil(model.lastDecisionCaseResearchReports[model.decisionCases[0].id], "研究报告应保存")
     }
 
     // MARK: - 研究报告存储

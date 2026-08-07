@@ -9,7 +9,7 @@ import Foundation
 // 见 docs/ai-pipeline-baseline.md 第 9.4 节。
 
 /// 复盘结论(不用"正确/错误")。
-enum DecisionReviewConclusion: String, Codable, Hashable, Sendable {
+enum DecisionReviewConclusion: String, Codable, Hashable, Sendable, CaseIterable {
     case supported                    // 判断被后续事实充分支持
     case partiallySupported           // 部分支持
     case contradicted                 // 被后续事实推翻

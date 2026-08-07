@@ -39,10 +39,17 @@ swift "$ROOT_DIR/scripts/render_macos_icon.swift" "$ICON_MASTER" "$ICONSET_DIR"
 iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 
 echo "[3/8] 编译原生 macOS 应用"
+# BUILD_CONFIG=debug 时跳过 -O 优化，大幅加速编译（开发调试用）
+BUILD_CONFIG="${BUILD_CONFIG:-release}"
+if [ "$BUILD_CONFIG" = "debug" ]; then
+  SWIFTC_OPT_FLAGS=""
+  echo "  (debug 构建，跳过 -O 优化以加速编译)"
+else
+  SWIFTC_OPT_FLAGS="-O -whole-module-optimization"
+fi
 swiftc \
   "${SWIFT_SOURCES[@]}" \
-  -O \
-  -whole-module-optimization \
+  $SWIFTC_OPT_FLAGS \
   -target "${TARGET_ARCH}-apple-macos${MIN_MACOS_VERSION}" \
   -framework SwiftUI \
   -framework Charts \

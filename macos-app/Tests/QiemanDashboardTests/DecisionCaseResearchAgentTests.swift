@@ -123,6 +123,89 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
         }
     }
 
+    // MARK: - 回归:风险不成立时空 findings 应被接受
+
+    func testStableConclusionWithEmptyFindingsIsAccepted() async throws {
+        // 研究「风险不成立」结论:findings 空 + rationale 说明 + suggestedState=.stable
+        // 修复前会被「缺少必填字段:findings」误拒,导致 3 次重试后抛错。
+        let submitArgs = makeSubmitArgumentsJSON(
+            findings: [],
+            counterFindings: [],
+            uncertainties: [],
+            suggestedState: .stable,
+            rationale: "研究表明集中度已回落到阈值以内,风险不成立"
+        )
+        let client = FakeDecisionCaseResearchClient(submitArguments: submitArgs)
+        let agent = DecisionCaseResearchAgent(client: client)
+
+        let report = try await agent.run(
+            decisionCase: makeCase(),
+            snapshot: makeSnapshot(),
+            settings: Self.configuredSettings,
+            webSearchSettings: .empty,
+            officialSourceSettings: .empty
+        )
+        XCTAssertEqual(report.suggestedState, .stable)
+        XCTAssertTrue(report.findings.isEmpty, "空 findings 的 stable 结论应原样保留")
+        XCTAssertFalse(report.rationale.isEmpty)
+    }
+
+    // MARK: - 回归:findings 解码失败应回灌真实原因,而非误报「缺少必填字段」
+
+    func testMalformedFindingsReportsDecodeError() async {
+        // findings 传成对象(非数组)→ 解码失败 → 应抛 Agent 错误,
+        // 且错误信息含真实解码原因(类型不匹配),不含「缺少必填字段:findings」。
+        let malformedArgs = makeRawSubmitArgumentsJSON(findingsValue: ["type": "object"])
+        let client = FakeDecisionCaseResearchClient(submitArguments: malformedArgs)
+        let agent = DecisionCaseResearchAgent(client: client)
+
+        do {
+            _ = try await agent.run(
+                decisionCase: makeCase(),
+                snapshot: makeSnapshot(),
+                settings: Self.configuredSettings,
+                webSearchSettings: .empty,
+                officialSourceSettings: .empty
+            )
+            XCTFail("findings 非数组应导致解码失败")
+        } catch let error as DecisionCaseResearchAgentError {
+            guard case .invalidSubmissionLimitExceeded(let errors) = error else {
+                return XCTFail("应抛 invalidSubmissionLimitExceeded,实际:\(error)")
+            }
+            let combined = errors.joined(separator: "、")
+            XCTAssertTrue(combined.contains("解码失败") || combined.contains("类型不匹配"), "错误应含真实解码原因,实际:\(combined)")
+            XCTAssertFalse(combined.contains("缺少必填字段:findings"), "不应误报缺少 findings")
+        } catch {
+            XCTFail("错误类型不对:\(error)")
+        }
+    }
+
+    // MARK: - 回归:findings 里 direction/significance 用同义词或非法值应容错降级,不抛解码错误
+
+    func testFindingWithSynonymDirectionIsAccepted() async throws {
+        // direction 用 "supports"（同义词，非合法枚举值）、significance 用 "moderate"
+        // 修复前会让整条 finding 解码失败（字段类型不匹配 findings.Index 0），3 次重试后抛错。
+        // 修复后应容错降级并成功提交。
+        let submitArgs = makeRawFindingsArgumentsJSON(
+            direction: "supports",
+            significance: "moderate",
+            evidenceID: "decision-case:context:\(Self.caseID.uuidString)"
+        )
+        let client = FakeDecisionCaseResearchClient(submitArguments: submitArgs)
+        let agent = DecisionCaseResearchAgent(client: client)
+
+        let report = try await agent.run(
+            decisionCase: makeCase(),
+            snapshot: makeSnapshot(),
+            settings: Self.configuredSettings,
+            webSearchSettings: .empty,
+            officialSourceSettings: .empty
+        )
+        XCTAssertEqual(report.findings.count, 1)
+        XCTAssertEqual(report.findings[0].direction, .supportive, "supports 应降级为 .supportive")
+        XCTAssertEqual(report.findings[0].significance, .medium, "moderate 应降级为 .medium")
+    }
+
     // MARK: - 辅助
 
     private static let caseID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
@@ -182,6 +265,35 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             "uncertainties": uncertainties,
             "suggestedState": suggestedState.rawValue,
             "rationale": rationale
+        ]
+        return (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
+    }
+
+    /// 用任意 findings 值构造提交 JSON（用于注入畸形 findings 测解码失败）。
+    private func makeRawSubmitArgumentsJSON(findingsValue: Any) -> String {
+        let obj: [String: Any] = [
+            "findings": findingsValue,
+            "counterFindings": [],
+            "uncertainties": [],
+            "suggestedState": PortfolioDecisionState.watch.rawValue,
+            "rationale": "测试"
+        ]
+        return (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
+    }
+
+    /// 构造带一条 finding 的提交 JSON，允许自定义 direction/significance（测同义词容错）。
+    private func makeRawFindingsArgumentsJSON(direction: String, significance: String, evidenceID: String) -> String {
+        let obj: [String: Any] = [
+            "findings": [[
+                "claim": "集中度确实偏高",
+                "direction": direction,
+                "significance": significance,
+                "evidenceIDs": [evidenceID]
+            ]],
+            "counterFindings": [],
+            "uncertainties": [],
+            "suggestedState": PortfolioDecisionState.watch.rawValue,
+            "rationale": "风险存在但可控"
         ]
         return (try? String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)) ?? "{}"
     }

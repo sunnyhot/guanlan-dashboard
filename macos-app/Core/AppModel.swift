@@ -435,11 +435,6 @@ final class AppModel: ObservableObject {
         set { enhancementState.nextHourGuidanceError = newValue }
     }
 
-    var selectedWorkbenchSegment: WorkbenchSegment {
-        get { enhancementState.selectedWorkbenchSegment }
-        set { enhancementState.selectedWorkbenchSegment = newValue }
-    }
-
     var trendTrackingItems: [TrendTrackingItem] {
         get { enhancementState.trendTrackingItems }
         set { enhancementState.trendTrackingItems = newValue }
@@ -485,6 +480,26 @@ final class AppModel: ObservableObject {
     var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] {
         get { enhancementState.lastDecisionCaseResearchReports }
         set { enhancementState.lastDecisionCaseResearchReports = newValue }
+    }
+
+    var latestDecisionCaseResearchRuns: [UUID: DecisionCaseResearchRunRecord] {
+        get { enhancementState.latestDecisionCaseResearchRuns }
+        set { enhancementState.latestDecisionCaseResearchRuns = newValue }
+    }
+
+    var decisionCaseResearchErrors: [UUID: String] {
+        get { enhancementState.decisionCaseResearchErrors }
+        set { enhancementState.decisionCaseResearchErrors = newValue }
+    }
+
+    var decisionCaseReviews: [UUID: [DecisionReview]] {
+        get { enhancementState.decisionCaseReviews }
+        set { enhancementState.decisionCaseReviews = newValue }
+    }
+
+    var lastDecisionReviewError: String {
+        get { enhancementState.lastDecisionReviewError }
+        set { enhancementState.lastDecisionReviewError = newValue }
     }
 
     var isPresentingCommandPalette: Bool {

@@ -153,6 +153,7 @@ enum TrendResearchAgentError: Error, LocalizedError {
     case toolCallLimitExceeded
     case missingToolCalls
     case invalidSubmissionLimitExceeded(errors: [String])
+    case marketOpportunityScanIncomplete(missingSectorGroups: [String])
     case modelRequestTimeoutRecoveryExceeded(timeout: Double)
     case totalTimeoutExceeded(limit: Double)
 
@@ -168,6 +169,11 @@ enum TrendResearchAgentError: Error, LocalizedError {
             return "模型连续返回普通文本，未调用工具。"
         case .invalidSubmissionLimitExceeded(let errors):
             return "报告多次校验未通过：\n" + errors.joined(separator: "\n")
+        case .marketOpportunityScanIncomplete(let missingSectorGroups):
+            let missing = missingSectorGroups.isEmpty
+                ? "大类资产、大盘或行业板块"
+                : missingSectorGroups.joined(separator: "、")
+            return "全市场机会扫描未完成（缺少：\(missing)）。已保留上一份报告，未用持仓长期观点填充市场机会；请检查联网研究配置后重试。"
         case .modelRequestTimeoutRecoveryExceeded(let timeout):
             return "趋势模型连续请求超时（单轮上限 \(Int(timeout.rounded())) 秒）。Agent 已自动收敛任务并重试，但模型服务仍未返回；已保留上一次报告，请检查模型服务状态后重试。"
         case .totalTimeoutExceeded(let limit):
@@ -587,6 +593,14 @@ struct TrendResearchAgent: Sendable {
                         webStatus: webStatus,
                         webSearchConfigured: webSearchSettings.isConfigured
                     )
+
+                    if toolName == Self.webSearchToolName,
+                       webSearchUnavailableResult != nil,
+                       !harnessState.opportunitySearchCoverageComplete {
+                        throw TrendResearchAgentError.marketOpportunityScanIncomplete(
+                            missingSectorGroups: harnessState.missingOpportunitySearchSectorGroups
+                        )
+                    }
 
                     // 工具结果超过字节上限：截断后再回灌，避免单个超大结果撑爆上下文。
                     messages.append(toolMessage(callID: call.id, content: Self.truncate(enrichedToolResult.contentJSON, limit: policy.maxToolResultBytes)))

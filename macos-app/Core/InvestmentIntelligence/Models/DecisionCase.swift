@@ -92,7 +92,7 @@ enum ConcentrationDimension: String, Codable, Hashable, Sendable {
 // MARK: - 事件历史
 
 /// 追加式状态变更记录,保证审计能力。
-struct DecisionCaseEvent: Codable, Hashable, Sendable {
+struct DecisionCaseEvent: Codable, Hashable, Sendable, Identifiable {
     let id: UUID
     let at: String
     let type: DecisionCaseEventType
@@ -180,11 +180,8 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
     var lastEvaluatedAt: String       // 最近一次指标评估时间
     var reviewDueAt: String?          // 显式复查时间(monitoring 时设定)
     var resolvedAt: String?           // 关闭时间
-    var baselineMetricSnapshotID: UUID?  // 进入监控时的基准快照
     var latestResearchRunID: UUID?    // 最近研究运行 ID
     var latestReviewID: UUID?         // 最近复盘 ID
-    var triggerCondition: DecisionCondition?    // 结构化触发条件(可自动判断)
-    var invalidationCondition: DecisionCondition?  // 结构化失效条件
 
     // 追加式事件历史
     var events: [DecisionCaseEvent]
@@ -212,11 +209,8 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         lastEvaluatedAt: String? = nil,
         reviewDueAt: String? = nil,
         resolvedAt: String? = nil,
-        baselineMetricSnapshotID: UUID? = nil,
         latestResearchRunID: UUID? = nil,
         latestReviewID: UUID? = nil,
-        triggerCondition: DecisionCondition? = nil,
-        invalidationCondition: DecisionCondition? = nil,
         events: [DecisionCaseEvent] = [],
         userDisposition: DecisionCaseUserDisposition = .pending
     ) {
@@ -239,11 +233,8 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         self.lastEvaluatedAt = lastEvaluatedAt ?? createdAt
         self.reviewDueAt = reviewDueAt
         self.resolvedAt = resolvedAt
-        self.baselineMetricSnapshotID = baselineMetricSnapshotID
         self.latestResearchRunID = latestResearchRunID
         self.latestReviewID = latestReviewID
-        self.triggerCondition = triggerCondition
-        self.invalidationCondition = invalidationCondition
         self.events = events
         self.userDisposition = userDisposition
     }
@@ -272,11 +263,8 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         lastEvaluatedAt = try c.decodeIfPresent(String.self, forKey: .lastEvaluatedAt) ?? updatedAt
         reviewDueAt = try c.decodeIfPresent(String.self, forKey: .reviewDueAt)
         resolvedAt = try c.decodeIfPresent(String.self, forKey: .resolvedAt)
-        baselineMetricSnapshotID = try c.decodeIfPresent(UUID.self, forKey: .baselineMetricSnapshotID)
         latestResearchRunID = try c.decodeIfPresent(UUID.self, forKey: .latestResearchRunID)
         latestReviewID = try c.decodeIfPresent(UUID.self, forKey: .latestReviewID)
-        triggerCondition = try c.decodeIfPresent(DecisionCondition.self, forKey: .triggerCondition)
-        invalidationCondition = try c.decodeIfPresent(DecisionCondition.self, forKey: .invalidationCondition)
         events = try c.decodeIfPresent([DecisionCaseEvent].self, forKey: .events) ?? []
         userDisposition = try c.decodeIfPresent(DecisionCaseUserDisposition.self, forKey: .userDisposition) ?? .pending
     }
@@ -292,6 +280,54 @@ enum DecisionCaseUserDisposition: String, Codable, Hashable, Sendable {
     case resolved
     /// 用户已关闭(不再关注)。
     case closed
+}
+
+extension DecisionCaseLifecycle {
+    var displayName: String {
+        switch self {
+        case .detected: return "待评估"
+        case .researching: return "研究中"
+        case .decisionReady: return "待处理"
+        case .monitoring: return "跟踪中"
+        case .reviewDue: return "待复盘"
+        case .closed: return "已结束"
+        }
+    }
+}
+
+extension PortfolioDecisionState {
+    var displayName: String {
+        switch self {
+        case .stable: return "保持现状"
+        case .watch: return "持续观察"
+        case .prepare: return "准备应对"
+        case .adjustReview: return "复核调整"
+        case .exitReview: return "复核退出"
+        case .insufficientEvidence: return "证据不足"
+        }
+    }
+
+    var guidanceText: String {
+        switch self {
+        case .stable: return "暂不需要改变组合"
+        case .watch: return "保留持仓，等待条件确认"
+        case .prepare: return "先准备方案，不立即交易"
+        case .adjustReview: return "评估是否降低相关暴露"
+        case .exitReview: return "重点复核原投资逻辑"
+        case .insufficientEvidence: return "先补充数据，再做判断"
+        }
+    }
+}
+
+extension DecisionCaseUserDisposition {
+    var displayName: String {
+        switch self {
+        case .pending: return "待处理"
+        case .acknowledged: return "已关注"
+        case .resolved: return "已解决"
+        case .closed: return "已关闭"
+        }
+    }
 }
 
 // MARK: - caseKey 生成

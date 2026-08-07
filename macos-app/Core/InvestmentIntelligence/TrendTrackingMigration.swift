@@ -80,7 +80,6 @@ enum TrendTrackingMigration {
         existingCases: [DecisionCase],
         trackingItems: [TrendTrackingItem]
     ) -> [DecisionCase] {
-        let existingByKey = Dictionary(existingCases.map { ($0.caseKey, $0) }, uniquingKeysWith: { _, last in last })
         var result = existingCases
         var consumedKeys = Set(existingCases.map(\.caseKey))
 

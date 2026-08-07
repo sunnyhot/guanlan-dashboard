@@ -36,11 +36,17 @@ struct ResearchFinding: Codable, Hashable, Sendable {
     }
 
     /// 解码时收集缺失字段(参考 NextHourGuidance 的 missingFields 模式)。
+    ///
+    /// direction / significance 用容错解码：模型输出同义词（如 supports/positive、
+    /// moderate/middle）或非法值时降级到默认，而不是抛错——避免单条 finding 的枚举值
+    /// 不规范导致整个 findings 数组解码失败（表现为「字段类型不匹配 findings.Index 0」）。
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         claim = try c.decodeIfPresent(String.self, forKey: .claim) ?? ""
-        direction = try c.decodeIfPresent(ResearchFindingDirection.self, forKey: .direction) ?? .neutral
-        significance = try c.decodeIfPresent(ResearchSignificance.self, forKey: .significance) ?? .medium
+        let directionRaw = try? c.decodeIfPresent(String.self, forKey: .direction)
+        direction = ResearchFindingDirection(fallback: .neutral, raw: directionRaw)
+        let significanceRaw = try? c.decodeIfPresent(String.self, forKey: .significance)
+        significance = ResearchSignificance(fallback: .medium, raw: significanceRaw)
         evidenceIDs = try c.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
     }
 }
@@ -49,12 +55,38 @@ enum ResearchFindingDirection: String, Codable, Hashable, Sendable {
     case supportive   // 支持 Case 的风险判断(如集中度风险确实存在)
     case counter      // 反向(削弱风险判断)
     case neutral      // 背景信息
+
+    /// 容错构造：raw 缺失/非法时用 fallback，不抛错。接受常见同义词。
+    init(fallback: ResearchFindingDirection, raw: String?) {
+        guard let raw else { self = fallback; return }
+        switch raw.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) {
+        case "supportive", "support", "supports", "positive", "for", "confirm", "confirms", "uphold":
+            self = .supportive
+        case "counter", "negative", "against", "oppose", "opposes", "refute", "refutes", "weaken", "weakens":
+            self = .counter
+        default:
+            self = fallback
+        }
+    }
 }
 
 enum ResearchSignificance: String, Codable, Hashable, Sendable {
     case high
     case medium
     case low
+
+    /// 容错构造：raw 缺失/非法时用 fallback，不抛错。接受常见同义词。
+    init(fallback: ResearchSignificance, raw: String?) {
+        guard let raw else { self = fallback; return }
+        switch raw.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) {
+        case "high", "important", "major", "strong", "critical":
+            self = .high
+        case "low", "minor", "weak", "negligible":
+            self = .low
+        default:
+            self = fallback
+        }
+    }
 }
 
 // MARK: - 研究报告
@@ -121,18 +153,22 @@ struct DecisionCaseResearchSubmission: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         var missing: [String] = []
 
-        findings = (try? c.decode([ResearchFinding].self, forKey: .findings)) ?? []
-        if findings.isEmpty { missing.append("findings") }
+        // findings / counterFindings 用 decodeIfPresent：缺键 → []；
+        // 若键存在但解码失败（如传成了对象而非数组、枚举值非法）则直接抛 DecodingError，
+        // 由上层 processSubmission 的 catch 捕获并回灌具体原因给模型，
+        // 而不是被 try? 吞成 [] 再误报"缺少必填字段:findings"。
+        // findings 不强制非空：研究结论为风险不成立（stable/insufficientEvidence）时
+        // 支持性 findings 自然为空，此时只需在 rationale 说明。
+        findings = try c.decodeIfPresent([ResearchFinding].self, forKey: .findings) ?? []
 
-        counterFindings = (try? c.decode([ResearchFinding].self, forKey: .counterFindings)) ?? []
-        // counterFindings 可以为空(单向判断),不强制
+        counterFindings = try c.decodeIfPresent([ResearchFinding].self, forKey: .counterFindings) ?? []
 
-        uncertainties = (try? c.decode([String].self, forKey: .uncertainties)) ?? []
+        uncertainties = try c.decodeIfPresent([String].self, forKey: .uncertainties) ?? []
 
-        suggestedState = (try? c.decode(PortfolioDecisionState.self, forKey: .suggestedState)) ?? .watch
+        suggestedState = try c.decodeIfPresent(PortfolioDecisionState.self, forKey: .suggestedState) ?? .watch
 
-        rationale = (try? c.decode(String.self, forKey: .rationale)) ?? ""
-        if rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        rationale = try c.decodeIfPresent(String.self, forKey: .rationale) ?? ""
+        if rationale.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty {
             missing.append("rationale")
         }
 

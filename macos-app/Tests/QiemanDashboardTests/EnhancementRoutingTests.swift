@@ -4,19 +4,18 @@ import XCTest
 @MainActor
 final class EnhancementRoutingTests: XCTestCase {
 
-    func testLegacyTradeSignalsDeepLinkOpensTracking() {
+    func testLegacyTradeSignalsDeepLinkOpensEnhancement() {
         let model = AppModel()
         let payload = NotificationDeepLinkPayload(type: .workbenchTrend, targetID: "trade-signals")
         model.handleNotificationDeepLink(payload)
         XCTAssertEqual(model.selectedSection, .enhancement)
-        XCTAssertEqual(model.selectedWorkbenchSegment, .tracking)
     }
 
-    func testUnknownTargetIDOpensToday() {
+    func testUnknownTargetIDOpensEnhancement() {
         let model = AppModel()
         let payload = NotificationDeepLinkPayload(type: .workbenchTrend, targetID: "does-not-exist")
         model.handleNotificationDeepLink(payload)
-        XCTAssertEqual(model.selectedWorkbenchSegment, .today)
+        XCTAssertEqual(model.selectedSection, .enhancement)
     }
 
     func testTrackingUUIDDeepLinkSelectsItem() {
@@ -33,16 +32,8 @@ final class EnhancementRoutingTests: XCTestCase {
 
         let payload = NotificationDeepLinkPayload(type: .workbenchTrend, targetID: id.uuidString)
         model.handleNotificationDeepLink(payload)
-        XCTAssertEqual(model.selectedWorkbenchSegment, .tracking)
+        XCTAssertEqual(model.selectedSection, .enhancement)
         XCTAssertEqual(model.selectedTrendTrackingItemID, id)
-    }
-
-    func testSegmentSwitchViaModel() {
-        let model = AppModel()
-        model.selectedWorkbenchSegment = .today
-        XCTAssertEqual(model.selectedWorkbenchSegment, .today)
-        model.selectedWorkbenchSegment = .tracking
-        XCTAssertEqual(model.selectedWorkbenchSegment, .tracking)
     }
 
     private func temporaryDirectory() -> URL {

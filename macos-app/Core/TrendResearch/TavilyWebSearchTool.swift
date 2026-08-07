@@ -5,7 +5,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
     let client: any TavilySearchClientProtocol
 
     let name = "web_search"
-    let description = "通过 Tavily 搜索最新网页信息，用于行业变化、宏观环境、监管政策和重要市场事件。查询中不得包含用户姓名、组合名称、金额或其他个人信息。优先使用近期、权威和可追溯来源。"
+    let description = "通过 Tavily 搜索最新网页信息，用于行业变化、宏观环境、监管政策、重要市场事件和独立于当前持仓的全市场机会扫描。查询中不得包含用户姓名、组合名称、金额或其他个人信息。优先使用近期、权威和可追溯来源。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [
@@ -17,7 +17,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
             ],
             "research_target": [
                 "type": "object",
-                "description": "本次搜索要回答的结构化研究目标。App 会对目标与当前快照做校验；它只表示查询意图，不代表返回结果一定支持该目标。",
+                "description": "本次搜索要回答的结构化研究目标。App 会对目标与当前快照或全市场研究池做校验；它只表示查询意图，不代表返回结果一定支持该目标。",
                 "properties": [
                     "kind": [
                         "type": "string",
@@ -109,7 +109,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
             return invalidArguments("query 包含金额、密钥或认证信息，已在联网请求前拒绝")
         }
         guard validate(target: params.research_target, snapshot: context.snapshot) else {
-            return invalidArguments("research_target 与本次组合快照不匹配")
+            return invalidArguments("research_target 与本次组合快照或全市场研究池不匹配")
         }
 
         let topic = params.topic ?? "news"
@@ -230,7 +230,7 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 let matchedAssetClasses = researchTarget.assetClassKeys.filter {
                     content.contains($0.lowercased())
                 }
-                let entityNames = researchTarget.kind == .asset && keyIsMentioned
+                let entityNames = [.asset, .index].contains(researchTarget.kind) && keyIsMentioned
                     ? [researchTarget.key]
                     : []
                 let sectorKeys = researchTarget.kind == .sector && keyIsMentioned
@@ -334,18 +334,24 @@ struct TavilyWebSearchTool: TrendResearchTool {
                     || asset.code.map { requestedCodes.contains($0.lowercased()) } == true
             }
         case .index:
-            return snapshot.marketQuotes.contains { quote in
+            return MarketOpportunityUniverse.contains(target.key, kind: .index)
+                || snapshot.marketQuotes.contains { quote in
                 quote.kind == "index"
                     && [quote.code.lowercased(), quote.name.lowercased()].contains(key)
             }
         case .sector:
+            if MarketOpportunityUniverse.sectorGroup(matching: target.key) != nil {
+                return MarketOpportunityUniverse.isCompleteSectorGroupTarget(target)
+            }
             let known = snapshot.sectors.map { $0.name.lowercased() }
                 + (snapshot.lookThrough?.industries.map { $0.name.lowercased() } ?? [])
-            return known.contains(key)
+            return MarketOpportunityUniverse.contains(target.key, kind: .sector)
+                || known.contains(key)
                 || target.sectorKeys.contains { known.contains($0.lowercased()) }
         case .assetClass:
             let known = snapshot.lookThrough?.assetClasses.map { $0.name.lowercased() } ?? []
-            return known.contains(key)
+            return MarketOpportunityUniverse.contains(target.key, kind: .assetClass)
+                || known.contains(key)
                 || target.assetClassKeys.contains { known.contains($0.lowercased()) }
         case .macro:
             return true

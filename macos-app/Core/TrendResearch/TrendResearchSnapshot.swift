@@ -235,6 +235,23 @@ struct TrendResearchSnapshot: Sendable, Hashable, Codable {
             .filter { $0.assetType == PersonalAssetType.fund.displayName }
             .compactMap { $0.code }
     }
+
+    /// 空占位快照，用于子 Agent 工具执行的兜底上下文（不执行真实搜索）。
+    static let placeholder = TrendResearchSnapshot(
+        runID: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+        createdAt: "",
+        dataAsOf: "",
+        privacyMode: .sanitized,
+        portfolio: TrendContextPortfolio(
+            assetCount: 0, holdingCount: 0, activePlanCount: 0, pendingAssetCount: 0,
+            totalMarketValue: nil, totalPendingCashAmount: nil,
+            totalEstimatedNextPlanAmount: nil, totalEffectiveHoldingAmount: nil
+        ),
+        assets: [], sectors: [],
+        platformSignals: [], managerSignals: [],
+        marketQuotes: [], lookThrough: nil,
+        insightHeadline: "", sourceWarnings: [], sourceStatuses: []
+    )
 }
 
 // MARK: - 构造器

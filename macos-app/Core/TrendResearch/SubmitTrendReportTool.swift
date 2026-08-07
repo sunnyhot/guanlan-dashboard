@@ -433,6 +433,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             id: value.id,
             name: value.name,
             category: value.category,
+            scope: value.scope,
             direction: value.direction,
             confidence: value.confidence.appNormalized,
             rationale: value.rationale,

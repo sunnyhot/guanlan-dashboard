@@ -64,7 +64,8 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         XCTAssertTrue(portfolio.contains("ModuleTabBar("))
         XCTAssertTrue(platform.contains("ModuleTabBar("))
-        XCTAssertTrue(enhancement.contains("ModuleTabBar("))
+        // AI 研判页已合并为单页通览，不再使用 ModuleTabBar
+        XCTAssertFalse(enhancement.contains("ModuleTabBar("))
 
         XCTAssertFalse(portfolio.contains(".pickerStyle(.segmented)"))
         XCTAssertFalse(platform.contains("isSelected ? AppPalette.brand : AppPalette.cardStrong"))
@@ -497,6 +498,40 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(panel.contains("PortfolioRankedExposurePanel"))
         XCTAssertFalse(panel.contains("total: maximumWeight"))
         XCTAssertFalse(panel.contains("StatChip("))
+    }
+
+    func testInvestmentDirectionUsesUniformSummaryCardsAndOneDetailSheet() throws {
+        let view = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentDirectionView.swift"
+        )
+        let card = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentDirectionCard.swift"
+        )
+        let detail = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentDirectionDetailSheet.swift"
+        )
+        let scanState = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentDirectionMarketScanStateView.swift"
+        )
+
+        XCTAssertTrue(view.contains(".sheet(item: $selectedSignal)"))
+        XCTAssertTrue(view.contains("我已持有的板块"))
+        XCTAssertTrue(view.contains("全市场板块机会"))
+        XCTAssertTrue(view.contains("F10 统计行业不直接生成卡片"))
+        XCTAssertTrue(view.contains("analysis?.marketScanCompleted == true"))
+        XCTAssertTrue(view.contains("已隐藏旧机会和空白占位"))
+        XCTAssertFalse(card.contains("dynamicTypeSize"))
+        XCTAssertFalse(card.contains("minHeight:"))
+        XCTAssertFalse(card.contains("portfolioWeightPct"))
+        XCTAssertTrue(card.contains(".lineLimit(2, reservesSpace: true)"))
+        XCTAssertTrue(card.contains(".frame(maxWidth: .infinity, alignment: .topLeading)"))
+        XCTAssertTrue(card.contains("查看详情"))
+        XCTAssertTrue(detail.contains("ScrollView"))
+        XCTAssertTrue(detail.contains("完整证据"))
+        XCTAssertTrue(detail.contains("组合暴露依据"))
+        XCTAssertTrue(detail.contains("触发条件"))
+        XCTAssertTrue(detail.contains("失效与反向信号"))
+        XCTAssertTrue(scanState.contains("arrow.clockwise.circle.fill"))
     }
 
     private func source(at relativePath: String) throws -> String {

@@ -23,6 +23,14 @@ struct TrendResearchHarnessState: Sendable {
     private(set) var successfulWebSearches = 0
     private(set) var seenWebEvidenceIDs: Set<String> = []
     private(set) var duplicateWebEvidenceCount = 0
+    private(set) var opportunitySearchTargetKinds: Set<TrendResearchTargetKind> = []
+    private(set) var opportunitySearchSectorGroups: Set<String> = []
+
+    private static let requiredOpportunitySearchTargetKinds: Set<TrendResearchTargetKind> = [
+        .assetClass,
+        .index,
+        .sector,
+    ]
 
     init(
         snapshot: TrendResearchSnapshot,
@@ -59,6 +67,23 @@ struct TrendResearchHarnessState: Sendable {
         officialSourceAttempts > 0
     }
 
+    var opportunitySearchCoverageComplete: Bool {
+        Self.requiredOpportunitySearchTargetKinds.isSubset(of: opportunitySearchTargetKinds)
+            && missingOpportunitySearchSectorGroups.isEmpty
+    }
+
+    var missingOpportunitySearchTargetKinds: [TrendResearchTargetKind] {
+        Self.requiredOpportunitySearchTargetKinds
+            .subtracting(opportunitySearchTargetKinds)
+            .sorted { $0.opportunityScanOrder < $1.opportunityScanOrder }
+    }
+
+    var missingOpportunitySearchSectorGroups: [String] {
+        MarketOpportunityUniverse.requiredSectorGroupKeys.filter {
+            !opportunitySearchSectorGroups.contains(Self.normalized($0))
+        }
+    }
+
     func readyForSubmission(
         webSearchConfigured: Bool,
         allowInsufficientWebEvidence: Bool = false
@@ -70,8 +95,13 @@ struct TrendResearchHarnessState: Sendable {
             && (!alphaVantageRequired || alphaVantageAttempts > 0)
             && (
                 !webSearchConfigured
-                    || successfulWebSearches > 0
-                    || allowInsufficientWebEvidence
+                    || (
+                        opportunitySearchCoverageComplete
+                            && (
+                                successfulWebSearches > 0
+                                    || allowInsufficientWebEvidence
+                            )
+                    )
             )
     }
 
@@ -121,6 +151,19 @@ struct TrendResearchHarnessState: Sendable {
               let envelope = Self.jsonObject(processed.contentJSON),
               let data = envelope["data"] as? [String: Any] else {
             return processed
+        }
+
+        if toolName == TrendResearchAgent.webSearchToolName,
+           let target = data["research_target"] as? [String: Any],
+           let rawKind = target["kind"] as? String,
+           let kind = TrendResearchTargetKind(rawValue: rawKind),
+           Self.requiredOpportunitySearchTargetKinds.contains(kind) {
+            opportunitySearchTargetKinds.insert(kind)
+            if kind == .sector,
+               let key = target["key"] as? String,
+               let group = MarketOpportunityUniverse.sectorGroup(matching: key) {
+                opportunitySearchSectorGroups.insert(Self.normalized(group.key))
+            }
         }
 
         switch toolName {
@@ -179,6 +222,14 @@ struct TrendResearchHarnessState: Sendable {
             "successful_web_searches": successfulWebSearches,
             "web_evidence_count": seenWebEvidenceIDs.count,
             "duplicate_web_evidence_removed": duplicateWebEvidenceCount,
+            "opportunity_search_dimensions": opportunitySearchTargetKinds
+                .sorted { $0.opportunityScanOrder < $1.opportunityScanOrder }
+                .map(\.rawValue),
+            "opportunity_sector_groups": MarketOpportunityUniverse.requiredSectorGroupKeys.filter {
+                opportunitySearchSectorGroups.contains(Self.normalized($0))
+            },
+            "opportunity_sector_groups_missing": missingOpportunitySearchSectorGroups,
+            "opportunity_search_coverage_complete": opportunitySearchCoverageComplete,
             "web_network_searches_used": webStatus.networkSearchesUsed,
             "web_cache_hits": webStatus.cacheHits,
             "web_searches_remaining": webStatus.remainingNetworkSearches,
@@ -227,6 +278,19 @@ struct TrendResearchHarnessState: Sendable {
                 return "中国标的先调用 web_search 并限定交易所、监管机构或政府官方域名；取得一手证据后，再用 alpha_vantage_research 补充结构化行情。"
             }
             return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方源，不得覆盖 SEC 等一手证据。"
+        }
+        if webSearchConfigured, !opportunitySearchCoverageComplete {
+            if remainingWebSearches == 0 {
+                return "全市场机会扫描未覆盖全部维度且联网预算已用完；本次不得提交新的机会报告，也不得用组合长期观点填充机会清单。"
+            }
+            let missing = missingOpportunitySearchTargetKinds
+                .map(\.opportunityScanDisplayName)
+                .joined(separator: "、")
+            if !missing.isEmpty {
+                return "继续调用 web_search 完成独立于当前持仓的全市场机会扫描，尚缺：\(missing)。每次使用对应的 research_target.kind。"
+            }
+            let nextGroup = missingOpportunitySearchSectorGroups.first ?? "行业板块"
+            return "继续调用 web_search 扫描板块分组「\(nextGroup)」，research_target.key 使用分组名，并在 sectorKeys 中完整填写该组板块。"
         }
         if webSearchConfigured, successfulWebSearches == 0 {
             if remainingWebSearches == 0 {
@@ -284,5 +348,34 @@ struct TrendResearchHarnessState: Sendable {
 
     private static func jsonObject(_ content: String) -> [String: Any]? {
         try? JSONSerialization.jsonObject(with: Data(content.utf8)) as? [String: Any]
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+    }
+}
+
+private extension TrendResearchTargetKind {
+    var opportunityScanOrder: Int {
+        switch self {
+        case .assetClass: 0
+        case .index: 1
+        case .sector: 2
+        case .asset: 3
+        case .macro: 4
+        }
+    }
+
+    var opportunityScanDisplayName: String {
+        switch self {
+        case .assetClass: "大类资产"
+        case .index: "大盘/宽基"
+        case .sector: "行业/主题板块"
+        case .asset: "持仓标的"
+        case .macro: "宏观环境"
+        }
     }
 }

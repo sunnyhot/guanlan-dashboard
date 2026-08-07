@@ -134,6 +134,8 @@ submit 前必须满足(否则 submit 被拒并要求重试):
 - `official_sec_research`(若 SEC 配置且有美股标的)
 - `alpha_vantage_research`(若配置)
 - `web_search`(若 Tavily 配置,至少一次)
+- `web_search` 全市场机会覆盖（若 Tavily 配置，必须完成 assetClass / index，并逐一完成科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值六个 sector 分组；候选来自受控研究池，不要求已在当前持仓中）
+- 基金 F10 `statistical_industries` 属于宽泛统计行业口径，只用于披露结构说明；不得直接生成投资板块卡片或作为 `sectors` 名称，投资板块必须结合底层证券、ETF/基金主题和持仓来源归纳。
 
 工具结果按 `executedByID`/`executedBySignature` 缓存复用;web_search 不可恢复失败会熔断。
 

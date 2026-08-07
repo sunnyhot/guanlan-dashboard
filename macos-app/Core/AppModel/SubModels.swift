@@ -143,7 +143,6 @@ final class EnhancementState: ObservableObject {
     @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
     @Published var nextHourGuidanceError = ""
-    @Published var selectedWorkbenchSegment: WorkbenchSegment = .today
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
     @Published var isPresentingCommandPalette = false
@@ -158,21 +157,8 @@ final class EnhancementState: ObservableObject {
     @Published var lastDecisionCaseResearchError = ""
     @Published var researchingDecisionCaseID: UUID?
     @Published var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] = [:]
-}
-
-/// 「AI 研判」内部分段（原 config/report/signals 重构为 today/tracking）
-enum WorkbenchSegment: String, CaseIterable, Identifiable, Hashable {
-    case today = "今日研判"
-    case tracking = "跟踪清单"
-
-    var id: String { rawValue }
-
-    var systemImage: String {
-        switch self {
-        case .today:
-            return "sparkles"
-        case .tracking:
-            return "bell.badge"
-        }
-    }
+    @Published var latestDecisionCaseResearchRuns: [UUID: DecisionCaseResearchRunRecord] = [:]
+    @Published var decisionCaseResearchErrors: [UUID: String] = [:]
+    @Published var decisionCaseReviews: [UUID: [DecisionReview]] = [:]
+    @Published var lastDecisionReviewError = ""
 }

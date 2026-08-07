@@ -121,6 +121,145 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertEqual(evidence?.url, "https://www.gov.cn/zhengce/example")
     }
 
+    func testWebSearchAllowsControlledSectorOutsidePortfolioAndTagsEvidence() async throws {
+        let response = TavilySearchResponse(
+            query: "人工智能产业最新进展",
+            results: [
+                TavilySearchResult(
+                    title: "人工智能产业观察",
+                    url: "https://example.com/ai-sector",
+                    content: "人工智能产业近期出现新的订单与政策信号。",
+                    score: 0.85,
+                    publishedDate: "2026-08-07"
+                )
+            ],
+            responseTime: "0.2",
+            requestID: "broad-sector"
+        )
+        let webRegistry = TrendResearchToolRegistry(
+            webSearchClient: FakeTavilySearchClient(response: response)
+        )
+        let ledger = TrendEvidenceLedger()
+        let context = TrendResearchToolContext(
+            snapshot: makeSnapshot(),
+            evidenceLedger: ledger,
+            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+        )
+
+        let result = await runWebSearch(
+            registry: webRegistry,
+            arguments: [
+                "query": "人工智能产业最新进展",
+                "research_target": ["kind": "sector", "key": "人工智能"],
+            ],
+            context: context
+        )
+
+        XCTAssertFalse(result.isError)
+        let allEvidence = await ledger.allEvidence()
+        let evidence = try XCTUnwrap(allEvidence.first)
+        XCTAssertTrue(evidence.metadata.isAssociated(sectorKey: "人工智能"))
+    }
+
+    func testWebSearchAllowsCompleteSectorGroupAndTagsMentionedMembers() async throws {
+        let group = try XCTUnwrap(
+            MarketOpportunityUniverse.sectorGroup(matching: "科技成长")
+        )
+        let response = TavilySearchResponse(
+            query: "科技成长板块比较",
+            results: [
+                TavilySearchResult(
+                    title: "科技成长行业比较",
+                    url: "https://example.com/technology-growth",
+                    content: "人工智能订单改善，半导体周期仍需观察。",
+                    score: 0.86,
+                    publishedDate: "2026-08-07"
+                )
+            ],
+            responseTime: "0.2",
+            requestID: "sector-group"
+        )
+        let ledger = TrendEvidenceLedger()
+        let registry = TrendResearchToolRegistry(
+            webSearchClient: FakeTavilySearchClient(response: response)
+        )
+        let context = TrendResearchToolContext(
+            snapshot: makeSnapshot(),
+            evidenceLedger: ledger,
+            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+        )
+
+        let result = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "科技成长板块比较",
+                "research_target": [
+                    "kind": "sector",
+                    "key": group.key,
+                    "sectorKeys": group.sectors,
+                ],
+            ],
+            context: context
+        )
+
+        XCTAssertFalse(result.isError)
+        let allEvidence = await ledger.allEvidence()
+        let evidence = try XCTUnwrap(allEvidence.first)
+        XCTAssertTrue(evidence.metadata.isAssociated(sectorKey: "人工智能"))
+        XCTAssertTrue(evidence.metadata.isAssociated(sectorKey: "半导体"))
+    }
+
+    func testWebSearchRejectsSectorGroupWhenMemberListIsIncomplete() async throws {
+        let group = try XCTUnwrap(
+            MarketOpportunityUniverse.sectorGroup(matching: "科技成长")
+        )
+        let registry = TrendResearchToolRegistry(
+            webSearchClient: FakeTavilySearchClient(response: .empty)
+        )
+        let context = makeContext(
+            snapshot: makeSnapshot(),
+            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+        )
+
+        let result = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "科技成长板块比较",
+                "research_target": [
+                    "kind": "sector",
+                    "key": group.key,
+                    "sectorKeys": Array(group.sectors.dropLast()),
+                ],
+            ],
+            context: context
+        )
+
+        XCTAssertTrue(result.isError)
+        XCTAssertTrue(result.contentJSON.contains("research_target 与本次组合快照或全市场研究池不匹配"))
+    }
+
+    func testWebSearchRejectsUnknownSectorOutsideControlledUniverse() async {
+        let webRegistry = TrendResearchToolRegistry(
+            webSearchClient: FakeTavilySearchClient(response: .empty)
+        )
+        let context = makeContext(
+            snapshot: makeSnapshot(),
+            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+        )
+
+        let result = await runWebSearch(
+            registry: webRegistry,
+            arguments: [
+                "query": "火星采矿最新进展",
+                "research_target": ["kind": "sector", "key": "火星采矿"],
+            ],
+            context: context
+        )
+
+        XCTAssertTrue(result.isError)
+        XCTAssertTrue(result.contentJSON.contains("research_target 与本次组合快照或全市场研究池不匹配"))
+    }
+
     func testWebSearchCacheIsSharedAcrossRunsAndDoesNotConsumeSecondBudget() async throws {
         let response = TavilySearchResponse(
             query: "China AI policy",

@@ -167,11 +167,18 @@ final class TrendResearchAgentTests: XCTestCase {
         let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client, webSearchClient: webClient)
 
-        _ = try await agent.run(
-            snapshot: snapshot,
-            settings: testSettings(),
-            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
-        ) { _ in }
+        do {
+            _ = try await agent.run(
+                snapshot: snapshot,
+                settings: testSettings(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+            ) { _ in }
+            XCTFail("全市场扫描未完成时不应提交新的机会报告")
+        } catch let error as TrendResearchAgentError {
+            guard case .marketOpportunityScanIncomplete = error else {
+                return XCTFail("预期市场扫描不完整错误，实际为 \(error)")
+            }
+        }
 
         let callCount = await webClient.callCount()
         XCTAssertEqual(callCount, 1)

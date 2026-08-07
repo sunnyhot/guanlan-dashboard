@@ -97,6 +97,15 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("user-decision-profile.json", isDirectory: false)
     }
 
+    var investmentIntelligenceDirectoryURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("investment-intelligence", isDirectory: true)
+    }
+
+    var decisionCaseJournalDirectoryURL: URL? {
+        investmentIntelligenceDirectoryURL?
+            .appendingPathComponent("journals", isDirectory: true)
+    }
+
     var hasLiveService: Bool {
         true
     }
