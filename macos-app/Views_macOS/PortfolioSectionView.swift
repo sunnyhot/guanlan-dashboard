@@ -26,6 +26,8 @@ struct PortfolioSectionView: View {
     @EnvironmentObject private var model: AppModel
     @State private var selectedTab: PortfolioContentTab = .analysis
     @State private var isPresentingAddPendingTrade = false
+    private let tabOrderStore = TabOrderStore(namespace: "portfolio")
+    @State private var orderedTabs: [PortfolioContentTab] = PortfolioContentTab.allCases
     @State private var editingPendingTrade: PersonalPendingTrade?
     @State private var deletingPendingTrade: PersonalPendingTrade?
     @State private var isPresentingAddInvestmentPlan = false
@@ -63,6 +65,9 @@ struct PortfolioSectionView: View {
                     .padding(14)
             }
         }
+        .onAppear {
+            orderedTabs = tabOrderStore.ordered(PortfolioContentTab.self, id: { $0.rawValue })
+        }
         .sheet(isPresented: $isPresentingAddPendingTrade) {
             PersonalPendingTradeEditSheet()
         }
@@ -89,10 +94,17 @@ struct PortfolioSectionView: View {
 
     private var portfolioTabBar: some View {
         ModuleTabBar(
-            items: PortfolioContentTab.allCases,
+            items: orderedTabs,
             selection: $selectedTab,
+            onReorder: { from, to in
+                var arranged = orderedTabs
+                arranged.move(fromOffsets: from, toOffset: to)
+                tabOrderStore.save(arranged.map { $0.rawValue })
+                orderedTabs = arranged
+            },
             title: { $0.rawValue },
-            systemImage: { $0.systemImage }
+            systemImage: { $0.systemImage },
+            trailingContent: { EmptyView() }
         )
     }
 

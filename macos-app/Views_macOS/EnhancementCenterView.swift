@@ -5,6 +5,8 @@ struct EnhancementCenterView: View {
     @State var trendAutoAnalysisTimesDraft = ""
     @State var isTrendConfigurationExpanded = false
     @State var selectedTrendEvidenceDetail: TrendEvidenceDetailSelection?
+    @State private var orderedTabs: [WorkbenchSegment] = WorkbenchSegment.allCases
+    private let tabOrderStore = TabOrderStore(namespace: "workbench")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +32,7 @@ struct EnhancementCenterView: View {
             .scrollIndicators(.hidden)
         }
         .onAppear {
+            orderedTabs = tabOrderStore.ordered(WorkbenchSegment.self, id: { $0.rawValue })
             normalizeDefaultSegment()
         }
         .sheet(item: $selectedTrendEvidenceDetail) { selection in
@@ -77,8 +80,14 @@ struct EnhancementCenterView: View {
 
     private var workbenchSegmentBar: some View {
         ModuleTabBar(
-            items: WorkbenchSegment.allCases,
+            items: orderedTabs,
             selection: $model.selectedWorkbenchSegment,
+            onReorder: { from, to in
+                var arranged = orderedTabs
+                arranged.move(fromOffsets: from, toOffset: to)
+                tabOrderStore.save(arranged.map { $0.rawValue })
+                orderedTabs = arranged
+            },
             title: { $0.rawValue },
             systemImage: { $0.systemImage },
             trailingContent: {

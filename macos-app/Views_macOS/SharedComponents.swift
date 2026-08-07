@@ -75,6 +75,9 @@ struct ModuleTabBar<Item: Identifiable & Hashable, TrailingContent: View>: View 
     let systemImage: (Item) -> String
     private let trailingContent: () -> TrailingContent
 
+    // 拖拽重排(可选,默认 nil = 不可重排,向下兼容)
+    private let onReorder: ((_ from: IndexSet, _ to: Int) -> Void)?
+
     init(
         items: [Item],
         selection: Binding<Item>,
@@ -87,13 +90,32 @@ struct ModuleTabBar<Item: Identifiable & Hashable, TrailingContent: View>: View 
         self.title = title
         self.systemImage = systemImage
         self.trailingContent = trailingContent
+        self.onReorder = nil
+    }
+
+    /// 带拖拽重排能力的 init。传入 onReorder 即开启按住拖动重排(始终可用,无需编辑模式),
+    /// 在拖放完成后回调,上层负责落盘并刷新 items。
+    init(
+        items: [Item],
+        selection: Binding<Item>,
+        onReorder: @escaping (_ from: IndexSet, _ to: Int) -> Void,
+        title: @escaping (Item) -> String,
+        systemImage: @escaping (Item) -> String,
+        @ViewBuilder trailingContent: @escaping () -> TrailingContent
+    ) {
+        self.items = items
+        self._selection = selection
+        self.title = title
+        self.systemImage = systemImage
+        self.trailingContent = trailingContent
+        self.onReorder = onReorder
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: AppPalette.spaceS) {
                 ForEach(items) { item in
-                    moduleTabButton(item)
+                    tabCell(item)
                 }
 
                 Spacer(minLength: AppPalette.spaceS)
@@ -107,37 +129,206 @@ struct ModuleTabBar<Item: Identifiable & Hashable, TrailingContent: View>: View 
         }
     }
 
-    private func moduleTabButton(_ item: Item) -> some View {
-        let isSelected = selection == item
+    private func tabLabel(_ item: Item, isSelected: Bool) -> some View {
+        Label(title(item), systemImage: systemImage(item))
+            .font(AppPalette.appFont(.body, weight: isSelected ? .semibold : .medium))
+            .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .interactiveSurface(
+                isSelected: isSelected,
+                tint: AppPalette.brand,
+                radius: AppPalette.controlRadius,
+                fill: AppPalette.cardStrong,
+                hoverFill: AppPalette.cardHover,
+                selectedFill: AppPalette.brand,
+                strokeOpacity: 0.45,
+                activeStrokeOpacity: AppPalette.selectionStrokeOpacity,
+                lift: 0
+            )
+    }
 
+    // MARK: - 单元格:点击切换 + 可选拖拽重排共存
+    //
+    // 拖拽用"占位偏移"模型消除闪烁:拖动期间绝不改动 items 数组,
+    // 而是给每个 tab 施加 displacement 视觉偏移——被拖 tab 纯跟手(瞬时,无动画),
+    // 其他 tab 按目标位置让位(spring 平滑滑动)。松手时才一次性提交新顺序。
+    // 点击切换照常生效:拖动有位移阈值,纯点击不触发重排。
+
+    @ViewBuilder
+    private func tabCell(_ item: Item) -> some View {
+        if onReorder != nil {
+            reorderableTabCell(item)
+        } else {
+            plainTabButton(item)
+        }
+    }
+
+    private func plainTabButton(_ item: Item) -> some View {
+        let isSelected = selection == item
         return Button {
             guard !isSelected else { return }
             withAnimation(AppPalette.motionSection) {
                 selection = item
             }
         } label: {
-            Label(title(item), systemImage: systemImage(item))
-                .font(AppPalette.appFont(.body, weight: isSelected ? .semibold : .medium))
-                .foregroundStyle(isSelected ? AppPalette.onBrand : AppPalette.muted)
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .interactiveSurface(
-                    isSelected: isSelected,
-                    tint: AppPalette.brand,
-                    radius: AppPalette.controlRadius,
-                    fill: AppPalette.cardStrong,
-                    hoverFill: AppPalette.cardHover,
-                    selectedFill: AppPalette.brand,
-                    strokeOpacity: 0.45,
-                    activeStrokeOpacity: AppPalette.selectionStrokeOpacity,
-                    lift: 0
-                )
+            tabLabel(item, isSelected: isSelected)
         }
         .buttonStyle(PressResponsiveButtonStyle())
         .contentShape(RoundedRectangle(cornerRadius: AppPalette.controlRadius))
         .accessibilityLabel(title(item))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: 拖拽状态机
+    @State private var draggingIndex: Int?
+    @State private var dragLocation: CGFloat = 0          // 手指当前全局 x(相对于拖起点的 translation 已折算)
+    @State private var tabCenters: [Int: CGFloat] = [:]   // 各 index 的稳态中心 x(布局原始位置)
+    @State private var tabWidths: [Int: CGFloat] = [:]    // 各 index 的宽度
+    @State private var hoverIndex: Int?                   // 手指当前悬停的目标 index(决定谁让位)
+
+    private var settleAnimation: Animation { .spring(response: 0.3, dampingFraction: 0.8) } // 让位/归位
+
+    private func reorderableTabCell(_ item: Item) -> some View {
+        let index = items.firstIndex(of: item) ?? -1
+        let isSelected = selection == item
+        let isDragging = draggingIndex == index
+        let disp = displacement(for: index)
+
+        // 不用 Button:Button 的内置手势会与 DragGesture 竞争,导致拖动不跟手。
+        // 改用纯 Label + onTapGesture(点击切换) + gesture(DragGesture)(拖动重排),
+        // 两者用 simultaneousGesture 共存而非竞争。
+        return tabLabel(item, isSelected: isSelected)
+            // 测量层紧贴内容,在 offset/scale 之前,测布局原始位置
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { recordMetrics(index, proxy) }
+                        .onChange(of: proxy.frame(in: .global).midX) { _, mid in recordCenter(index, mid) }
+                        .onChange(of: proxy.size.width) { _, w in recordWidth(index, w) }
+                }
+            }
+            .scaleEffect(isDragging ? 1.06 : 1.0, anchor: .center)
+            .opacity(isDragging ? 0.92 : 1.0)
+            .zIndex(isDragging ? 100 : 0)
+            .shadow(color: .black.opacity(isDragging ? 0.22 : 0), radius: isDragging ? 10 : 0, y: isDragging ? 5 : 0)
+            // 位移:被拖元素跟手(瞬时);其他元素让位(spring)
+            .offset(x: disp)
+            .animation(isDragging ? nil : settleAnimation, value: disp)
+            .contentShape(RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+            // 点击切换:仅在未拖动时响应
+            .onTapGesture {
+                guard !isSelected, draggingIndex == nil else { return }
+                withAnimation(AppPalette.motionSection) {
+                    selection = item
+                }
+            }
+            // 拖动重排:4pt 阈值区分点击与拖动
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { value in
+                        if draggingIndex == nil {
+                            draggingIndex = index
+                            hoverIndex = index
+                        }
+                        // 跟手:强制无动画,保证瞬时贴着鼠标
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) {
+                            dragLocation = value.translation.width
+                        }
+                        updateHover()
+                    }
+                    .onEnded { _ in
+                        commitReorder()
+                    }
+            )
+            .onHover { inside in
+                if inside {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .accessibilityLabel(title(item))
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: 测量
+    private func recordMetrics(_ index: Int, _ proxy: GeometryProxy) {
+        recordCenter(index, proxy.frame(in: .global).midX)
+        recordWidth(index, proxy.size.width)
+    }
+    private func recordCenter(_ index: Int, _ mid: CGFloat) { tabCenters[index] = mid }
+    private func recordWidth(_ index: Int, _ w: CGFloat) { tabWidths[index] = w }
+
+    // MARK: 计算 displacement(占位偏移)——消除闪烁的核心
+    //
+    // 被拖 index:跟手,displacement = dragLocation(瞬时)
+    // 其他 index:若它当前在目标顺序里"越过"被拖元素的原位置,则平移一个被拖元素的宽度让位
+    private func displacement(for index: Int) -> CGFloat {
+        guard let dragIdx = draggingIndex else { return 0 }
+        if index == dragIdx {
+            return dragLocation   // 跟手,无动画
+        }
+        guard let dragCenter = tabCenters[dragIdx],
+              let myCenter = tabCenters[index] else { return 0 }
+        // 让位判定:被拖元素当前 x 是否越过了我的中心
+        let fingerX = dragCenter + dragLocation
+        let spacing = AppPalette.spaceS
+        let dragW = tabWidths[dragIdx] ?? 0
+        let myW = tabWidths[index] ?? 0
+        // 被拖元素原本在我左侧,现在手指越过我 → 我向左让(平移 dragW + spacing)
+        // 被拖元素原本在我右侧,现在手指退到我左侧 → 我向右让
+        if dragIdx < index && fingerX > myCenter {
+            return -(dragW + spacing)   // 向左让位
+        } else if dragIdx > index && fingerX < myCenter {
+            return (myW + spacing)      // 向右让位(用自己宽度,因为是自己移开)
+        }
+        return 0
+    }
+
+    // MARK: 悬停目标(用于松手提交)——与 displacement 让位方向一致
+    private func updateHover() {
+        guard let dragIdx = draggingIndex,
+              let dragCenter = tabCenters[dragIdx] else { return }
+        let fingerX = dragCenter + dragLocation
+        // 找手指最接近的中心所在的 index 作为目标
+        var best = dragIdx
+        var bestDist = CGFloat.infinity
+        for (i, c) in tabCenters where i != dragIdx {
+            let d = abs(c - fingerX)
+            if d < bestDist {
+                bestDist = d
+                best = i
+            }
+        }
+        hoverIndex = best
+    }
+
+    // MARK: 松手提交——此时才真正改 items
+    private func commitReorder() {
+        guard let onReorder,
+              let dragIdx = draggingIndex,
+              let target = hoverIndex,
+              target != dragIdx else {
+            // 未移动:清状态归位
+            withAnimation(settleAnimation) {
+                draggingIndex = nil
+                hoverIndex = nil
+                dragLocation = 0
+            }
+            return
+        }
+        let destination = target > dragIdx ? target + 1 : target
+        // 先把视觉状态归零,再提交顺序;两者用同一动画,被拖元素从"跟手位置"spring 到新槽位
+        withAnimation(settleAnimation) {
+            draggingIndex = nil
+            hoverIndex = nil
+            dragLocation = 0
+            onReorder(IndexSet(integer: dragIdx), destination)
+        }
     }
 }
 
