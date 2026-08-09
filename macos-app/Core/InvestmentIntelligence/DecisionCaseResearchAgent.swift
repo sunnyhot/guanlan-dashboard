@@ -420,7 +420,7 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         do {
             submission = try JSONDecoder().decode(DecisionCaseResearchSubmission.self, from: reportData)
         } catch {
-            return (nil, ["报告解码失败：\(Self.describeDecodeError(error))"])
+            return (nil, ["报告解码失败：\(AgentDecodingErrorFormatter.describe(error))"])
         }
 
         var errors: [String] = []
@@ -484,20 +484,4 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         return (report, [])
     }
 
-    /// 把 DecodingError 翻译成模型可读的原因（参考 NextHourGuidance.describeDecodeError）。
-    private static func describeDecodeError(_ error: Error) -> String {
-        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
-        switch decodingError {
-        case .keyNotFound(let key, _):
-            return "缺少字段 \(key.stringValue)"
-        case .valueNotFound(_, let context):
-            return "缺少必要值（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return error.localizedDescription
-        }
-    }
 }

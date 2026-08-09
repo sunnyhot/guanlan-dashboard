@@ -173,7 +173,7 @@ struct PersonalAssetAddHoldingSheet: View {
     @FocusState private var focusedField: HoldingField?
 
     private enum HoldingField: Hashable {
-        case code, units, cost
+        case units, cost
     }
 
     private var lookupKey: String {

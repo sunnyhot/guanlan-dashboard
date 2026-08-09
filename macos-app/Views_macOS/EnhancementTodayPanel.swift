@@ -184,154 +184,6 @@ extension EnhancementCenterView {
         .tint(AppPalette.muted)
     }
 
-    private var researchEvidenceDisclosure: some View {
-        DisclosureGroup(isExpanded: $isResearchEvidenceExpanded) {
-            VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                TrendLiveLogPanel()
-                if model.trendReport != nil {
-                    ShareLink(item: shareReportText()) {
-                        Label("分享完整研究报告", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.appSecondary)
-                    .controlSize(.small)
-                }
-                researchEvidenceSection
-            }
-            .padding(.top, AppPalette.spaceM)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Label("研究依据", systemImage: "doc.text.magnifyingglass")
-                    .font(AppPalette.appFont(.body, weight: .semibold))
-                    .foregroundStyle(AppPalette.ink)
-                Text("展开查看盘中研判、趋势报告、证据与数据边界")
-                    .font(AppPalette.appFont(.caption))
-                    .foregroundStyle(AppPalette.muted)
-            }
-        }
-        .tint(AppPalette.brand)
-        .padding(.horizontal, AppPalette.spaceM)
-        .padding(.vertical, AppPalette.spaceS)
-    }
-
-    /// 研究依据区(旧功能降级):下一小时(盘中短周期)+ 趋势研报(中长期)。
-    private var researchEvidenceSection: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-            nextHourGuidanceModule
-            Group {
-                if let report = model.trendReport {
-                    todayReportView(report)
-                } else if model.trendSettings.provider.isConfigured {
-                    trendEmptyState("等待生成", detail: "趋势分析会结合本地持仓、平台动态和模型可用的外部信号，输出条件式判断和反证条件。")
-                } else {
-                    trendEmptyState("未配置模型", detail: "点右上角「设置」填写模型地址、模型名称和 API Key 后即可生成。")
-                }
-            }
-        }
-    }
-
-    private var nextHourGuidanceModule: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            HStack(spacing: AppPalette.spaceS) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(AppPalette.appFont(.title3, weight: .bold))
-                    .foregroundStyle(AppPalette.onBrand)
-                    .frame(width: 30, height: 30)
-                    .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("下一小时买卖建议")
-                        .font(AppPalette.appFont(.title3, weight: .bold))
-                        .foregroundStyle(AppPalette.ink)
-                    Text(model.nextHourGuidanceScheduleText)
-                        .font(AppPalette.appFont(.caption))
-                        .foregroundStyle(AppPalette.muted)
-                }
-                Spacer(minLength: AppPalette.spaceS)
-                nextHourGuidanceStatus
-                Button {
-                    model.startNextHourGuidance()
-                } label: {
-                    Label(
-                        model.nextHourGuidanceGenerationState == .generating ? "生成中…" : "手动生成",
-                        systemImage: "arrow.clockwise"
-                    )
-                    .font(AppPalette.appFont(.footnote, weight: .semibold))
-                }
-                .buttonStyle(.appSecondary)
-                .disabled(
-                    !model.trendSettings.provider.isConfigured
-                        || model.nextHourGuidanceGenerationState == .generating
-                        || model.trendGenerationState == .generating
-                )
-            }
-
-            if model.trendSettings.provider.isConfigured,
-               !model.trendSettings.webSearch.isConfigured {
-                Label(
-                    "未配置 Tavily 联网搜索：Agent 仍会读取行情和基金穿透，但风控规则只允许输出持有。",
-                    systemImage: "lock.trianglebadge.exclamationmark"
-                )
-                .font(AppPalette.appFont(.caption, weight: .medium))
-                .foregroundStyle(AppPalette.warning)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if model.nextHourGuidanceGenerationState == .generating {
-                HStack(spacing: AppPalette.spaceS) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("正在刷新行情、穿透基金底层资产并搜索最新消息，再生成买入 / 卖出 / 持有建议…")
-                        .font(AppPalette.appFont(.subheadline, weight: .medium))
-                        .foregroundStyle(AppPalette.muted)
-                }
-                .padding(.vertical, AppPalette.spaceS)
-            }
-
-            if let report = model.nextHourGuidanceReport {
-                nextHourGuidanceReportView(report)
-            } else {
-                Text(model.trendSettings.provider.isConfigured
-                     ? "将在下一个交易时段槽位自动生成；也可以随时手动触发。场外基金不会参与盘中逐小时研判，只在 14:50 或手动研判时纳入。"
-                     : "配置 AI 模型后自动启用。生成成功会发送系统提醒，点击提醒可回到 AI 研判。")
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineSpacing(4)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.vertical, AppPalette.spaceS)
-            }
-
-            if !model.nextHourGuidanceError.isEmpty {
-                Label(model.nextHourGuidanceError, systemImage: "exclamationmark.triangle.fill")
-                    .font(AppPalette.appFont(.footnote, weight: .medium))
-                    .foregroundStyle(AppPalette.warning)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(AppPalette.spaceL)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .staticSurface(
-            tint: AppPalette.brand,
-            fill: AppPalette.cardStrong,
-            strokeOpacity: 0.20,
-            activeStrokeOpacity: 0.42
-        )
-    }
-
-    @ViewBuilder
-    var nextHourGuidanceStatus: some View {
-        switch model.nextHourGuidanceGenerationState {
-        case .generating:
-            trendMetaTag("状态", "生成中", tint: AppPalette.info)
-        case .succeeded:
-            trendMetaTag("状态", "已更新", tint: AppPalette.positive)
-        case .failed, .rejected:
-            trendMetaTag("状态", "上次失败", tint: AppPalette.warning)
-        case .idle:
-            trendMetaTag("状态", "等待时段", tint: AppPalette.muted)
-        }
-    }
-
     func nextHourGuidanceReportView(
         _ report: NextHourGuidanceReport
     ) -> some View {
@@ -471,20 +323,6 @@ extension EnhancementCenterView {
             confidenceLabel: confidenceLabel,
             confidenceColor: confidenceColor
         )
-    }
-
-    func nextHourCondition(_ title: String, _ text: String, tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 4) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .bold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     func nextHourPostureTint(_ posture: NextHourGuidancePosture) -> Color {
@@ -721,19 +559,6 @@ struct NextHourGuidanceActionCard: View {
         }
     }
 
-    private func conditionView(_ title: String, _ text: String, tint: Color) -> some View {
-        HStack(alignment: .top, spacing: 4) {
-            Text(title)
-                .font(AppPalette.appFont(.caption, weight: .bold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 }
 
 // MARK: - 盘中操作建议详情弹窗
@@ -862,13 +687,6 @@ struct NextHourGuidanceActionDetailSheet: View {
         .padding(AppPalette.spaceM)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
-    }
-
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title)
-            .font(AppPalette.appFont(.subheadline, weight: .semibold))
-            .foregroundStyle(AppPalette.muted)
-            .padding(.top, AppPalette.spaceS)
     }
 
     private func conditionRow(_ title: String, _ text: String, tint: Color) -> some View {

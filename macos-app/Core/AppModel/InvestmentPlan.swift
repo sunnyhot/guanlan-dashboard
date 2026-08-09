@@ -26,22 +26,7 @@ extension AppModel {
         do {
             let nextPlans = investmentPlans.map { plan -> PersonalInvestmentPlan in
                 guard targetIDs.contains(plan.id) else { return plan }
-                return PersonalInvestmentPlan(
-                    id: plan.id,
-                    planTypeLabel: plan.planTypeLabel,
-                    fundName: plan.fundName,
-                    fundCode: plan.fundCode,
-                    scheduleText: plan.scheduleText,
-                    amountText: plan.amountText,
-                    minAmount: plan.minAmount,
-                    maxAmount: plan.maxAmount,
-                    investedPeriods: plan.investedPeriods,
-                    cumulativeInvestedAmount: plan.cumulativeInvestedAmount,
-                    paymentMethod: plan.paymentMethod,
-                    nextExecutionDate: plan.nextExecutionDate,
-                    status: status,
-                    note: plan.note
-                )
+                return replacingInvestmentPlan(plan, status: status)
             }
             investmentPlans = nextPlans.sorted(by: sortInvestmentPlans)
             clearInvestmentPlanCaches()
@@ -217,17 +202,6 @@ extension AppModel {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    func reloadInvestmentPlansFromDisk() {
-        loadInvestmentPlans()
-        if investmentPlans.isEmpty {
-            noticeMessage = "已从磁盘重载定投计划，目前没有已保存内容。"
-            Task { await applyPersonalAssetAutomation() }
-            return
-        }
-        noticeMessage = "已从磁盘重载 \(investmentPlans.count) 条定投计划。"
-        Task { await applyPersonalAssetAutomation() }
     }
 
     func loadInvestmentPlans() {

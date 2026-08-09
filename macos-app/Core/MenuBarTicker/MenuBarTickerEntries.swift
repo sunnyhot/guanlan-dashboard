@@ -13,14 +13,6 @@ extension AppModel {
         return menuBarTickerCandidateEntries(settings: settings, maxEntries: settings.maxVisibleItems)
     }
 
-    var menuBarTickerTitle: String? {
-        let text = menuBarTickerVisibleEntries
-            .map(\.compactText)
-            .filter { !$0.isEmpty }
-            .joined(separator: "  ")
-        return text.isEmpty ? nil : text
-    }
-
     func isMenuBarTickerKindEnabled(_ kind: MenuBarTickerKind) -> Bool {
         menuBarTickerSettings.selections.contains { $0.kindValue == kind }
     }
@@ -428,34 +420,23 @@ private struct MenuBarTickerAggregateAccumulator {
 
 struct MenuBarTickerAggregateSet {
     let all: MenuBarTickerAggregate
-    private let markets: [StockMarket: MenuBarTickerAggregate]
     private let funds: [FundMarket: MenuBarTickerAggregate]
 
     init(rows: [UserPortfolioValuationRow]) {
         var allAccumulator = MenuBarTickerAggregateAccumulator()
-        var stockAccumulators: [StockMarket: MenuBarTickerAggregateAccumulator] = [:]
         var fundAccumulators: [FundMarket: MenuBarTickerAggregateAccumulator] = [:]
 
         for row in rows {
             allAccumulator.add(row)
-            if row.holding.assetType == .stock, let market = row.holding.detectedMarket {
-                stockAccumulators[market, default: MenuBarTickerAggregateAccumulator()].add(row)
-            } else if row.holding.assetType == .fund, let market = row.holding.detectedFundMarket {
+            if row.holding.assetType == .fund, let market = row.holding.detectedFundMarket {
                 fundAccumulators[market, default: MenuBarTickerAggregateAccumulator()].add(row)
             }
         }
 
         all = allAccumulator.makeAggregate()
-        markets = Dictionary(uniqueKeysWithValues: StockMarket.allCases.map { market in
-            (market, stockAccumulators[market]?.makeAggregate() ?? .empty)
-        })
         funds = Dictionary(uniqueKeysWithValues: FundMarket.allCases.map { market in
             (market, fundAccumulators[market]?.makeAggregate() ?? .empty)
         })
-    }
-
-    func market(_ market: StockMarket) -> MenuBarTickerAggregate {
-        markets[market] ?? .empty
     }
 
     func fund(_ market: FundMarket) -> MenuBarTickerAggregate {
@@ -467,26 +448,14 @@ struct MenuBarTickerAggregate {
     static let empty = MenuBarTickerAggregate(dailyAmount: nil, previousValue: nil, profitAmount: nil, costValue: nil)
 
     let dailyAmount: Double?
-    let previousValue: Double?
     let dailyPct: Double?
     let profitAmount: Double?
-    let costValue: Double?
     let profitPct: Double?
-
-    init(rows: [UserPortfolioValuationRow]) {
-        var accumulator = MenuBarTickerAggregateAccumulator()
-        for row in rows {
-            accumulator.add(row)
-        }
-        self = accumulator.makeAggregate()
-    }
 
     init(dailyAmount: Double?, previousValue: Double?, profitAmount: Double?, costValue: Double?) {
         self.dailyAmount = dailyAmount
-        self.previousValue = previousValue
         dailyPct = tickerPctFromAmount(dailyAmount, previous: previousValue)
         self.profitAmount = profitAmount
-        self.costValue = costValue
         profitPct = tickerPctFromAmount(profitAmount, previous: costValue)
     }
 

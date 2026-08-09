@@ -127,17 +127,6 @@ extension AppModel {
         }
     }
 
-    func reloadPendingTradesFromDisk() {
-        loadPendingTrades()
-        if pendingTrades.isEmpty {
-            noticeMessage = "已从磁盘重载买入中记录，目前没有已保存内容。"
-            Task { await applyPersonalAssetAutomation() }
-            return
-        }
-        noticeMessage = "已从磁盘重载 \(pendingTrades.count) 条买入中记录。"
-        Task { await applyPersonalAssetAutomation() }
-    }
-
     func loadPendingTrades() {
         guard let pendingTradeFileURL else { return }
         do {

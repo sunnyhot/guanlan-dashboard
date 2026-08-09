@@ -10,6 +10,25 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         super.tearDown()
     }
 
+    func testAgentDecodingErrorFormatterUsesStableFieldPath() throws {
+        do {
+            _ = try JSONDecoder().decode(
+                DecodingFormatterFixture.self,
+                from: Data(#"{"required":"wrong-type"}"#.utf8)
+            )
+            XCTFail("预期解码失败")
+        } catch {
+            XCTAssertEqual(
+                AgentDecodingErrorFormatter.describe(error),
+                "字段类型不匹配（路径：required）"
+            )
+            XCTAssertEqual(
+                AgentDecodingErrorFormatter.describe(error, trailingPeriod: true),
+                "字段类型不匹配（路径：required）。"
+            )
+        }
+    }
+
     func testClientEncodesToolsAndToolChoice() async throws {
         let tool = AgentToolDefinition.function(
             name: "get_portfolio_overview",
@@ -378,6 +397,10 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         }
         return data
     }
+}
+
+private struct DecodingFormatterFixture: Decodable {
+    let required: [Int]
 }
 
 private struct ResponseError: Error {

@@ -282,7 +282,7 @@ struct IOSPersonalAssetDetailSheet: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, IOSDesign.spaceL)
             } else {
-                IOSPriceTrendChart(points: pricePoints, costPrice: row.costPrice, isMarketPrice: row.usesMarketTradeColumns)
+                IOSPriceTrendChart(points: pricePoints, costPrice: row.costPrice)
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
             }

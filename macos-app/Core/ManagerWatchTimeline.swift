@@ -97,16 +97,21 @@ struct ManagerWatchTimelineStore {
     }
 
     func load(from fileURL: URL) throws -> [ManagerWatchTimelineEvent] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        let data = try Data(contentsOf: fileURL)
-        return try decoder.decode([ManagerWatchTimelineEvent].self, from: data)
+        try JSONFilePersistence.load(
+            [ManagerWatchTimelineEvent].self,
+            from: fileURL,
+            defaultValue: [],
+            decoder: decoder
+        )
             .sorted { $0.occurredAt > $1.occurredAt }
     }
 
     func save(_ events: [ManagerWatchTimelineEvent], to fileURL: URL, now: Date = Date()) throws {
-        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try encoder.encode(Self.pruned(events, now: now))
-        try data.write(to: fileURL, options: .atomic)
+        try JSONFilePersistence.save(
+            Self.pruned(events, now: now),
+            to: fileURL,
+            encoder: encoder
+        )
     }
 
     func append(_ event: ManagerWatchTimelineEvent, to fileURL: URL, now: Date = Date()) throws {

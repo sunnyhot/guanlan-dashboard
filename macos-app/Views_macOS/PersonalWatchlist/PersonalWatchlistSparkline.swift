@@ -80,7 +80,6 @@ struct PersonalWatchlistChartPoint: Identifiable {
     let date: Date
     let dateText: String
     let price: Double
-    let quotedAt: String?
 
     var id: String { dateText }
 }

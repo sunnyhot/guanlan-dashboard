@@ -13,18 +13,6 @@ import Foundation
 
 enum EvidenceIndependencePolicy {
 
-    /// 为一组证据计算独立来源分组键。
-    /// 返回的 Set 元素数量 = 独立来源数。
-    static func independentGroupKeys(for evidence: [TrendEvidence]) -> Set<String> {
-        var groups = Set<String>()
-        for e in evidence {
-            if let key = groupKey(for: e) {
-                groups.insert(key)
-            }
-        }
-        return groups
-    }
-
     /// 独立来源数量(达到 tier 要求的外部证据 + 事实类证据)。
     /// - Parameters:
     ///   - evidence: 待评估的证据
@@ -48,17 +36,6 @@ enum EvidenceIndependencePolicy {
         // 合并:外部独立组 + 事实类组
         // 注意:外部组和事实类组不会冲突(键空间不同——一个是 domain,一个是 sourceKind 枚举值)
         return externalGroups.count + factualGroups.count
-    }
-
-    /// 单条证据的分组键(nil = 不计入独立性,如 unknown publisher)。
-    static func groupKey(for e: TrendEvidence) -> String? {
-        if e.metadata.sourceKind.isExternalResearch {
-            // 外部研究:用 publisherKey
-            return normalizedPublisherKey(e.metadata.publisherKey)
-        } else {
-            // 事实类:用 sourceKind
-            return "factual:\(e.metadata.sourceKind.rawValue)"
-        }
     }
 
     // MARK: - 内部辅助

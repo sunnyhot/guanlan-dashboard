@@ -4,18 +4,6 @@ struct AITrendSummaryPanel: View {
     let summary: TrendDashboardSummary
     let action: (TrendDashboardAction) -> Void
 
-    private func trendHorizonWideColumns(count: Int) -> [GridItem] {
-        Array(repeating: GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top), count: max(1, min(3, count)))
-    }
-
-    private func trendHorizonMediumColumns(count: Int) -> [GridItem] {
-        Array(repeating: GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top), count: max(1, min(2, count)))
-    }
-
-    private var trendHorizonCompactColumns: [GridItem] {
-        [GridItem(.flexible(minimum: 190), spacing: 10, alignment: .top)]
-    }
-
     private func trendSectorWideColumns(count: Int) -> [GridItem] {
         Array(repeating: GridItem(.flexible(minimum: 220), spacing: 10, alignment: .top), count: max(1, min(4, count)))
     }

@@ -34,7 +34,14 @@ enum ArchiveCipher {
                         iterations: UInt32 = defaultIterations) throws -> Data {
         // 1. 生成随机 salt + nonce
         var salt = [UInt8](repeating: 0, count: saltLength)
-        SecRandomCopyBytes(kSecRandomDefault, saltLength, &salt)
+        let randomStatus = SecRandomCopyBytes(kSecRandomDefault, saltLength, &salt)
+        guard randomStatus == errSecSuccess else {
+            throw NSError(
+                domain: NSOSStatusErrorDomain,
+                code: Int(randomStatus),
+                userInfo: [NSLocalizedDescriptionKey: "无法生成加密随机盐值。"]
+            )
+        }
 
         let nonce = AES.GCM.Nonce()
 

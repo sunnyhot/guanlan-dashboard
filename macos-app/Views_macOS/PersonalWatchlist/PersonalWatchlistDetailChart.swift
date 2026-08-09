@@ -22,8 +22,7 @@ struct PersonalWatchlistDetailChart: View {
             return PersonalWatchlistChartPoint(
                 date: date,
                 dateText: point.date,
-                price: point.price,
-                quotedAt: point.quotedAt
+                price: point.price
             )
         }
     }

@@ -17,8 +17,7 @@ struct DecisionMetricResolver {
         decisionCase cs: DecisionCase,
         rows: [PersonalAssetAggregateRow],
         lookThroughSnapshot snapshot: PortfolioLookThroughSnapshot?,
-        profile: UserDecisionProfile,
-        timestamp: String
+        profile: UserDecisionProfile
     ) -> DecisionMetricResolution {
         switch cs.kind {
         case .concentrationRisk:

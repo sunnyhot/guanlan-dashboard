@@ -48,7 +48,7 @@ struct TrendAnalysisValidator {
 
         // 证据账本解析：sectors/marketOutlook/opportunities 引用的 evidenceID 必须都在 report.evidence 中。
         let evidenceIDs = Set(report.evidence.map(\.id))
-        for id in collectReferencedEvidenceIDs(report) where !evidenceIDs.contains(id) {
+        for id in report.referencedEvidenceIDs where !evidenceIDs.contains(id) {
             messages.append("引用的证据 ID 不存在：\(id)")
         }
 
@@ -178,29 +178,6 @@ struct TrendAnalysisValidator {
         guard let value else { return nil }
         let normalized = value.uppercased().filter { $0.isLetter || $0.isNumber }
         return normalized.isEmpty ? nil : normalized
-    }
-
-    /// sectors/marketOutlook/opportunities 中引用的全部 evidenceID（去重、保序）。
-    private func collectReferencedEvidenceIDs(_ report: TrendAnalysisReport) -> [String] {
-        var ids: [String] = []
-        var seen = Set<String>()
-        let append: (String) -> Void = { id in
-            if !seen.contains(id) { seen.insert(id); ids.append(id) }
-        }
-        report.sectors.forEach { $0.evidenceIDs.forEach(append) }
-        report.marketOutlook.forEach { $0.evidenceIDs.forEach(append) }
-        report.opportunities.forEach { $0.evidenceIDs.forEach(append) }
-        report.portfolio.claimEvidence.allEvidenceIDs.forEach(append)
-        report.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.sectors.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.marketOutlook.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.opportunities.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        (report.keyAssets + report.assetTrends).forEach { asset in
-            asset.claimEvidence.allEvidenceIDs.forEach(append)
-            asset.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        }
-        report.actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        return ids
     }
 
     /// 报告里所有 TrendConfidence，用于范围校验。

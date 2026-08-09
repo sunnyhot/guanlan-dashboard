@@ -90,13 +90,6 @@ struct SettingsSectionView: View {
         )
     }
 
-    var menuBarTickerMaxItemsBinding: Binding<Int> {
-        Binding(
-            get: { model.menuBarTickerSettings.maxVisibleItems },
-            set: { model.setMenuBarTickerMaxVisibleItems($0) }
-        )
-    }
-
     var menuBarTickerCustomColorBinding: Binding<Color> {
         #if canImport(AppKit)
         return Binding(
@@ -121,13 +114,6 @@ struct SettingsSectionView: View {
             }
         )
         #endif
-    }
-
-    var menuBarTickerCarouselIntervalBinding: Binding<Double> {
-        Binding(
-            get: { model.menuBarTickerSettings.carouselIntervalSeconds },
-            set: { model.setMenuBarTickerCarouselInterval($0) }
-        )
     }
 
     var body: some View {

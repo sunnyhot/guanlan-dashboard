@@ -189,11 +189,6 @@ final class AppModel: ObservableObject {
         set { portfolioState.isRefreshingPortfolio = newValue }
     }
 
-    var isResolvingPortfolioNames: Bool {
-        get { portfolioState.isResolvingPortfolioNames }
-        set { portfolioState.isResolvingPortfolioNames = newValue }
-    }
-
     var personalWatchlistRecords: [PersonalWatchlistRecord] {
         get { portfolioState.personalWatchlistRecords }
         set { portfolioState.personalWatchlistRecords = newValue }
@@ -307,11 +302,6 @@ final class AppModel: ObservableObject {
             #endif
             NotificationCenter.default.post(name: .qiemanAppearanceDidChange, object: newValue)
         }
-    }
-
-    var showAdvancedParams: Bool {
-        get { uiState.showAdvancedParams }
-        set { uiState.showAdvancedParams = newValue }
     }
 
     var launchAtLoginEnabled: Bool {
@@ -509,16 +499,6 @@ final class AppModel: ObservableObject {
 
     // MARK: Cache proxies (forwarding to portfolioState)
 
-    var _cachedAssetRows: [PersonalAssetAggregateRow]? {
-        get { portfolioState._cachedAssetRows }
-        set { portfolioState._cachedAssetRows = newValue }
-    }
-
-    var _cachedAssetSummary: PersonalAssetAggregateSummary? {
-        get { portfolioState._cachedAssetSummary }
-        set { portfolioState._cachedAssetSummary = newValue }
-    }
-
     var _cachedMonthlyPlatformSummary: [PlatformMonthSummary]? {
         get { portfolioState._cachedMonthlyPlatformSummary }
         set { portfolioState._cachedMonthlyPlatformSummary = newValue }
@@ -547,18 +527,6 @@ final class AppModel: ObservableObject {
     var _cachedPendingTradeSummary: PersonalPendingTradeSummary? {
         get { portfolioState._cachedPendingTradeSummary }
         set { portfolioState._cachedPendingTradeSummary = newValue }
-    }
-
-    func clearCachedComputedProperties() {
-        portfolioState.clearAllCaches()
-    }
-
-    func clearPortfolioCaches() {
-        portfolioState.clearPortfolioCaches()
-    }
-
-    func clearPlatformCaches() {
-        portfolioState.clearPlatformCaches()
     }
 
     func clearInvestmentPlanCaches() {

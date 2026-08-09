@@ -16,10 +16,6 @@ enum ApplicationDataError: LocalizedError {
 final class ApplicationDataController {
     private(set) var supportDirectory: URL?
 
-    var dataDirectoryURL: URL? {
-        supportDirectory
-    }
-
     var logFileURL: URL? {
         supportDirectory?.appendingPathComponent("dashboard.log", isDirectory: false)
     }
@@ -35,11 +31,6 @@ final class ApplicationDataController {
     func openDataDirectory() {
         guard let supportDirectory else { return }
         FilePresenter.reveal(supportDirectory)
-    }
-
-    func updateSupportDirectory(_ url: URL) {
-        supportDirectory = url
-        prepareLogFileIfNeeded(at: url)
     }
 
     private func prepareSupportDirectory() throws -> URL {

@@ -39,7 +39,10 @@ struct SubmitTrendReportTool: TrendResearchTool {
         do {
             decoded = try JSONDecoder().decode(TrendAnalysisReport.self, from: reportData)
         } catch {
-            return validationFailure(messages: ["报告解码失败：\(Self.describeDecodingError(error))"], context: context)
+            return validationFailure(
+                messages: ["报告解码失败：\(AgentDecodingErrorFormatter.describe(error))"],
+                context: context
+            )
         }
         guard decoded.schemaVersion == TrendAnalysisReport.currentSchemaVersion else {
             return validationFailure(
@@ -51,7 +54,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
         }
 
         // 3. 收集被引用的证据 ID（sectors/marketOutlook/opportunities）。
-        let referencedIDs = Self.collectReferencedEvidenceIDs(decoded)
+        let referencedIDs = decoded.referencedEvidenceIDs
 
         // 4. 证据归一化：只保留被引用且账本中存在的证据，用账本规范对象覆盖模型字段。
         var canonical: [TrendEvidence] = []
@@ -200,28 +203,6 @@ struct SubmitTrendReportTool: TrendResearchTool {
             remainingRepairAttempts: remaining
         )
         return .content(envelope, isError: true)
-    }
-
-    private static func collectReferencedEvidenceIDs(_ report: TrendAnalysisReport) -> [String] {
-        var ids: [String] = []
-        var seen = Set<String>()
-        let append: (String) -> Void = { id in
-            if !seen.contains(id) { seen.insert(id); ids.append(id) }
-        }
-        report.sectors.forEach { $0.evidenceIDs.forEach(append) }
-        report.marketOutlook.forEach { $0.evidenceIDs.forEach(append) }
-        report.opportunities.forEach { $0.evidenceIDs.forEach(append) }
-        report.portfolio.claimEvidence.allEvidenceIDs.forEach(append)
-        report.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.sectors.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.marketOutlook.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        report.opportunities.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        (report.keyAssets + report.assetTrends).forEach { asset in
-            asset.claimEvidence.allEvidenceIDs.forEach(append)
-            asset.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        }
-        report.actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
-        return ids
     }
 
     private static func externalSignalStatus(for evidence: [TrendEvidence]) -> TrendExternalSignalStatus {
@@ -559,24 +540,4 @@ struct SubmitTrendReportTool: TrendResearchTool {
         return formatter
     }()
 
-    private static func describeDecodingError(_ error: Error) -> String {
-        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
-        switch decodingError {
-        case .keyNotFound(let key, let context):
-            return "缺少字段 \(key.stringValue)\(codingPathSuffix(context.codingPath))"
-        case .valueNotFound(_, let context):
-            return "缺少必要值\(codingPathSuffix(context.codingPath))"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配\(codingPathSuffix(context.codingPath))"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return error.localizedDescription
-        }
-    }
-
-    private static func codingPathSuffix(_ path: [CodingKey]) -> String {
-        guard !path.isEmpty else { return "" }
-        return "（路径：\(path.map(\.stringValue).joined(separator: "."))）"
-    }
 }

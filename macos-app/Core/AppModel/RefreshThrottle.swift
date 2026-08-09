@@ -23,9 +23,4 @@ actor RefreshThrottle {
         await action()
         return true
     }
-
-    /// Resets the throttle for a given key, allowing immediate execution on next call.
-    func reset(key: String) {
-        lastExecutionTimes.removeValue(forKey: key)
-    }
 }

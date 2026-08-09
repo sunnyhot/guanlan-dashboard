@@ -9,7 +9,6 @@ import SwiftUI
 struct IOSPriceTrendChart: View {
     let points: [PersonalWatchlistDailyPoint]
     let costPrice: Double?
-    let isMarketPrice: Bool
 
     @State private var visibleStart: Int = 0
     @State private var visibleEnd: Int = 0

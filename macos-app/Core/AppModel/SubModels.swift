@@ -12,7 +12,6 @@ final class PortfolioState: ObservableObject {
     @Published var userPortfolioHoldings: [UserPortfolioHolding] = []
     @Published var userPortfolioSnapshot: UserPortfolioSnapshot?
     @Published var isRefreshingPortfolio = false
-    @Published var isResolvingPortfolioNames = false
     @Published var personalWatchlistRecords: [PersonalWatchlistRecord] = []
     @Published var personalWatchlistSnapshot: PersonalWatchlistSnapshot?
     @Published var isRefreshingPersonalWatchlist = false
@@ -22,19 +21,12 @@ final class PortfolioState: ObservableObject {
     @Published var isRefreshingMarketIndices = false
 
     // Cached computed property backing stores (moved from AppModel)
-    var _cachedAssetRows: [PersonalAssetAggregateRow]?
-    var _cachedAssetSummary: PersonalAssetAggregateSummary?
     var _cachedMonthlyPlatformSummary: [PlatformMonthSummary]?
     var _cachedActiveInvestmentPlans: [PersonalInvestmentPlan]?
     var _cachedPausedInvestmentPlans: [PersonalInvestmentPlan]?
     var _cachedEndedInvestmentPlans: [PersonalInvestmentPlan]?
     var _cachedInvestmentPlanSummary: PersonalInvestmentPlanSummary?
     var _cachedPendingTradeSummary: PersonalPendingTradeSummary?
-
-    func clearPortfolioCaches() {
-        _cachedAssetRows = nil
-        _cachedAssetSummary = nil
-    }
 
     func clearInvestmentPlanCaches() {
         _cachedActiveInvestmentPlans = nil
@@ -47,20 +39,6 @@ final class PortfolioState: ObservableObject {
         _cachedPendingTradeSummary = nil
     }
 
-    func clearPlatformCaches() {
-        _cachedMonthlyPlatformSummary = nil
-    }
-
-    func clearAllCaches() {
-        _cachedAssetRows = nil
-        _cachedAssetSummary = nil
-        _cachedMonthlyPlatformSummary = nil
-        _cachedActiveInvestmentPlans = nil
-        _cachedPausedInvestmentPlans = nil
-        _cachedEndedInvestmentPlans = nil
-        _cachedInvestmentPlanSummary = nil
-        _cachedPendingTradeSummary = nil
-    }
 }
 
 // MARK: - ForumState
@@ -103,7 +81,6 @@ final class UIState: ObservableObject {
     }
 
     @Published var appearance: AppAppearance = AppAppearance.load() { didSet { appearance.save() } }
-    @Published var showAdvancedParams = false
     @Published var launchAtLoginEnabled = false
 }
 

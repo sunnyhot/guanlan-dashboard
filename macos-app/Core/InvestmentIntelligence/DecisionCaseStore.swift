@@ -8,33 +8,15 @@ import Foundation
 // 单文件数组 + 原子写更简单。未来如需历史审计,再拆独立的 HistoryStore。
 
 struct DecisionCaseStore {
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
-
-    init() {
-        encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        decoder = JSONDecoder()
-    }
-
     func load(from fileURL: URL) throws -> [DecisionCase] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return []
-        }
-        let data = try Data(contentsOf: fileURL)
-        return try decoder.decode([DecisionCase].self, from: data)
+        try JSONFilePersistence.load(
+            [DecisionCase].self,
+            from: fileURL,
+            defaultValue: []
+        )
     }
 
     func save(_ cases: [DecisionCase], to fileURL: URL) throws {
-        let data = try encoder.encode(cases)
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try data.write(to: fileURL, options: [.atomic])
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: fileURL.path
-        )
+        try JSONFilePersistence.save(cases, to: fileURL)
     }
 }

@@ -942,27 +942,6 @@ struct MaterialPanel: NSViewRepresentable {
     }
 }
 
-/// Convenience modifier that wraps content in a material background with optional border and corner radius.
-struct MaterialBackgroundModifier: ViewModifier {
-    var material: NSVisualEffectView.Material
-    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
-    var cornerRadius: CGFloat
-    var borderColor: Color?
-    var borderWidth: CGFloat = 1
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                MaterialPanel(material: material, blendingMode: blendingMode)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor ?? AppPalette.line.opacity(0.35), lineWidth: borderWidth)
-            )
-    }
-}
 #else
 /// iOS fallback material panel backed by SwiftUI's native material system.
 struct MaterialPanel: View {
@@ -975,26 +954,6 @@ struct MaterialPanel: View {
     }
 }
 
-struct MaterialBackgroundModifier: ViewModifier {
-    var material: Material = .regularMaterial
-    var blendingMode: Material = .regularMaterial
-    var cornerRadius: CGFloat
-    var borderColor: Color?
-    var borderWidth: CGFloat = 1
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                Color.clear.background(material)
-                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(borderColor ?? AppPalette.line.opacity(0.35), lineWidth: borderWidth)
-            )
-    }
-}
 #endif
 
 extension View {
@@ -1051,39 +1010,4 @@ extension View {
         modifier(ReducedMotionRespectingModifier())
     }
 
-    /// Apply a translucent material background with rounded corners and optional border.
-    #if canImport(AppKit)
-    func materialBackground(
-        _ material: NSVisualEffectView.Material = .sidebar,
-        blendingMode: NSVisualEffectView.BlendingMode = .behindWindow,
-        cornerRadius: CGFloat = AppPalette.panelRadius,
-        borderColor: Color? = nil,
-        borderWidth: CGFloat = 1
-    ) -> some View {
-        modifier(MaterialBackgroundModifier(
-            material: material,
-            blendingMode: blendingMode,
-            cornerRadius: cornerRadius,
-            borderColor: borderColor,
-            borderWidth: borderWidth
-        ))
-    }
-    #else
-    /// iOS material background using SwiftUI's native material system.
-    func materialBackground(
-        _ material: Material = .regularMaterial,
-        blendingMode: Material = .regularMaterial,
-        cornerRadius: CGFloat = AppPalette.panelRadius,
-        borderColor: Color? = nil,
-        borderWidth: CGFloat = 1
-    ) -> some View {
-        modifier(MaterialBackgroundModifier(
-            material: material,
-            blendingMode: blendingMode,
-            cornerRadius: cornerRadius,
-            borderColor: borderColor,
-            borderWidth: borderWidth
-        ))
-    }
-    #endif
 }

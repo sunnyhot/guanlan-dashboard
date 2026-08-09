@@ -308,6 +308,111 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertEqual(callCount, 1)
     }
 
+    func testSharedWebSearchCacheHonorsConsumerSpecificFreshness() async {
+        let cache = TrendWebSearchResponseCache(ttlSeconds: 6 * 60 * 60)
+        let request = TavilySearchRequest(
+            query: "China market update",
+            topic: "news",
+            searchDepth: "basic",
+            maxResults: 5,
+            timeRange: "day",
+            includeDomains: nil,
+            includeAnswer: false,
+            includeRawContent: false,
+            includeImages: false
+        )
+        let now = Date(timeIntervalSince1970: 1_000)
+        await cache.store(
+            .empty,
+            for: request,
+            apiKey: "tvly-test",
+            ttlSeconds: 6 * 60 * 60,
+            now: now
+        )
+
+        let intradayValue = await cache.value(
+            for: request,
+            apiKey: "tvly-test",
+            maxAgeSeconds: 10 * 60,
+            now: now.addingTimeInterval(11 * 60)
+        )
+        let longTermValue = await cache.value(
+            for: request,
+            apiKey: "tvly-test",
+            maxAgeSeconds: 6 * 60 * 60,
+            now: now.addingTimeInterval(11 * 60)
+        )
+
+        XCTAssertNil(intradayValue)
+        XCTAssertNotNil(longTermValue)
+    }
+
+    func testWebSearchCachePersistsAcrossInstances() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trend-web-cache-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let request = TavilySearchRequest(
+            query: "China market close review",
+            topic: "news",
+            searchDepth: "basic",
+            maxResults: 5,
+            timeRange: "day",
+            includeDomains: ["gov.cn"],
+            includeAnswer: false,
+            includeRawContent: false,
+            includeImages: false
+        )
+        let response = TavilySearchResponse(
+            query: request.query,
+            results: [
+                TavilySearchResult(
+                    title: "市场复盘",
+                    url: "https://example.com/market-close",
+                    content: "收盘数据摘要",
+                    score: 0.9,
+                    publishedDate: "2026-08-09"
+                )
+            ],
+            responseTime: "0.2",
+            requestID: "persisted-cache"
+        )
+        let now = Date()
+
+        let firstCache = TrendWebSearchResponseCache(
+            ttlSeconds: 6 * 60 * 60,
+            storageDirectory: directory
+        )
+        await firstCache.store(
+            response,
+            for: request,
+            apiKey: "tvly-test",
+            now: now
+        )
+
+        let restoredCache = TrendWebSearchResponseCache(
+            ttlSeconds: 6 * 60 * 60,
+            storageDirectory: directory
+        )
+        let restored = await restoredCache.value(
+            for: request,
+            apiKey: "tvly-test",
+            now: now.addingTimeInterval(1)
+        )
+
+        XCTAssertEqual(restored, response)
+        let cacheFile = try XCTUnwrap(
+            FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            ).first
+        )
+        let permissions = try XCTUnwrap(
+            FileManager.default.attributesOfItem(atPath: cacheFile.path)[.posixPermissions] as? NSNumber
+        )
+        XCTAssertEqual(permissions.intValue & 0o777, 0o600)
+    }
+
     func testWebSearchGovernorRejectsNewQueryAfterNetworkBudgetIsExhausted() async {
         let client = CountingTavilySearchClient(response: .empty)
         let registry = TrendResearchToolRegistry(webSearchClient: client)

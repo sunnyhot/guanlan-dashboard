@@ -148,14 +148,6 @@ struct PersonalWatchlistAddSheet: View {
         }
     }
 
-    private var codePlaceholder: String {
-        switch category {
-        case .offExchangeFund: return "例如 021550"
-        case .onExchangeFund: return "例如 510300 / 159915"
-        case .stock: return "例如 600519 / HK:00700 / US:AAPL"
-        }
-    }
-
     private func scheduleCodeResolution() {
         lookupTask?.cancel()
         inlineErrorMessage = ""

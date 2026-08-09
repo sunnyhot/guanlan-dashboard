@@ -25,13 +25,12 @@ struct TrendAnalysisSettingsStore {
     }
 
     func load(from fileURL: URL) throws -> TrendAnalysisSettings {
-        var settings: TrendAnalysisSettings
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            let data = try Data(contentsOf: fileURL)
-            settings = try decoder.decode(TrendAnalysisSettings.self, from: data)
-        } else {
-            settings = .default
-        }
+        var settings = try JSONFilePersistence.load(
+            TrendAnalysisSettings.self,
+            from: fileURL,
+            defaultValue: .default,
+            decoder: decoder
+        )
         // API Key 从 Keychain 读取(JSON 不再存明文 key)。
         // 迁移:若 Keychain 无值但 JSON 里有旧明文,迁移进 Keychain。
         migrateAPIKeysIfNeeded(into: &settings)
@@ -46,9 +45,7 @@ struct TrendAnalysisSettingsStore {
         sanitized.provider.apiKey = ""
         sanitized.webSearch.apiKey = ""
         sanitized.alphaVantage.apiKey = ""
-        let data = try encoder.encode(sanitized)
-        try data.write(to: fileURL, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        try JSONFilePersistence.save(sanitized, to: fileURL, encoder: encoder)
     }
 
     // MARK: - API Key <-> Keychain
@@ -130,15 +127,14 @@ struct TrendAnalysisReportStore {
     }
 
     func load(from fileURL: URL) throws -> TrendAnalysisReport? {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return nil
-        }
-        let data = try Data(contentsOf: fileURL)
-        return try decoder.decode(TrendAnalysisReport.self, from: data)
+        try JSONFilePersistence.load(
+            TrendAnalysisReport.self,
+            from: fileURL,
+            decoder: decoder
+        )
     }
 
     func save(_ report: TrendAnalysisReport, to fileURL: URL) throws {
-        let data = try encoder.encode(report)
-        try data.write(to: fileURL, options: .atomic)
+        try JSONFilePersistence.save(report, to: fileURL, encoder: encoder)
     }
 }

@@ -13,7 +13,6 @@ final class macOSAppUpdateService: AppUpdateService {
     }
 
     var currentVersion: String { checker.currentVersion }
-    var supportsAutoInstall: Bool { true }
 
     func checkForUpdate() async throws -> AppUpdateRelease? {
         try await checker.check()

@@ -446,10 +446,6 @@ private struct MenuBarHoldingRow: View {
         AppPalette.marketTint(for: row.estimatedDailyChangeAmount)
     }
 
-    private var profitTint: Color {
-        AppPalette.marketTint(for: row.profitAmount)
-    }
-
     private var marketTint: Color {
         if let market = row.holding.detectedMarket {
             switch market {
@@ -648,38 +644,5 @@ private struct MenuBarWatchlistRow: View {
                 Label("取消关注", systemImage: "star.slash")
             }
         }
-    }
-}
-
-private struct HoldingMetricPill: View {
-    let title: String
-    let amount: String
-    let pct: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(AppPalette.appFont(.caption2, weight: .medium))
-                    .foregroundStyle(AppPalette.muted)
-                Text(amount)
-                    .font(AppPalette.appFont(.footnote, weight: .bold))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .monospacedDigit()
-                Text(pct)
-                    .font(AppPalette.appFont(.caption, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .monospacedDigit()
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48, alignment: .leading)
-        .padding(.horizontal, 7)
-        .background(tint.opacity(0.09))
-        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
     }
 }

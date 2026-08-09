@@ -24,10 +24,6 @@ struct AppUpdateRelease: Identifiable, Equatable {
     let currentVersion: String
     let sha256: String?
 
-    var downloadURL: URL {
-        asset?.downloadURL ?? htmlURL
-    }
-
     var displayTitle: String {
         title.isEmpty ? "版本 \(version)" : title
     }

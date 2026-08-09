@@ -42,22 +42,6 @@ extension AppModel {
         persistManagerWatchSettings(restartLoop: false)
     }
 
-    func syncManagerWatchTargetsFromCurrentForm() {
-        let prodCode = form.prodCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        let managerName = preferredManagerWatchName
-        if !prodCode.isEmpty {
-            managerWatchSettings.prodCode = prodCode
-        }
-        if !managerName.isEmpty {
-            managerWatchSettings.managerName = managerName
-        }
-        persistManagerWatchSettings(restartLoop: false)
-        if managerWatchSettings.isEnabled {
-            restartManagerWatchLoop(immediate: true)
-        }
-        noticeMessage = "已把通知巡检目标同步成当前查询参数。"
-    }
-
     func updateManagerWatchEnabled(_ isEnabled: Bool) {
         Task { await setManagerWatchEnabled(isEnabled) }
     }

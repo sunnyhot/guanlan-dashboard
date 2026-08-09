@@ -277,7 +277,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(source.contains("OverviewAssetTypeSummary"))
         XCTAssertFalse(source.contains("assetTypeSummary"))
         XCTAssertTrue(source.contains("todayBriefWideColumns"))
-        XCTAssertTrue(source.contains("trendHorizonWideColumns"))
+        XCTAssertFalse(source.contains("trendHorizonWideColumns"))
         XCTAssertTrue(source.contains("trendSectorWideColumns"))
         XCTAssertTrue(source.contains(".lineLimit(4)"))
         XCTAssertTrue(source.contains(".lineLimit(3)"))
@@ -327,7 +327,7 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(contentSource.contains("TrendLiveLogPanel()"))
         XCTAssertFalse(centerSource.contains("TrendLiveLogPanel()"))
         XCTAssertTrue(todaySource.contains("TrendLiveLogPanel()"))
-        XCTAssertTrue(todaySource.contains("researchEvidenceDisclosure"))
+        XCTAssertFalse(todaySource.contains("researchEvidenceDisclosure"))
         let directionStart = try XCTUnwrap(todaySource.range(of: "var investmentDirectionSection"))
         let directionEnd = try XCTUnwrap(
             todaySource.range(

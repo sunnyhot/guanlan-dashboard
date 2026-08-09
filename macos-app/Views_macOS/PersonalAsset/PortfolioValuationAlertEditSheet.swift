@@ -22,11 +22,6 @@ struct PortfolioValuationAlertEditSheet: View {
     init(row: PersonalAssetAggregateRow, fundCode: String) {
         self.row = row
         self.fundCode = fundCode
-        // 初始 draft：从现有 profile 载入，缺失的维度补空（按 assetType 过滤）
-        let profile = row.fundCode.flatMap { _ in
-            // 占位：实际从 model 取在 body onAppear 处理
-            nil as PortfolioValuationAlertProfile?
-        }
         _drafts = State(initialValue: Self.initialDrafts(assetType: row.assetType, profile: nil))
     }
 

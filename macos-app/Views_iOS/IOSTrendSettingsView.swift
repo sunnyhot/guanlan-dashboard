@@ -106,7 +106,7 @@ struct IOSTrendSettingsView: View {
     private var actionsSection: some View {
         Section {
             Button("立即生成趋势研判") {
-                Task { await model.startTrendAnalysis(userInitiated: true) }
+                model.startTrendAnalysis(userInitiated: true)
             }
             .disabled(!model.trendSettings.provider.isConfigured)
         } footer: {

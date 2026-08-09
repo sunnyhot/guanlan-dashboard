@@ -113,7 +113,7 @@ struct IOSAlfaPlatformPanel: View {
                 // 持仓
                 let holdings = model.filteredAlfaHoldings
                 if !holdings.isEmpty {
-                    holdingsCard(holdings, author: selected.author)
+                    holdingsCard(holdings)
                 }
             }
         } else {
@@ -139,7 +139,7 @@ struct IOSAlfaPlatformPanel: View {
 
     @State private var detailAction: PlatformActionPayload?
 
-    private func holdingsCard(_ holdings: [AlfaHoldingPart], author: String) -> some View {
+    private func holdingsCard(_ holdings: [AlfaHoldingPart]) -> some View {
         let total = holdings.reduce(0.0) { $0 + $1.percent }
         return IOSSectionCard(title: "目标持仓", subtitle: "\(holdings.count) 只 · 配置 \(String(format: "%.0f%%", total * 100))", icon: "piechart") {
             ForEach(Array(holdings.enumerated()), id: \.element.id) { idx, part in

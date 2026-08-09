@@ -85,10 +85,6 @@ actor TrendEvidenceLedger {
         }
     }
 
-    func contains(_ id: String) -> Bool {
-        evidenceByID[id] != nil
-    }
-
     func canonical(for id: String) -> TrendEvidence? {
         evidenceByID[id]
     }

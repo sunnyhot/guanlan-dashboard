@@ -63,14 +63,14 @@ struct IOSPlatformMonthlyChart: View {
             } else {
                 legend
                 chart(months)
-                statsBar(months)
+                statsBar
             }
         }
     }
 
     /// 统计/详情条(固定高度):未选中显示累计汇总,选中显示该月明细。
     @ViewBuilder
-    private func statsBar(_ months: [PlatformMonthSummary]) -> some View {
+    private var statsBar: some View {
         // 仅选中时显示该月详情(未选中时空,不显示冗余汇总/提示)。
         if let sel = selectedMonth {
             HStack(spacing: IOSDesign.spaceM) {

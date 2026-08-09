@@ -11,14 +11,6 @@ enum InvestmentIntelligenceStyle {
         }
     }
 
-    static func tint(for state: InvestmentIntelligenceOverallState) -> Color {
-        switch state {
-        case .stable: return AppPalette.positive
-        case .attentionNeeded: return AppPalette.info
-        case .actionReviewNeeded: return AppPalette.warning
-        case .insufficientData: return AppPalette.muted
-        }
-    }
 }
 
 struct InvestmentStateBadge: View {
@@ -33,30 +25,6 @@ struct InvestmentStateBadge: View {
             .padding(.vertical, 4)
             .background(tint.opacity(0.10), in: Capsule())
             .overlay(Capsule().stroke(tint.opacity(0.22), lineWidth: 1))
-    }
-}
-
-struct InvestmentSectionTitle: View {
-    let eyebrow: String
-    let title: String
-    var detail: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(eyebrow.uppercased())
-                .font(AppPalette.appFont(.caption2, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(AppPalette.brand)
-            Text(title)
-                .font(AppPalette.appFont(.title2, weight: .bold))
-                .foregroundStyle(AppPalette.ink)
-            if let detail, !detail.isEmpty {
-                Text(detail)
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
     }
 }
 

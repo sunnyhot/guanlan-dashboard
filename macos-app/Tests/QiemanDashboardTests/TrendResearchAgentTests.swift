@@ -222,7 +222,6 @@ final class TrendResearchAgentTests: XCTestCase {
         policy.expandedMaxTurns = 4
         policy.maxToolCalls = 4
         policy.expandedMaxToolCalls = 4
-        policy.reservedSubmitTurns = 2
         policy.reservedSubmitToolCalls = 2
         let agent = TrendResearchAgent(client: client, policy: policy)
 

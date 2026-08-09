@@ -6,28 +6,6 @@ import AppKit
 import UIKit
 #endif
 
-// MARK: - LinkOpener
-
-/// Cross-platform URL opener for external links.
-/// - macOS: `NSWorkspace.shared.open`
-/// - iOS: `UIApplication.shared.open`
-enum LinkOpener {
-    /// Open `url` in the system's default handler. Returns true on success.
-    @discardableResult
-    static func open(_ url: URL) -> Bool {
-        #if os(macOS)
-        NSWorkspace.shared.open(url)
-        return true
-        #elseif canImport(UIKit)
-        guard UIApplication.shared.canOpenURL(url) else { return false }
-        UIApplication.shared.open(url, options: [:], completionHandler: nil)
-        return true
-        #else
-        return false
-        #endif
-    }
-}
-
 // MARK: - PasteboardHelper
 
 /// Cross-platform clipboard copy.

@@ -45,7 +45,7 @@ enum InvestmentIntelligencePresenter {
                 overallState = .stable
                 headline = "组合状态稳定"
             }
-            detail = makeActiveDetail(cases: activeCases, mostSevere: mostSevere)
+            detail = makeActiveDetail(cases: activeCases)
         }
 
         let primaryCase = mostSevereCase(activeCases)
@@ -92,7 +92,7 @@ enum InvestmentIntelligencePresenter {
 
     // MARK: - 有 Case 详情
 
-    private static func makeActiveDetail(cases: [DecisionCase], mostSevere: PortfolioDecisionState?) -> String {
+    private static func makeActiveDetail(cases: [DecisionCase]) -> String {
         let primary = mostSevereCase(cases)
         if let primary {
             return "最需要留意：\(primary.title)（\(primary.metricLabel)）"

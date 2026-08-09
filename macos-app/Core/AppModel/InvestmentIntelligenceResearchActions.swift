@@ -315,8 +315,7 @@ extension AppModel {
             decisionCase: cs,
             rows: personalAssetRows,
             lookThroughSnapshot: portfolioLookThroughSnapshot,
-            profile: userDecisionProfile,
-            timestamp: now
+            profile: userDecisionProfile
         )
         let currentMetric = resolution.value ?? cs.metricValue
 

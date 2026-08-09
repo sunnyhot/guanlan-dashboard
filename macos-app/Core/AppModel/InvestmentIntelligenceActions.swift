@@ -22,17 +22,6 @@ extension AppModel {
         decisionCases.filter { $0.userDisposition == .closed || $0.lifecycle == .closed }
     }
 
-    /// 最严重的 Case(用户第一眼看到的)。
-    var primaryDecisionCase: DecisionCase? {
-        let order: [PortfolioDecisionState] = [.exitReview, .adjustReview, .prepare, .watch, .insufficientEvidence, .stable]
-        for state in order {
-            if let cs = activeDecisionCases.first(where: { $0.decisionState == state }) {
-                return cs
-            }
-        }
-        return nil
-    }
-
     /// 投资智能仪表盘摘要(Presenter 输出,View 直接消费)。
     var investmentIntelligenceSummary: InvestmentIntelligenceDashboardSummary {
         InvestmentIntelligencePresenter.makeSummary(

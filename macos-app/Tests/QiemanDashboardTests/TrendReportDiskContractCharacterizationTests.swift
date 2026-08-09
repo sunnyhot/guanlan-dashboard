@@ -6,7 +6,7 @@ import XCTest
 //
 // 冻结 TrendAnalysisReportStore 的当前行为(见 docs/ai-pipeline-baseline.md 第 5 节):
 //   - 单文件覆盖写,无历史目录
-//   - 文件权限不收紧(默认,非 0o600)——这是一个已知不一致,改造时收紧需主动更新本测试
+//   - 文件权限统一收紧为 0o600
 //   - 旧 schemaVersion=1 报告能被解码(向后兼容)
 //   - 当前 schema 往返一致
 final class TrendReportDiskContractCharacterizationTests: XCTestCase {
@@ -54,12 +54,9 @@ final class TrendReportDiskContractCharacterizationTests: XCTestCase {
         XCTAssertEqual(loaded?.generatedAt, "2026-07-25 10:00:00", "应只保留最后一次写入的报告")
     }
 
-    // MARK: - 测试 10:文件权限不收紧(冻结当前不一致现状)
+    // MARK: - 测试 10:文件权限收紧
 
-    func testReportStoreDoesNotRestrictFilePermissions() throws {
-        // 这个测试显式记录:trend-analysis-report.json 当前没有 0o600 权限收紧,
-        // 而 trend-analysis-settings.json 有。这是已知不一致。
-        // 投资智能改造若收紧权限,需同步更新本测试。
+    func testReportStoreRestrictsFilePermissions() throws {
         let url = fileURL("trend-analysis-report.json")
         let store = TrendAnalysisReportStore()
         let report = TrendAnalysisReport.fixture(
@@ -71,10 +68,7 @@ final class TrendReportDiskContractCharacterizationTests: XCTestCase {
         let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
         let permissions = attrs[.posixPermissions] as? NSNumber
         XCTAssertNotNil(permissions, "应能读取文件权限")
-        // 0o600 = 384。当前 ReportStore 不收紧,权限应不等于 0o600。
-        // (默认权限由 umask 决定,通常是 0o644 = 420)
-        XCTAssertNotEqual(permissions?.int16Value, 0o600,
-                          "当前 ReportStore 不收紧权限;若此断言失败说明已收紧,需更新本测试注释")
+        XCTAssertEqual((permissions?.intValue ?? 0) & 0o777, 0o600)
     }
 
     // MARK: - 测试 11:旧 v1 报告解码向后兼容

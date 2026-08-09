@@ -9,7 +9,6 @@ import SwiftUI
 
 struct SettingsSectionView: View {
     @EnvironmentObject private var model: AppModel
-    @AppStorage("qieman.dashboard.update.autoCheckOnLaunch") private var autoCheckOnLaunch = true
 
     @FocusState private var focusedField: Field?
 

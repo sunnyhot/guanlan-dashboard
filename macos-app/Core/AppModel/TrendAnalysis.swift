@@ -440,7 +440,7 @@ extension AppModel {
             alfaPayload: alfaPayload,
             managerWatchEvents: managerWatchTimelineEvents,
             marketIndexQuotes: marketIndexQuotes,
-            fundEstimates: makeTrendResearchFundEstimates(generatedAt: generatedAt),
+            fundEstimates: makeTrendResearchFundEstimates(),
             lookThrough: lookThrough,
             watchSummary: managerWatchTimelineSummary,
             insightSummary: portfolioSnapshotInsightSummary,
@@ -454,9 +454,7 @@ extension AppModel {
     }
 
     /// 从个人持仓估值行组装基金估值（已持有基金的最可靠来源）。非持有标的不纳入。
-    private func makeTrendResearchFundEstimates(
-        generatedAt: String
-    ) -> [String: TrendResearchFundEstimate] {
+    private func makeTrendResearchFundEstimates() -> [String: TrendResearchFundEstimate] {
         var estimates: [String: TrendResearchFundEstimate] = [:]
         for row in personalAssetRows {
             guard let code = row.fundCode, !code.isEmpty, estimates[code] == nil else { continue }

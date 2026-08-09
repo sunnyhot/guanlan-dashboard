@@ -27,6 +27,7 @@ SWIFT_SOURCES=(
   "$ROOT_DIR/macos-app/Core/Platform/NativePlatformDTOs.swift"
   "$ROOT_DIR/macos-app/Core/QiemanRequestSigning.swift"
   "$ROOT_DIR/macos-app/Core/QiemanText.swift"
+  "$ROOT_DIR/macos-app/Core/JSONFilePersistence.swift"
   "$ROOT_DIR/macos-app/Core/Alfa/QiemanAlfaClient.swift"
   "$ROOT_DIR/macos-app/Core/AlfaPortfolioStore.swift"
   "$ROOT_DIR/macos-app/Core/NativeSnapshotStore.swift"

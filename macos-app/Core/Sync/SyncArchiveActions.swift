@@ -51,23 +51,6 @@ extension AppModel {
         )
     }
 
-    // MARK: - 生成导入预览(不解密不修改状态)
-
-    /// 从已解密的 payload 生成预览信息(用于确认对话框)。
-    func makeImportPreview(from payload: SyncPayload) -> SyncImportPreview {
-        SyncImportPreview(
-            exportedAt: payload.exportedAt,
-            sourceDeviceName: payload.sourceDeviceName,
-            schemaVersion: payload.schemaVersion,
-            holdingsCount: payload.holdings.count,
-            pendingTradesCount: payload.pendingTrades.count,
-            plansCount: payload.investmentPlans.count,
-            watchlistCount: payload.watchlist.count,
-            alfaCount: payload.alfaPortfolios.count,
-            hasTrendConfig: !payload.trendSettings.provider.apiKey.isEmpty
-        )
-    }
-
     // MARK: - 事务式应用 payload(覆盖本地)
 
     /// 应用同步 payload:完全覆盖本地数据。

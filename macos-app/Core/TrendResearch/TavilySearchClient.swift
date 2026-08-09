@@ -32,7 +32,7 @@ struct TavilySearchRequest: Encodable, Hashable, Sendable {
     }
 }
 
-struct TavilySearchResponse: Decodable, Hashable, Sendable {
+struct TavilySearchResponse: Codable, Hashable, Sendable {
     let query: String?
     let results: [TavilySearchResult]
     let responseTime: String?
@@ -66,7 +66,7 @@ struct TavilySearchResponse: Decodable, Hashable, Sendable {
     }
 }
 
-struct TavilySearchResult: Decodable, Hashable, Sendable {
+struct TavilySearchResult: Codable, Hashable, Sendable {
     let title: String
     let url: String
     let content: String

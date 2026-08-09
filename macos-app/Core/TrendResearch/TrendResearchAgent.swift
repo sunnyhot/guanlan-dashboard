@@ -59,7 +59,6 @@ struct TrendResearchRunPolicy: Sendable {
     var maxWebSearches: Int = 10
     var expandedMaxWebSearches: Int = 12
     var reservedSubmitToolCalls: Int = 8
-    var reservedSubmitTurns: Int = 8
     var maxInvalidSubmissions: Int = 4
     var maxPlainTextResponses: Int = 2
     var perRequestTimeoutSeconds: Double = Self.defaultPerRequestTimeoutSeconds
@@ -193,7 +192,6 @@ struct TrendResearchAgent: Sendable {
 
     /// 运行时强制：submit 前必须先调用的工具。
     static let overviewToolName = "get_portfolio_overview"
-    static let lookThroughToolName = "get_fund_lookthrough"
     static let officialSourceToolName = "official_sec_research"
     static let alphaVantageToolName = "alpha_vantage_research"
     static let webSearchToolName = "web_search"
@@ -203,7 +201,7 @@ struct TrendResearchAgent: Sendable {
     init(
         client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
-        webSearchCache: TrendWebSearchResponseCache = TrendWebSearchResponseCache(),
+        webSearchCache: TrendWebSearchResponseCache = .shared,
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared,
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),

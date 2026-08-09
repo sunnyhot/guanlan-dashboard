@@ -13,8 +13,6 @@ final class iOSAppUpdateService: AppUpdateService {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    var supportsAutoInstall: Bool { false }
-
     func checkForUpdate() async throws -> AppUpdateRelease? {
         // Updates are managed by the App Store; report up-to-date.
         nil

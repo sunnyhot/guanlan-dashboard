@@ -151,20 +151,18 @@ struct PortfolioSnapshotInsightStore {
     }
 
     func load(from fileURL: URL) throws -> [PortfolioInsightSnapshot] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-        let data = try Data(contentsOf: fileURL)
-        return try decoder.decode([PortfolioInsightSnapshot].self, from: data)
+        try JSONFilePersistence.load(
+            [PortfolioInsightSnapshot].self,
+            from: fileURL,
+            defaultValue: [],
+            decoder: decoder
+        )
             .sorted { $0.createdAt < $1.createdAt }
     }
 
     func save(_ snapshots: [PortfolioInsightSnapshot], to fileURL: URL) throws {
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
         let pruned = Array(snapshots.sorted { $0.createdAt < $1.createdAt }.suffix(maxCount))
-        let data = try encoder.encode(pruned)
-        try data.write(to: fileURL, options: .atomic)
+        try JSONFilePersistence.save(pruned, to: fileURL, encoder: encoder)
     }
 
     func append(_ snapshot: PortfolioInsightSnapshot, to fileURL: URL) throws {

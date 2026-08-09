@@ -144,7 +144,6 @@ struct OverviewSectionView: View {
                         trendItemRow(
                             title: horizon.title,
                             direction: horizon.directionText,
-                            confidence: horizon.confidenceText,
                             rationale: horizon.rationale,
                             tone: horizon.tone
                         )
@@ -165,7 +164,7 @@ struct OverviewSectionView: View {
         }
     }
 
-    private func trendItemRow(title: String, direction: String, confidence: String, rationale: String, tone: TrendDashboardTone) -> some View {
+    private func trendItemRow(title: String, direction: String, rationale: String, tone: TrendDashboardTone) -> some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(trendToneColor(tone))

@@ -10,54 +10,83 @@ import Foundation
 final class SyncClient {
     static let shared = SyncClient()
 
+    private enum StorageKey {
+        static let serverURL = "qieman.sync.serverURL"
+        static let groupID = "qieman.sync.groupId"
+        static let deviceID = "qieman.sync.deviceId"
+        static let lastRevision = "qieman.sync.lastRevision"
+        static let lastSyncTime = "qieman.sync.lastTime"
+        static let accessTokenFallback = "qieman.sync.accessToken"
+        static let passwordFallback = "qieman.sync.password"
+    }
+
+    private let userDefaults: UserDefaults
+    private let readSecret: (String) -> String?
+    private let writeSecret: (String, String) -> Void
+    private let deleteSecret: (String) -> Void
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        readSecret: @escaping (String) -> String? = { KeychainHelper.get(account: $0) },
+        writeSecret: @escaping (String, String) -> Void = { value, account in
+            KeychainHelper.set(value, account: account)
+        },
+        deleteSecret: @escaping (String) -> Void = { KeychainHelper.delete(account: $0) }
+    ) {
+        self.userDefaults = userDefaults
+        self.readSecret = readSecret
+        self.writeSecret = writeSecret
+        self.deleteSecret = deleteSecret
+    }
+
     // MARK: - 配置(UserDefaults,非敏感)
 
     var serverURL: String {
-        get { UserDefaults.standard.string(forKey: "qieman.sync.serverURL") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "qieman.sync.serverURL") }
+        get { userDefaults.string(forKey: StorageKey.serverURL) ?? "" }
+        set { userDefaults.set(newValue, forKey: StorageKey.serverURL) }
     }
 
     var groupId: String? {
-        get { UserDefaults.standard.string(forKey: "qieman.sync.groupId") }
-        set { UserDefaults.standard.set(newValue, forKey: "qieman.sync.groupId") }
+        get { userDefaults.string(forKey: StorageKey.groupID) }
+        set { userDefaults.set(newValue, forKey: StorageKey.groupID) }
     }
 
     var deviceId: String? {
-        get { UserDefaults.standard.string(forKey: "qieman.sync.deviceId") }
-        set { UserDefaults.standard.set(newValue, forKey: "qieman.sync.deviceId") }
+        get { userDefaults.string(forKey: StorageKey.deviceID) }
+        set { userDefaults.set(newValue, forKey: StorageKey.deviceID) }
     }
 
     var lastKnownRevision: Int {
-        get { UserDefaults.standard.integer(forKey: "qieman.sync.lastRevision") }
-        set { UserDefaults.standard.set(newValue, forKey: "qieman.sync.lastRevision") }
+        get { userDefaults.integer(forKey: StorageKey.lastRevision) }
+        set { userDefaults.set(newValue, forKey: StorageKey.lastRevision) }
     }
 
     var lastSyncTime: Date? {
-        get { UserDefaults.standard.object(forKey: "qieman.sync.lastTime") as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: "qieman.sync.lastTime") }
+        get { userDefaults.object(forKey: StorageKey.lastSyncTime) as? Date }
+        set { userDefaults.set(newValue, forKey: StorageKey.lastSyncTime) }
     }
 
     // MARK: - Keychain 敏感配置
 
     var accessToken: String? {
         get {
-            KeychainHelper.get(account: KeychainHelper.Account.syncAccessToken)
-                ?? UserDefaults.standard.string(forKey: "qieman.sync.accessToken")
+            readSecret(KeychainHelper.Account.syncAccessToken)
+                ?? userDefaults.string(forKey: StorageKey.accessTokenFallback)
         }
     }
 
     var syncPassword: String? {
         get {
-            KeychainHelper.get(account: KeychainHelper.Account.syncPassword)
-                ?? UserDefaults.standard.string(forKey: "qieman.sync.password")
+            readSecret(KeychainHelper.Account.syncPassword)
+                ?? userDefaults.string(forKey: StorageKey.passwordFallback)
         }
         set {
             if let pw = newValue, !pw.isEmpty {
-                KeychainHelper.set(pw, account: KeychainHelper.Account.syncPassword)
-                UserDefaults.standard.set(pw, forKey: "qieman.sync.password") // fallback
+                writeSecret(pw, KeychainHelper.Account.syncPassword)
+                userDefaults.set(pw, forKey: StorageKey.passwordFallback)
             } else {
-                KeychainHelper.delete(account: KeychainHelper.Account.syncPassword)
-                UserDefaults.standard.removeObject(forKey: "qieman.sync.password")
+                deleteSecret(KeychainHelper.Account.syncPassword)
+                userDefaults.removeObject(forKey: StorageKey.passwordFallback)
             }
         }
     }
@@ -80,14 +109,14 @@ final class SyncClient {
             throw SyncError.serverError(0)
         }
         guard http.statusCode == 201 else {
-            throw statusError(http.statusCode, data)
+            throw statusError(http.statusCode)
         }
 
         let result = try JSONDecoder().decode(RegisterResponse.self, from: data)
         groupId = result.groupId
         deviceId = result.deviceId
-        KeychainHelper.set(result.accessToken, account: KeychainHelper.Account.syncAccessToken)
-        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken")
+        writeSecret(result.accessToken, KeychainHelper.Account.syncAccessToken)
+        userDefaults.set(result.accessToken, forKey: StorageKey.accessTokenFallback)
         syncPassword = password
         lastKnownRevision = 0
     }
@@ -111,21 +140,21 @@ final class SyncClient {
         if http.statusCode == 404 { throw SyncError.groupNotFound }
         if http.statusCode == 401 { throw SyncError.authFailed }
         guard http.statusCode == 200 else {
-            throw statusError(http.statusCode, data)
+            throw statusError(http.statusCode)
         }
 
         let result = try JSONDecoder().decode(RegisterResponse.self, from: data)
         groupId = result.groupId
         deviceId = result.deviceId
-        KeychainHelper.set(result.accessToken, account: KeychainHelper.Account.syncAccessToken)
-        UserDefaults.standard.set(result.accessToken, forKey: "qieman.sync.accessToken")
+        writeSecret(result.accessToken, KeychainHelper.Account.syncAccessToken)
+        userDefaults.set(result.accessToken, forKey: StorageKey.accessTokenFallback)
         syncPassword = password
     }
 
     // MARK: - 上传(推送)
 
     /// 加密当前数据并推送到服务端。
-    func push(payload: SyncPayload, deviceName: String) async throws {
+    func push(payload: SyncPayload) async throws {
         guard isConfigured else { throw SyncError.authFailed }
         guard let password = syncPassword else { throw SyncError.authFailed }
 
@@ -159,7 +188,7 @@ final class SyncClient {
             throw SyncError.conflictNeedsConfirmation
         }
         guard http.statusCode == 200 else {
-            throw statusError(http.statusCode, data)
+            throw statusError(http.statusCode)
         }
 
         let result = try JSONDecoder().decode(PushResponse.self, from: data)
@@ -171,7 +200,7 @@ final class SyncClient {
 
     /// 从服务端拉取并解密。返回 payload + 预览信息。
     /// 不修改本地状态(调用方负责 applySyncPayload)。
-    func pull() async throws -> (payload: SyncPayload, preview: SyncImportPreview) {
+    func pull() async throws -> (payload: SyncPayload, preview: SyncImportPreview, revision: Int) {
         guard isConfigured else { throw SyncError.authFailed }
         guard let password = syncPassword else { throw SyncError.authFailed }
 
@@ -193,7 +222,7 @@ final class SyncClient {
             throw SyncError.serverError(404)  // 无数据,调用方提示
         }
         guard http.statusCode == 200 else {
-            throw statusError(http.statusCode, data)
+            throw statusError(http.statusCode)
         }
 
         let result = try JSONDecoder().decode(PullResponse.self, from: data)
@@ -230,13 +259,28 @@ final class SyncClient {
             hasTrendConfig: !payload.trendSettings.provider.apiKey.isEmpty
         )
 
-        return (payload, preview)
+        return (payload, preview, result.revision)
     }
 
     /// 确认下载后更新 revision 记录。
     func didDownload(revision: Int) {
         lastKnownRevision = revision
         lastSyncTime = Date()
+    }
+
+    /// 清除同步组、设备、revision 和全部敏感凭据 fallback；保留服务端地址，方便重新注册。
+    func resetConfiguration() {
+        groupId = nil
+        deviceId = nil
+        lastKnownRevision = 0
+        lastSyncTime = nil
+        deleteSecret(KeychainHelper.Account.syncAccessToken)
+        deleteSecret(KeychainHelper.Account.syncPassword)
+        userDefaults.removeObject(forKey: StorageKey.accessTokenFallback)
+        userDefaults.removeObject(forKey: StorageKey.passwordFallback)
+        userDefaults.removeObject(forKey: StorageKey.deviceID)
+        userDefaults.removeObject(forKey: StorageKey.lastRevision)
+        userDefaults.removeObject(forKey: StorageKey.lastSyncTime)
     }
 
     // MARK: - 辅助
@@ -271,7 +315,7 @@ final class SyncClient {
         return URLSession(configuration: config, delegate: SyncURLSessionDelegate(), delegateQueue: nil)
     }()
 
-    private func statusError(_ code: Int, _ data: Data) -> SyncError {
+    private func statusError(_ code: Int) -> SyncError {
         switch code {
         case 401: return .authFailed
         case 404: return .groupNotFound

@@ -9,7 +9,6 @@ import XCTest
 final class ConcentrationRiskEngineTests: XCTestCase {
 
     private let timestamp = "2026-08-05 10:00:00"
-    private let policy = PortfolioDecisionPolicy.default
 
     // MARK: - 直接持仓集中度
 

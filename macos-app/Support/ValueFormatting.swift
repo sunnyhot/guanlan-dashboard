@@ -36,11 +36,6 @@ func currencyText(_ value: Double, market: StockMarket?) -> String {
     (market?.currencySymbol ?? "¥") + formattedNumber(value)
 }
 
-func currencyOptional(_ value: Double?) -> String {
-    guard let value else { return "—" }
-    return currencyText(value)
-}
-
 func currencyOptional(_ value: Double?, market: StockMarket?) -> String {
     guard let value else { return "—" }
     return currencyText(value, market: market)

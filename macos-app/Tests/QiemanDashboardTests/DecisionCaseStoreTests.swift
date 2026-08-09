@@ -116,4 +116,36 @@ final class DecisionCaseStoreTests: XCTestCase {
         let permissions = attrs[.posixPermissions] as? NSNumber
         XCTAssertEqual(permissions?.int16Value, 0o600)
     }
+
+    func testJSONFilePersistenceCreatesParentAndSupportsDelete() throws {
+        let url = tempDir
+            .appendingPathComponent("nested", isDirectory: true)
+            .appendingPathComponent("payload.json")
+        let payload = ["beta": 2, "alpha": 1]
+
+        try JSONFilePersistence.save(payload, to: url)
+        let loaded = try JSONFilePersistence.load(
+            [String: Int].self,
+            from: url,
+            defaultValue: [:]
+        )
+
+        XCTAssertEqual(loaded, payload)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let permissions = attributes[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.int16Value, 0o600)
+
+        try JSONFilePersistence.delete(at: url)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    func testJSONFilePersistenceReturnsDefaultForMissingFile() throws {
+        let url = tempDir.appendingPathComponent("missing-generic.json")
+        let loaded = try JSONFilePersistence.load(
+            [String].self,
+            from: url,
+            defaultValue: ["fallback"]
+        )
+        XCTAssertEqual(loaded, ["fallback"])
+    }
 }

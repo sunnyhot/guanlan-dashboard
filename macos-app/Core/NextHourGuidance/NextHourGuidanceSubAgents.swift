@@ -139,7 +139,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         ]
 
         let tools: [AgentToolDefinition] = [
-            Self.makeMarketContextTool(context: context),
+            Self.makeMarketContextTool(),
             AgentToolDefinition.function(
                 name: "submit_market_signal",
                 description: "提交行情信号分析结论。",
@@ -363,7 +363,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
     // MARK: - 辅助
 
     /// 行情上下文工具（只读，返回 context JSON）。
-    private static func makeMarketContextTool(context: NextHourGuidanceContext) -> AgentToolDefinition {
+    private static func makeMarketContextTool() -> AgentToolDefinition {
         AgentToolDefinition.function(
             name: "get_live_market_context",
             description: "读取实时行情、持仓报价、大盘指数。",

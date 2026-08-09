@@ -905,38 +905,6 @@ final class QiemanPlatformNativeClient {
         return results
     }
 
-    private func preloadQuotes(_ fundCodes: [String], histories: [String: NativeFundHistory]) async -> [String: NativeFundQuote] {
-        var results: [String: NativeFundQuote] = [:]
-        let uniqueCodes = uniqueNonEmptyCodes(fundCodes)
-        await withTaskGroup(of: (String, NativeFundQuote).self) { group in
-            var nextIndex = 0
-            func enqueue(_ code: String) {
-                group.addTask {
-                    if let cached = await self.cache.quote(for: code, ttl: self.quoteTTL) {
-                        return (code, cached)
-                    }
-                    let quote = (try? await self.fetchFundQuote(code, history: histories[code])) ?? NativeFundQuote.empty(code)
-                    await self.cache.store(quote: quote, for: code)
-                    return (code, quote)
-                }
-            }
-
-            while nextIndex < Swift.min(uniqueCodes.count, Self.preloadConcurrencyLimit) {
-                enqueue(uniqueCodes[nextIndex])
-                nextIndex += 1
-            }
-
-            while let (code, quote) = await group.next() {
-                results[code] = quote
-                if nextIndex < uniqueCodes.count {
-                    enqueue(uniqueCodes[nextIndex])
-                    nextIndex += 1
-                }
-            }
-        }
-        return results
-    }
-
     /// Pipelined preload: quotes start as soon as their corresponding history completes,
     /// overlapping the two phases instead of running them sequentially.
     private func preloadHistoriesAndQuotes(
@@ -1110,7 +1078,6 @@ final class QiemanPlatformNativeClient {
         }
 
         let text = try await requestText(
-            hostURL: URL(string: "https://web.ifzq.gtimg.cn")!,
             absoluteURL: url,
             headers: [
                 "Accept": "application/json",
@@ -1150,7 +1117,7 @@ final class QiemanPlatformNativeClient {
     private func fetchFundHistorySeries(_ fundCode: String) async throws -> NativeFundHistory {
         let requestTime = Int(now().timeIntervalSince1970)
         let url = URL(string: "https://fund.eastmoney.com/pingzhongdata/\(fundCode).js?v=\(requestTime)")!
-        let text = try await requestText(hostURL: url.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent(), absoluteURL: url, headers: [
+        let text = try await requestText(absoluteURL: url, headers: [
             "Referer": "https://fund.eastmoney.com/",
         ])
 
@@ -1238,7 +1205,7 @@ final class QiemanPlatformNativeClient {
     private func fetchLegacyFundQuote(_ fundCode: String) async -> NativeFundQuote? {
         let requestTime = Int(now().timeIntervalSince1970)
         let url = URL(string: "https://fundgz.1234567.com.cn/js/\(fundCode).js?rt=\(requestTime)")!
-        let text = (try? await requestText(hostURL: url.deletingLastPathComponent().deletingLastPathComponent(), absoluteURL: url, headers: [
+        let text = (try? await requestText(absoluteURL: url, headers: [
             "Referer": "https://fund.eastmoney.com/",
         ])) ?? ""
 
@@ -1289,7 +1256,6 @@ final class QiemanPlatformNativeClient {
     private func fetchSinaFundEstimate(_ fundCode: String) async throws -> NativeFundEstimate? {
         let url = URL(string: "https://hq.sinajs.cn/list=fu_\(fundCode)")!
         let text = try await requestText(
-            hostURL: URL(string: "https://hq.sinajs.cn")!,
             absoluteURL: url,
             headers: [
                 "Accept": "text/plain,*/*",
@@ -1475,7 +1441,6 @@ final class QiemanPlatformNativeClient {
     private func fetchSinaQuoteParts(symbol: String) async throws -> [String] {
         let url = URL(string: "https://hq.sinajs.cn/list=\(symbol)")!
         let text = try await requestText(
-            hostURL: URL(string: "https://hq.sinajs.cn")!,
             absoluteURL: url,
             headers: [
                 "Accept": "text/plain,*/*",
@@ -1559,7 +1524,6 @@ final class QiemanPlatformNativeClient {
         }
 
         let text = try await requestText(
-            hostURL: URL(string: "https://api.fund.eastmoney.com")!,
             absoluteURL: url,
             headers: [
                 "Accept": "application/json",
@@ -1633,7 +1597,7 @@ final class QiemanPlatformNativeClient {
             return .empty(stockCode)
         }
         let url = URL(string: "https://push2.eastmoney.com/api/qt/stock/get?secid=\(secid)&fields=f43,f57,f58,f59,f60,f86,f169,f170")!
-        let text = try await requestText(hostURL: url, absoluteURL: url, headers: [
+        let text = try await requestText(absoluteURL: url, headers: [
             "Accept": "application/json",
             "Referer": "https://quote.eastmoney.com/",
         ])
@@ -1692,7 +1656,7 @@ final class QiemanPlatformNativeClient {
 
     private func fetchSingleTencentQuote(symbol: String, stockCode: String) async throws -> NativeStockQuote {
         let url = URL(string: "https://qt.gtimg.cn/q=\(symbol)")!
-        let text = try await requestText(hostURL: url, absoluteURL: url, headers: [
+        let text = try await requestText(absoluteURL: url, headers: [
             "Accept": "text/plain,*/*",
             "Referer": "https://gu.qq.com/",
         ])

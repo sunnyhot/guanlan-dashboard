@@ -48,7 +48,7 @@ extension QiemanPlatformNativeClient {
         return payload
     }
 
-    func requestText(hostURL: URL, absoluteURL: URL, headers: [String: String]) async throws -> String {
+    func requestText(absoluteURL: URL, headers: [String: String]) async throws -> String {
         var request = URLRequest(url: absoluteURL)
         request.httpMethod = "GET"
         request.timeoutInterval = 12

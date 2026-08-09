@@ -523,7 +523,12 @@ struct OpenAICompatibleAgentClient: Sendable {
     private static func decodingSummary(_ error: Error, data: Data) -> String {
         var parts: [String] = []
         if let decodingError = error as? DecodingError {
-            parts.append(describe(decodingError))
+            parts.append(
+                AgentDecodingErrorFormatter.describe(
+                    decodingError,
+                    trailingPeriod: true
+                )
+            )
         } else {
             parts.append(error.localizedDescription)
         }
@@ -540,26 +545,6 @@ struct OpenAICompatibleAgentClient: Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
         return String(normalized.prefix(220))
-    }
-
-    private static func describe(_ error: DecodingError) -> String {
-        switch error {
-        case .keyNotFound(let key, let context):
-            return "缺少字段 \(key.stringValue)\(codingPathSuffix(context.codingPath))。"
-        case .valueNotFound(_, let context):
-            return "缺少必要值\(codingPathSuffix(context.codingPath))。"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配\(codingPathSuffix(context.codingPath))。"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return error.localizedDescription
-        }
-    }
-
-    private static func codingPathSuffix(_ path: [CodingKey]) -> String {
-        guard !path.isEmpty else { return "" }
-        return "（路径：\(path.map(\.stringValue).joined(separator: "."))）"
     }
 
     private static func nowTimestamp() -> String {

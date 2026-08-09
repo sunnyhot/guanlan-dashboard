@@ -65,12 +65,6 @@ extension AppModel {
         }
     }
 
-    func openAvailableUpdateDownload() {
-        guard let update = availableUpdate else { return }
-        updateService.openUpdateDestination(for: update)
-        noticeMessage = "已打开更新页。"
-    }
-
     func openAvailableUpdateReleasePage() {
         guard let update = availableUpdate else { return }
         updateService.openUpdateDestination(for: update)

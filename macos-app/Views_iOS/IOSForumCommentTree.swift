@@ -70,7 +70,7 @@ struct IOSForumCommentTree: View {
     @ViewBuilder
     private func commentBlock(_ comment: CommentPayload, depth: Int) -> some View {
         VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
-            singleComment(comment, depth: depth)
+            singleComment(comment)
             if !comment.children.isEmpty {
                 // 子评论：左侧竖线 + 缩进，递归渲染（AnyView 打断递归）
                 HStack(alignment: .top, spacing: IOSDesign.spaceS) {
@@ -87,7 +87,7 @@ struct IOSForumCommentTree: View {
         }
     }
 
-    private func singleComment(_ comment: CommentPayload, depth: Int) -> some View {
+    private func singleComment(_ comment: CommentPayload) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: IOSDesign.spaceS) {
                 Text(comment.userName ?? "匿名")

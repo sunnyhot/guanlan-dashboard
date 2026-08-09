@@ -1102,6 +1102,31 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
     let warnings: [TrendWarning]
     let disclaimer: String
 
+    /// 报告引用的全部 evidence ID，去重并保持首次出现顺序。
+    var referencedEvidenceIDs: [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+        let append: (String) -> Void = { id in
+            if seen.insert(id).inserted {
+                ids.append(id)
+            }
+        }
+        sectors.forEach { $0.evidenceIDs.forEach(append) }
+        marketOutlook.forEach { $0.evidenceIDs.forEach(append) }
+        opportunities.forEach { $0.evidenceIDs.forEach(append) }
+        portfolio.claimEvidence.allEvidenceIDs.forEach(append)
+        horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        sectors.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        marketOutlook.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        opportunities.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        (keyAssets + assetTrends).forEach { asset in
+            asset.claimEvidence.allEvidenceIDs.forEach(append)
+            asset.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        }
+        actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        return ids
+    }
+
     init(
         id: UUID,
         generatedAt: String,

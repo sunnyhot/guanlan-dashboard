@@ -130,57 +130,6 @@ enum MenuBarTickerKind: String, Codable, CaseIterable, Identifiable {
         .overallProfitPct,
     ]
 
-    static let fundMarketKinds: [MenuBarTickerKind] = [
-        .offExchangeDailyAmount,
-        .offExchangeDailyPct,
-        .offExchangeProfitAmount,
-        .offExchangeProfitPct,
-        .onExchangeDailyAmount,
-        .onExchangeDailyPct,
-        .onExchangeProfitAmount,
-        .onExchangeProfitPct,
-    ]
-
-    static let marketIndexKinds: [MenuBarTickerKind] = [
-        .sseIndexChangePct,
-        .sseIndexChangeAmount,
-        .sseIndexLevel,
-        .csi300IndexChangePct,
-        .csi300IndexChangeAmount,
-        .csi300IndexLevel,
-        .chinextIndexChangePct,
-        .chinextIndexChangeAmount,
-        .chinextIndexLevel,
-        .hsiIndexChangePct,
-        .hsiIndexChangeAmount,
-        .hsiIndexLevel,
-        .nasdaqIndexChangePct,
-        .nasdaqIndexChangeAmount,
-        .nasdaqIndexLevel,
-        .sp500IndexChangePct,
-        .sp500IndexChangeAmount,
-        .sp500IndexLevel,
-        .dowJonesIndexChangePct,
-        .dowJonesIndexChangeAmount,
-        .dowJonesIndexLevel,
-    ]
-
-    static let aShareIndexKinds: [MenuBarTickerKind] = [
-        .sseIndexChangePct, .sseIndexChangeAmount, .sseIndexLevel,
-        .csi300IndexChangePct, .csi300IndexChangeAmount, .csi300IndexLevel,
-        .chinextIndexChangePct, .chinextIndexChangeAmount, .chinextIndexLevel,
-    ]
-
-    static let hkIndexKinds: [MenuBarTickerKind] = [
-        .hsiIndexChangePct, .hsiIndexChangeAmount, .hsiIndexLevel,
-    ]
-
-    static let usIndexKinds: [MenuBarTickerKind] = [
-        .nasdaqIndexChangePct, .nasdaqIndexChangeAmount, .nasdaqIndexLevel,
-        .sp500IndexChangePct, .sp500IndexChangeAmount, .sp500IndexLevel,
-        .dowJonesIndexChangePct, .dowJonesIndexChangeAmount, .dowJonesIndexLevel,
-    ]
-
     static func tickerKind(indexKind: MarketIndexKind, metric: MarketIndexMetric) -> MenuBarTickerKind? {
         switch (indexKind, metric) {
         case (.sseComposite, .level): return .sseIndexLevel

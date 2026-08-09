@@ -141,57 +141,6 @@ extension AppModel {
         }
     }
 
-    @discardableResult
-    func resolveAndPersistPortfolioNames() async -> Int {
-        guard let portfolioFileURL else { return 0 }
-
-        let missingNameHoldings = userPortfolioHoldings.filter {
-            !$0.normalizedFundCode.isEmpty && $0.normalizedName == nil
-        }
-        guard !missingNameHoldings.isEmpty else { return 0 }
-
-        isResolvingPortfolioNames = true
-        defer { isResolvingPortfolioNames = false }
-
-        let namesByHoldingID = await platformClient.resolveAssetNames(holdings: missingNameHoldings)
-        guard !namesByHoldingID.isEmpty else { return 0 }
-
-        var resolvedCount = 0
-        let enrichedHoldings = userPortfolioHoldings.map { holding in
-            guard holding.normalizedName == nil,
-                  let resolvedName = namesByHoldingID[holding.id],
-                  !resolvedName.isEmpty
-            else {
-                return holding
-            }
-            resolvedCount += 1
-            return UserPortfolioHolding(
-                id: holding.id,
-                fundCode: holding.fundCode,
-                assetType: holding.assetType,
-                units: holding.units,
-                costPrice: holding.costPrice,
-                displayName: resolvedName,
-                stockMarket: holding.stockMarket,
-                fundMarket: holding.fundMarket,
-                isArchived: holding.isArchived,
-                archivedAt: holding.archivedAt
-            )
-        }
-
-        guard resolvedCount > 0 else { return 0 }
-
-        do {
-            userPortfolioHoldings = enrichedHoldings
-            rebuildAssetRows()
-            try portfolioStore.save(enrichedHoldings, to: portfolioFileURL)
-            return resolvedCount
-        } catch {
-            errorMessage = error.localizedDescription
-            return 0
-        }
-    }
-
     func restartPortfolioAutoRefreshLoop() {
         portfolioAutoRefreshTask?.cancel()
         let interval = portfolioAutoRefreshIntervalSeconds * 1_000_000_000

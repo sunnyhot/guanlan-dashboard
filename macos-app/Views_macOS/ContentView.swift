@@ -6,7 +6,6 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.legibilityWeight) private var legibilityWeight
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @AppStorage("qieman.dashboard.hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
@@ -565,28 +564,3 @@ struct SidebarFloatingCompatModifier: ViewModifier {
             .shadow(color: AppPalette.sidebarShadowColor, radius: AppPalette.sidebarShadowRadius, x: AppPalette.sidebarShadowX, y: 0)
     }
 }
-
-// MARK: - NSVisualEffectView Wrapper (Legacy Alias)
-
-/// Wraps `NSVisualEffectView` to provide a blurred material backdrop.
-/// Kept for backward compatibility; new code should use `MaterialPanel` instead.
-#if canImport(AppKit)
-struct VisualEffectBlurView: NSViewRepresentable {
-    var material: NSVisualEffectView.Material
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.wantsLayer = true
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = .behindWindow
-        nsView.state = .active
-    }
-}
-#endif

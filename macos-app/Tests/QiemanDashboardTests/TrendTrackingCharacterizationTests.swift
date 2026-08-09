@@ -28,7 +28,7 @@ final class TrendTrackingCharacterizationTests: XCTestCase {
     }
 
     private func addAction(
-        to model: AppModel, name: String, code: String? = nil, action: TrendActionKind = .watch
+        to model: AppModel, name: String, action: TrendActionKind = .watch
     ) -> UUID {
         let candidate = TrendActionCandidate(
             id: "act-\(name)", kind: action, title: name, detail: "理由",

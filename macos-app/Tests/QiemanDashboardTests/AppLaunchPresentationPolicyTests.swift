@@ -3,9 +3,9 @@ import XCTest
 @testable import QiemanDashboard
 
 final class AppLaunchPresentationPolicyTests: XCTestCase {
-    func testInitialLaunchStaysRegularEvenWhenDockPreferenceIsHidden() {
+    func testInitialLaunchStaysRegular() {
         XCTAssertEqual(
-            AppLaunchPresentationPolicy.initialActivationPolicy(storedShowsInDock: false),
+            AppLaunchPresentationPolicy.initialActivationPolicy(),
             .regular
         )
     }

@@ -416,27 +416,23 @@ struct TrendAgentRunArtifactStore {
     }
 
     func save(_ artifact: TrendAgentRunArtifact, in directoryURL: URL) throws {
-        try FileManager.default.createDirectory(
-            at: directoryURL,
-            withIntermediateDirectories: true
-        )
         let fileURL = directoryURL.appendingPathComponent(
             "\(artifact.completedAt.prefix(10))-\(artifact.runID.uuidString).json",
             isDirectory: false
         )
-        try encoder.encode(artifact).write(to: fileURL, options: .atomic)
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o600],
-            ofItemAtPath: fileURL.path
-        )
+        try JSONFilePersistence.save(artifact, to: fileURL, encoder: encoder)
         try trimArtifacts(in: directoryURL)
     }
 
     func load(from fileURL: URL) throws -> TrendAgentRunArtifact {
-        try decoder.decode(
+        guard let artifact = try JSONFilePersistence.load(
             TrendAgentRunArtifact.self,
-            from: Data(contentsOf: fileURL)
-        )
+            from: fileURL,
+            decoder: decoder
+        ) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        return artifact
     }
 
     private func trimArtifacts(in directoryURL: URL) throws {

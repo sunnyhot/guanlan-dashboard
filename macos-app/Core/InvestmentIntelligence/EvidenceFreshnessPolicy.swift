@@ -70,13 +70,11 @@ enum EvidenceFreshnessPolicy {
         let freshCount = statuses.filter { $0.1 == .fresh }.count
         let previousCloseCount = statuses.filter { $0.1 == .previousSessionClose }.count
         let staleCount = statuses.filter { $0.1 == .stale }.count
-        let unknownCount = statuses.filter { $0.1 == .unknown }.count
         return EvidenceFreshnessSummary(
             perEvidence: statuses,
             freshCount: freshCount,
             usableCount: freshCount + previousCloseCount,  // fresh + previousSessionClose 可用
-            staleCount: staleCount,
-            unknownCount: unknownCount
+            staleCount: staleCount
         )
     }
 
@@ -108,11 +106,4 @@ struct EvidenceFreshnessSummary {
     let freshCount: Int
     let usableCount: Int     // fresh + previousSessionClose
     let staleCount: Int
-    let unknownCount: Int
-
-    /// 是否有足够新鲜的外部证据(freshCount ≥ threshold)。
-    func hasSufficientFreshExternalEvidence(threshold: Int = 2) -> Bool {
-        let externalFresh = perEvidence.filter { $0.0.metadata.sourceKind.isExternalResearch && $0.1 == .fresh }.count
-        return externalFresh >= threshold
-    }
 }

@@ -9,7 +9,7 @@ private enum AppSceneIdentifier {
 }
 
 enum AppLaunchPresentationPolicy {
-    static func initialActivationPolicy(storedShowsInDock: Bool) -> NSApplication.ActivationPolicy {
+    static func initialActivationPolicy() -> NSApplication.ActivationPolicy {
         // Keep the first interactive launch regular so SwiftUI can create the
         // initial WindowGroup even when the saved preference hides the Dock icon.
         .regular
@@ -96,9 +96,8 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
             }
         }
 
-        let showInDock = (UserDefaults.standard.object(forKey: AppStorageKey.showsInDock) as? Bool) ?? true
         NSApplication.shared.setActivationPolicy(
-            AppLaunchPresentationPolicy.initialActivationPolicy(storedShowsInDock: showInDock)
+            AppLaunchPresentationPolicy.initialActivationPolicy()
         )
 
         // Install local monitor to handle double-click in the titlebar/toolbar area.

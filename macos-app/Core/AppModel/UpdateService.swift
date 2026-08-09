@@ -16,10 +16,6 @@ protocol AppUpdateService: AnyObject {
     /// The human-readable version string of the currently running build.
     var currentVersion: String { get }
 
-    /// Whether this platform can download and install an update in place.
-    /// macOS: true. iOS: false (updates come from the App Store).
-    var supportsAutoInstall: Bool { get }
-
     /// Check the update feed for a newer release. Returns nil when up-to-date.
     func checkForUpdate() async throws -> AppUpdateRelease?
 
@@ -61,8 +57,6 @@ final class NoOpAppUpdateService: AppUpdateService {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    var supportsAutoInstall: Bool { false }
-
     func checkForUpdate() async throws -> AppUpdateRelease? { nil }
 
     func install(release: AppUpdateRelease,
@@ -70,4 +64,3 @@ final class NoOpAppUpdateService: AppUpdateService {
 
     func openUpdateDestination(for release: AppUpdateRelease) {}
 }
-

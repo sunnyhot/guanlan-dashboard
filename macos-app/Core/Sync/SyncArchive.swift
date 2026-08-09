@@ -130,4 +130,14 @@ struct SyncImportPreview {
     let watchlistCount: Int
     let alfaCount: Int
     let hasTrendConfig: Bool
+
+    var confirmationText: String {
+        """
+        导出时间：\(exportedAt.formatted(date: .abbreviated, time: .shortened))
+        来源设备：\(sourceDeviceName)
+        持仓 \(holdingsCount) · 待确认 \(pendingTradesCount) · 计划 \(plansCount) · 关注 \(watchlistCount) · 投顾 \(alfaCount)
+        \(hasTrendConfig ? "含 AI 模型配置" : "")
+        此操作将完全覆盖本机数据；如有需要，可以使用“撤销上次下载”恢复。
+        """
+    }
 }

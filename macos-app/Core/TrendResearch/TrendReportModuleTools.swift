@@ -494,19 +494,5 @@ private func moduleValidationMessages(from contentJSON: String) -> [String] {
 }
 
 private func describeModuleError(_ error: Error) -> String {
-    if let decodingError = error as? DecodingError {
-        switch decodingError {
-        case .keyNotFound(let key, let context):
-            return "缺少字段 \(key.stringValue)（\(context.codingPath.map(\.stringValue).joined(separator: "."))）。"
-        case .valueNotFound(_, let context):
-            return "字段缺少必要值（\(context.codingPath.map(\.stringValue).joined(separator: "."))）。"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配（\(context.codingPath.map(\.stringValue).joined(separator: "."))）。"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return decodingError.localizedDescription
-        }
-    }
-    return error.localizedDescription
+    AgentDecodingErrorFormatter.describe(error, trailingPeriod: true)
 }

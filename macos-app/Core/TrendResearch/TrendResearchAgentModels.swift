@@ -266,3 +266,44 @@ enum AgentStopReason: Sendable, Hashable {
         }
     }
 }
+
+/// 把 Codable 解码错误转换成可回灌给模型或展示给用户的稳定文本。
+///
+/// Agent 的多个提交入口都依赖同一套字段/路径提示，统一后模型修复行为不会因
+/// 工作流不同而漂移；需要响应诊断元数据的客户端仍可在此文本之外追加上下文。
+enum AgentDecodingErrorFormatter {
+    static func describe(
+        _ error: Error,
+        trailingPeriod: Bool = false
+    ) -> String {
+        let message: String
+        guard let decodingError = error as? DecodingError else {
+            message = error.localizedDescription
+            return trailingPeriod ? appendingPeriod(to: message) : message
+        }
+
+        switch decodingError {
+        case .keyNotFound(let key, let context):
+            message = "缺少字段 \(key.stringValue)\(codingPathSuffix(context.codingPath))"
+        case .valueNotFound(_, let context):
+            message = "缺少必要值\(codingPathSuffix(context.codingPath))"
+        case .typeMismatch(_, let context):
+            message = "字段类型不匹配\(codingPathSuffix(context.codingPath))"
+        case .dataCorrupted(let context):
+            message = context.debugDescription
+        @unknown default:
+            message = error.localizedDescription
+        }
+        return trailingPeriod ? appendingPeriod(to: message) : message
+    }
+
+    private static func codingPathSuffix(_ path: [CodingKey]) -> String {
+        guard !path.isEmpty else { return "" }
+        return "（路径：\(path.map(\.stringValue).joined(separator: "."))）"
+    }
+
+    private static func appendingPeriod(to text: String) -> String {
+        guard !text.hasSuffix("。") else { return text }
+        return text + "。"
+    }
+}

@@ -12,7 +12,6 @@ private struct PortfolioAllocationSlice: Identifiable {
     let id: String
     let label: String
     let weightPct: Double
-    let detail: String
     let tint: Color
 }
 
@@ -140,7 +139,6 @@ struct PortfolioAllocationPanel: View {
                 id: item.category.rawValue,
                 label: item.category.displayName,
                 weightPct: item.weightPct,
-                detail: "\(item.assetCount) 个标的 · \(currencyText(item.amount))",
                 tint: AppPalette.chartColor(index: index)
             )
         }
@@ -158,7 +156,6 @@ struct PortfolioAllocationPanel: View {
                 id: item.id,
                 label: item.name,
                 weightPct: item.portfolioWeightPct,
-                detail: "穿透后占组合有效敞口",
                 tint: assetClassColor(name: item.name, fallbackIndex: index)
             )
         }
@@ -170,7 +167,6 @@ struct PortfolioAllocationPanel: View {
                     id: "unclassified",
                     label: "未取得资产分类",
                     weightPct: unclassifiedWeight,
-                    detail: "未覆盖基金或缺少资产配置披露",
                     tint: AppPalette.muted
                 )
             )

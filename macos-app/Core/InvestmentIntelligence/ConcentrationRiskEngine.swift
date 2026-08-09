@@ -96,7 +96,6 @@ enum ConcentrationRiskEngine {
             reviewThreshold: reviewThreshold,
             state: finalState,
             profile: profile,
-            policy: policy,
             timestamp: timestamp,
             hhi: m.hhi,
             holdingCount: m.holdingCount
@@ -140,7 +139,6 @@ enum ConcentrationRiskEngine {
                     reviewThreshold: reviewThreshold,
                     state: finalState,
                     profile: profile,
-                    policy: policy,
                     timestamp: timestamp,
                     coverage: coverage
                 ))
@@ -180,7 +178,6 @@ enum ConcentrationRiskEngine {
                     reviewThreshold: reviewThreshold,
                     state: finalState,
                     profile: profile,
-                    policy: policy,
                     timestamp: timestamp,
                     coverage: coverage
                 ))
@@ -210,7 +207,6 @@ enum ConcentrationRiskEngine {
                     reviewThreshold: reviewThreshold,
                     state: finalState,
                     profile: profile,
-                    policy: policy,
                     timestamp: timestamp,
                     coverage: coverage
                 ))
@@ -393,7 +389,6 @@ enum ConcentrationRiskEngine {
         reviewThreshold: Double,
         state: PortfolioDecisionState,
         profile: UserDecisionProfile,
-        policy: PortfolioDecisionPolicy,
         timestamp: String,
         hhi: Double? = nil,
         holdingCount: Int? = nil,
@@ -408,7 +403,7 @@ enum ConcentrationRiskEngine {
         let metricLabel = String(format: "%.1f%%", metricValue)
         let title = makeTitle(dimension: dimension, state: state, subjectName: subjectName)
         let detail = makeDetail(
-            dimension: dimension, state: state, subjectName: subjectName,
+            state: state,
             metricValue: metricValue, metricLabel: metricLabel, metricDescription: metricDescription,
             watchThreshold: watchThreshold, reviewThreshold: reviewThreshold,
             hhi: hhi, holdingCount: holdingCount, coverage: coverage, profile: profile
@@ -510,9 +505,7 @@ enum ConcentrationRiskEngine {
     }
 
     private static func makeDetail(
-        dimension: ConcentrationDimension,
         state: PortfolioDecisionState,
-        subjectName: String,
         metricValue: Double,
         metricLabel: String,
         metricDescription: String,

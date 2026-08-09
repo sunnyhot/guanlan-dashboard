@@ -39,20 +39,6 @@ enum AppPalette {
     /// Toolbar bottom padding
     static let toolbarPaddingBottom: CGFloat = 14
 
-    // MARK: - Shadow Tokens
-
-    static func cardShadow(opacity: Double = 0.18, radius: CGFloat = 12, y: CGFloat = 4) -> some View {
-        Color.clear.shadow(color: .black.opacity(opacity), radius: radius, x: 0, y: y)
-    }
-
-    static func subtleShadow(opacity: Double = 0.06, radius: CGFloat = 10, y: CGFloat = 3) -> some View {
-        Color.clear.shadow(color: .black.opacity(opacity), radius: radius, x: 0, y: y)
-    }
-
-    static func panelShadow(opacity: Double = 0.05, radius: CGFloat = 8, y: CGFloat = 2) -> some View {
-        Color.clear.shadow(color: .black.opacity(opacity), radius: radius, x: 0, y: y)
-    }
-
     // MARK: - Motion / Interaction Tokens
 
     static let motionFastDuration: Double = 0.12
@@ -115,22 +101,7 @@ enum AppPalette {
         return .system(size: size.rawValue, weight: resolvedWeight, design: design)
     }
 
-    /// 快捷构造：在已有 weight 基础上，如果用户开了 Bold Text 则升级到 .bold。
-    static func appFontAdaptive(
-        _ size: AppFontSize,
-        weight: Font.Weight = .regular,
-        design: Font.Design = .default,
-        isBoldText: Bool = false
-    ) -> Font {
-        appFont(size, weight: isBoldText ? .bold : weight, design: design)
-    }
-
     // MARK: - Border / Stroke Opacity Presets
-
-    /// 根据是否增加对比度返回描边透明度。HIG 要求 Increase Contrast 开启时加粗/加深。
-    static func borderOpacity(isIncreasedContrast: Bool) -> Double {
-        isIncreasedContrast ? 0.85 : borderLight
-    }
 
     static let borderLight: Double = 0.32
     static let borderMedium: Double = 0.42
@@ -141,16 +112,8 @@ enum AppPalette {
 
     // MARK: - Surfaces (semantic)
 
-    /// Window-level background — used behind the main content area.
-    static let windowBackground = surface
-    /// Toolbar / top bar background.
-    static let toolbarBackground = surface
-    /// Sidebar footer background (inherits from sidebar material).
-    static let sidebarBackground = surface
     /// Elevated panel background (settings panels, filter panels).
     static let panelBackground = card
-    /// Inline card background (stat chips, mini stats).
-    static let inlineBackground = card
 
     // MARK: - Brand & Base Surfaces
 
@@ -193,7 +156,6 @@ enum AppPalette {
 
     // MARK: - Legacy Aliases (backward compat)
 
-    static let sand = surfaceVariant
     static let paper = surface
 
     // MARK: - Semantic Colors
@@ -237,33 +199,6 @@ enum AppPalette {
         return chartPalette[(index % count + count) % count]
     }
 
-    // MARK: - Glass / Blur Helpers
-
-    static var glassMaterial: Material { .ultraThinMaterial }
-
-    static func glassBackground(radius: CGFloat = cardRadius) -> some View {
-        RoundedRectangle(cornerRadius: radius)
-            .fill(.ultraThinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: radius)
-                    .stroke(lineColor: Color.white.opacity(0.06), lineWidth: 1)
-            )
-    }
-
-    /// NSVisualEffectView.Material convenience aliases for consistent usage.
-    #if canImport(AppKit)
-    enum Materials {
-        /// Primary sidebar / panel background material.
-        static let sidebar: NSVisualEffectView.Material = .sidebar
-        /// Toolbar / header area material.
-        static let toolbar: NSVisualEffectView.Material = .windowBackground
-        /// Content area background material for subtle depth.
-        static let content: NSVisualEffectView.Material = .underWindowBackground
-        /// Elevated card / popover material.
-        static let popover: NSVisualEffectView.Material = .hudWindow
-    }
-    #endif
-
     // MARK: - Gradients
 
     static var canvasGradient: LinearGradient {
@@ -275,27 +210,6 @@ enum AppPalette {
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
-        )
-    }
-
-    static var heroGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                brandSoft.opacity(0.96),
-                cardStrong.opacity(0.94),
-                brand.opacity(0.10),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    /// Subtle glow gradient for card accent bars
-    static func accentGlow(_ color: Color) -> LinearGradient {
-        LinearGradient(
-            colors: [color, color.opacity(0.3)],
-            startPoint: .top,
-            endPoint: .bottom
         )
     }
 
@@ -312,19 +226,8 @@ enum AppPalette {
 
     /// Opacity used for toolbar background overlay.
     static let bgToolbar: Double = 0.96
-    /// Opacity used for panel-level overlay (filter panel, collapsible sections).
-    static let bgPanel: Double = 0.52
-    /// Opacity for settings panel background.
-    static let bgSettings: Double = 0.94
-    /// Opacity for selected/active row fill.
-    static let bgSelected: Double = 0.94
     /// Opacity for default row fill.
     static let bgDefault: Double = 0.76
-
-    // MARK: - Text Opacities
-
-    /// Dimmed / tertiary text opacity (footnotes, timestamps).
-    static let textDimmed: Double = 0.72
 
     // MARK: - Accent Tint Opacities (for icon backgrounds)
 
@@ -407,18 +310,6 @@ extension Color {
     }
 }
 
-// MARK: - ShapeStyle helper for stroke with Color
-
-extension ShapeStyle where Self == Color {
-    static var lineColor: Color { AppPalette.hairline }
-}
-
-extension Shape {
-    func stroke(lineColor: Color, lineWidth: CGFloat = 1) -> some View {
-        self.stroke(lineColor, lineWidth: lineWidth)
-    }
-}
-
 // MARK: - View Extension: Unified Stroke & Card Style
 
 extension View {
@@ -441,11 +332,6 @@ extension View {
     /// Applies section-level shadow.
     func sectionShadow() -> some View {
         shadow(color: AppPalette.sectionShadowColor, radius: AppPalette.sectionShadowRadius, y: AppPalette.sectionShadowY)
-    }
-
-    /// Applies panel-level shadow.
-    func panelShadow() -> some View {
-        shadow(color: AppPalette.panelShadowColor, radius: AppPalette.panelShadowRadius, y: AppPalette.panelShadowY)
     }
 
     /// Applies the standard input field style (background + border).

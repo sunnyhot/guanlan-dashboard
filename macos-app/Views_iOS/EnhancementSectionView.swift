@@ -536,7 +536,7 @@ struct EnhancementSectionView: View {
         case .configure:
             model.selectedSection = .settings
         case .generate, .refresh:
-            Task { await model.startTrendAnalysis(userInitiated: true) }
+            model.startTrendAnalysis(userInitiated: true)
         case .openReport, .wait:
             break
         }

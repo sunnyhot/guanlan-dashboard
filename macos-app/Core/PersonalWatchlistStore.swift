@@ -1,21 +1,13 @@
 import Foundation
 
 struct PersonalWatchlistStore {
-    private let decoder = JSONDecoder()
-    private let encoder: JSONEncoder
-
-    init() {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        self.encoder = encoder
-    }
-
     func load(from fileURL: URL) throws -> [PersonalWatchlistRecord] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return []
-        }
-        let data = try Data(contentsOf: fileURL)
-        return try decoder.decode([PersonalWatchlistRecord].self, from: data).map {
+        let records = try JSONFilePersistence.load(
+            [PersonalWatchlistRecord].self,
+            from: fileURL,
+            defaultValue: []
+        )
+        return records.map {
             PersonalWatchlistRecord(
                 item: $0.item,
                 baseline: $0.baseline,
@@ -36,12 +28,10 @@ struct PersonalWatchlistStore {
                 alertState: $0.alertState
             )
         }
-        let data = try encoder.encode(normalized)
-        try data.write(to: fileURL, options: .atomic)
+        try JSONFilePersistence.save(normalized, to: fileURL)
     }
 
     func delete(at fileURL: URL) throws {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-        try FileManager.default.removeItem(at: fileURL)
+        try JSONFilePersistence.delete(at: fileURL)
     }
 }

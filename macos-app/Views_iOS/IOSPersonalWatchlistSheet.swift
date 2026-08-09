@@ -2,64 +2,6 @@
 import SwiftUI
 import Charts
 
-// MARK: - iOS 关注列表
-//
-// 复用 personalWatchlistRecords + add/removePersonalWatchlistItem。
-// 每行：名称/代码 + sparkline（30 日，自绘 Path 轻量版）+ 最新价/涨跌。
-// 点击行 → 详情 Sheet（Swift Charts 大走势图 + 基准价 RuleMark）。
-
-struct IOSPersonalWatchlistSheet: View {
-    @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var showingAdd = false
-    @State private var detailRecord: PersonalWatchlistRecord?
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if model.personalWatchlistRecords.isEmpty {
-                    Section {
-                        Text("暂无关注。点击右上角添加基金或股票。").foregroundStyle(IOSDesign.muted)
-                    }
-                } else {
-                    ForEach(model.personalWatchlistRecords) { record in
-                        Button {
-                            detailRecord = record
-                        } label: {
-                            IOSWatchlistRow(record: record) { detailRecord = record }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete { indexSet in
-                        for i in indexSet {
-                            model.removePersonalWatchlistItem(model.personalWatchlistRecords[i].item.id)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("关注列表")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("完成") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAdd = true } label: { Image(systemName: "plus") }
-                }
-            }
-            .refreshable {
-                try? await model.refreshPersonalWatchlist(updateNotice: true)
-            }
-            .sheet(isPresented: $showingAdd) {
-                IOSAddWatchlistItemSheet()
-            }
-            .sheet(item: $detailRecord) { record in
-                IOSWatchlistDetailSheet(record: record)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
-        }
-    }
-}
-
 // MARK: - Sparkline（自绘 Path，轻量，避免每行嵌 Charts）
 
 struct IOSWatchlistSparkline: View {
@@ -163,7 +105,6 @@ struct IOSWatchlistRow: View {
 // MARK: - 关注详情 Sheet（大走势图 + 基准价）
 
 struct IOSWatchlistDetailSheet: View {
-    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let record: PersonalWatchlistRecord
 

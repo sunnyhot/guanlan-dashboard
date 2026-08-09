@@ -60,7 +60,7 @@ final class QiemanNativeClient {
             params["sortType"] = "HOT"
         }
 
-        let payload = try await requestJSON(path: "/community/comment/list", params: params, cookie: nil)
+        let payload = try await requestJSON(path: "/community/comment/list", params: params)
         guard let items = payload as? [[String: Any]] else {
             throw NativeQiemanError.invalidResponse
         }
@@ -100,8 +100,7 @@ final class QiemanNativeClient {
                     "postType": "1",
                     "queryStrategy": "ONLY_GROUP_POST",
                     "orderBy": "TIME",
-                ],
-                cookie: nil
+                ]
             )
             let items = extractItemsFromGroupList(payload)
             if items.isEmpty {
@@ -181,8 +180,8 @@ final class QiemanNativeClient {
     }
 
     private func fetchGroupInfo(groupID: Int, source: String) async throws -> NativeGroupInfo {
-        async let summaryPayload = requestJSON(path: "/community/group/summary", params: ["groupId": String(groupID)], cookie: nil)
-        async let managerPayload = requestJSON(path: "/community/group/manager-info", params: ["groupId": String(groupID)], cookie: nil)
+        async let summaryPayload = requestJSON(path: "/community/group/summary", params: ["groupId": String(groupID)])
+        async let managerPayload = requestJSON(path: "/community/group/manager-info", params: ["groupId": String(groupID)])
 
         let summaryAny = try await summaryPayload
         let managerAny = try await managerPayload
@@ -211,7 +210,7 @@ final class QiemanNativeClient {
             return groupID
         }
         if !form.prodCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let payload = try await requestJSON(path: "/community/config", params: ["prodCode": form.prodCode], cookie: nil)
+            let payload = try await requestJSON(path: "/community/config", params: ["prodCode": form.prodCode])
             if let config = payload as? [String: Any],
                let entrance = config["caAssetDetailEntrance"] as? [String: Any],
                let groupID = groupIDFromURL(normalizedString(entrance["communityUrl"])) {
@@ -221,14 +220,14 @@ final class QiemanNativeClient {
         if !form.managerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let target = form.managerName.lowercased()
             for page in 1...10 {
-                let payload = try await requestJSON(path: "/community/group/awesome-list", params: ["page": String(page), "size": "50"], cookie: nil)
+                let payload = try await requestJSON(path: "/community/group/awesome-list", params: ["page": String(page), "size": "50"])
                 guard let object = payload as? [String: Any], let groups = object["data"] as? [[String: Any]], !groups.isEmpty else {
                     break
                 }
                 for group in groups {
                     let groupID = positiveInt(group["groupId"], fallback: 0)
                     guard groupID > 0 else { continue }
-                    let managerPayload = try await requestJSON(path: "/community/group/manager-info", params: ["groupId": String(groupID)], cookie: nil)
+                    let managerPayload = try await requestJSON(path: "/community/group/manager-info", params: ["groupId": String(groupID)])
                     let leader = (((managerPayload as? [String: Any])?["groupLeaderInfo"] as? [String: Any])?["leader"] as? [String: Any]) ?? [:]
                     if normalizedString(leader["userName"]).lowercased().contains(target) {
                         return groupID
@@ -255,11 +254,7 @@ final class QiemanNativeClient {
         return "native"
     }
 
-    private func requestJSON(path: String, params: [String: String], cookie: String?) async throws -> Any {
-        try await requestJSONInternal(path: path, params: params, cookie: cookie)
-    }
-
-    private func requestJSONInternal(path: String, params: [String: String], cookie: String?) async throws -> Any {
+    private func requestJSON(path: String, params: [String: String]) async throws -> Any {
         let queryItems = params.compactMap { key, value -> URLQueryItem? in
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : URLQueryItem(name: key, value: trimmed)
@@ -331,45 +326,6 @@ final class QiemanNativeClient {
         return []
     }
 
-    private func extractItems(_ payload: Any) -> [[String: Any]] {
-        if let list = payload as? [[String: Any]] {
-            return list
-        }
-        guard let object = payload as? [String: Any] else {
-            return []
-        }
-        for key in ["data", "content", "items", "list", "records", "rows", "recommendUserList", "result"] {
-            if let list = object[key] as? [[String: Any]] {
-                return list
-            }
-            if let nested = object[key] {
-                let items = extractItems(nested)
-                if !items.isEmpty {
-                    return items
-                }
-            }
-        }
-        return []
-    }
-
-    private func extractCursor(_ payload: Any) -> String? {
-        guard let object = payload as? [String: Any] else {
-            return nil
-        }
-        for key in ["pageId", "nextPageId", "nextCursor", "cursor"] {
-            let value = normalizedString(object[key])
-            if !value.isEmpty {
-                return value
-            }
-        }
-        for key in ["data", "content", "result"] {
-            if let nested = object[key], let value = extractCursor(nested) {
-                return value
-            }
-        }
-        return nil
-    }
-
     private func parsePostItem(_ item: [String: Any], defaultGroup: NativeGroupInfo?) -> [String: Any] {
         let content = item["content"] as? [String: Any] ?? [:]
         let groupInfo = item["groupInfo"] as? [String: Any] ?? [:]
@@ -416,30 +372,6 @@ final class QiemanNativeClient {
                 "https://qieman.com/content/post-detail/\(postID)",
             ]),
         ]
-    }
-
-    private func unwrapUserPayload(_ payload: Any) -> [String: Any] {
-        guard let object = payload as? [String: Any] else {
-            return [:]
-        }
-        for key in ["data", "userInfo", "user"] {
-            if let nested = object[key] as? [String: Any] {
-                return nested
-            }
-        }
-        return object
-    }
-
-    private func unwrapFirstObject(_ payload: Any, keys: [String]) -> [String: Any] {
-        guard let object = payload as? [String: Any] else {
-            return [:]
-        }
-        for key in keys {
-            if let nested = object[key] as? [String: Any] {
-                return nested
-            }
-        }
-        return object
     }
 
     private func groupDictionary(_ group: NativeGroupInfo) -> [String: Any] {
@@ -610,22 +542,6 @@ final class QiemanNativeClient {
         for (key, value) in pairs {
             guard let value, !value.isEmpty else { continue }
             result[key] = value
-        }
-        return result
-    }
-
-    private func stringAnyMap(_ pairs: (String, Any?)...) -> [String: Any] {
-        var result: [String: Any] = [:]
-        for (key, value) in pairs {
-            guard let value else { continue }
-            if let text = value as? String {
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    result[key] = trimmed
-                }
-            } else {
-                result[key] = value
-            }
         }
         return result
     }

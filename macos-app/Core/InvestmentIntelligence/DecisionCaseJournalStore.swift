@@ -118,11 +118,6 @@ struct DecisionCaseJournalStore {
     // MARK: - 安全写入
 
     private func write<T: Encodable>(_ value: T, to file: URL) throws {
-        let directory = file.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-        let data = try encoder.encode(value)
-        try data.write(to: file, options: [.atomic])
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        try JSONFilePersistence.save(value, to: file, encoder: encoder)
     }
 }

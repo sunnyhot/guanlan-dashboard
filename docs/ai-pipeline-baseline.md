@@ -175,6 +175,7 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 - 每次运行**新建** `TrendEvidenceLedger()`(actor,非持久化,**不复用**链路 A 的 ledger)
 - 工具:`get_live_market_context` / `get_fund_lookthrough` / `official_sec_research` / `web_search` / `submit_next_hour_guidance`
 - 预算:`maxTurns=10` / `maxToolCalls=20` / `maxWebSearches=4` / `minimumWebSearchAttempts=2` / `totalTimeoutSeconds=300`
+- Tavily 与长期趋势研究共享跨启动磁盘缓存，但盘中链路只接受 10 分钟内结果
 - 校验:`validate()` + `TrendClaimEvidencePolicy().validateExecution()` 双层把关
 
 ### 3.3 调度窗口(NextHourGuidanceSchedule)
@@ -254,19 +255,19 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 
 | 文件 | 路径 | 编码 | 权限 | schemaVersion | 历史 | Store |
 |---|---|---|---|---|---|---|
-| 趋势报告 | `trend-analysis-report.json` | prettyPrinted + sortedKeys | **无收紧**(默认) | `currentSchemaVersion=2`,解码宽容 | **单文件覆盖写,无历史** | `TrendAnalysisReportStore` |
+| 趋势报告 | `trend-analysis-report.json` | prettyPrinted + sortedKeys | **0o600** | `currentSchemaVersion=2`,解码宽容 | **单文件覆盖写,无历史** | `TrendAnalysisReportStore` |
 | 趋势设置 | `trend-analysis-settings.json` | prettyPrinted | **0o600** | 无 | 单文件覆盖 | `TrendAnalysisSettingsStore`(API Key 在 Keychain) |
 | Agent 日志 | `trend-agent.log` | 文本 | **0o600** | 无 | 每次运行覆盖写 header + append 进度 | `TrendAgentRunLogStore` |
 | Agent 审计产物 | `trend-agent-runs/<YYYY-MM-DD>-<runID>.json` | prettyPrinted | **0o600** | 无 | **最近 20 个**,超出按 mtime 删除 | `TrendAgentRunArtifactStore` |
 | 下一小时研判 | `next-hour-guidance.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `NextHourGuidanceStore` |
 | 跟踪清单 | `trend-tracking-items.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `TrendTrackingStore` |
 | 基金穿透缓存 | `fund-look-through-cache.json` | — | — | — | — | `FundLookThroughClient` |
+| Tavily 搜索缓存 | `~/Library/Caches/QiemanDashboard/AIResearch/Tavily/*.json` | prettyPrinted + sortedKeys | **0o600** | 1 | 每请求一文件，最多 64 个；长期 6 小时、盘中读取门槛 10 分钟 | `TrendWebSearchResponseCache` |
 | (已预留)组合洞察快照 | `portfolio-insight-snapshots.json` | — | — | — | — | URL 已定义,暂无 Store 消费 |
 
 ### 当前已知不一致(改造时需注意)
 
-1. **`trend-analysis-report.json` 无文件权限收紧**,而同目录的 settings/agent-runs 都有 0o600。这是一个安全不一致,被 `TrendReportDiskContractCharacterizationTests.testReportStoreDoesNotRestrictFilePermissions` 显式冻结——改造时收紧权限是预期改进,但需主动更新该测试。
-2. **`next-hour-guidance.json` 与 `trend-tracking-items.json` 无 schemaVersion**。向后兼容纯靠 Codable 默认值兜底,任何字段重命名都会静默吞掉旧数据。投资智能改造若引入 DecisionCase,应从一开始就带 schemaVersion。
+1. **`next-hour-guidance.json` 与 `trend-tracking-items.json` 无 schemaVersion**。向后兼容纯靠 Codable 默认值兜底,任何字段重命名都会静默吞掉旧数据。投资智能改造若引入 DecisionCase,应从一开始就带 schemaVersion。
 
 ---
 

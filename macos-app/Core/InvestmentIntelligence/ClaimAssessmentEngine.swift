@@ -56,7 +56,6 @@ enum ClaimAssessmentEngine {
         // 综合判定
         let disposition = computeDisposition(
             supportingCount: supportingEvidence.count,
-            counterCount: counterEvidence.count,
             supportingIndependence: supportingIndependence,
             counterIndependence: counterIndependence,
             hasAssociatedSupport: hasAssociatedSupport,
@@ -86,7 +85,6 @@ enum ClaimAssessmentEngine {
 
     private static func computeDisposition(
         supportingCount: Int,
-        counterCount: Int,
         supportingIndependence: Int,
         counterIndependence: Int,
         hasAssociatedSupport: Bool,

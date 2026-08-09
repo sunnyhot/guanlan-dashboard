@@ -4,24 +4,6 @@ import Foundation
 
 extension AppModel {
 
-    func clearPortfolio() {
-        guard let portfolioFileURL else { return }
-        do {
-            try portfolioStore.delete(at: portfolioFileURL)
-            userPortfolioHoldings = []
-            // 清空所有估值预警
-            if let portfolioValuationAlertFileURL {
-                try? portfolioValuationAlertStore.save([:], to: portfolioValuationAlertFileURL)
-            }
-            portfolioValuationAlertProfiles = [:]
-            userPortfolioSnapshot = nil
-            rebuildAssetRows()
-            noticeMessage = "已清空个人持仓。"
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     func deletePersonalAssetEntry(_ row: PersonalAssetAggregateRow, scope: PersonalAssetDeleteScope) {
         let holdingIDs = Set(scope.includesHolding ? [
             row.rawHolding?.id,
@@ -549,21 +531,6 @@ extension AppModel {
         } catch {
             errorMessage = error.localizedDescription
             return false
-        }
-    }
-
-    func reloadPortfolioFromDisk() {
-        loadSavedPortfolio()
-        if userPortfolioHoldings.isEmpty {
-            userPortfolioSnapshot = nil
-            noticeMessage = "已从磁盘重载持仓，目前没有已保存内容。"
-            Task { await applyPersonalAssetAutomation() }
-            return
-        }
-        noticeMessage = "已从磁盘重载 \(userPortfolioHoldings.count) 条个人持仓。"
-        Task {
-            try? await refreshUserPortfolio(updateNotice: false)
-            await applyPersonalAssetAutomation()
         }
     }
 

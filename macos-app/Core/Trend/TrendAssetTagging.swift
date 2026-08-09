@@ -123,7 +123,6 @@ struct TrendAssetTagIndex: Hashable {
         let tradePlan = makeTradePlan(
             action: relatedActions.first,
             direction: primaryHorizon?.direction,
-            confidence: primaryConfidence,
             counterSignals: counterSignals,
             row: nil,
             sourceID: asset.id
@@ -251,7 +250,6 @@ struct TrendAssetTagIndex: Hashable {
         let tradePlan = makeTradePlan(
             action: relatedActions.first,
             direction: direction,
-            confidence: confidence,
             counterSignals: counterSignals,
             row: row,
             sourceID: row.id
@@ -336,7 +334,6 @@ struct TrendAssetTagIndex: Hashable {
     private static func makeTradePlan(
         action: TrendActionCandidate?,
         direction: TrendDirection?,
-        confidence: TrendConfidence,
         counterSignals: [String],
         row: PersonalAssetAggregateRow?,
         sourceID: String

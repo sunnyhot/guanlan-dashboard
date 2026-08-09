@@ -52,7 +52,6 @@ struct NextHourGuidanceSchedule: Hashable, Sendable {
     }
 
     static let `default` = NextHourGuidanceSchedule()
-    static let timeStrings = ["09:15", "10:15", "11:15", "13:15", "14:15", "14:50"]
 
     private static let windows: [Window] = [
         .init(startMinute: 9 * 60 + 15, endMinute: 10 * 60 + 14, timeString: "09:15", validUntil: "10:15", scope: .marketTrading),
@@ -404,17 +403,16 @@ struct NextHourGuidanceStore {
     }
 
     func load(from fileURL: URL) throws -> NextHourGuidanceArchive {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return .empty }
-        return try decoder.decode(NextHourGuidanceArchive.self, from: Data(contentsOf: fileURL))
+        try JSONFilePersistence.load(
+            NextHourGuidanceArchive.self,
+            from: fileURL,
+            defaultValue: .empty,
+            decoder: decoder
+        )
     }
 
     func save(_ archive: NextHourGuidanceArchive, to fileURL: URL) throws {
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try encoder.encode(archive).write(to: fileURL, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        try JSONFilePersistence.save(archive, to: fileURL, encoder: encoder)
     }
 }
 
@@ -634,9 +632,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared,
-        webSearchCache: TrendWebSearchResponseCache = TrendWebSearchResponseCache(
-            ttlSeconds: 10 * 60
-        )
+        webSearchCache: TrendWebSearchResponseCache = .shared
     ) {
         self.client = client
         self.registry = TrendResearchToolRegistry(
@@ -659,7 +655,8 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let ledger = TrendEvidenceLedger()
         let webSearchGovernor = TrendWebSearchGovernor(
             maxNetworkSearches: Self.maxWebSearches,
-            cache: webSearchCache
+            cache: webSearchCache,
+            cacheMaxAgeSeconds: 10 * 60
         )
         let requiresLookThrough = researchSnapshot.lookThrough != nil
         let requiresOfficialSource = officialSourceSettings.isSECConfigured
@@ -889,7 +886,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                 isError: true
                             )
                         } catch {
-                            lastErrors = ["提交 JSON 无法解码：\(Self.describeDecodeError(error))"]
+                            lastErrors = ["提交 JSON 无法解码：\(AgentDecodingErrorFormatter.describe(error))"]
                             invalidSubmissions += 1
                             toolResult = .content(
                                 TrendResearchToolEnvelope.submitValidationError(
@@ -973,7 +970,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         // 2. 汇总决策 Agent：综合三方结论，输出最终买卖建议
         var submission = try await runDecisionAgent(
             context: context,
-            researchSnapshot: researchSnapshot,
             market: marketAssessment,
             news: newsAssessment,
             portfolio: portfolioAssessment,
@@ -1137,7 +1133,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     /// - 温度 0.2（原 0.1），让模型更愿意给出明确判断
     private func runDecisionAgent(
         context: NextHourGuidanceContext,
-        researchSnapshot: TrendResearchSnapshot,
         market: MarketSignalAssessment,
         news: NewsEventAssessment,
         portfolio: PortfolioContextAssessment,
@@ -1674,22 +1669,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 "additionalProperties": false,
             ]
         )
-    }
-
-    private static func describeDecodeError(_ error: Error) -> String {
-        guard let decodingError = error as? DecodingError else { return error.localizedDescription }
-        switch decodingError {
-        case .keyNotFound(let key, _):
-            return "缺少字段 \(key.stringValue)"
-        case .valueNotFound(_, let context):
-            return "缺少必要值（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配（\(context.codingPath.map(\.stringValue).joined(separator: "."))）"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return error.localizedDescription
-        }
     }
 
     private static func submitTool() -> AgentToolDefinition {
