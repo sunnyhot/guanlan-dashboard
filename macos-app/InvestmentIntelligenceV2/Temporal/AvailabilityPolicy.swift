@@ -5,10 +5,18 @@ import Foundation
 // availableAt 是经济可知语义，由版本化 AvailabilityPolicy 计算，
 // 不等于 publishedAt 也不等于 ingestedAt（ADR-DATA005 §Decision）。
 // V1 保守规则集覆盖三类数据（rollout DOM-7）。
+//
+// 审查 P1 修复点：
+// 1. rule 数据化为 AvailabilityRule 结构（base + offset + jurisdictionSource），
+//    不再藏在方法体里，可持久化、可审计、可跨市场执行
+// 2. 法域由 jurisdictionSource 动态推导（不硬编码 chinaMainland），
+//    支持 HK/US Listing
+// 3. 自定义 Codable：解码时验证 policyID/version，损坏或版本不匹配的数据
+//    抛错而非静默解成 v1
 
 /// 单条 AvailabilityPolicy。
 ///
-/// 每条 policy 含 id / version / rule / provenance，可审计。
+/// 每条 policy 含 id / version / rule / provenance，可审计（ADR-DATA005）。
 /// policy 修订走新 version，旧 vintage 数据保留旧 version 标注（ADR-DATA008）。
 protocol AvailabilityPolicy: Sendable, Codable, Hashable {
     /// Policy 唯一标识（如 "fund_nav"、"market_close"、"fund_disclosure"）
@@ -17,13 +25,20 @@ protocol AvailabilityPolicy: Sendable, Codable, Hashable {
     var version: String { get }
     /// 该 policy 适用的观测类型
     var applicableKind: AvailabilityPolicyKind { get }
+    /// 数据化的规则（base + offset + jurisdictionSource）
+    var rule: AvailabilityRule { get }
     /// Provenance：policy 来源（manual / derived_from_observation / regulation）
     var provenance: AvailabilityPolicyProvenance { get }
     /// 基于 ProviderRecord 推导 availableAt。
     ///
-    /// 输入是 Provider 给的（effectiveAt, publishedAt），输出是客观可知的 availableAt。
-    /// 不接受 ingestedAt，因为 ingestedAt 是本系统抓取时间，不该影响客观可知语义。
-    func availableAt(effectiveAt: Date, publishedAt: Date, calendar: TradingCalendar) -> Date?
+    /// 输入是 Provider 给的（effectiveAt, publishedAt）+ 标的法域，输出是客观可知的 availableAt。
+    /// 不接受 ingestedAt，因为 ingestedAt 是本系统抓取时间，不该影响客观可知语义（ADR-DATA002 §4）。
+    func availableAt(
+        effectiveAt: Date,
+        publishedAt: Date,
+        jurisdiction: Jurisdiction,
+        calendar: TradingCalendar
+    ) -> Date?
 }
 
 /// Policy 适用的观测类型。
@@ -40,10 +55,53 @@ enum AvailabilityPolicyProvenance: String, Sendable, Codable, Hashable {
     case regulation = "REGULATION"
 }
 
+/// Policy 解码错误（审查 P1 修复：损坏或版本不匹配的数据抛错而非静默解成 v1）。
+enum AvailabilityPolicyDecodeError: Error, Equatable, Sendable {
+    /// 解码出的 policyID/version/rule 与预期不符（如 v2 数据解到 v1 类型）
+    case identityMismatch(policyID: String, version: String)
+}
+
+// MARK: - AvailabilityRule（数据化的规则）
+//
+// 规则 = 从某个基准时间（effectiveAt / publishedAt）出发，加 N 个交易日 offset，
+// 在该法域的交易日 00:00 取 availableAt。
+// 法域由 jurisdictionSource 指定（从 listing 推导 / 固定 / 从 publishedAt 推断）。
+
+/// 数据化的可用性规则（可持久化、可审计、可跨市场执行）。
+struct AvailabilityRule: Sendable, Codable, Hashable {
+    /// 基准时间来源
+    let base: Base
+    /// 交易日 offset（保守 V1 全是 +1）
+    let offset: TradingDayOffset
+    /// 法域来源（决定用哪个市场的交易日历）
+    let jurisdictionSource: JurisdictionSource
+
+    /// 基准时间从哪个字段取。
+    enum Base: String, Sendable, Codable, Hashable {
+        case effectiveAt = "EFFECTIVE_AT"     // 如 fund NAV 用 navDate
+        case publishedAt = "PUBLISHED_AT"     // 如 fund disclosure 用 announcementDate
+    }
+
+    /// 交易日偏移量。
+    struct TradingDayOffset: Sendable, Codable, Hashable {
+        /// 偏移天数（正数 = 未来第 N 个交易日；0 = 当日）
+        let tradingDays: Int
+        init(tradingDays: Int) { self.tradingDays = tradingDays }
+    }
+
+    /// 法域来源。
+    enum JurisdictionSource: Sendable, Codable, Hashable {
+        /// 从 Listing 的 exchange 推导（最准确，调用方传入）
+        case fromListing
+        /// 固定法域（如 fund NAV 默认 CN）
+        case fixed(Jurisdiction)
+    }
+}
+
 // MARK: - TradingCalendar（最小骨架）
 //
 // 完整 A 股 + 基金净值交易日历在 Epic 6 SYNC-1 实现。
-// 这里只放 AvailabilityPolicy 推导所需的最小接口，V1 policy 用它算「次交易日」。
+// 这里只放 AvailabilityPolicy 推导所需的最小接口。
 
 /// 交易日历协议（完整实现见 Epic 6 SYNC-1）。
 ///
@@ -52,65 +110,197 @@ enum AvailabilityPolicyProvenance: String, Sendable, Codable, Hashable {
 protocol TradingCalendar: Sendable {
     /// 判断某日是否为该法域的交易日。
     func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool
-    /// 返回 d 之后的第一个交易日（不含 d 当日）。
-    func nextTradingDay(after date: Date, jurisdiction: Jurisdiction) -> Date
+    /// 返回 d 之后的第 N 个交易日（N = offset.tradingDays，不含 d 当日）。
+    func tradingDay(after date: Date, offset: Int, jurisdiction: Jurisdiction) -> Date
     /// 返回 d 所在交易日的「日界」（当日 00:00 本地时间）。
     func tradingDayStart(_ date: Date, jurisdiction: Jurisdiction) -> Date
 }
 
+// MARK: - AvailabilityPolicy 默认 availableAt 实现（基于 AvailabilityRule）
+
+extension AvailabilityPolicy {
+    /// 基于 rule 推导 availableAt 的默认实现。具体 policy 只需提供 rule 字段。
+    func availableAt(
+        effectiveAt: Date,
+        publishedAt: Date,
+        jurisdiction: Jurisdiction,
+        calendar: TradingCalendar
+    ) -> Date? {
+        let resolvedJurisdiction: Jurisdiction
+        switch rule.jurisdictionSource {
+        case .fromListing:
+            resolvedJurisdiction = jurisdiction   // 调用方按 listing.exchange.jurisdiction 传入
+        case .fixed(let j):
+            resolvedJurisdiction = j
+        }
+        let baseDate: Date
+        switch rule.base {
+        case .effectiveAt: baseDate = effectiveAt
+        case .publishedAt: baseDate = publishedAt
+        }
+        let targetDay = calendar.tradingDay(
+            after: baseDate,
+            offset: rule.offset.tradingDays,
+            jurisdiction: resolvedJurisdiction
+        )
+        return calendar.tradingDayStart(targetDay, jurisdiction: resolvedJurisdiction)
+    }
+}
+
 // MARK: - V1 保守规则集（ADR-DATA005 §Decision 1）
-//
-// V1 保守规则：所有数据统一「availableAt = 公告日 / 净值日的次交易日 00:00」。
-// 宁可少算不可多算，防 lookahead bias（ADR-DATA005 §Decision 3）。
 
 /// V1 保守规则集：三类数据各自的 policy。
+///
+/// 所有 V1 policy 的 offset 都是 +1 交易日（保守：宁可少算不可多算，
+/// ADR-DATA005 §Decision 3）。差异在 base 字段：
+/// - FundNAV：base = effectiveAt（navDate）
+/// - MarketClose：base = effectiveAt（tradingDay）
+/// - FundDisclosure：base = publishedAt（announcementDate）
 enum AvailabilityPolicyV1 {
     /// 基金 NAV：T 日净值 T+1 日才可知。
-    /// availableAt = navDate + 1 trading day 00:00
     struct FundNAV: AvailabilityPolicy {
         let policyID = "fund_nav"
         let version = "v1"
         let applicableKind: AvailabilityPolicyKind = .fundNAV
         let provenance: AvailabilityPolicyProvenance = .manual
+        let rule: AvailabilityRule
+        init() {
+            rule = AvailabilityRule(
+                base: .effectiveAt,
+                offset: .init(tradingDays: 1),
+                jurisdictionSource: .fixed(.chinaMainland)   // 公募基金默认 CN
+            )
+        }
 
-        func availableAt(effectiveAt: Date, publishedAt: Date, calendar: TradingCalendar) -> Date? {
-            // 保守：取 effectiveAt（navDate）的次交易日，作为可知时刻
-            // 不用 publishedAt（Provider 可能晚给但客观可知早于给的时间）
-            let nextDay = calendar.nextTradingDay(after: effectiveAt, jurisdiction: .chinaMainland)
-            return calendar.tradingDayStart(nextDay, jurisdiction: .chinaMainland)
+        // 显式解码：校验 id/version/rule 与 V1 一致，损坏或版本不匹配的数据抛错，
+        // 不静默解成 v1（审查 P1 修复点）。
+        private enum CodingKeys: String, CodingKey {
+            case policyID, version, applicableKind, provenance, rule
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try c.decode(String.self, forKey: .policyID)
+            let decodedVersion = try c.decode(String.self, forKey: .version)
+            let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
+            guard decodedID == "fund_nav", decodedVersion == "v1",
+                  decodedKind == .fundNAV,
+                  decodedRule == AvailabilityRule(
+                      base: .effectiveAt, offset: .init(tradingDays: 1),
+                      jurisdictionSource: .fixed(.chinaMainland)
+                  )
+            else {
+                throw AvailabilityPolicyDecodeError.identityMismatch(
+                    policyID: decodedID, version: decodedVersion
+                )
+            }
+            // policyID/version/applicableKind/provenance 是常量（保留默认值）；
+            // rule 是唯一非常量字段，从解码值取
+            rule = decodedRule
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(policyID, forKey: .policyID)
+            try c.encode(version, forKey: .version)
+            try c.encode(applicableKind, forKey: .applicableKind)
+            try c.encode(provenance, forKey: .provenance)
+            try c.encode(rule, forKey: .rule)
         }
     }
 
     /// 市场收盘：T 日收盘 T+1 日才可知。
-    /// availableAt = tradingDay + 1 trading day 00:00
+    /// 法域从 listing 推导（A股 / 美股 / 港股各自下一交易日）。
     struct MarketClose: AvailabilityPolicy {
         let policyID = "market_close"
         let version = "v1"
         let applicableKind: AvailabilityPolicyKind = .marketClose
         let provenance: AvailabilityPolicyProvenance = .manual
+        let rule: AvailabilityRule
+        init() {
+            rule = AvailabilityRule(
+                base: .effectiveAt,
+                offset: .init(tradingDays: 1),
+                jurisdictionSource: .fromListing   // 不硬编码 CN，跨市场生效
+            )
+        }
 
-        func availableAt(effectiveAt: Date, publishedAt: Date, calendar: TradingCalendar) -> Date? {
-            // 不同法域交易日不同，按 publishedAt 时点推断（Provider 公布时间）
-            // V1 简化：统一用 nextTradingDay，法域由调用方传入 calendar 时隐含
-            // 这里保守用次交易日（不假设盘后清算完成时刻）
-            let nextDay = calendar.nextTradingDay(after: effectiveAt, jurisdiction: .chinaMainland)
-            return calendar.tradingDayStart(nextDay, jurisdiction: .chinaMainland)
+        private enum CodingKeys: String, CodingKey {
+            case policyID, version, applicableKind, provenance, rule
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try c.decode(String.self, forKey: .policyID)
+            let decodedVersion = try c.decode(String.self, forKey: .version)
+            let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
+            guard decodedID == "market_close", decodedVersion == "v1",
+                  decodedKind == .marketClose,
+                  decodedRule == AvailabilityRule(
+                      base: .effectiveAt, offset: .init(tradingDays: 1),
+                      jurisdictionSource: .fromListing
+                  )
+            else {
+                throw AvailabilityPolicyDecodeError.identityMismatch(
+                    policyID: decodedID, version: decodedVersion
+                )
+            }
+            rule = decodedRule
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(policyID, forKey: .policyID)
+            try c.encode(version, forKey: .version)
+            try c.encode(applicableKind, forKey: .applicableKind)
+            try c.encode(provenance, forKey: .provenance)
+            try c.encode(rule, forKey: .rule)
         }
     }
 
     /// 基金披露：公告日次日才可知。
-    /// availableAt = announcementDate + 1 trading day 00:00
+    /// 法域从 listing 推导（披露规则各地不同，但保守统一用上市地法域）。
     struct FundDisclosure: AvailabilityPolicy {
         let policyID = "fund_disclosure"
         let version = "v1"
         let applicableKind: AvailabilityPolicyKind = .fundDisclosure
         let provenance: AvailabilityPolicyProvenance = .manual
+        let rule: AvailabilityRule
+        init() {
+            rule = AvailabilityRule(
+                base: .publishedAt,
+                offset: .init(tradingDays: 1),
+                jurisdictionSource: .fromListing
+            )
+        }
 
-        func availableAt(effectiveAt: Date, publishedAt: Date, calendar: TradingCalendar) -> Date? {
-            // 公告日的次交易日。effectiveAt 是报告期（如 6-30），publishedAt 是公告日（如 7-20）
-            // 客观可知是公告日的次交易日（7-21）
-            let nextDay = calendar.nextTradingDay(after: publishedAt, jurisdiction: .chinaMainland)
-            return calendar.tradingDayStart(nextDay, jurisdiction: .chinaMainland)
+        private enum CodingKeys: String, CodingKey {
+            case policyID, version, applicableKind, provenance, rule
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try c.decode(String.self, forKey: .policyID)
+            let decodedVersion = try c.decode(String.self, forKey: .version)
+            let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
+            guard decodedID == "fund_disclosure", decodedVersion == "v1",
+                  decodedKind == .fundDisclosure,
+                  decodedRule == AvailabilityRule(
+                      base: .publishedAt, offset: .init(tradingDays: 1),
+                      jurisdictionSource: .fromListing
+                  )
+            else {
+                throw AvailabilityPolicyDecodeError.identityMismatch(
+                    policyID: decodedID, version: decodedVersion
+                )
+            }
+            rule = decodedRule
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(policyID, forKey: .policyID)
+            try c.encode(version, forKey: .version)
+            try c.encode(applicableKind, forKey: .applicableKind)
+            try c.encode(provenance, forKey: .provenance)
+            try c.encode(rule, forKey: .rule)
         }
     }
 
