@@ -9,7 +9,9 @@ import Foundation
 /// 所有 Canonical 观测的统一协议。
 ///
 /// 协议要求：
-/// - 稳定 `id`（含 vintage 维度，ADR-DATA008）
+/// - 稳定 `id`
+/// - 带 `vintage`（ADR-DATA008 multi-vintage，Repository 通过 existential 操作时
+///   可统一过滤 / 排序 / 选择最新版本，不必做类型分支）
 /// - 指向 Canonical Identity（Instrument / Listing / ...）
 /// - 带 `temporalEnvelope`（四时间，ADR-DATA002）
 /// - 带 `availabilityProvenance`（availableAt 推导溯源，ADR-DATA005）
@@ -18,6 +20,7 @@ import Foundation
 /// 业务层只消费 CanonicalObservation；Provider 原始字段只活在 ProviderRecord。
 protocol CanonicalObservation: Sendable, Codable, Hashable {
     var id: ObservationID { get }
+    var vintage: Vintage { get }
     var temporalEnvelope: TemporalEnvelope { get }
     var availabilityProvenance: AvailabilityProvenance { get }
     var dataQuality: DataQuality { get }
@@ -393,9 +396,17 @@ struct CorporateAction: CanonicalObservation {
 ///
 /// 与 EvidenceFact（DOM-9）区别：EvidenceObservation 是 Observation 层的载体，
 /// EvidenceFact 是更细粒度的「事实 + extractionMethod + verificationStatus」。
-/// 这里只放最小骨架，DOM-9 完整实现 EvidenceFact。
+///
+/// **Evidence 逻辑身份（EvidenceID）**：EvidenceObservation 同时携带
+/// `id: ObservationID`（CanonicalObservation 协议要求）和
+/// `evidenceID: EvidenceID`（Evidence 逻辑身份）。下游引用（EvidenceFact.evidenceID、
+/// InvestmentSignal.derivedFromEvidenceIDs）一律用 `EvidenceID`，**不允许用
+/// ObservationID 冒充**——这样一条 DailyBar 或 NAV 的 ObservationID 无法被当作
+/// Evidence 引用（审查 P1 修复点：编译期类型隔离）。
 struct EvidenceObservation: CanonicalObservation {
     let id: ObservationID
+    /// Evidence 逻辑身份（与 id 一一对应，但类型独立，下游引用专用）
+    let evidenceID: EvidenceID
     let temporalEnvelope: TemporalEnvelope
     let availabilityProvenance: AvailabilityProvenance
     let dataQuality: DataQuality
@@ -418,6 +429,7 @@ struct EvidenceObservation: CanonicalObservation {
 
     init(
         id: ObservationID,
+        evidenceID: EvidenceID,
         temporalEnvelope: TemporalEnvelope,
         availabilityProvenance: AvailabilityProvenance,
         dataQuality: DataQuality,
@@ -427,6 +439,7 @@ struct EvidenceObservation: CanonicalObservation {
         subjectCanonical: CanonicalRef
     ) {
         self.id = id
+        self.evidenceID = evidenceID
         self.temporalEnvelope = temporalEnvelope
         self.availabilityProvenance = availabilityProvenance
         self.dataQuality = dataQuality

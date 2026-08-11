@@ -59,6 +59,22 @@ final class CanonicalIDTests: XCTestCase {
         XCTAssertEqual(original, decoded)
     }
 
+    func testInvestmentTargetID_codableRoundTrip() throws {
+        // ADR-D000 Target 的稳定标识，Decision 层通过它引用 Target
+        let original = InvestmentTargetID(rawValue: "target_user_001")
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(InvestmentTargetID.self, from: data)
+        XCTAssertEqual(original, decoded)
+    }
+
+    func testEvidenceID_codableRoundTrip() throws {
+        // EvidenceID 与 ObservationID 类型独立，编译期不可互换
+        let original = EvidenceID(rawValue: "ev_01J8Z3F9")
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(EvidenceID.self, from: data)
+        XCTAssertEqual(original, decoded)
+    }
+
     // MARK: - Hashable（可作 Dictionary key / Set 元素）
 
     func testIDTypes_hashableAsDictionaryKey() {

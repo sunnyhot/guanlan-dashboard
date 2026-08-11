@@ -109,6 +109,17 @@ struct TargetVersion: Sendable, Codable, Hashable, RawRepresentable {
     init(rawValue: String) { self.rawValue = rawValue }
 }
 
+/// 投资目标 ID（Strategic Allocation Target 的稳定标识）。
+///
+/// ADR-D000 Target 是 Cardinal Firewall 第一道：每个 Strategic Target Allocation
+/// 有唯一 InvestmentTargetID，Agent / LLM / Signal 都不能改它（只能推荐目录
+/// 已有模板给用户确认）。业务层（Decision）通过 InvestmentTargetID 引用 Target，
+/// 不直接持有权重字典。
+struct InvestmentTargetID: Sendable, Codable, Hashable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+}
+
 // MARK: - 已知 Provider ID 常量
 //
 // 集中声明便于审查（FREE001 PR checklist：新增 Provider 必须在此登记）。

@@ -31,7 +31,7 @@ final class EvidenceAndSignalTests: XCTestCase {
         // SEC 10-K XBRL 营收 fact
         let fact = EvidenceFact(
             id: DomainID(rawValue: "fact_1"),
-            evidenceID: ObservationID(rawValue: "obs_sec_10k"),
+            evidenceID: EvidenceID(rawValue: "ev_sec_10k"),
             statement: "茅台 2024 Q2 营收 450 亿元",
             extractionMethod: .xbrlFact,
             verificationStatus: .verified,
@@ -50,7 +50,7 @@ final class EvidenceAndSignalTests: XCTestCase {
         // LLM 抽取的 fact 默认 unverifiable（需 Evidence Matcher 升级，RES-8）
         let fact = EvidenceFact(
             id: DomainID(rawValue: "fact_2"),
-            evidenceID: ObservationID(rawValue: "obs_news"),
+            evidenceID: EvidenceID(rawValue: "ev_news"),
             statement: "公司高管在采访中表示看好下半年增长",
             extractionMethod: .llmExtracted,
             verificationStatus: .unverifiable,
@@ -87,8 +87,8 @@ final class EvidenceAndSignalTests: XCTestCase {
             direction: .bullish,
             strength: .strong,
             derivedFromEvidenceIDs: [
-                ObservationID(rawValue: "obs_ev_1"),
-                ObservationID(rawValue: "obs_ev_2"),
+                EvidenceID(rawValue: "ev_1"),
+                EvidenceID(rawValue: "ev_2"),
             ],
             effectiveAt: now,
             producer: SignalProducer(kind: .llm, modelIdentifier: "gpt-4"),
@@ -111,7 +111,7 @@ final class EvidenceAndSignalTests: XCTestCase {
             dimension: .technical,
             direction: .bearish,
             strength: .moderate,
-            derivedFromEvidenceIDs: [ObservationID(rawValue: "obs_bar_1")],
+            derivedFromEvidenceIDs: [EvidenceID(rawValue: "ev_bar_1")],
             effectiveAt: now,
             producer: .factorEngine,
             rationale: nil
@@ -145,9 +145,9 @@ final class EvidenceAndSignalTests: XCTestCase {
         // signal 的 derivedFromEvidenceIDs 是 D004 replay 的引用对象
         // 重放时按引用取 evidence，不重跑 LLM
         let evidenceIDs = [
-            ObservationID(rawValue: "obs_ev_1"),
-            ObservationID(rawValue: "obs_ev_2"),
-            ObservationID(rawValue: "obs_ev_3"),
+            EvidenceID(rawValue: "ev_1"),
+            EvidenceID(rawValue: "ev_2"),
+            EvidenceID(rawValue: "ev_3"),
         ]
         let signal = InvestmentSignal(
             id: SignalID(rawValue: "sig_replay"),
@@ -185,7 +185,7 @@ final class EvidenceAndSignalTests: XCTestCase {
         // 两者不能直接互换，必须经 SignalPolicy（FAC-2）转换
         let fact = EvidenceFact(
             id: DomainID(rawValue: "f"),
-            evidenceID: ObservationID(rawValue: "obs"),
+            evidenceID: EvidenceID(rawValue: "ev_obs"),
             statement: "营收同比 +20%",
             extractionMethod: .xbrlFact,
             verificationStatus: .verified,

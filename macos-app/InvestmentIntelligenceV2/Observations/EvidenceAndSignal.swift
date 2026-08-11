@@ -50,12 +50,16 @@ enum EvidenceVerificationStatus: String, Sendable, Codable, Hashable {
 /// - EvidenceObservation 是 Observation 层的载体（带 temporalEnvelope / vintage）
 /// - EvidenceFact 是其内部的「原子事实 + 提取方式 + 验证状态」
 ///
+/// `evidenceID` 用强类型 `EvidenceID`（不是 ObservationID），编译期保证只有
+/// 真正的 Evidence 观测能被引用，DailyBar/NAV 的 ObservationID 无法冒充
+/// （审查 P1 修复点）。
+///
 /// LLM 输出的事实默认 verificationStatus = .unverifiable，
 /// 需经 Evidence Matcher（RES-8）匹配已有 Evidence 才升级。
 struct EvidenceFact: Sendable, Codable, Hashable {
     let id: DomainID
-    /// 该事实的来源 evidence
-    let evidenceID: ObservationID
+    /// 该事实的来源 evidence（强类型 EvidenceID，不是 ObservationID）
+    let evidenceID: EvidenceID
     /// 事实陈述（如「茅台 Q2 营收 450 亿，同比 +17%」）
     let statement: String
     /// 提取方式
@@ -70,7 +74,7 @@ struct EvidenceFact: Sendable, Codable, Hashable {
 
     init(
         id: DomainID,
-        evidenceID: ObservationID,
+        evidenceID: EvidenceID,
         statement: String,
         extractionMethod: EvidenceExtractionMethod,
         verificationStatus: EvidenceVerificationStatus,
@@ -128,8 +132,9 @@ struct InvestmentSignal: Sendable, Codable, Hashable {
     let direction: SignalDirection
     /// 强度
     let strength: SignalStrength
-    /// 推导此 signal 的 evidence IDs（ADR-D004 replay 引用）
-    let derivedFromEvidenceIDs: [ObservationID]
+    /// 推导此 signal 的 evidence IDs（强类型 EvidenceID，ADR-D004 replay 引用）。
+    /// 不允许用 ObservationID 冒充——只有真正的 Evidence 观测能被引用。
+    let derivedFromEvidenceIDs: [EvidenceID]
     /// 信号生效时间
     let effectiveAt: Date
     /// 信号产出方（LLM model / Factor engine / manual）
@@ -143,7 +148,7 @@ struct InvestmentSignal: Sendable, Codable, Hashable {
         dimension: SignalDimension,
         direction: SignalDirection,
         strength: SignalStrength,
-        derivedFromEvidenceIDs: [ObservationID],
+        derivedFromEvidenceIDs: [EvidenceID],
         effectiveAt: Date,
         producer: SignalProducer,
         rationale: String? = nil

@@ -235,6 +235,7 @@ final class CanonicalObservationTests: XCTestCase {
     func testEvidenceObservation_codableRoundTrip() throws {
         let ev = EvidenceObservation(
             id: ObservationID(rawValue: "obs_ev_1"),
+            evidenceID: EvidenceID(rawValue: "ev_1"),   // Evidence 逻辑身份
             temporalEnvelope: envelope,
             availabilityProvenance: prov,
             dataQuality: DataQuality(providerReliability: .officialStable),
@@ -247,6 +248,7 @@ final class CanonicalObservationTests: XCTestCase {
         let decoded = try JSONDecoder().decode(EvidenceObservation.self, from: data)
         XCTAssertEqual(ev, decoded)
         XCTAssertEqual(decoded.source, .secFiling)
+        XCTAssertEqual(decoded.evidenceID, EvidenceID(rawValue: "ev_1"))
     }
 
     // MARK: - 协议多态（[CanonicalObservation] 容器）
