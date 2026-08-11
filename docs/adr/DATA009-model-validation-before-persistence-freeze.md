@@ -39,7 +39,7 @@ Investment Intelligence V3.1 是一个 ~340 点数的大计划，SQLite schema�
    - 场景 1：同一基金跨 Provider 代码不同 → 解析到同一 InstrumentID
    - 场景 2：同一股票跨 Provider symbol 不同 → 解析到同一 ListingID
    - 场景 3：基金 Q2 持仓 7-20 公告 → `economicKnowledge(asOf: 7-10)` 查不到
-   - 场景 4：Provider 故障 8-01 抓到 → `availableAt = 7-20`、`ingestedAt = 8-01`；7-21 决策可用
+   - 场景 4：Provider 故障 8-01 抓到 → `availableAt = nextTradingDay(7-20) = 7-22`（2024 中国日历，7-20 周六）、`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见
    - 场景 5：模拟 v1→v2 revision → 历史 vintage 查询仍看到 v1
 
 3. **M2 不过的应对**：

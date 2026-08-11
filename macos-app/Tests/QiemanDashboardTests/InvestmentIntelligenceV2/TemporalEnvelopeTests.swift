@@ -54,20 +54,30 @@ final class TemporalEnvelopeTests: XCTestCase {
         )
     }
 
-    func testValidate_availableAfterIngested() {
+    func testValidate_ingestedLaterThanAvailable_isAllowed() {
+        // availableAt 与 ingestedAt 不建立全序（ADR-DATA002 §Decision 4）。
+        // Provider 故障延迟到 8-01 抓到的 7-20 公告数据是合法的：
+        // availableAt = 7-21（客观可知），ingestedAt = 8-01（本机滞后）。
         let env = TemporalEnvelope(
             effectiveAt: date(2024, 6, 30),
             publishedAt: date(2024, 7, 20),
-            availableAt: date(2024, 8, 5),    // 晚于 ingestedAt
-            ingestedAt: date(2024, 8, 1)
+            availableAt: date(2024, 7, 21),
+            ingestedAt: date(2024, 8, 1)   // 晚于 availableAt，合法
         )
-        XCTAssertEqual(
-            env.validate(),
-            .availableAfterIngested(
-                availableAt: date(2024, 8, 5),
-                ingestedAt: date(2024, 8, 1)
-            )
+        XCTAssertNil(env.validate())
+    }
+
+    func testValidate_availableLaterThanIngested_isAllowed() {
+        // 反向：保守策略把 availableAt 推迟到下一交易日，
+        // 但本机在发布当天就已经抓到（availableAt > ingestedAt），同样合法。
+        // 这种数据走 economicKnowledge 仍按客观可知时间过滤。
+        let env = TemporalEnvelope(
+            effectiveAt: date(2024, 7, 18),       // 周四 navDate
+            publishedAt: date(2024, 7, 18),
+            availableAt: date(2024, 7, 19),        // 保守：次交易日才客观可知
+            ingestedAt: date(2024, 7, 18)          // 但本机 7-18 就抓到了（早于 availableAt）
         )
+        XCTAssertNil(env.validate())
     }
 
     func testValidate_equalTimestamps_ok() {
@@ -82,18 +92,18 @@ final class TemporalEnvelopeTests: XCTestCase {
     // MARK: - M2 场景 4 预演：Provider 故障 ingestedAt ≠ availableAt
 
     func testM2Scenario4_ingestedLaterThanAvailable() {
-        // 基金 Q2 持仓 7-20 公告，客观 7-21 可知（次交易日）；
-        // 但 Provider 故障延迟到 8-01 才抓到。
-        // ADR-DATA005：availableAt 仍记为客观的 7-21，ingestedAt 记为 8-01。
+        // 基金 Q2 持仓 7-20 公告，客观可知 = nextTradingDay(7-20) = 7-22（2024 真实日历，7-20 周六）；
+        // Provider 故障延迟到 8-01 才抓到。
+        // ADR-DATA005：availableAt 仍记为客观的 7-22，ingestedAt 记为 8-01。
         let env = TemporalEnvelope(
             effectiveAt: date(2024, 6, 30),
             publishedAt: date(2024, 7, 20),
-            availableAt: date(2024, 7, 21),
+            availableAt: date(2024, 7, 22),
             ingestedAt: date(2024, 8, 1)
         )
         XCTAssertNil(env.validate())
         XCTAssertNotEqual(env.availableAt, env.ingestedAt)
-        // 7-21 决策用 economicKnowledge(asOf: 7-21) 仍能看到这条数据
+        // 7-22 决策用 economicKnowledge(asOf: 7-22) 仍能看到这条数据
         // （具体查询逻辑在 REPO 阶段实现，这里只验证 envelope 语义）
     }
 

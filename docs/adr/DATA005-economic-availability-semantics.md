@@ -36,8 +36,8 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 
 2. **TemporalNormalizer 用 Policy 算 availableAt**（REPO-5）：
    - ProviderRecord 不带 availableAt，由 TemporalNormalizer 基于 AvailabilityPolicy 推导
-   - Provider 故障延迟到 8-01 抓到的 7-20 公告数据，`availableAt` 仍记为 7-21（客观），`ingestedAt` 记为 8-01
-   - 7-21 的决策回放用 `economicKnowledge(asOf: 7-21)` 仍能看到这条数据（M2 场景 4）
+   - Provider 故障延迟到 8-01 抓到的 7-20 公告数据，`availableAt` 仍记为 `nextTradingDay(7-20)`。以 2024 中国日历为例，7-20 是周六，`availableAt = 2024-07-22`（客观）；`ingestedAt` 记为 8-01
+   - 7-22 的决策回放用 `economicKnowledge(asOf: 7-22)` 仍能看到这条数据（M2 场景 4）。注意：若用 `operationalKnowledge(asOf: 7-22)` 则看不到（本机 8-01 才抓到）——这正是两种 mode 的区别
 
 3. **Conservative 优先**：当规则模糊时（如盘后数据确切发布时刻不清），用更保守的 availableAt（次交易日），宁可少算不可多算。回测 lookahead bias 是单向错误，宁可错过不可假装看到。
 
@@ -64,8 +64,8 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 
 - **DOM-7 测试**：`AvailabilityPolicy` 结构含 id/version/rule/provenance；V1 三类规则各自有测试
 - **REPO-5 测试**：`TemporalNormalizer` 基于 policy 算 availableAt；测试断言「ingestedAt ≠ availableAt」
-- **M2 验收场景 4**（rollout §4.1）：Provider 故障 8-01 抓到的 7-20 公告数据，`availableAt = 7-21`、`ingestedAt = 8-01`；7-21 决策仍可见
-- **M2 验收场景 3**：基金 Q2 持仓 7-20 公告，`economicKnowledge(asOf: 7-10)` 查不到
+- **M2 验收场景 4**（rollout §4.1）：Provider 故障 8-01 抓到的 7-20 公告数据（7-20 为 2024 年周六），`availableAt = nextTradingDay(7-20) = 2024-07-22`、`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见
+- **M2 验收场景 3**：基金 Q2 持仓 7-20 公告，`availableAt = 7-22`，`economicKnowledge(asOf: 7-10)` 查不到
 - **PR checklist**：
   - 任何代码用 publishedAt 或 ingestedAt 当 availableAt → 拒绝
   - AvailabilityPolicy 修订未增 version → 拒绝

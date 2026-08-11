@@ -423,8 +423,8 @@ M2 是整个项目最关键的验收。五个场景必须全过：
 |---|---|---|
 | 1 | 同一基金在 Qieman 和天天基金代码不同 | 解析到同一 `InstrumentID` |
 | 2 | 同一股票在两个 Provider symbol 不同 | 解析到同一 `ListingID` |
-| 3 | 基金 Q2 持仓 7-20 公告 | `economicKnowledge(at: 7-10)` 查不到 |
-| 4 | Provider 故障延迟到 8-01 抓到 | `availableAt = 7-20`（客观），`ingestedAt = 8-01`；7-21 决策仍可用 |
+| 3 | 基金 Q2 持仓 7-20 公告（2024 年周六）| `availableAt = nextTradingDay(7-20) = 7-22`；`economicKnowledge(asOf: 7-10)` 查不到 |
+| 4 | Provider 故障延迟到 8-01 抓到 | `availableAt = 7-22`（客观，由 policy 推导），`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见 |
 | 5 | 模拟一次 data revision（v1→v2）| 历史 vintage 查询仍看到 v1 |
 
 M2 不过不进 Epic 5（GRDB schema 冻结）。

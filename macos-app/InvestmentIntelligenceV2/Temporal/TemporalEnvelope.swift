@@ -12,15 +12,22 @@ import Foundation
 ///   （如基金 2024-06-30 持仓、2024-07-20 收盘价）
 /// - `publishedAt`：数据源对外公布的时间
 ///   （如基金季报 2024-07-20 公告日、FRED vintage 发布日）
-/// - `availableAt`：客观上数据进入公开世界的最早时间
-///   （由 AvailabilityPolicy 推导，≠ publishedAt 也 ≠ ingestedAt）
-/// - `ingestedAt`：本系统实际抓到并入库的时间
-///   （永远 ≥ availableAt，受 Provider 故障影响）
+/// - `availableAt`：**客观经济可知**时间——数据客观上进入公开世界的最早时间
+///   （由 AvailabilityPolicy 推导，与 publishedAt / ingestedAt 之间不建立全序）
+/// - `ingestedAt`：**本机实际已知**时间——本系统实际抓到并入库的时间
+///   （受 Provider 故障 / 抓取调度影响，可能与 availableAt 任意先后）
+///
+/// 关键：`availableAt` 与 `ingestedAt` **不存在固定顺序**（ADR-DATA002 §Decision 4）。
+/// 保守的 AvailabilityPolicy 可能把 availableAt 推迟到下一交易日，但本机可能在
+/// 数据发布的当天就已经 ingested（availableAt > ingestedAt）；反过来 Provider 故障
+/// 也可能让 ingestedAt 远晚于 availableAt（availableAt < ingestedAt）。
+/// 因此 validate() 只校验客观事件链 effective → published → available，
+/// 不把 ingestedAt 纳入全序。
 ///
 /// 不变量（TemporalEnvelope.validate()）：
 /// - `effectiveAt <= publishedAt`：事件发生早于或等于公布
-/// - `publishedAt <= availableAt`：公布早于或等于客观可知（保守策略下可放宽到次交易日）
-/// - `availableAt <= ingestedAt`：客观可知早于或等于本系统入库
+/// - `publishedAt <= availableAt`：公布早于或等于客观可知（保守策略可推迟到次交易日）
+/// - `availableAt` 与 `ingestedAt` 之间**无序**（见上）
 struct TemporalEnvelope: Sendable, Codable, Hashable {
     let effectiveAt: Date
     let publishedAt: Date
@@ -35,15 +42,16 @@ struct TemporalEnvelope: Sendable, Codable, Hashable {
     }
 
     /// 校验四时间不变量。违反返回具体原因，便于 Pipeline 拒收脏数据（ADR-DATA003）。
+    ///
+    /// 注意：**不校验 `availableAt <= ingestedAt`**。两个语义不同的时间戳不建立
+    /// 全序——客观可知时间与本机入库时间各自独立，由 DataQueryMode 的不同模式
+    /// 分别消费（见 KnowledgeContext.swift）。
     func validate() -> TemporalInvariantViolation? {
         if effectiveAt > publishedAt {
             return .effectiveAfterPublished(effectiveAt: effectiveAt, publishedAt: publishedAt)
         }
         if publishedAt > availableAt {
             return .publishedAfterAvailable(publishedAt: publishedAt, availableAt: availableAt)
-        }
-        if availableAt > ingestedAt {
-            return .availableAfterIngested(availableAt: availableAt, ingestedAt: ingestedAt)
         }
         return nil
     }
@@ -52,7 +60,6 @@ struct TemporalEnvelope: Sendable, Codable, Hashable {
 enum TemporalInvariantViolation: Error, Equatable, Sendable {
     case effectiveAfterPublished(effectiveAt: Date, publishedAt: Date)
     case publishedAfterAvailable(publishedAt: Date, availableAt: Date)
-    case availableAfterIngested(availableAt: Date, ingestedAt: Date)
 }
 
 // MARK: - AvailabilityProvenance（ADR-DATA005）
