@@ -102,14 +102,52 @@ extension AppModel {
         }
 
         // 运行 Agent
+        let diagnosticRecorder: AIAgentDiagnosticRecorder?
         do {
-            let report = try await decisionCaseResearchAgent.run(
-                decisionCase: case_,
-                snapshot: snapshot,
-                settings: trendSettings.provider,
-                webSearchSettings: trendSettings.webSearch,
-                officialSourceSettings: trendSettings.officialSources
+            diagnosticRecorder = try makeAIAgentDiagnosticRecorder(
+                runID: runID,
+                agentKind: "decision-case-research",
+                scope: case_.kind.rawValue,
+                trigger: trigger,
+                provider: trendSettings.provider,
+                privacyMode: snapshot.privacyMode,
+                startedAt: startedAt
             )
+        } catch {
+            diagnosticRecorder = nil
+            setDecisionCaseResearchError(
+                "专项研究会继续，但完整诊断日志初始化失败：\(error.localizedDescription)",
+                for: case_.id
+            )
+        }
+        do {
+            let report = try await AIAgentDiagnosticLog.$recorder.withValue(
+                diagnosticRecorder
+            ) {
+                do {
+                    let result = try await decisionCaseResearchAgent.run(
+                        decisionCase: case_,
+                        snapshot: snapshot,
+                        settings: trendSettings.provider,
+                        webSearchSettings: trendSettings.webSearch,
+                        officialSourceSettings: trendSettings.officialSources
+                    )
+                    await AIAgentDiagnosticLog.record("run_completed", payload: result)
+                    return result
+                } catch is CancellationError {
+                    await AIAgentDiagnosticLog.record(
+                        "run_cancelled",
+                        message: "专项研究已取消"
+                    )
+                    throw CancellationError()
+                } catch {
+                    await AIAgentDiagnosticLog.record(
+                        "run_failed",
+                        message: error.localizedDescription
+                    )
+                    throw error
+                }
+            }
 
             // 本地 Policy 校验 + 应用
             applyResearchReport(

@@ -96,6 +96,124 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(permissions?.intValue, 0o600)
     }
 
+    func testCompleteEvidenceLedgerKeepsUncitedTeamAssessmentsAndDeduplicates() {
+        let cited = TrendEvidence(
+            id: "analysis:news:fund:510300",
+            sourceName: "新闻事件分析",
+            title: "新闻结论",
+            url: nil,
+            publishedAt: nil,
+            retrievedAt: "2026-07-27 10:15:00",
+            summary: "新闻维度结论。"
+        )
+        let uncited = TrendEvidence(
+            id: "analysis:market:fund:510300",
+            sourceName: "行情信号分析",
+            title: "行情结论",
+            url: nil,
+            publishedAt: nil,
+            retrievedAt: "2026-07-27 10:15:00",
+            summary: "行情维度结论。"
+        )
+        let report = NextHourGuidanceReport(
+            generatedAt: "2026-07-27 10:15:00",
+            validUntil: "2026-07-27 11:15",
+            slotKey: "2026-07-27 10:15",
+            scope: .marketTrading,
+            headline: "测试",
+            posture: .balanced,
+            summary: "测试完整证据账本。",
+            actions: [],
+            riskChecks: [],
+            assetCount: 1,
+            evidence: [cited],
+            auditEvidence: [cited, uncited]
+        )
+
+        XCTAssertEqual(report.completeEvidenceLedger.map(\.id), [cited.id, uncited.id])
+    }
+
+    func testActionDetailSeparatesRelatedTeamAssessmentsFromSupportingEvidence() {
+        let targetID = "fund:510300"
+        let targetName = "沪深300ETF"
+        let metadata = TrendEvidenceMetadata(
+            sourceKind: .portfolioSnapshot,
+            sourceTier: .primary,
+            entityNames: [targetName],
+            metadataConfidence: .deterministic
+        )
+        let teamEvidence = [
+            TrendEvidence(
+                id: "analysis:market:\(targetID)",
+                sourceName: "行情信号分析",
+                title: "行情判断",
+                url: nil,
+                publishedAt: nil,
+                retrievedAt: "2026-07-27 10:15:00",
+                summary: "行情结论。",
+                metadata: metadata
+            ),
+            TrendEvidence(
+                id: "analysis:news:\(targetID)",
+                sourceName: "新闻事件分析",
+                title: "新闻判断",
+                url: nil,
+                publishedAt: nil,
+                retrievedAt: "2026-07-27 10:15:00",
+                summary: "新闻结论。",
+                metadata: metadata
+            ),
+            TrendEvidence(
+                id: "analysis:portfolio:\(targetID)",
+                sourceName: "持仓结构分析",
+                title: "持仓判断",
+                url: nil,
+                publishedAt: nil,
+                retrievedAt: "2026-07-27 10:15:00",
+                summary: "持仓结论。",
+                metadata: metadata
+            )
+        ]
+        let rawEvidence = TrendEvidence(
+            id: "local:next-hour:asset:\(targetID)",
+            sourceName: "本地行情快照",
+            title: "行情快照",
+            url: nil,
+            publishedAt: nil,
+            retrievedAt: "2026-07-27 10:15:00",
+            summary: "原始支持证据。",
+            metadata: metadata
+        )
+        let action = NextHourGuidanceAction(
+            targetID: targetID,
+            targetName: targetName,
+            action: .hold,
+            instruction: "继续持有",
+            rationale: "等待确认",
+            trigger: "放量突破",
+            invalidation: "跌破支撑",
+            confidence: 70,
+            evidenceIDs: [teamEvidence[1].id, rawEvidence.id]
+        )
+        let report = NextHourGuidanceReport(
+            generatedAt: "2026-07-27 10:15:00",
+            validUntil: "2026-07-27 11:15",
+            slotKey: "2026-07-27 10:15",
+            scope: .marketTrading,
+            headline: "测试",
+            posture: .balanced,
+            summary: "测试条目详情证据分组。",
+            actions: [action],
+            riskChecks: [],
+            assetCount: 1,
+            evidence: [teamEvidence[1], rawEvidence],
+            auditEvidence: teamEvidence
+        )
+
+        XCTAssertEqual(report.teamEvidence(for: action).map(\.id), teamEvidence.map(\.id))
+        XCTAssertEqual(report.supportingEvidence(for: action).map(\.id), [rawEvidence.id])
+    }
+
     func testFocusedAgentDecodesSubmittedGuidance() async throws {
         let arguments = """
         {

@@ -21,6 +21,7 @@ protocol TrendResearchTool: Sendable {
 
 struct TrendResearchToolContext: Sendable {
     let snapshot: TrendResearchSnapshot
+    let scope: TrendResearchRunScope
     let evidenceLedger: TrendEvidenceLedger
     let webSearchSettings: TavilySearchSettings
     let webSearchGovernor: TrendWebSearchGovernor
@@ -35,6 +36,7 @@ struct TrendResearchToolContext: Sendable {
 
     init(
         snapshot: TrendResearchSnapshot,
+        scope: TrendResearchRunScope = .full,
         evidenceLedger: TrendEvidenceLedger,
         webSearchSettings: TavilySearchSettings = .empty,
         webSearchGovernor: TrendWebSearchGovernor = TrendWebSearchGovernor(maxNetworkSearches: 10),
@@ -43,6 +45,7 @@ struct TrendResearchToolContext: Sendable {
         reportDraftStore: TrendReportDraftStore? = nil
     ) {
         self.snapshot = snapshot
+        self.scope = scope
         self.evidenceLedger = evidenceLedger
         self.webSearchSettings = webSearchSettings
         self.webSearchGovernor = webSearchGovernor

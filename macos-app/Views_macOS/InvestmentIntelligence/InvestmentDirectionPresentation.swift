@@ -3,20 +3,17 @@ import SwiftUI
 extension InvestmentDirectionRecommendation {
     var tint: Color {
         switch self {
-        case .considerAdd, .keyOpportunity, .considerBuying, .marketTailwind:
+        case .keyOpportunity, .considerBuying, .marketTailwind:
             AppPalette.positive
-        case .considerReduce, .marketHeadwind:
+        case .marketHeadwind:
             AppPalette.warning
-        case .holdAndReview, .startWatching, .marketNeutral:
+        case .startWatching, .marketNeutral:
             AppPalette.info
         }
     }
 
     var systemImage: String {
         switch self {
-        case .considerAdd: "plus.circle.fill"
-        case .considerReduce: "minus.circle.fill"
-        case .holdAndReview: "pause.circle.fill"
         case .startWatching: "eye.fill"
         case .keyOpportunity: "scope"
         case .considerBuying: "arrow.up.right.circle.fill"
@@ -32,7 +29,6 @@ extension InvestmentDirectionDimension {
         switch self {
         case .assetClass: "大类资产"
         case .broadMarket: "大盘/宽基"
-        case .heldSector: "已持有板块"
         case .marketSector: "全市场板块"
         }
     }

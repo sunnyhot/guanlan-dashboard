@@ -73,13 +73,20 @@ struct SubmitTrendReportTool: TrendResearchTool {
             ledger: context.evidenceLedger,
             officialSourceConfigured: context.officialSourceSettings.isSECConfigured,
             alphaVantageConfigured: context.alphaVantageSettings.isConfigured,
-            webSearchConfigured: context.webSearchSettings.isConfigured
+            webSearchConfigured: context.webSearchSettings.isConfigured,
+            scope: context.scope
         )
-        let insufficientReasons = Self.insufficientEvidenceReasons(
-            sourceStatuses: sourceStatuses,
-            expectedFundCodes: snapshot.expectedFundCodes,
-            marketQuotes: snapshot.marketQuotes
-        )
+        // 增量任务不得因本次没有刷新“其它模块的数据源”而改写旧模块。
+        // 只有会更新组合长期判断/行动的 full、longTerm 运行才触发全报告降级。
+        let insufficientReasons: [String] = if context.scope == .full || context.scope == .longTerm {
+            Self.insufficientEvidenceReasons(
+                sourceStatuses: sourceStatuses,
+                expectedFundCodes: snapshot.expectedFundCodes,
+                marketQuotes: snapshot.marketQuotes
+            )
+        } else {
+            []
+        }
         let normalizedHorizons = decoded.horizons.map {
             Self.normalized(
                 $0,
@@ -89,6 +96,11 @@ struct SubmitTrendReportTool: TrendResearchTool {
         var normalizedMarket = decoded.marketOutlook.map(Self.normalized)
         var normalizedSectors = decoded.sectors.map(Self.normalized)
         var normalizedOpportunities = decoded.opportunities.map(Self.normalized)
+        if sourceStatuses.first(where: { $0.source == .webSearch })?.status != .success {
+            // 联网失败时不能让模型用记忆或持仓长期观点填充“全市场机会”。
+            // 本地行情、穿透和官方证据仍可形成降级复盘，但机会与资金行动必须留空。
+            normalizedOpportunities = []
+        }
 
         // 非 action 研究结论（板块/大类资产/机会）若 supporting 证据与该主题无关联，
         // 降级为 uncertain 并登记 warning——不硬拒整份报告；资金动作仍由 validateAction 严卡。
@@ -224,7 +236,8 @@ struct SubmitTrendReportTool: TrendResearchTool {
         ledger: TrendEvidenceLedger,
         officialSourceConfigured: Bool,
         alphaVantageConfigured: Bool,
-        webSearchConfigured: Bool
+        webSearchConfigured: Bool,
+        scope: TrendResearchRunScope
     ) async -> [TrendSourceStatus] {
         var bySource = Dictionary(
             snapshot.sourceStatuses.map { ($0.source, $0) },
@@ -235,7 +248,9 @@ struct SubmitTrendReportTool: TrendResearchTool {
             $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
         }
         let eligibleOfficialTargets = snapshot.eligibleSECResearchTickers
-        if eligibleOfficialTargets.isEmpty {
+        if !scope.usesOfficialAndVendorResearch {
+            // 本模块未请求官方源，保留快照中的 notRequested/notConfigured 状态。
+        } else if eligibleOfficialTargets.isEmpty {
             bySource[.officialSource] = TrendSourceStatus(
                 source: .officialSource,
                 status: .notRequested,
@@ -266,7 +281,9 @@ struct SubmitTrendReportTool: TrendResearchTool {
             $0.metadata.sourceKind == .licensedMarketData
                 || $0.id.hasPrefix("vendor:alphavantage:")
         }
-        if snapshot.eligibleAlphaVantageSymbols.isEmpty {
+        if !scope.usesOfficialAndVendorResearch {
+            // 本模块未请求供应商数据，保留快照状态。
+        } else if snapshot.eligibleAlphaVantageSymbols.isEmpty {
             bySource[.alphaVantage] = TrendSourceStatus(
                 source: .alphaVantage,
                 status: .notRequested,
@@ -296,7 +313,9 @@ struct SubmitTrendReportTool: TrendResearchTool {
         let webEvidence = allEvidence.filter {
             $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
         }
-        if webSearchConfigured {
+        if !scope.usesWebSearch {
+            // 收盘复盘只使用本地冻结数据，不把“未联网”误报成调用失败。
+        } else if webSearchConfigured {
             bySource[.webSearch] = TrendSourceStatus(
                 source: .webSearch,
                 status: webEvidence.isEmpty ? .failed : .success,

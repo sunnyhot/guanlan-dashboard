@@ -21,12 +21,93 @@ struct TrendWebSearchGovernorStatus: Sendable, Equatable {
 
 enum TrendWebSearchGovernorError: Error, LocalizedError {
     case budgetExhausted(limit: Int)
+    case providerUnavailable(TrendWebSearchAvailabilityBlockReason)
 
     var errorDescription: String? {
         switch self {
         case .budgetExhausted(let limit):
             return "本次分析的 Tavily 实际请求已达到 \(limit) 次上限。已有证据应优先用于形成结论；如仍缺少本地数据，可继续调用持仓或行情工具，随后提交报告。"
+        case .providerUnavailable(let reason):
+            return reason.userFacingMessage
         }
+    }
+
+    var toolErrorCode: String {
+        switch self {
+        case .budgetExhausted:
+            return "web_search_budget_exhausted"
+        case .providerUnavailable(let reason):
+            return reason.toolErrorCode
+        }
+    }
+}
+
+enum TrendWebSearchAvailabilityBlockReason: String, Sendable {
+    case quotaOrRateLimit
+    case authentication
+
+    var toolErrorCode: String {
+        switch self {
+        case .quotaOrRateLimit: "web_search_quota_exhausted"
+        case .authentication: "web_search_auth_failed"
+        }
+    }
+
+    var userFacingMessage: String {
+        switch self {
+        case .quotaOrRateLimit:
+            "Tavily 套餐额度已用尽或达到请求限制；已暂停重复联网请求。请升级套餐、更换 API Key，或等待额度恢复。"
+        case .authentication:
+            "Tavily API Key 无效或无权访问；已暂停重复联网请求，请检查设置。"
+        }
+    }
+
+    var cooldown: TimeInterval {
+        switch self {
+        case .quotaOrRateLimit: 30 * 60
+        case .authentication: 10 * 60
+        }
+    }
+}
+
+/// 在 App 生命周期内跨多次 Agent 运行保留供应商失败冷却状态。
+/// 成功响应仍优先走磁盘缓存；只有缓存未命中时才检查冷却，避免用户连续重试继续打额度接口。
+actor TrendWebSearchAvailabilityGate {
+    static let shared = TrendWebSearchAvailabilityGate()
+
+    private struct BlockedState: Sendable {
+        let reason: TrendWebSearchAvailabilityBlockReason
+        let unavailableUntil: Date
+    }
+
+    private var states: [String: BlockedState] = [:]
+
+    func block(
+        apiKey: String,
+        reason: TrendWebSearchAvailabilityBlockReason,
+        now: Date = .now
+    ) {
+        states[Self.apiKeyDigest(apiKey)] = BlockedState(
+            reason: reason,
+            unavailableUntil: now.addingTimeInterval(reason.cooldown)
+        )
+    }
+
+    func blockedReason(apiKey: String, now: Date = .now) -> TrendWebSearchAvailabilityBlockReason? {
+        let key = Self.apiKeyDigest(apiKey)
+        guard let state = states[key] else { return nil }
+        guard state.unavailableUntil > now else {
+            states.removeValue(forKey: key)
+            return nil
+        }
+        return state.reason
+    }
+
+    private static func apiKeyDigest(_ apiKey: String) -> String {
+        SHA256.hash(data: Data(apiKey.utf8))
+            .prefix(12)
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }
 
@@ -93,11 +174,16 @@ actor TrendWebSearchResponseCache {
     func value(
         for request: TavilySearchRequest,
         apiKey: String,
+        cacheKeyOverride: String? = nil,
         maxAgeSeconds: TimeInterval? = nil,
         now: Date = Date()
     ) -> TavilySearchResponse? {
         pruneExpired(now: now)
-        guard let entry = entries[Self.key(for: request, apiKey: apiKey)] else {
+        guard let entry = entries[Self.key(
+            for: request,
+            apiKey: apiKey,
+            cacheKeyOverride: cacheKeyOverride
+        )] else {
             return nil
         }
         let allowedAge = max(60, maxAgeSeconds ?? ttlSeconds)
@@ -111,11 +197,16 @@ actor TrendWebSearchResponseCache {
         _ response: TavilySearchResponse,
         for request: TavilySearchRequest,
         apiKey: String,
+        cacheKeyOverride: String? = nil,
         ttlSeconds entryTTLSeconds: TimeInterval? = nil,
         now: Date = Date()
     ) {
         pruneExpired(now: now)
-        let key = Self.key(for: request, apiKey: apiKey)
+        let key = Self.key(
+            for: request,
+            apiKey: apiKey,
+            cacheKeyOverride: cacheKeyOverride
+        )
         if entries[key] == nil,
            entries.count >= maxEntries,
            let oldest = entries.min(by: { $0.value.insertedAt < $1.value.insertedAt })?.key {
@@ -160,10 +251,14 @@ actor TrendWebSearchResponseCache {
         try? JSONFilePersistence.delete(at: fileURL, fileManager: fileManager)
     }
 
-    private static func key(for request: TavilySearchRequest, apiKey: String) -> Key {
+    private static func key(
+        for request: TavilySearchRequest,
+        apiKey: String,
+        cacheKeyOverride: String? = nil
+    ) -> Key {
         Key(
             apiKeyDigest: digest(apiKey),
-            query: normalizedText(request.query),
+            query: normalizedText(cacheKeyOverride ?? request.query),
             topic: request.topic.lowercased(),
             searchDepth: request.searchDepth.lowercased(),
             maxResults: request.maxResults,
@@ -282,28 +377,33 @@ actor TrendWebSearchGovernor {
     private let maxNetworkSearches: Int
     private let cache: TrendWebSearchResponseCache
     private let cacheMaxAgeSeconds: TimeInterval?
+    private let availabilityGate: TrendWebSearchAvailabilityGate
     private var networkSearchesUsed = 0
     private var cacheHits = 0
 
     init(
         maxNetworkSearches: Int,
         cache: TrendWebSearchResponseCache = .shared,
-        cacheMaxAgeSeconds: TimeInterval? = nil
+        cacheMaxAgeSeconds: TimeInterval? = nil,
+        availabilityGate: TrendWebSearchAvailabilityGate = .shared
     ) {
         self.maxNetworkSearches = max(1, maxNetworkSearches)
         self.cache = cache
         self.cacheMaxAgeSeconds = cacheMaxAgeSeconds
+        self.availabilityGate = availabilityGate
     }
 
     func search(
         _ request: TavilySearchRequest,
         apiKey: String,
         timeoutSeconds: Double,
-        client: any TavilySearchClientProtocol
+        client: any TavilySearchClientProtocol,
+        cacheKeyOverride: String? = nil
     ) async throws -> TrendWebSearchOutcome {
         if let response = await cache.value(
             for: request,
             apiKey: apiKey,
+            cacheKeyOverride: cacheKeyOverride,
             maxAgeSeconds: cacheMaxAgeSeconds
         ) {
             cacheHits += 1
@@ -314,21 +414,34 @@ actor TrendWebSearchGovernor {
             )
         }
 
+        if let reason = await availabilityGate.blockedReason(apiKey: apiKey) {
+            throw TrendWebSearchGovernorError.providerUnavailable(reason)
+        }
+
         guard networkSearchesUsed < maxNetworkSearches else {
             throw TrendWebSearchGovernorError.budgetExhausted(limit: maxNetworkSearches)
         }
 
         // 发起请求即计入预算；网络失败也会消耗一次实际尝试，防止故障时无限重试。
         networkSearchesUsed += 1
-        let response = try await client.search(
-            request,
-            apiKey: apiKey,
-            timeoutSeconds: timeoutSeconds
-        )
+        let response: TavilySearchResponse
+        do {
+            response = try await client.search(
+                request,
+                apiKey: apiKey,
+                timeoutSeconds: timeoutSeconds
+            )
+        } catch let error as TavilySearchClientError {
+            if let reason = error.availabilityBlockReason {
+                await availabilityGate.block(apiKey: apiKey, reason: reason)
+            }
+            throw error
+        }
         await cache.store(
             response,
             for: request,
-            apiKey: apiKey
+            apiKey: apiKey,
+            cacheKeyOverride: cacheKeyOverride
         )
         return TrendWebSearchOutcome(
             response: response,

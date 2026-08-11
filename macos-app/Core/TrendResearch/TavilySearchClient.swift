@@ -106,7 +106,7 @@ struct TavilySearchResult: Codable, Hashable, Sendable {
     }
 }
 
-enum TavilySearchClientError: Error, LocalizedError {
+enum TavilySearchClientError: Error, LocalizedError, Sendable {
     case missingAPIKey
     case invalidResponse(String)
     case requestFailed(statusCode: Int, detail: String?)
@@ -129,6 +129,55 @@ enum TavilySearchClientError: Error, LocalizedError {
             return "Tavily 搜索失败：HTTP \(statusCode)。\(suffix)"
         case .timedOut(let seconds):
             return "Tavily 搜索超时：\(Int(seconds)) 秒内未返回。"
+        }
+    }
+
+    var toolErrorCode: String {
+        switch self {
+        case .missingAPIKey:
+            return "web_search_not_configured"
+        case .requestFailed(let statusCode, _):
+            if statusCode == 401 { return "web_search_auth_failed" }
+            if [429, 432, 433].contains(statusCode) {
+                return "web_search_quota_exhausted"
+            }
+            return "web_search_failed"
+        case .invalidResponse:
+            return "web_search_invalid_response"
+        case .timedOut:
+            return "web_search_timed_out"
+        }
+    }
+
+    var userFacingToolMessage: String {
+        switch self {
+        case .missingAPIKey:
+            return "尚未配置 Tavily API Key，请先在 AI 研判设置中完成配置。"
+        case .requestFailed(let statusCode, _):
+            if statusCode == 401 {
+                return "Tavily API Key 无效或无权访问；本次已停止继续搜索。"
+            }
+            if [429, 432, 433].contains(statusCode) {
+                return "Tavily 套餐额度已用尽或达到请求限制；本次已停止继续搜索。请升级套餐、更换 API Key，或等待额度恢复。"
+            }
+            return "Tavily 服务暂不可用（HTTP \(statusCode)），本次已停止继续搜索。"
+        case .invalidResponse:
+            return "Tavily 返回数据异常，本次已停止继续搜索。"
+        case .timedOut:
+            return "Tavily 搜索超时，本次已停止继续搜索。"
+        }
+    }
+
+    var availabilityBlockReason: TrendWebSearchAvailabilityBlockReason? {
+        switch self {
+        case .missingAPIKey:
+            return .authentication
+        case .requestFailed(let statusCode, _):
+            if statusCode == 401 { return .authentication }
+            if [429, 432, 433].contains(statusCode) { return .quotaOrRateLimit }
+            return nil
+        case .invalidResponse, .timedOut:
+            return nil
         }
     }
 }

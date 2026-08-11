@@ -75,6 +75,7 @@ final class ApplicationDataController {
         - user-watchlist.json: 我的关注、关注起始价与每日价格记录
         - output/: 抓取输出与运行数据
         - dashboard.log: 应用运行日志
+        - ai-analysis-logs/: 每次 AI 分析的完整 JSONL 诊断日志（自动轮转）
         """
         try? text.write(to: readme, atomically: true, encoding: .utf8)
     }

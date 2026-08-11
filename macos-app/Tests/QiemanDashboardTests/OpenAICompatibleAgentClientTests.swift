@@ -64,6 +64,67 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         XCTAssertEqual(result.stopReason, .stop)
     }
 
+    func testClientWritesCompleteModelRequestAndResponseToTaskLocalDiagnosticLog() async throws {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "agent-client-log-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let recorder = try AIAgentDiagnosticRecorder(
+            directoryURL: directoryURL,
+            metadata: AIAgentDiagnosticRunMetadata(
+                runID: UUID(),
+                agentKind: "trend-research",
+                scope: "closeReview",
+                trigger: "manual",
+                providerName: "Test",
+                baseURL: "https://api.example.com/v1",
+                model: "glm-5.2",
+                privacyMode: TrendPrivacyMode.sanitized.rawValue,
+                startedAt: "2026-08-10 18:00:00"
+            )
+        )
+        MockAgentURLProtocol.requestHandler = { request in
+            (
+                Self.okResponse(for: request),
+                Self.textMessageResponse(content: "完整模型响应")
+            )
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        _ = try await AIAgentDiagnosticLog.$recorder.withValue(recorder) {
+            try await client.complete(
+                messages: [
+                    AgentChatMessage(role: .system, content: "完整系统提示词"),
+                    AgentChatMessage(role: .user, content: "完整用户提示词"),
+                    AgentChatMessage(
+                        role: .assistant,
+                        toolCalls: [
+                            AgentToolCall(
+                                id: "prior-call",
+                                function: AgentToolFunctionCall(
+                                    name: "web_search",
+                                    arguments: #"{"api_key":"plain-secret-value","query":"测试"}"#
+                                )
+                            )
+                        ]
+                    ),
+                ],
+                tools: [],
+                settings: providerSettings()
+            )
+        }
+
+        let content = try String(contentsOf: recorder.fileURL, encoding: .utf8)
+        XCTAssertTrue(content.contains("model_request"))
+        XCTAssertTrue(content.contains("model_response"))
+        XCTAssertTrue(content.contains("完整系统提示词"))
+        XCTAssertTrue(content.contains("完整用户提示词"))
+        XCTAssertTrue(content.contains("完整模型响应"))
+        XCTAssertFalse(content.contains("sk-test"))
+        XCTAssertFalse(content.contains("plain-secret-value"))
+    }
+
     func testClientDecodesContentNullWithToolCalls() async throws {
         let responseData = try JSONSerialization.data(withJSONObject: [
             "choices": [

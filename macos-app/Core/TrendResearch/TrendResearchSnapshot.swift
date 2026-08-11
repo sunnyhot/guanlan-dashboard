@@ -273,6 +273,7 @@ struct TrendResearchSnapshotBuilder {
         managerWatchEvents: [ManagerWatchTimelineEvent],
         marketIndexQuotes: [MarketIndexKind: MarketIndexQuote],
         fundEstimates: [String: TrendResearchFundEstimate],
+        underlyingStockQuotes: [String: NativeStockQuote] = [:],
         lookThrough: PortfolioLookThroughSnapshot? = nil,
         watchSummary: ManagerWatchTimelineSummary,
         insightSummary: PortfolioSnapshotInsightSummary,
@@ -309,6 +310,9 @@ struct TrendResearchSnapshotBuilder {
             receivedAt: indexReceivedAt
         ) + Self.fundEstimateQuotes(
             from: fundEstimates,
+            receivedAt: fundReceivedAt
+        ) + Self.underlyingStockQuotes(
+            from: underlyingStockQuotes,
             receivedAt: fundReceivedAt
         )
 
@@ -448,6 +452,38 @@ struct TrendResearchSnapshotBuilder {
                 assessment: assessment
             )
         }
+    }
+
+    private static func underlyingStockQuotes(
+        from quotes: [String: NativeStockQuote],
+        receivedAt: String
+    ) -> [TrendResearchQuote] {
+        quotes
+            .sorted { $0.key < $1.key }
+            .compactMap { requestedCode, quote in
+                guard quote.hasUsableData, !quote.priceTime.isEmpty else { return nil }
+                // 保留披露中的请求代码，确保能和来源基金的 contributor 稳定关联。
+                let code = requestedCode
+                let assessment = TrendSourceFreshnessPolicy.assess(
+                    quoteType: .lastTrade,
+                    asOf: quote.priceTime,
+                    receivedAt: receivedAt
+                )
+                return TrendResearchQuote(
+                    kind: "underlying-stock",
+                    evidenceID: "market:stock:\(code):\(quote.priceTime)",
+                    code: code,
+                    name: quote.stockName.isEmpty ? code : quote.stockName,
+                    price: quote.price > 0 ? quote.price : nil,
+                    changePct: quote.changePct,
+                    changeAmount: quote.previousClose.flatMap { previousClose in
+                        quote.price > 0 ? quote.price - previousClose : nil
+                    },
+                    quotedAt: quote.priceTime,
+                    sourceLabel: quote.priceSourceLabel.isEmpty ? "底层证券行情" : quote.priceSourceLabel,
+                    assessment: assessment
+                )
+            }
     }
 
     private static let isoFormatter: ISO8601DateFormatter = {

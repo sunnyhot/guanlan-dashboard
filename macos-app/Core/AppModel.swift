@@ -371,6 +371,26 @@ final class AppModel: ObservableObject {
         set { enhancementState.trendGenerationState = newValue }
     }
 
+    var trendResearchScope: TrendResearchRunScope {
+        get { enhancementState.trendResearchScope }
+        set { enhancementState.trendResearchScope = newValue }
+    }
+
+    var trendResearchRequestedScope: TrendResearchRunScope {
+        get { enhancementState.trendResearchRequestedScope }
+        set { enhancementState.trendResearchRequestedScope = newValue }
+    }
+
+    var trendResearchProgress: TrendResearchModuleProgress {
+        get { enhancementState.trendResearchProgress }
+        set { enhancementState.trendResearchProgress = newValue }
+    }
+
+    var marketCloseReviewArchive: MarketCloseReviewArchive? {
+        get { enhancementState.marketCloseReviewArchive }
+        set { enhancementState.marketCloseReviewArchive = newValue }
+    }
+
     var trendConnectionState: TrendConnectionState {
         get { enhancementState.trendConnectionState }
         set { enhancementState.trendConnectionState = newValue }
@@ -418,6 +438,11 @@ final class AppModel: ObservableObject {
     var nextHourGuidanceGenerationState: TrendGenerationState {
         get { enhancementState.nextHourGuidanceGenerationState }
         set { enhancementState.nextHourGuidanceGenerationState = newValue }
+    }
+
+    var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage {
+        get { enhancementState.nextHourGuidanceProgressStage }
+        set { enhancementState.nextHourGuidanceProgressStage = newValue }
     }
 
     var nextHourGuidanceError: String {

@@ -60,20 +60,103 @@ enum TrendReportDraftError: LocalizedError {
 actor TrendReportDraftStore {
     static let assetBatchSize = 5
 
+    static func effectiveScope(
+        requestedScope: TrendResearchRunScope,
+        baselineReport: TrendAnalysisReport?,
+        expectedFundCodes: [String]
+    ) -> TrendResearchRunScope {
+        guard requestedScope != .full, let baselineReport else { return .full }
+        if requestedScope == .closeReview,
+           expectedFundCodes.compactMap(normalizedCode).isEmpty {
+            return .full
+        }
+        guard requestedScope == .marketRadar else { return requestedScope }
+        let baselineCodes = Set(baselineReport.assetTrends.compactMap { normalizedCode($0.code) })
+        let expectedCodes = Set(expectedFundCodes.compactMap(normalizedCode))
+        return baselineCodes == expectedCodes ? requestedScope : .full
+    }
+
     private let expectedFundCodesByNormalized: [String: String]
+    private let requiredModuleToolNames: [String]
+    private let requiredModuleToolNameSet: Set<String>
     private var overview: TrendReportOverviewModule?
     private var market: TrendReportMarketModule?
     private var assetTrendsByCode: [String: TrendAssetView] = [:]
     private var actions: TrendReportActionsModule?
 
-    init(expectedFundCodes: [String]) {
-        expectedFundCodesByNormalized = Dictionary(
+    init(
+        expectedFundCodes: [String],
+        scope requestedScope: TrendResearchRunScope = .full,
+        baselineReport: TrendAnalysisReport? = nil
+    ) {
+        let expectedByNormalized = Dictionary(
             expectedFundCodes.compactMap { code -> (String, String)? in
                 guard let normalized = Self.normalizedCode(code) else { return nil }
                 return (normalized, code)
             },
             uniquingKeysWith: { first, _ in first }
         )
+        // 增量运行必须有上一份完整、已校验报告作为未更新模块的基线。
+        // 市场雷达不重算持仓；若持仓清单已经变化，也回退为 full 以维持报告完整性。
+        let effectiveScope = Self.effectiveScope(
+            requestedScope: requestedScope,
+            baselineReport: baselineReport,
+            expectedFundCodes: expectedFundCodes
+        )
+        let requiredNames = effectiveScope.requiredModuleToolNames
+        let requiredNameSet = effectiveScope.requiredModuleToolNameSet
+
+        var initialOverview: TrendReportOverviewModule?
+        var initialMarket: TrendReportMarketModule?
+        var initialAssets: [String: TrendAssetView] = [:]
+        var initialActions: TrendReportActionsModule?
+
+        if let baselineReport {
+            initialOverview = TrendReportOverviewModule(
+                portfolio: baselineReport.portfolio,
+                horizons: baselineReport.horizons
+            )
+            initialMarket = TrendReportMarketModule(
+                marketOutlook: baselineReport.marketOutlook,
+                sectors: baselineReport.sectors,
+                opportunities: baselineReport.opportunities
+            )
+            initialAssets = Dictionary(
+                baselineReport.assetTrends.compactMap { asset -> (String, TrendAssetView)? in
+                    guard let normalized = Self.normalizedCode(asset.code),
+                          expectedByNormalized[normalized] != nil else { return nil }
+                    return (normalized, asset)
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
+            initialActions = TrendReportActionsModule(
+                keyAssets: baselineReport.keyAssets,
+                actions: baselineReport.actions,
+                warnings: baselineReport.warnings,
+                disclaimer: baselineReport.disclaimer
+            )
+        }
+
+        if requiredNameSet.contains(TrendReportModuleToolName.overview) {
+            initialOverview = nil
+        }
+        if requiredNameSet.contains(TrendReportModuleToolName.market) {
+            initialMarket = nil
+        }
+        if requiredNameSet.contains(TrendReportModuleToolName.assetBatch) {
+            initialAssets.removeAll()
+        }
+        if requiredNameSet.contains(TrendReportModuleToolName.actions) {
+            initialActions = nil
+        }
+
+        expectedFundCodesByNormalized = expectedByNormalized
+        requiredModuleToolNames = requiredNames
+        requiredModuleToolNameSet = requiredNameSet
+        overview = initialOverview
+        market = initialMarket
+        assetTrendsByCode = initialAssets
+        actions = initialActions
     }
 
     func storeOverview(_ module: TrendReportOverviewModule) throws {
@@ -147,6 +230,9 @@ actor TrendReportDraftStore {
                     "基金 \(asset.code ?? asset.name) 已提交，请只提交 remaining_fund_codes 中的基金。"
                 )
             }
+            if let message = TrendAssetDailyAttributionPolicy.validationMessage(for: asset) {
+                throw TrendReportDraftError.invalidModule(message)
+            }
         }
 
         for asset in module.assetTrends {
@@ -173,34 +259,47 @@ actor TrendReportDraftStore {
 
     func progress() -> TrendReportDraftProgress {
         let remainingCodes = remainingFundCodes
-        let batchCount = Int(
-            ceil(Double(expectedFundCodesByNormalized.count) / Double(Self.assetBatchSize))
+        let assetModuleRequired = requiredModuleToolNameSet.contains(
+            TrendReportModuleToolName.assetBatch
         )
-        let totalSections = 3 + batchCount
+        let batchCount = assetModuleRequired
+            ? Int(ceil(Double(expectedFundCodesByNormalized.count) / Double(Self.assetBatchSize)))
+            : 0
+        let totalSections = requiredModuleToolNames.reduce(into: 0) { count, toolName in
+            count += toolName == TrendReportModuleToolName.assetBatch ? batchCount : 1
+        }
         let completedAssetBatches: Int
-        if expectedFundCodesByNormalized.isEmpty {
+        if !assetModuleRequired || expectedFundCodesByNormalized.isEmpty {
             completedAssetBatches = 0
         } else if remainingCodes.isEmpty {
             completedAssetBatches = batchCount
         } else {
             completedAssetBatches = min(batchCount, assetTrendsByCode.count / Self.assetBatchSize)
         }
-        let completedSections = (overview == nil ? 0 : 1)
-            + (market == nil ? 0 : 1)
-            + completedAssetBatches
-            + (actions == nil ? 0 : 1)
+        let completedSections = requiredModuleToolNames.reduce(into: 0) { count, toolName in
+            switch toolName {
+            case TrendReportModuleToolName.overview:
+                count += overview == nil ? 0 : 1
+            case TrendReportModuleToolName.market:
+                count += market == nil ? 0 : 1
+            case TrendReportModuleToolName.assetBatch:
+                count += completedAssetBatches
+            case TrendReportModuleToolName.actions:
+                count += actions == nil ? 0 : 1
+            default:
+                break
+            }
+        }
 
         let nextToolName: String?
-        if overview == nil {
-            nextToolName = TrendReportModuleToolName.overview
-        } else if market == nil {
-            nextToolName = TrendReportModuleToolName.market
-        } else if !remainingCodes.isEmpty {
-            nextToolName = TrendReportModuleToolName.assetBatch
-        } else if actions == nil {
-            nextToolName = TrendReportModuleToolName.actions
-        } else {
-            nextToolName = nil
+        nextToolName = requiredModuleToolNames.first { toolName in
+            switch toolName {
+            case TrendReportModuleToolName.overview: overview == nil
+            case TrendReportModuleToolName.market: market == nil
+            case TrendReportModuleToolName.assetBatch: !remainingCodes.isEmpty
+            case TrendReportModuleToolName.actions: actions == nil
+            default: false
+            }
         }
         return TrendReportDraftProgress(
             nextToolName: nextToolName,
@@ -246,34 +345,48 @@ actor TrendReportDraftStore {
         if joined.contains("组合结论")
             || joined.contains("短中长期")
             || joined.contains("周期趋势") {
-            overview = nil
-            matched = true
+            if requiredModuleToolNameSet.contains(TrendReportModuleToolName.overview) {
+                overview = nil
+                matched = true
+            }
         }
         if joined.contains("大盘")
             || joined.contains("板块")
             || joined.contains("机会")
             || joined.contains("marketOutlook")
             || joined.contains("sectors") {
-            market = nil
-            matched = true
+            if requiredModuleToolNameSet.contains(TrendReportModuleToolName.market) {
+                market = nil
+                matched = true
+            }
         }
         if joined.contains("已持有基金")
             || joined.contains("assetTrends")
             || joined.contains("资产「") {
-            assetTrendsByCode.removeAll()
-            matched = true
+            if requiredModuleToolNameSet.contains(TrendReportModuleToolName.assetBatch) {
+                assetTrendsByCode.removeAll()
+                matched = true
+            }
         }
         if joined.contains("行动")
             || joined.contains("allocationReview")
             || joined.contains("非投资建议")
             || joined.contains("关键资产")
             || joined.contains("disclaimer") {
-            actions = nil
-            matched = true
+            if requiredModuleToolNameSet.contains(TrendReportModuleToolName.actions) {
+                actions = nil
+                matched = true
+            }
         }
         if !matched {
-            // 无法可靠归类的跨模块错误优先重做最后一块，避免推翻全部研究。
-            actions = nil
+            // 只重做本次运行范围内的最后一块，绝不把增量任务扩回整份报告。
+            switch requiredModuleToolNames.last {
+            case TrendReportModuleToolName.overview: overview = nil
+            case TrendReportModuleToolName.market: market = nil
+            case TrendReportModuleToolName.assetBatch: assetTrendsByCode.removeAll()
+            case TrendReportModuleToolName.actions: actions = nil
+            default: break
+            }
         }
     }
 
@@ -344,7 +457,7 @@ struct SubmitTrendMarketModuleTool: TrendResearchTool {
 
 struct SubmitTrendAssetBatchTool: TrendResearchTool {
     let name = TrendReportModuleToolName.assetBatch
-    let description = "分批提交已持有基金趋势。每次最多 5 只，只提交工具结果 remaining_fund_codes 中尚未覆盖的基金；直到全部覆盖。"
+    let description = "分批提交已持有基金趋势。每次最多 5 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [

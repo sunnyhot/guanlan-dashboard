@@ -222,6 +222,14 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
                         )
                         if let report = report, errors.isEmpty {
                             // 成功:记录审计并返回
+                            let accepted = TrendResearchToolEnvelope.success(["accepted": true])
+                            await AIAgentDiagnosticLog.recordToolResult(
+                                turn: turnCount,
+                                call: call,
+                                contentJSON: accepted,
+                                modelContentJSON: accepted,
+                                isError: false
+                            )
                             toolCallAudits.append(makeAudit(sequence: toolCallCount, call: call, succeeded: true))
                             return report
                         } else {
@@ -256,6 +264,19 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
                     succeeded = false
                 }
 
+                let toolContent = messages.last(where: {
+                    $0.role == .tool && $0.toolCallID == call.id
+                })?.content ?? TrendResearchToolEnvelope.error(
+                    code: "missing_tool_result",
+                    message: "工具结果未写入消息上下文。"
+                )
+                await AIAgentDiagnosticLog.recordToolResult(
+                    turn: turnCount,
+                    call: call,
+                    contentJSON: toolContent,
+                    modelContentJSON: toolContent,
+                    isError: !succeeded
+                )
                 toolCallAudits.append(makeAudit(sequence: toolCallCount, call: call, succeeded: succeeded))
             }
         }

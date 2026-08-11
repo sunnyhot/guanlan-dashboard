@@ -36,6 +36,7 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(policy.preferredWebSearches, 6)
         XCTAssertEqual(policy.maxWebSearches, 10)
         XCTAssertEqual(policy.expandedMaxWebSearches, 12)
+        XCTAssertEqual(policy.reservedSubmitToolCalls, 8)
         XCTAssertEqual(policy.maxInvalidSubmissions, 4)
         XCTAssertEqual(policy.maxPlainTextResponses, 2)
         XCTAssertEqual(policy.perRequestTimeoutSeconds, 180)
@@ -171,6 +172,100 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         let loaded = try store.load(from: expectedURL)
         XCTAssertEqual(loaded.runID, snapshot.runID)
         XCTAssertEqual(loaded.agentKind, "trend-research")
+    }
+
+    // MARK: - 完整 AI 诊断日志
+
+    func testDiagnosticRecorderWritesCompleteToolExchangeAndRedactsCredentials() async throws {
+        let runID = UUID()
+        let recorder = try AIAgentDiagnosticRecorder(
+            directoryURL: tempDir,
+            metadata: AIAgentDiagnosticRunMetadata(
+                runID: runID,
+                agentKind: "trend-research",
+                scope: "closeReview",
+                trigger: "manual",
+                providerName: "test",
+                baseURL: "https://example.test/v1?api_key=plain-base-url-secret",
+                model: "test-model",
+                privacyMode: TrendPrivacyMode.sanitized.rawValue,
+                startedAt: "2026-08-10 18:00:00"
+            )
+        )
+        let call = AgentToolCall(
+            id: "call-1",
+            function: AgentToolFunctionCall(
+                name: TrendReportModuleToolName.assetBatch,
+                arguments: """
+                {"api_key":"sk-test-secret-123456","market_value":275478,"direction":"up"}
+                """
+            )
+        )
+
+        await AIAgentDiagnosticLog.$recorder.withValue(recorder) {
+            await AIAgentDiagnosticLog.recordToolResult(
+                turn: 3,
+                call: call,
+                contentJSON: """
+                {"ok":false,"error":{"message":"Cannot initialize TrendDirection from invalid String value up."}}
+                """,
+                modelContentJSON: """
+                {"ok":false,"error":{"message":"Cannot initialize TrendDirection from invalid String value up."}}
+                """,
+                isError: true
+            )
+        }
+
+        let content = try String(contentsOf: recorder.fileURL, encoding: .utf8)
+        XCTAssertTrue(content.contains("275478"), "本地完整日志应保留分析问题所需的业务数据")
+        XCTAssertTrue(content.contains("Cannot initialize TrendDirection"))
+        XCTAssertTrue(content.contains("[redacted]"))
+        XCTAssertFalse(content.contains("sk-test-secret-123456"))
+        XCTAssertFalse(content.contains("plain-base-url-secret"))
+
+        let entries = try content
+            .split(separator: "\n")
+            .map { line in
+                try JSONDecoder().decode(
+                    AIAgentDiagnosticTraceEntry.self,
+                    from: Data(line.utf8)
+                )
+            }
+        XCTAssertEqual(entries.map(\.event), ["run_started", "tool_result"])
+        XCTAssertEqual(entries.last?.turn, 3)
+        XCTAssertEqual(entries.last?.toolName, TrendReportModuleToolName.assetBatch)
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: recorder.fileURL.path)
+        let permissions = attrs[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.int16Value, 0o600)
+    }
+
+    func testDiagnosticRecorderRotatesJSONLFiles() throws {
+        for index in 0..<4 {
+            _ = try AIAgentDiagnosticRecorder(
+                directoryURL: tempDir,
+                metadata: AIAgentDiagnosticRunMetadata(
+                    runID: UUID(),
+                    agentKind: "trend-research",
+                    scope: "marketRadar",
+                    trigger: "scheduled",
+                    providerName: "test",
+                    baseURL: "https://example.test/v1",
+                    model: "test-model",
+                    privacyMode: TrendPrivacyMode.sanitized.rawValue,
+                    startedAt: "2026-08-1\(index) 09:00:00"
+                ),
+                maximumFileCount: 2
+            )
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+
+        let files = try FileManager.default.contentsOfDirectory(
+            at: tempDir,
+            includingPropertiesForKeys: nil
+        )
+        .filter { $0.pathExtension == "jsonl" }
+        XCTAssertEqual(files.count, 2)
     }
 
     // MARK: - 辅助

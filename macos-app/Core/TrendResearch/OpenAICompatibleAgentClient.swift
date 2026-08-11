@@ -123,6 +123,17 @@ struct OpenAICompatibleAgentClient: Sendable {
         )
         let requestStartedAt = Date()
         let hardDeadline = requestStartedAt.addingTimeInterval(effectiveTimeout)
+        await AIAgentDiagnosticLog.record(
+            "model_request",
+            payload: AIAgentModelRequestTrace(
+                model: settings.model,
+                messages: messages,
+                tools: tools,
+                toolChoice: toolChoice,
+                temperature: temperature,
+                timeoutSeconds: effectiveTimeout
+            )
+        )
 
         do {
             let (bytes, response) = try await session.bytes(for: request)
@@ -143,36 +154,60 @@ struct OpenAICompatibleAgentClient: Sendable {
             }
 
             let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+            let result: AgentCompletionResult
             if contentType.contains("text/event-stream") {
-                return try await Self.decodeStreamingResponse(
+                result = try await Self.decodeStreamingResponse(
                     bytes,
                     statusCode: http.statusCode,
                     startedAt: requestStartedAt,
                     timeoutSeconds: effectiveTimeout,
                     progressHandler: streamProgress
                 )
+            } else {
+                // 部分 OpenAI-compatible 服务会忽略 stream=true，仍返回普通 JSON；
+                // 也有代理漏写 text/event-stream。完整收集后同时兼容这两类响应。
+                let data = try await Self.collect(
+                    bytes,
+                    deadline: hardDeadline,
+                    timeoutSeconds: effectiveTimeout
+                )
+                if Self.looksLikeEventStream(data) {
+                    result = try Self.decodeBufferedEventStream(data, statusCode: http.statusCode)
+                } else {
+                    result = try Self.decodeCompletion(data, decoder: decoder)
+                }
             }
-
-            // 部分 OpenAI-compatible 服务会忽略 stream=true，仍返回普通 JSON；
-            // 也有代理漏写 text/event-stream。完整收集后同时兼容这两类响应。
-            let data = try await Self.collect(
-                bytes,
-                deadline: hardDeadline,
-                timeoutSeconds: effectiveTimeout
+            await AIAgentDiagnosticLog.record(
+                "model_response",
+                payload: AIAgentModelResponseTrace(
+                    result: result,
+                    durationSeconds: Date().timeIntervalSince(requestStartedAt)
+                )
             )
-            if Self.looksLikeEventStream(data) {
-                return try Self.decodeBufferedEventStream(data, statusCode: http.statusCode)
-            }
-            return try Self.decodeCompletion(data, decoder: decoder)
+            return result
         } catch let error as URLError where error.code == .timedOut {
-            throw OpenAICompatibleAgentClientError.timedOut(effectiveTimeout)
+            let mapped = OpenAICompatibleAgentClientError.timedOut(effectiveTimeout)
+            await AIAgentDiagnosticLog.record(
+                "model_error",
+                message: mapped.localizedDescription
+            )
+            throw mapped
         } catch let error as OpenAICompatibleAgentClientError {
+            await AIAgentDiagnosticLog.record(
+                "model_error",
+                message: error.localizedDescription
+            )
             throw error
         } catch {
-            throw OpenAICompatibleAgentClientError.requestFailed(
+            let mapped = OpenAICompatibleAgentClientError.requestFailed(
                 statusCode: nil,
                 detail: error.localizedDescription
             )
+            await AIAgentDiagnosticLog.record(
+                "model_error",
+                message: mapped.localizedDescription
+            )
+            throw mapped
         }
     }
 

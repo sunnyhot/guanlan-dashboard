@@ -68,12 +68,20 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("trend-analysis-report.json", isDirectory: false)
     }
 
+    var marketCloseReviewArchiveFileURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("market-close-review.json", isDirectory: false)
+    }
+
     var trendAgentRunLogFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("trend-agent.log", isDirectory: false)
     }
 
     var trendAgentRunArtifactsDirectoryURL: URL? {
         dataDirectoryURL?.appendingPathComponent("trend-agent-runs", isDirectory: true)
+    }
+
+    var aiAnalysisDiagnosticLogsDirectoryURL: URL? {
+        dataDirectoryURL?.appendingPathComponent("ai-analysis-logs", isDirectory: true)
     }
 
     var nextHourGuidanceFileURL: URL? {

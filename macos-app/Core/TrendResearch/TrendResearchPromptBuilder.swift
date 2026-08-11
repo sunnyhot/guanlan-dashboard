@@ -9,10 +9,22 @@ import Foundation
 struct TrendResearchPromptBuilder: Sendable {
     func initialMessages(
         snapshot: TrendResearchSnapshot,
+        scope: TrendResearchRunScope = .full,
         officialSourceConfigured: Bool = false,
         alphaVantageConfigured: Bool = false
     ) -> [AgentChatMessage] {
-        [
+        if scope != .full {
+            return [
+                partialSystemMessage(
+                    snapshot: snapshot,
+                    scope: scope,
+                    officialSourceConfigured: officialSourceConfigured,
+                    alphaVantageConfigured: alphaVantageConfigured
+                ),
+                partialUserMessage(snapshot: snapshot, scope: scope),
+            ]
+        }
+        return [
             systemMessage(
                 snapshot: snapshot,
                 officialSourceConfigured: officialSourceConfigured,
@@ -24,6 +36,90 @@ struct TrendResearchPromptBuilder: Sendable {
                 alphaVantageConfigured: alphaVantageConfigured
             )
         ]
+    }
+
+    private func partialSystemMessage(
+        snapshot: TrendResearchSnapshot,
+        scope: TrendResearchRunScope,
+        officialSourceConfigured: Bool,
+        alphaVantageConfigured: Bool
+    ) -> AgentChatMessage {
+        let mission: String
+        let flow: String
+        let contract: String
+        switch scope {
+        case .marketRadar:
+            mission = "只更新全市场机会雷达。不得读取、评价或推断个人持仓；上一份报告中的组合、持仓与行动模块由 App 原样复用。"
+            flow = """
+先调用 get_market_snapshot 读取主要指数；再用 web_search 完成 assetClass（key=大类资产配置）、index（key=大盘宽基指数）以及「科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值」六个 sector 分组。每次搜索必须携带匹配的 research_target；板块分组只需准确填写分组名，sectorKeys 由 App 自动补齐。覆盖完成后只调用 submit_trend_market_module。
+"""
+            contract = """
+submit_trend_market_module JSON：
+{"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[{"id":"","name":"","category":"index|assetClass|sector","scope":"marketWide","direction":"","confidence":{},"rationale":"","triggerConditions":[],"invalidatingConditions":[],"evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}]}
+"""
+        case .closeReview:
+            mission = "只更新今日收盘复盘所需的逐只持仓涨跌归因。市场雷达与长期组合模块从缓存报告复用，不做联网行业扫描，不生成行动建议。"
+            flow = """
+依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot 读取基金净值和底层证券当日涨跌。随后只用 submit_trend_asset_batch 分批提交 remaining_fund_codes，每批最多 \(TrendReportDraftStore.assetBatchSize) 只。
+"""
+            contract = """
+submit_trend_asset_batch JSON：{"assetTrends":[{"id":"","name":"","code":"","sector":"","impactText":"","horizons":[short/medium/long 三个 horizon],"rationale":"","counterSignals":[],"claimEvidence":{}}]}
+impactText 必须以「涨跌归因：」或「原因待确认：」开头。只有 market:stock:*、web:tavily:* 或 vendor:alphavantage:* 能支撑因果归因；静态持仓名单、持仓占比、市值、累计盈利和净值涨跌本身都不是涨跌原因。公开持仓有披露滞后，使用「可能主要由」「与……一致」。
+"""
+        case .longTerm:
+            mission = "只更新组合长期研判：组合结论、短中长期周期、逐只持仓趋势与少量行动候选。全市场机会雷达从缓存报告复用，不重新做八组全市场扫描。"
+            let official = officialSourceConfigured ? "有 SEC 目标时先调用 official_sec_research。" : ""
+            let alpha = alphaVantageConfigured ? "官方源之后至少调用一次 alpha_vantage_research。" : ""
+            flow = """
+依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot。\(official)\(alpha)配置 Tavily 时只做与当前组合直接相关的必要搜索，取得有效证据后停止。然后按 App 开放顺序提交 submit_trend_overview_module、submit_trend_asset_batch（每批最多 \(TrendReportDraftStore.assetBatchSize) 只）、submit_trend_actions_module。
+"""
+            contract = """
+overview：{"portfolio":{"headline":"","riskLevel":"low|medium|high|unknown","summary":"","claimEvidence":{}},"horizons":[三个 short/medium/long horizon]}
+asset batch：{"assetTrends":[asset]}，必须覆盖 remaining_fund_codes；asset 含 id/name/code/sector/impactText/horizons/rationale/counterSignals/claimEvidence。
+actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirmation|observeInBatches|pausePlan|considerIncrease|considerReduce|rebalanceReview","title":"","detail":"","targetName":"","confidence":{},"triggerConditions":[],"invalidatingConditions":[],"claimEvidence":{}}],"warnings":[],"disclaimer":"必须包含非投资建议"}。
+"""
+        case .full:
+            mission = ""
+            flow = ""
+            contract = ""
+        }
+
+        let privacy = snapshot.privacyMode == .sanitized
+            ? "当前为脱敏模式，不得编造金额。"
+            : "当前为完整明细模式。"
+        let text = """
+你是且慢投资研究分析师。本次运行模块：\(scope.displayName)。
+
+【本次唯一任务】
+\(mission)
+
+【工具顺序】
+\(flow)
+遵循每个工具结果的 harness.next_step_hint；ready_for_submission=true 后立即停止研究，只调用当前开放的提交工具。普通文本不会被接收。
+
+【提交契约】
+\(contract)
+通用 horizon 含 horizon/direction/confidence/rationale/counterSignals/claimEvidence。confidence.score 为 0...100，label 按 ≥75 高、≥45 中、否则低。claimEvidence 固定为 supportingEvidenceIDs/counterEvidenceIDs/contextEvidenceIDs/exemptionReason，只能引用工具返回的 evidence_ids。方向性结论没有相关支持证据时必须 direction=uncertain 并填写 exemptionReason。行动必须有触发与失效条件；资金动作证据不足时降为 watch。
+
+\(privacy)
+不得输出绝对买卖指令；最终声明非投资建议。
+"""
+        return AgentChatMessage(role: .system, content: text)
+    }
+
+    private func partialUserMessage(
+        snapshot: TrendResearchSnapshot,
+        scope: TrendResearchRunScope
+    ) -> AgentChatMessage {
+        let scopeData = scope == .marketRadar
+            ? "本次不提供个人持仓信息。"
+            : "资产数：\(snapshot.assets.count)。"
+        return AgentChatMessage(
+            role: .user,
+            content: """
+执行「\(scope.displayName)」增量更新。快照 ID：\(snapshot.runID.uuidString)，数据截止：\(snapshot.dataAsOf)。\(scopeData)只研究并提交本次模块，未开放模块由 App 从上一份报告合并。
+"""
+        )
     }
 
     private func systemMessage(
@@ -58,10 +154,10 @@ struct TrendResearchPromptBuilder: Sendable {
 1. get_portfolio_overview：取得组合基线。提交报告前必须至少调用一次（运行时强制，未调用会被拒绝）。
 2. get_portfolio_assets：分页读取全部资产明细，必须读完全部页面或用 codes 覆盖全部持有基金。
 3. get_fund_lookthrough：读取基金公开定期报告的底层股票/债券、行业、资产类别、重叠持仓、披露日期、覆盖率与未知仓位。本次快照包含穿透数据时为必调工具。
-4. get_market_snapshot：读取大盘指数与基金估值行情（可选）。
+4. get_market_snapshot：读取大盘指数、基金估值，以及基金公开披露底层证券的当日行情。快照有行情时为必调工具；生成 assetTrends 前按基金代码读取，用底层涨跌解释基金净值变化。
 5. official_sec_research：直接查询 SEC EDGAR 官方 Submissions 和 XBRL Company Facts。只用于当前直接持仓或基金穿透出的美股；有可识别标的且已配置时为必调，并且优先于 web_search。
 6. alpha_vantage_research：第三方结构化市场数据补充。只能研究当前直接持仓或基金穿透标的；它不是官方一手来源。已配置且有可识别标的时至少调用一次。美股先查 SEC；中国标的先用 web_search 限定交易所、监管机构或政府官方域名，再用它补充结构化行情。
-7. web_search：通过 Tavily 补充最新行业、宏观、政策和事件信息。组合研究目标需匹配当前快照；全市场机会目标可从下方受控研究池选择，不要求用户已经持有。政策/监管检索先用 include_domains 限定官方域名，SEC 已覆盖的事实不得再用二手网页替代。已配置时必须分别完成 assetClass、index，并逐一完成「科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值」六个 sector 分组扫描；板块分组搜索的 research_target.key 使用分组名，sectorKeys 必须完整填写该组板块。查询中不得包含组合名称、个人信息或金额。
+7. web_search：通过 Tavily 补充最新行业、宏观、政策和事件信息。组合研究目标需匹配当前快照；全市场机会目标可从下方受控研究池选择，不要求用户已经持有。政策/监管检索先用 include_domains 限定官方域名，SEC 已覆盖的事实不得再用二手网页替代。已配置时必须分别完成 assetClass（聚合扫描固定 key=大类资产配置）、index（聚合扫描固定 key=大盘宽基指数），并逐一完成「科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值」六个 sector 分组扫描；板块分组搜索的 research_target.key 只填写准确分组名，sectorKeys 可省略并由 App 自动补齐。查询中不得包含组合名称、个人信息或金额。若 Tavily 返回额度、鉴权或服务不可用错误，立即停止继续搜索，以本地数据提交降级报告，opportunities 与 actions 留空。
 8. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
    - submit_trend_overview_module：组合总判断 + short/medium/long 三周期。
    - submit_trend_market_module：大盘/大类资产 + 行业板块 + 机会。
@@ -118,6 +214,10 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - 基金穿透数据按「基金在组合中的权重 × 底层披露权重」计算。get_fund_lookthrough 返回的 statistical_industries 是 F10 宽泛统计行业，仅用于披露结构说明，不得直接输出为 sectors；sectors 应结合底层证券、ETF/基金主题和持仓来源形成可投资板块，exposureText 必须写清具体持仓、来源基金和计算后的组合暴露。组合集中度应识别多只基金重复持有的同一证券。
 - 公开基金持仓是定期报告口径，不是实时仓位。引用底层证券或行业时必须同时考虑 disclosureDate、fund_data_coverage_pct、disclosed_security_coverage_pct 和 unknown_portfolio_weight_pct；覆盖不足或披露陈旧时降低 confidence，并在 warnings/反证条件中明确说明。
 - assetTrends 仍按用户直接持有的基金逐只输出；底层证券用于解释基金趋势和组合共同风险，不要用底层证券替代应覆盖的基金 code。
+- assetTrends.impactText 是「当日涨跌归因」，不是持仓画像。必须以「涨跌归因：」或「原因待确认：」开头：
+  - 能归因时，结合基金当日估值/净值、get_market_snapshot.underlying_attribution 中底层证券涨跌、来源基金与披露权重，以及必要的行业/事件证据，说明哪些因素构成主要贡献或拖累。公开持仓存在披露滞后，措辞使用「可能主要由」「与……一致」，不得宣称精确因果。
+  - 「涨跌归因：」必须在 asset.claimEvidence.supportingEvidenceIDs 引用 market:stock:*、web:tavily:* 或 vendor:alphavantage:* 之一；只引用基金净值、组合快照或穿透名单不构成因果证据。
+  - 没有底层当日行情或外部证据时，必须写「原因待确认：仅确认净值变化，但缺少……」，不得用市值、累计盈利、持仓占比、底层证券名单或净值涨跌本身代替原因。
 
 【其它约束】
 - 不要输出普通文本作为最终结论；普通文本不会被接收。提交阶段每轮只调用当前开放的分模块工具。
@@ -172,7 +272,7 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 资产数量：\(snapshot.portfolio.assetCount)
 数据截止时间：\(snapshot.dataAsOf)\(lookThrough)\(official)\(alphaVantage)\(warnings)
 
-请先调用 get_portfolio_overview 取得组合基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough。完成组合研究后，使用 web_search 完成 assetClass、index 和六个 sector 分组的全市场扫描，再跨分组挑选板块机会，候选不受当前持仓限制。美股持仓先查 SEC；中国持仓先用 web_search 限定交易所、监管机构或政府官方域名；随后已配置 Alpha Vantage 时选择一项最相关的结构化补充。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
+请先调用 get_portfolio_overview 取得组合基线，再分页读取资产；有基金穿透快照时调用 get_fund_lookthrough，并调用 get_market_snapshot 读取基金估值及底层证券当日行情。完成组合研究后，使用 web_search 完成 assetClass、index 和六个 sector 分组的全市场扫描，再跨分组挑选板块机会，候选不受当前持仓限制。美股持仓先查 SEC；中国持仓先用 web_search 限定交易所、监管机构或政府官方域名；随后已配置 Alpha Vantage 时选择一项最相关的结构化补充。研究覆盖完成后严格按 App 每轮开放的单个分模块工具提交，不要一次生成整份报告。
 """
     }
 }

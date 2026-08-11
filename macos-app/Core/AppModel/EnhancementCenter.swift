@@ -16,6 +16,7 @@ extension AppModel {
         loadManagerWatchTimeline()
         loadPortfolioInsightSnapshots()
         loadTrendAnalysisState()
+        loadMarketCloseReviewArchive()
         loadNextHourGuidanceState()
         loadTrendTrackingState()
         loadInvestmentIntelligenceState()

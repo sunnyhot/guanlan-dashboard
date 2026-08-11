@@ -25,11 +25,7 @@ struct InvestmentDirectionCard: View {
                 }
 
                 HStack(spacing: AppPalette.spaceS) {
-                    if signal.portfolioExposureText != nil {
-                        Text("持仓板块")
-                    } else {
-                        Text(signal.dimension.displayName)
-                    }
+                    Text(signal.dimension.displayName)
                     Text("置信度 \(signal.confidence.normalizedScore)%")
                 }
                 .font(AppPalette.appFont(.caption))

@@ -15,6 +15,8 @@ protocol TrendResearchAgentProtocol: Sendable {
         webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings,
         alphaVantageSettings: AlphaVantageSettings,
+        scope: TrendResearchRunScope,
+        baselineReport: TrendAnalysisReport?,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport
 }
@@ -77,7 +79,8 @@ struct TrendResearchRunPolicy: Sendable {
     func effectiveLimits(
         assetCount: Int,
         sectorCount: Int = 0,
-        reportAssetCount: Int? = nil
+        reportAssetCount: Int? = nil,
+        scope: TrendResearchRunScope = .full
     ) -> (
         maxTurns: Int,
         maxToolCalls: Int,
@@ -100,21 +103,40 @@ struct TrendResearchRunPolicy: Sendable {
             expandedMaxWebSearches,
             maxWebSearches + extraSectorGroups
         )
-        return (
-            maxTurns: min(
-                expandedMaxTurns,
-                maxTurns + extraPages + extraReportBatches
-            ),
-            maxToolCalls: min(
-                expandedMaxToolCalls,
-                maxToolCalls + extraPages + extraReportBatches
-            ),
-            preferredWebSearches: min(
-                effectiveMaxWebSearches,
-                preferredWebSearches + extraSectorGroups
-            ),
-            maxWebSearches: effectiveMaxWebSearches
-        )
+        switch scope {
+        case .marketRadar:
+            return (18, 28, 8, 10)
+        case .closeReview:
+            return (
+                min(expandedMaxTurns, 8 + extraPages + max(1, reportBatchCount)),
+                min(expandedMaxToolCalls, 16 + extraPages + max(1, reportBatchCount)),
+                0,
+                0
+            )
+        case .longTerm:
+            return (
+                min(expandedMaxTurns, 14 + extraPages + max(1, reportBatchCount)),
+                min(expandedMaxToolCalls, 28 + extraPages + max(1, reportBatchCount)),
+                2,
+                4
+            )
+        case .full:
+            return (
+                maxTurns: min(
+                    expandedMaxTurns,
+                    maxTurns + extraPages + extraReportBatches
+                ),
+                maxToolCalls: min(
+                    expandedMaxToolCalls,
+                    maxToolCalls + extraPages + extraReportBatches
+                ),
+                preferredWebSearches: min(
+                    effectiveMaxWebSearches,
+                    preferredWebSearches + extraSectorGroups
+                ),
+                maxWebSearches: effectiveMaxWebSearches
+            )
+        }
     }
 
     /// 整次运行总预算随组合规模和搜索预算扩张：分块报告与多次联网搜索都比单次提交
@@ -130,6 +152,7 @@ struct TrendResearchRunPolicy: Sendable {
 enum TrendResearchAgentEvent: Sendable {
     case started(runID: UUID)
     case harnessConfigured(maxTurns: Int, maxToolCalls: Int, preferredWebSearches: Int, maxWebSearches: Int)
+    case moduleProgress(completedSections: Int, totalSections: Int, nextToolName: String?)
     case harnessGuidance(message: String)
     case turnStarted(Int)
     case modelRequestStarted(turn: Int)
@@ -152,7 +175,6 @@ enum TrendResearchAgentError: Error, LocalizedError {
     case toolCallLimitExceeded
     case missingToolCalls
     case invalidSubmissionLimitExceeded(errors: [String])
-    case marketOpportunityScanIncomplete(missingSectorGroups: [String])
     case modelRequestTimeoutRecoveryExceeded(timeout: Double)
     case totalTimeoutExceeded(limit: Double)
 
@@ -168,11 +190,6 @@ enum TrendResearchAgentError: Error, LocalizedError {
             return "模型连续返回普通文本，未调用工具。"
         case .invalidSubmissionLimitExceeded(let errors):
             return "报告多次校验未通过：\n" + errors.joined(separator: "\n")
-        case .marketOpportunityScanIncomplete(let missingSectorGroups):
-            let missing = missingSectorGroups.isEmpty
-                ? "大类资产、大盘或行业板块"
-                : missingSectorGroups.joined(separator: "、")
-            return "全市场机会扫描未完成（缺少：\(missing)）。已保留上一份报告，未用持仓长期观点填充市场机会；请检查联网研究配置后重试。"
         case .modelRequestTimeoutRecoveryExceeded(let timeout):
             return "趋势模型连续请求超时（单轮上限 \(Int(timeout.rounded())) 秒）。Agent 已自动收敛任务并重试，但模型服务仍未返回；已保留上一次报告，请检查模型服务状态后重试。"
         case .totalTimeoutExceeded(let limit):
@@ -227,22 +244,38 @@ struct TrendResearchAgent: Sendable {
         webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
+        scope requestedScope: TrendResearchRunScope = .full,
+        baselineReport: TrendAnalysisReport? = nil,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport {
         guard settings.isConfigured else {
             throw TrendResearchAgentError.missingConfiguration
         }
 
-        let ledger = TrendEvidenceLedger()
-        let reportDraftStore = TrendReportDraftStore(
+        let scope = TrendReportDraftStore.effectiveScope(
+            requestedScope: requestedScope,
+            baselineReport: baselineReport,
             expectedFundCodes: snapshot.expectedFundCodes
         )
-        let officialSourceRequired = officialSourceSettings.isSECConfigured
+        let ledger = TrendEvidenceLedger()
+        if let baselineReport {
+            await ledger.record(baselineReport.evidence)
+        }
+        let reportDraftStore = TrendReportDraftStore(
+            expectedFundCodes: snapshot.expectedFundCodes,
+            scope: scope,
+            baselineReport: baselineReport
+        )
+        let officialSourceRequired = scope.usesOfficialAndVendorResearch
+            && officialSourceSettings.isSECConfigured
             && !snapshot.eligibleSECResearchTickers.isEmpty
-        let alphaVantageRequired = alphaVantageSettings.isConfigured
+        let alphaVantageRequired = scope.usesOfficialAndVendorResearch
+            && alphaVantageSettings.isConfigured
             && !snapshot.eligibleAlphaVantageSymbols.isEmpty
+        let webSearchRequired = scope.usesWebSearch && webSearchSettings.isConfigured
         var messages = promptBuilder.initialMessages(
             snapshot: snapshot,
+            scope: scope,
             officialSourceConfigured: officialSourceRequired,
             alphaVantageConfigured: alphaVantageRequired
         )
@@ -257,6 +290,7 @@ struct TrendResearchAgent: Sendable {
         var webSearchUnavailableResult: TrendResearchToolResult?
         var harnessState = TrendResearchHarnessState(
             snapshot: snapshot,
+            scope: scope,
             officialSourceRequired: officialSourceRequired,
             alphaVantageRequired: alphaVantageRequired
         )
@@ -268,7 +302,8 @@ struct TrendResearchAgent: Sendable {
         let runLimits = policy.effectiveLimits(
             assetCount: snapshot.assets.count,
             sectorCount: snapshot.sectors.count,
-            reportAssetCount: snapshot.expectedFundCodes.count
+            reportAssetCount: snapshot.expectedFundCodes.count,
+            scope: scope
         )
         // 整次运行总预算随组合规模与搜索预算动态扩张；固定值对大组合+联网搜索偏紧。
         let effectiveTotal = policy.effectiveTotalTimeout(
@@ -280,6 +315,21 @@ struct TrendResearchAgent: Sendable {
             cache: webSearchCache
         )
 
+        await AIAgentDiagnosticLog.record(
+            "agent_configured",
+            payload: AgentJSONValue.object([
+                "scope": .string(scope.rawValue),
+                "asset_count": .number(Double(snapshot.assets.count)),
+                "expected_fund_count": .number(Double(snapshot.expectedFundCodes.count)),
+                "sector_count": .number(Double(snapshot.sectors.count)),
+                "privacy_mode": .string(snapshot.privacyMode.rawValue),
+                "max_turns": .number(Double(runLimits.maxTurns)),
+                "max_tool_calls": .number(Double(runLimits.maxToolCalls)),
+                "max_web_searches": .number(Double(runLimits.maxWebSearches)),
+                "total_timeout_seconds": .number(effectiveTotal),
+            ])
+        )
+
         await eventHandler(.started(runID: snapshot.runID))
         await eventHandler(
             .harnessConfigured(
@@ -287,6 +337,14 @@ struct TrendResearchAgent: Sendable {
                 maxToolCalls: runLimits.maxToolCalls,
                 preferredWebSearches: runLimits.preferredWebSearches,
                 maxWebSearches: runLimits.maxWebSearches
+            )
+        )
+        let initialDraftProgress = await reportDraftStore.progress()
+        await eventHandler(
+            .moduleProgress(
+                completedSections: initialDraftProgress.completedSections,
+                totalSections: initialDraftProgress.totalSections,
+                nextToolName: initialDraftProgress.nextToolName
             )
         )
 
@@ -307,17 +365,33 @@ struct TrendResearchAgent: Sendable {
                 )
 
                 let webStatusBeforeRequest = await webSearchGovernor.status()
+                let remainingResearchToolCalls = max(
+                    0,
+                    runLimits.maxToolCalls
+                        - policy.reservedSubmitToolCalls
+                        - toolCallCount
+                )
+                let researchToolBudgetExhausted = remainingResearchToolCalls == 0
                 let researchReady = harnessState.readyForSubmission(
-                    webSearchConfigured: webSearchSettings.isConfigured,
+                    webSearchConfigured: webSearchRequired,
                     allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
                         && (
                             webStatusBeforeRequest.remainingNetworkSearches == 0
                                 || webSearchUnavailableResult != nil
+                                || researchToolBudgetExhausted
                         )
                 )
                 if researchReady, !submissionMode {
                     submissionMode = true
-                    let guidance = "研究数据已覆盖，立即停止新增搜索并进入分模块提交：组合判断 → 市场与板块 → 持仓基金每批最多 \(TrendReportDraftStore.assetBatchSize) 只 → 操作与风险。App 将在本地组装并统一校验。"
+                    let guidance = if researchToolBudgetExhausted,
+                                      scope.requiresOpportunitySearchCoverage,
+                                      !harnessState.opportunitySearchCoverageComplete {
+                        "研究工具预算已收敛，已为结构化提交保留 \(policy.reservedSubmitToolCalls) 次调用。立即停止搜索并提交降级市场模块；未完成覆盖的维度不得生成机会结论。"
+                    } else if webSearchUnavailableResult != nil {
+                        "Tavily 本次不可用，已停止新增联网请求。继续使用本地行情、缓存和已有证据完成「\(scope.displayName)」；需要外部证据的结论必须降级。"
+                    } else {
+                        "「\(scope.displayName)」所需数据已覆盖，立即停止新增搜索，只提交当前开放模块；其它模块复用上一份已校验结果。"
+                    }
                     messages.append(correctionMessage(guidance))
                     await eventHandler(.harnessGuidance(message: guidance))
                 }
@@ -331,11 +405,15 @@ struct TrendResearchAgent: Sendable {
                     if Self.isSubmissionTool(toolName) {
                         return false
                     }
+                    guard scope.allowedResearchToolNames.contains(toolName) else {
+                        return false
+                    }
                     if toolName == Self.webSearchToolName {
-                        return webSearchSettings.isConfigured
+                        return webSearchRequired
                             && (!officialSourceRequired || harnessState.officialSourceAttempted)
                             && webStatusBeforeRequest.remainingNetworkSearches > 0
                             && webSearchUnavailableResult == nil
+                            && !researchToolBudgetExhausted
                     }
                     if toolName == Self.officialSourceToolName {
                         return officialSourceRequired
@@ -379,11 +457,12 @@ struct TrendResearchAgent: Sendable {
                     consecutiveRequestTimeoutRecoveries += 1
                     let webStatus = await webSearchGovernor.status()
                     let researchReady = harnessState.readyForSubmission(
-                        webSearchConfigured: webSearchSettings.isConfigured,
+                        webSearchConfigured: webSearchRequired,
                         allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
                             && (
                                 webStatus.remainingNetworkSearches == 0
                                     || webSearchUnavailableResult != nil
+                                    || researchToolBudgetExhausted
                             )
                     )
                     if researchReady {
@@ -401,7 +480,7 @@ struct TrendResearchAgent: Sendable {
                     let recoveryProgress = await reportDraftStore.progress()
                     let nextStep = researchReady
                         ? "研究覆盖已经满足要求。停止新增搜索和解释，只调用当前开放的分模块提交工具 \(recoveryProgress.nextToolName ?? TrendReportModuleToolName.actions)。"
-                        : "不要重复展开分析，本轮只完成一个必要动作：\(harnessState.nextStepHint(webSearchConfigured: webSearchSettings.isConfigured, remainingWebSearches: webStatus.remainingNetworkSearches))"
+                        : "不要重复展开分析，本轮只完成一个必要动作：\(harnessState.nextStepHint(webSearchConfigured: webSearchRequired, remainingWebSearches: webStatus.remainingNetworkSearches))"
                     let guidance = "第 \(currentTurn) 轮模型请求超时。Harness 正在自动恢复：\(nextStep)"
                     messages.append(correctionMessage(guidance))
                     await eventHandler(.harnessGuidance(message: guidance))
@@ -448,14 +527,20 @@ struct TrendResearchAgent: Sendable {
                     let callSignature = Self.toolCallSignature(call)
                     let unexpectedTool = !exposedToolNames.contains(toolName)
                     // 运行时强制：submit 前必须先调用 get_portfolio_overview。
-                    let missingOverview = isSubmit && !harnessState.overviewRead
+                    let missingOverview = isSubmit
+                        && scope.requiresPortfolioOverview
+                        && !harnessState.overviewRead
                     // 标的明细必须完整覆盖，否则模型无法生成完整 assetTrends。
-                    let missingAssets = isSubmit && !harnessState.assetCoverageComplete
+                    let missingAssets = isSubmit
+                        && scope.requiresPortfolioAssets
+                        && !harnessState.assetCoverageComplete
                     // 有基金穿透快照时必须读取，避免继续把场内/场外基金误当成真实板块。
-                    let missingLookThrough = isSubmit && !harnessState.lookThroughCoverageComplete
+                    let missingLookThrough = isSubmit
+                        && scope.requiresFundLookThrough
+                        && !harnessState.lookThroughCoverageComplete
                     // 配置了 Tavily 时至少尝试一次联网搜索，避免把模型记忆冒充最新行业/政策信息。
                     let missingWebSearch = isSubmit
-                        && webSearchSettings.isConfigured
+                        && webSearchRequired
                         && harnessState.webSearchAttempts == 0
                     let missingOfficialSource = isSubmit
                         && officialSourceRequired
@@ -546,6 +631,7 @@ struct TrendResearchAgent: Sendable {
                         await eventHandler(.toolStarted(name: toolName))
                         var context = TrendResearchToolContext(
                             snapshot: snapshot,
+                            scope: scope,
                             evidenceLedger: ledger,
                             webSearchSettings: webSearchSettings,
                             webSearchGovernor: webSearchGovernor,
@@ -566,6 +652,17 @@ struct TrendResearchAgent: Sendable {
                             webSearchUnavailableResult = rawToolResult
                         }
                         await eventHandler(.toolFinished(name: toolName, summary: Self.summary(of: rawToolResult)))
+                    }
+
+                    if Self.moduleSubmitToolNames.contains(toolName) {
+                        let moduleProgress = await reportDraftStore.progress()
+                        await eventHandler(
+                            .moduleProgress(
+                                completedSections: moduleProgress.completedSections,
+                                totalSections: moduleProgress.totalSections,
+                                nextToolName: moduleProgress.nextToolName
+                            )
+                        )
                     }
 
                     let toolResult = harnessState.process(
@@ -589,19 +686,25 @@ struct TrendResearchAgent: Sendable {
                         maxToolCalls: runLimits.maxToolCalls,
                         reservedSubmitToolCalls: policy.reservedSubmitToolCalls,
                         webStatus: webStatus,
-                        webSearchConfigured: webSearchSettings.isConfigured
+                        webSearchConfigured: webSearchRequired
                     )
 
-                    if toolName == Self.webSearchToolName,
-                       webSearchUnavailableResult != nil,
-                       !harnessState.opportunitySearchCoverageComplete {
-                        throw TrendResearchAgentError.marketOpportunityScanIncomplete(
-                            missingSectorGroups: harnessState.missingOpportunitySearchSectorGroups
-                        )
-                    }
-
                     // 工具结果超过字节上限：截断后再回灌，避免单个超大结果撑爆上下文。
-                    messages.append(toolMessage(callID: call.id, content: Self.truncate(enrichedToolResult.contentJSON, limit: policy.maxToolResultBytes)))
+                    // 磁盘诊断日志同时保存完整原始结果和实际回灌模型的内容。
+                    let modelToolContent = Self.truncate(
+                        enrichedToolResult.contentJSON,
+                        limit: policy.maxToolResultBytes
+                    )
+                    await AIAgentDiagnosticLog.recordToolResult(
+                        turn: turnCount,
+                        call: call,
+                        contentJSON: rawToolResult.contentJSON,
+                        modelContentJSON: modelToolContent,
+                        isError: rawToolResult.isError
+                    )
+                    messages.append(
+                        toolMessage(callID: call.id, content: modelToolContent)
+                    )
 
                     // submit 成功 → 结束。
                     if case .report(let report) = toolResult.completion {
@@ -615,6 +718,10 @@ struct TrendResearchAgent: Sendable {
                         )
                         await eventHandler(.auditArtifactReady(artifact))
                         await eventHandler(.completed(duration: Date().timeIntervalSince(started)))
+                        await AIAgentDiagnosticLog.record(
+                            "run_completed",
+                            payload: report
+                        )
                         return report
                     }
 
@@ -654,6 +761,10 @@ struct TrendResearchAgent: Sendable {
 
             throw TrendResearchAgentError.turnLimitExceeded
         } catch is CancellationError {
+            await AIAgentDiagnosticLog.record(
+                "run_cancelled",
+                message: "Agent 运行已取消"
+            )
             await eventHandler(
                 .auditArtifactReady(
                     TrendAgentRunArtifact.makeFailure(
@@ -672,6 +783,10 @@ struct TrendResearchAgent: Sendable {
             await eventHandler(.cancelled)
             throw CancellationError()
         } catch let error as TrendResearchAgentError {
+            await AIAgentDiagnosticLog.record(
+                "run_failed",
+                message: error.localizedDescription
+            )
             await eventHandler(
                 .auditArtifactReady(
                     TrendAgentRunArtifact.makeFailure(
@@ -690,6 +805,10 @@ struct TrendResearchAgent: Sendable {
             await eventHandler(.failed(message: error.localizedDescription))
             throw error
         } catch {
+            await AIAgentDiagnosticLog.record(
+                "run_failed",
+                message: error.localizedDescription
+            )
             await eventHandler(
                 .auditArtifactReady(
                     TrendAgentRunArtifact.makeFailure(
@@ -822,7 +941,14 @@ struct TrendResearchAgent: Sendable {
               let code = error["code"] as? String else {
             return false
         }
-        return ["web_search_failed", "web_search_not_configured"].contains(code)
+        return [
+            "web_search_failed",
+            "web_search_invalid_response",
+            "web_search_timed_out",
+            "web_search_quota_exhausted",
+            "web_search_auth_failed",
+            "web_search_not_configured",
+        ].contains(code)
     }
 
     private static func parseErrors(from contentJSON: String) -> [String] {

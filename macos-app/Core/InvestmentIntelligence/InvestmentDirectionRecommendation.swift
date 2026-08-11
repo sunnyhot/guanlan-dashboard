@@ -5,9 +5,6 @@ import Foundation
 /// “可考虑买入/加配/减配”只表示达到研究门槛，仍须结合用户约束和触发条件，
 /// 不等同于自动交易指令。
 enum InvestmentDirectionRecommendation: String, Hashable, Sendable {
-    case considerAdd
-    case considerReduce
-    case holdAndReview
     case startWatching
     case keyOpportunity
     case considerBuying
@@ -17,9 +14,6 @@ enum InvestmentDirectionRecommendation: String, Hashable, Sendable {
 
     var displayName: String {
         switch self {
-        case .considerAdd: "可考虑加配"
-        case .considerReduce: "可考虑减配"
-        case .holdAndReview: "持有观察"
         case .startWatching: "开始关注"
         case .keyOpportunity: "重点机会"
         case .considerBuying: "可考虑买入"
@@ -31,15 +25,12 @@ enum InvestmentDirectionRecommendation: String, Hashable, Sendable {
 
     var priority: Int {
         switch self {
-        case .considerReduce: 0
-        case .considerBuying: 1
-        case .considerAdd: 2
-        case .keyOpportunity: 3
-        case .startWatching: 4
-        case .holdAndReview: 5
-        case .marketTailwind: 6
-        case .marketHeadwind: 7
-        case .marketNeutral: 8
+        case .considerBuying: 0
+        case .keyOpportunity: 1
+        case .startWatching: 2
+        case .marketTailwind: 3
+        case .marketHeadwind: 4
+        case .marketNeutral: 5
         }
     }
 }

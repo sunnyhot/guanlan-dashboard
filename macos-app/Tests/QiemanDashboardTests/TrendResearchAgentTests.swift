@@ -148,7 +148,7 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(client.responsesConsumed, 5)
     }
 
-    func testWebSearchFailureTripsCircuitBreakerForRemainingRun() async throws {
+    func testWebSearchFailureTripsCircuitBreakerAndSubmitsSafeDegradedReport() async throws {
         let snapshot = makeEmptySnapshot()
         let report = TrendAnalysisReport
             .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
@@ -167,21 +167,20 @@ final class TrendResearchAgentTests: XCTestCase {
         let client = ScriptedTrendAgentClient(responses)
         let agent = TrendResearchAgent(client: client, webSearchClient: webClient)
 
-        do {
-            _ = try await agent.run(
-                snapshot: snapshot,
-                settings: testSettings(),
-                webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
-            ) { _ in }
-            XCTFail("全市场扫描未完成时不应提交新的机会报告")
-        } catch let error as TrendResearchAgentError {
-            guard case .marketOpportunityScanIncomplete = error else {
-                return XCTFail("预期市场扫描不完整错误，实际为 \(error)")
-            }
-        }
+        let result = try await agent.run(
+            snapshot: snapshot,
+            settings: testSettings(),
+            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
+        ) { _ in }
 
         let callCount = await webClient.callCount()
         XCTAssertEqual(callCount, 1)
+        XCTAssertTrue(result.opportunities.isEmpty)
+        XCTAssertTrue(result.actions.isEmpty)
+        XCTAssertEqual(
+            result.sourceStatuses.first(where: { $0.source == .webSearch })?.status,
+            .failed
+        )
     }
 
     func testRunPolicyExpandsBudgetForPaginatedAssetsWithinHardCap() {
@@ -203,6 +202,64 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(veryLarge.maxTurns, 48)
         XCTAssertEqual(veryLarge.maxToolCalls, 96)
         XCTAssertEqual(veryLarge.maxWebSearches, 12)
+    }
+
+    func testMarketRadarPreservesSubmissionBudgetWhenSearchCoverageStalls() async throws {
+        let snapshot = makeEmptySnapshot()
+        let report = reportWithUncertainShortHorizon(
+            TrendAnalysisReport
+                .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+                .groundedForSubmission(snapshot: snapshot)
+        )
+        var responses: [Result<AgentCompletionResult, Error>] = []
+
+        for turn in 0..<4 {
+            let calls = (0..<5).map { index in
+                AgentToolCall(
+                    id: "invalid-\(turn)-\(index)",
+                    function: AgentToolFunctionCall(
+                        name: "web_search",
+                        arguments: #"{"query":"火星采矿最新进展","research_target":{"kind":"sector","key":"火星采矿"}}"#
+                    )
+                )
+            }
+            responses.append(.success(toolCallResponse(calls)))
+        }
+        for attempt in 0..<5 {
+            responses.append(
+                try moduleSubmissionResponse(
+                    report: report,
+                    stage: .market,
+                    id: "budget-reserved-market-\(attempt)"
+                )
+            )
+        }
+
+        let client = ScriptedTrendAgentClient(responses)
+        let recorder = TrendAgentEventRecorder()
+        let agent = TrendResearchAgent(client: client)
+        let result: TrendAnalysisReport
+        do {
+            result = try await agent.run(
+                snapshot: snapshot,
+                settings: testSettings(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-test"),
+                scope: .marketRadar,
+                baselineReport: report
+            ) { event in
+                await recorder.record(event)
+            }
+        } catch {
+            XCTFail("市场雷达应保留提交预算：\(error.localizedDescription)；校验：\(await recorder.validationErrors)")
+            return
+        }
+
+        XCTAssertEqual(client.responsesConsumed, 5)
+        XCTAssertEqual(
+            client.requestedToolNames(at: 4),
+            [TrendReportModuleToolName.market]
+        )
+        XCTAssertEqual(result.marketOutlook.map(\.id), report.marketOutlook.map(\.id))
     }
 
     func testHarnessImmediatelySwitchesToOrderedModuleTools() async throws {
@@ -431,6 +488,43 @@ final class TrendResearchAgentTests: XCTestCase {
         case overview
         case market
         case actions
+    }
+
+    private func reportWithUncertainShortHorizon(
+        _ report: TrendAnalysisReport
+    ) -> TrendAnalysisReport {
+        let horizons = report.horizons.map { item in
+            guard item.horizon == .short else { return item }
+            return TrendHorizonView(
+                horizon: item.horizon,
+                direction: .uncertain,
+                confidence: TrendConfidence(score: 35, label: "低"),
+                rationale: item.rationale,
+                counterSignals: item.counterSignals,
+                claimEvidence: item.claimEvidence
+            )
+        }
+        return TrendAnalysisReport(
+            id: report.id,
+            generatedAt: report.generatedAt,
+            dataAsOf: report.dataAsOf,
+            privacyMode: report.privacyMode,
+            externalSignalStatus: report.externalSignalStatus,
+            portfolio: report.portfolio,
+            horizons: horizons,
+            marketOutlook: report.marketOutlook,
+            sectors: report.sectors,
+            opportunities: report.opportunities,
+            keyAssets: report.keyAssets,
+            assetTrends: report.assetTrends,
+            actions: report.actions,
+            evidence: report.evidence,
+            warnings: report.warnings,
+            disclaimer: report.disclaimer,
+            schemaVersion: report.schemaVersion,
+            disposition: report.disposition,
+            sourceStatuses: report.sourceStatuses
+        )
     }
 
     private func moduleSubmissionResponses(
@@ -664,10 +758,14 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
 
 private actor TrendAgentEventRecorder {
     private(set) var timeoutEventCount = 0
+    private(set) var validationErrors: [String] = []
 
     func record(_ event: TrendResearchAgentEvent) {
         if case .modelRequestTimedOut = event {
             timeoutEventCount += 1
+        }
+        if case .reportValidationFailed(let errors, _) = event {
+            validationErrors.append(contentsOf: errors)
         }
     }
 }

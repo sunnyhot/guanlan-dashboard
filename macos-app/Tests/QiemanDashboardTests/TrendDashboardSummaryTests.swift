@@ -322,23 +322,31 @@ final class TrendDashboardSummaryTests: XCTestCase {
             contentsOf: viewsURL.appendingPathComponent("EnhancementTodayPanel.swift"),
             encoding: .utf8
         )
+        let dashboardSource = try String(
+            contentsOf: viewsURL.appendingPathComponent(
+                "InvestmentIntelligence/InvestmentIntelligenceDashboardView.swift"
+            ),
+            encoding: .utf8
+        )
 
         XCTAssertFalse(trendSource.contains("trendProgressSummaryCard"))
         XCTAssertFalse(contentSource.contains("TrendLiveLogPanel()"))
         XCTAssertFalse(centerSource.contains("TrendLiveLogPanel()"))
-        XCTAssertTrue(todaySource.contains("TrendLiveLogPanel()"))
+        XCTAssertFalse(todaySource.contains("TrendLiveLogPanel()"))
+        XCTAssertTrue(dashboardSource.contains("TrendLiveLogPanel()"))
         XCTAssertFalse(todaySource.contains("researchEvidenceDisclosure"))
-        let directionStart = try XCTUnwrap(todaySource.range(of: "var investmentDirectionSection"))
+        let directionStart = try XCTUnwrap(todaySource.range(of: "var marketOpportunitySection"))
         let directionEnd = try XCTUnwrap(
             todaySource.range(
-                of: "// MARK: - ④ 长期趋势研判",
+                of: "// MARK: - ③ 我的组合长期研判",
                 range: directionStart.upperBound..<todaySource.endIndex
             )
         )
         let directionSource = todaySource[directionStart.lowerBound..<directionEnd.lowerBound]
-        XCTAssertTrue(directionSource.contains("TrendLiveLogPanel()"))
+        XCTAssertFalse(directionSource.contains("TrendLiveLogPanel()"))
         XCTAssertTrue(directionSource.contains("InvestmentDirectionView("))
-        XCTAssertTrue(liveLogSource.contains("AI 分析实时日志"))
+        XCTAssertTrue(liveLogSource.contains("model.trendResearchScope.displayName"))
+        XCTAssertTrue(liveLogSource.contains("model.trendResearchProgress.fraction"))
         XCTAssertTrue(liveLogSource.contains("ScrollViewReader"))
         XCTAssertTrue(liveLogSource.contains("scrollToBottom"))
         XCTAssertTrue(liveLogSource.contains(".onChange(of: latestLog?.id)"))

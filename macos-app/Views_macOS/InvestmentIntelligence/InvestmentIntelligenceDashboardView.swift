@@ -3,7 +3,7 @@ import SwiftUI
 /// 投资智能单页通览。
 ///
 /// 原 AI 观点 / 我的组合 / 决策中心 / 决策记录 四个 tab 内容都很薄且彼此重复，
-/// 合并为一个纵向长滚动页：收盘复盘 → 盘中指引 → 投资方向 → 长期趋势 → 判断记录。
+/// 合并为一个纵向长滚动页：实时进度 → 收盘复盘 → 盘中指引 → 全市场机会 → 组合长期研判 → 判断记录。
 /// 顶部只复盘全市场，不展示持仓收益、DecisionCase 或组合画像。
 /// 分区统一使用全站 `SectionCard` 容器，与总览/持仓/平台板块保持同一视觉系统。
 struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
@@ -24,12 +24,13 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+            TrendLiveLogPanel()
             MarketCloseReviewSection()
             intradayContent
             trendContent
             recordsSection
-            credibilityFooter
+            credibilitySection
         }
         .sheet(item: $selectedCase) { decisionCase in
             DecisionCaseDetailSheet(caseID: decisionCase.id)
@@ -89,18 +90,23 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
         }
     }
 
-    // MARK: - 底部可信度条
+    // MARK: - 研判基础（可信度与数据时效）
 
-    private var credibilityFooter: some View {
-        HStack(spacing: AppPalette.spaceS) {
-            Image(systemName: credibilityIsLow ? "exclamationmark.triangle.fill" : "shield.checkered")
-                .font(AppPalette.appFont(.caption))
-            Text(credibilityText)
-                .font(AppPalette.appFont(.caption))
-                .foregroundStyle(credibilityTint)
-            Spacer()
+    private var credibilitySection: some View {
+        SectionCard(
+            title: "研判基础",
+            subtitle: "穿透覆盖与数据时效",
+            icon: "shield.checkered"
+        ) {
+            HStack(spacing: AppPalette.spaceS) {
+                Image(systemName: credibilityIsLow ? "exclamationmark.triangle.fill" : "shield.checkered")
+                    .font(AppPalette.appFont(.caption))
+                Text(credibilityText)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(credibilityTint)
+                Spacer()
+            }
         }
-        .padding(.horizontal, AppPalette.spaceS)
     }
 
     private var coveragePct: Double? {

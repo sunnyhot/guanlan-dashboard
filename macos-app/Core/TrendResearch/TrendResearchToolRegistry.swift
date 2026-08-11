@@ -187,7 +187,7 @@ struct PortfolioAssetsTool: TrendResearchTool {
         let evidenceIDs = page.map { "portfolio:asset:\($0.id)" }
         await context.evidenceLedger.record(
             page.map { asset in
-                TrendEvidence(
+                return TrendEvidence(
                     id: "portfolio:asset:\(asset.id)",
                     sourceName: "本地组合快照",
                     title: asset.name,
@@ -378,7 +378,7 @@ struct FundLookThroughTool: TrendResearchTool {
 
 struct MarketSnapshotTool: TrendResearchTool {
     let name = "get_market_snapshot"
-    let description = "读取 App 已获取的大盘指数与基金估值行情快照。只返回快照已有数据，缺失数据列入 warnings。不得把陈旧净值表达成实时行情。"
+    let description = "读取 App 已获取的大盘指数、基金估值与公开披露底层证券行情。底层行情同时返回来源基金和披露权重，用于解释基金当日涨跌；缺失数据列入 warnings，不得把静态持仓结构或陈旧净值冒充涨跌原因。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [
@@ -387,7 +387,8 @@ struct MarketSnapshotTool: TrendResearchTool {
                 "items": ["type": "string"],
                 "description": "可选：只返回这些基金代码的估值行情"
             ],
-            "include_indices": ["type": "boolean", "description": "是否包含大盘指数，默认 true"]
+            "include_indices": ["type": "boolean", "description": "是否包含大盘指数，默认 true"],
+            "include_underlying_holdings": ["type": "boolean", "description": "是否包含基金披露底层证券的最新行情及来源基金，默认 true"]
         ],
         "additionalProperties": false
     ]
@@ -395,6 +396,7 @@ struct MarketSnapshotTool: TrendResearchTool {
     private struct Params: Codable {
         var asset_codes: [String]?
         var include_indices: Bool?
+        var include_underlying_holdings: Bool?
     }
 
     func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
@@ -409,15 +411,33 @@ struct MarketSnapshotTool: TrendResearchTool {
             return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "参数不是合法 JSON：\(error.localizedDescription)"), isError: true)
         }
 
+        let isMarketOnly = context.scope == .marketRadar
         let includeIndices = params.include_indices ?? true
+        let includeUnderlyingHoldings = !isMarketOnly
+            && (params.include_underlying_holdings ?? true)
         let snapshot = context.snapshot
         var quotes: [TrendResearchQuote] = []
         if includeIndices {
             quotes += snapshot.marketQuotes.filter { $0.kind == "index" }
         }
         let requestedCodes = params.asset_codes.map { Set($0) }
-        quotes += snapshot.marketQuotes.filter { quote in
-            quote.kind == "fund-estimate" && (requestedCodes?.contains(quote.code) ?? true)
+        if !isMarketOnly {
+            quotes += snapshot.marketQuotes.filter { quote in
+                quote.kind == "fund-estimate" && (requestedCodes?.contains(quote.code) ?? true)
+            }
+        }
+
+        let relevantPositions = isMarketOnly
+            ? []
+            : relevantUnderlyingPositions(
+                snapshot: snapshot,
+                requestedFundCodes: requestedCodes
+            )
+        let relevantUnderlyingCodes = Set(relevantPositions.map(\.code))
+        if includeUnderlyingHoldings {
+            quotes += snapshot.marketQuotes.filter { quote in
+                quote.kind == "underlying-stock" && relevantUnderlyingCodes.contains(quote.code)
+            }
         }
 
         var warnings: [String] = []
@@ -431,10 +451,20 @@ struct MarketSnapshotTool: TrendResearchTool {
         if includeIndices && !snapshot.marketQuotes.contains(where: { $0.kind == "index" }) {
             warnings.append("本次分析已主动刷新指数，但没有取得可用大盘行情；不得把缺失解读为市场平稳。")
         }
+        if includeUnderlyingHoldings, !relevantPositions.isEmpty {
+            let quotedCodes = Set(quotes.filter { $0.kind == "underlying-stock" }.map(\.code))
+            let missingCodes = relevantUnderlyingCodes.subtracting(quotedCodes)
+            if !missingCodes.isEmpty {
+                warnings.append("部分披露底层证券没有当日行情：\(missingCodes.sorted().joined(separator: "、"))；相关基金应标记原因待确认。")
+            }
+        }
 
         await context.evidenceLedger.record(
             quotes.map { quote in
-                TrendEvidence(
+                let position = relevantPositions.first { $0.code == quote.code }
+                let relatedFundCodes = position?.contributors.compactMap(\.fundCode) ?? []
+                let relatedFundNames = position?.contributors.map(\.fundName) ?? []
+                return TrendEvidence(
                     id: quote.evidenceID,
                     sourceName: quote.sourceLabel ?? quote.kind,
                     title: quote.name,
@@ -446,8 +476,8 @@ struct MarketSnapshotTool: TrendResearchTool {
                         sourceKind: .marketQuote,
                         sourceTier: .primary,
                         requestedTopicKeys: [quote.code, quote.name],
-                        entityCodes: [quote.code],
-                        entityNames: [quote.name],
+                        entityCodes: [quote.code] + relatedFundCodes,
+                        entityNames: [quote.name] + relatedFundNames,
                         quoteType: quote.assessment.quoteType,
                         freshnessStatus: quote.assessment.freshnessStatus,
                         metadataConfidence: .deterministic
@@ -456,10 +486,43 @@ struct MarketSnapshotTool: TrendResearchTool {
             }
         )
 
+        let quoteByCode = Dictionary(
+            uniqueKeysWithValues: quotes
+                .filter { $0.kind == "underlying-stock" }
+                .map { ($0.code, $0) }
+        )
+        let attributionRows: [[String: Any]] = relevantPositions.compactMap { position in
+            guard let quote = quoteByCode[position.code] else { return nil }
+            let contributors = position.contributors.filter { contributor in
+                guard let requestedCodes, !requestedCodes.isEmpty else { return true }
+                return contributor.fundCode.map { requestedCodes.contains($0) } ?? false
+            }
+            return [
+                "security": jsonObject(quote),
+                "source_funds": contributors.map { jsonObject($0) },
+                "disclosure_boundary": "基金定期报告持仓，不代表分析日实时仓位"
+            ]
+        }
         let data: [String: Any] = [
             "quotes": quotes.map { jsonObject($0) },
+            "underlying_attribution": attributionRows,
             "count": quotes.count
         ]
         return .content(TrendResearchToolEnvelope.success(data, warnings: warnings, evidenceIDs: quotes.map(\.evidenceID)))
+    }
+
+    private func relevantUnderlyingPositions(
+        snapshot: TrendResearchSnapshot,
+        requestedFundCodes: Set<String>?
+    ) -> [PortfolioLookThroughPosition] {
+        guard let positions = snapshot.lookThrough?.topPositions else { return [] }
+        guard let requestedFundCodes, !requestedFundCodes.isEmpty else {
+            return positions.filter { $0.kind == .stock }
+        }
+        return positions.filter { position in
+            position.kind == .stock && position.contributors.contains { contributor in
+                contributor.fundCode.map { requestedFundCodes.contains($0) } ?? false
+            }
+        }
     }
 }

@@ -209,7 +209,7 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertTrue(evidence.metadata.isAssociated(sectorKey: "半导体"))
     }
 
-    func testWebSearchRejectsSectorGroupWhenMemberListIsIncomplete() async throws {
+    func testWebSearchAutoCompletesSectorGroupWhenMemberListIsIncomplete() async throws {
         let group = try XCTUnwrap(
             MarketOpportunityUniverse.sectorGroup(matching: "科技成长")
         )
@@ -234,8 +234,16 @@ final class TrendResearchToolTests: XCTestCase {
             context: context
         )
 
-        XCTAssertTrue(result.isError)
-        XCTAssertTrue(result.contentJSON.contains("research_target 与本次组合快照或全市场研究池不匹配"))
+        XCTAssertFalse(result.isError)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(result.contentJSON.utf8)) as? [String: Any]
+        )
+        let data = try XCTUnwrap(object["data"] as? [String: Any])
+        let target = try XCTUnwrap(data["research_target"] as? [String: Any])
+        XCTAssertEqual(
+            Set(target["sectorKeys"] as? [String] ?? []),
+            Set(group.sectors)
+        )
     }
 
     func testWebSearchRejectsUnknownSectorOutsideControlledUniverse() async {
@@ -258,6 +266,129 @@ final class TrendResearchToolTests: XCTestCase {
 
         XCTAssertTrue(result.isError)
         XCTAssertTrue(result.contentJSON.contains("research_target 与本次组合快照或全市场研究池不匹配"))
+    }
+
+    func testWebSearchAcceptsAggregateAssetClassAndIndexTargetsUsedByAgent() async {
+        let registry = TrendResearchToolRegistry(
+            webSearchClient: FakeTavilySearchClient(response: .empty)
+        )
+
+        let assetClassResult = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "A股 港股 美股 债券 黄金 原油市场展望",
+                "research_target": [
+                    "kind": "assetClass",
+                    "key": "大类资产配置",
+                ],
+            ],
+            context: makeContext(
+                snapshot: makeSnapshot(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-aggregate-asset-class")
+            )
+        )
+        XCTAssertFalse(assetClassResult.isError)
+
+        let indexResult = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "沪深300 上证指数 标普500 纳斯达克走势",
+                "research_target": [
+                    "kind": "index",
+                    "key": "大盘宽基指数",
+                ],
+            ],
+            context: makeContext(
+                snapshot: makeSnapshot(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-aggregate-index")
+            )
+        )
+        XCTAssertFalse(indexResult.isError)
+    }
+
+    func testControlledTargetCacheSurvivesModelQueryRewording() async throws {
+        let response = TavilySearchResponse(
+            query: "大类资产扫描",
+            results: [
+                TavilySearchResult(
+                    title: "大类资产表现",
+                    url: "https://example.com/asset-allocation",
+                    content: "A股与黄金近期表现分化。",
+                    score: 0.8,
+                    publishedDate: "2026-08-10"
+                )
+            ],
+            responseTime: "0.2",
+            requestID: "semantic-cache"
+        )
+        let client = CountingTavilySearchClient(response: response)
+        let registry = TrendResearchToolRegistry(webSearchClient: client)
+        let cache = TrendWebSearchResponseCache(ttlSeconds: 600)
+        let target: [String: Any] = [
+            "kind": "assetClass",
+            "key": "大类资产配置",
+        ]
+
+        let first = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "A股 港股 美股 债券 黄金 原油市场展望",
+                "research_target": target,
+            ],
+            context: makeContext(
+                snapshot: makeSnapshot(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-semantic-cache"),
+                webSearchGovernor: TrendWebSearchGovernor(maxNetworkSearches: 1, cache: cache)
+            )
+        )
+        XCTAssertFalse(first.isError)
+
+        let second = await runWebSearch(
+            registry: registry,
+            arguments: [
+                "query": "全球股票 债券 商品 最新配置观点",
+                "research_target": target,
+            ],
+            context: makeContext(
+                snapshot: makeSnapshot(),
+                webSearchSettings: TavilySearchSettings(apiKey: "tvly-semantic-cache"),
+                webSearchGovernor: TrendWebSearchGovernor(maxNetworkSearches: 1, cache: cache)
+            )
+        )
+        XCTAssertFalse(second.isError)
+        XCTAssertEqual(try parseData(second)["cache_hit"] as? Bool, true)
+        let semanticCacheCallCount = await client.callCount()
+        XCTAssertEqual(semanticCacheCallCount, 1)
+    }
+
+    func testQuotaFailureIsSanitizedAndBlockedAcrossRuns() async {
+        let client = QuotaFailingTavilySearchClient()
+        let registry = TrendResearchToolRegistry(webSearchClient: client)
+        let cache = TrendWebSearchResponseCache(ttlSeconds: 600)
+        let availabilityGate = TrendWebSearchAvailabilityGate()
+        let apiKey = "tvly-quota-cooldown"
+
+        for _ in 0..<2 {
+            let result = await runWebSearch(
+                registry: registry,
+                arguments: ["query": "最新产业政策"],
+                context: makeContext(
+                    snapshot: makeSnapshot(),
+                    webSearchSettings: TavilySearchSettings(apiKey: apiKey),
+                    webSearchGovernor: TrendWebSearchGovernor(
+                        maxNetworkSearches: 2,
+                        cache: cache,
+                        availabilityGate: availabilityGate
+                    )
+                )
+            )
+            XCTAssertTrue(result.isError)
+            XCTAssertTrue(result.contentJSON.contains("web_search_quota_exhausted"))
+            XCTAssertFalse(result.contentJSON.contains("contact support@tavily.com"))
+        }
+
+        let quotaCallCount = await client.callCount()
+        XCTAssertEqual(quotaCallCount, 1)
     }
 
     func testWebSearchCacheIsSharedAcrossRunsAndDoesNotConsumeSecondBudget() async throws {
@@ -457,6 +588,175 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertTrue(ids.contains("portfolio:asset:00001"))
     }
 
+    func testMarketSnapshotReturnsUnderlyingQuoteWithRelatedFundEvidence() async throws {
+        let quote = TrendResearchQuote(
+            kind: "underlying-stock",
+            evidenceID: "market:stock:688041:2026-08-10 15:00:00",
+            code: "688041",
+            name: "海光信息",
+            price: 188.5,
+            changePct: 4.2,
+            changeAmount: 7.6,
+            quotedAt: "2026-08-10 15:00:00",
+            sourceLabel: "股票行情",
+            assessment: TrendSourceFreshnessPolicy.assess(
+                quoteType: .lastTrade,
+                asOf: "2026-08-10 15:00:00",
+                receivedAt: "2026-08-10 15:02:00"
+            )
+        )
+        let contributor = PortfolioLookThroughContributor(
+            fundCode: "163402",
+            fundName: "兴全趋势投资混合",
+            fundPortfolioWeightPct: 41.69,
+            underlyingWeightPct: 10.44,
+            portfolioWeightPct: 4.35,
+            disclosureDate: "2026-06-30",
+            isDirectHolding: false
+        )
+        let lookThrough = PortfolioLookThroughSnapshot(
+            expectedFundCount: 1,
+            coveredFundCount: 1,
+            fundDataCoveragePct: 100,
+            disclosedSecurityCoveragePct: 10.44,
+            unknownPortfolioWeightPct: 89.56,
+            topPositions: [
+                PortfolioLookThroughPosition(
+                    code: "688041",
+                    name: "海光信息",
+                    kind: .stock,
+                    portfolioWeightPct: 4.35,
+                    contributors: [contributor]
+                )
+            ],
+            industries: [],
+            assetClasses: [],
+            funds: [],
+            disclosures: [:],
+            warnings: []
+        )
+        let snapshot = makeSnapshot(
+            assets: [makeAsset(code: "163402")],
+            quotes: [quote],
+            lookThrough: lookThrough
+        )
+        let ledger = TrendEvidenceLedger()
+        let context = TrendResearchToolContext(snapshot: snapshot, evidenceLedger: ledger)
+        let call = AgentToolCall(
+            id: "market-attribution",
+            function: AgentToolFunctionCall(
+                name: "get_market_snapshot",
+                arguments: jsonString([
+                    "asset_codes": ["163402"],
+                    "include_indices": false,
+                    "include_underlying_holdings": true,
+                ])
+            )
+        )
+
+        let result = await registry.execute(call, context: context)
+        let data = try parseData(result)
+        XCTAssertEqual((data["underlying_attribution"] as? [Any])?.count, 1)
+        let evidence = await ledger.canonical(for: quote.evidenceID)
+        XCTAssertTrue(evidence?.metadata.isAssociated(entityCode: "163402") == true)
+        XCTAssertTrue(evidence?.metadata.isAssociated(entityName: "兴全趋势投资混合") == true)
+    }
+
+    func testMarketRadarSnapshotDoesNotExposeFundOrUnderlyingHoldingQuotes() async throws {
+        let assessment = TrendSourceFreshnessPolicy.assess(
+            quoteType: .lastTrade,
+            asOf: "2026-08-10 15:00:00",
+            receivedAt: "2026-08-10 15:02:00"
+        )
+        let quotes = [
+            TrendResearchQuote(
+                kind: "index",
+                evidenceID: "market:index:000001:2026-08-10 15:00:00",
+                code: "000001",
+                name: "上证指数",
+                price: 3900,
+                changePct: 0.8,
+                changeAmount: 31,
+                quotedAt: "2026-08-10 15:00:00",
+                sourceLabel: "指数行情",
+                assessment: assessment
+            ),
+            TrendResearchQuote(
+                kind: "fund-estimate",
+                evidenceID: "market:fund-estimate:163402:2026-08-10 15:00:00",
+                code: "163402",
+                name: "兴全趋势投资混合",
+                price: 1.2,
+                changePct: 2.6,
+                changeAmount: nil,
+                quotedAt: "2026-08-10 15:00:00",
+                sourceLabel: "基金估值",
+                assessment: assessment
+            ),
+        ]
+        let snapshot = makeSnapshot(
+            assets: [makeAsset(code: "163402")],
+            quotes: quotes
+        )
+        let ledger = TrendEvidenceLedger()
+        let context = TrendResearchToolContext(
+            snapshot: snapshot,
+            scope: .marketRadar,
+            evidenceLedger: ledger
+        )
+        let call = AgentToolCall(
+            id: "market-only",
+            function: AgentToolFunctionCall(
+                name: "get_market_snapshot",
+                arguments: "{}"
+            )
+        )
+
+        let result = await registry.execute(call, context: context)
+        let data = try parseData(result)
+        let returnedQuotes = try XCTUnwrap(data["quotes"] as? [[String: Any]])
+        XCTAssertEqual(returnedQuotes.compactMap { $0["kind"] as? String }, ["index"])
+        let fundEvidence = await ledger.canonical(for: quotes[1].evidenceID)
+        XCTAssertNil(fundEvidence)
+    }
+
+    func testHarnessRequiresMarketSnapshotWhenQuotesAreAvailable() {
+        let quote = TrendResearchQuote(
+            kind: "fund-estimate",
+            evidenceID: "market:fund-estimate:163402:2026-08-10 15:00:00",
+            code: "163402",
+            name: "兴全趋势投资混合",
+            price: 1.2,
+            changePct: 2.67,
+            changeAmount: nil,
+            quotedAt: "2026-08-10 15:00:00",
+            sourceLabel: "基金估值"
+        )
+        var harness = TrendResearchHarnessState(
+            snapshot: makeSnapshot(quotes: [quote])
+        )
+        _ = harness.process(
+            toolName: "get_portfolio_overview",
+            result: TrendResearchToolResult.content(
+                TrendResearchToolEnvelope.success(["portfolio": [:]])
+            )
+        )
+
+        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertTrue(
+            harness.nextStepHint(webSearchConfigured: false, remainingWebSearches: 0)
+                .contains("get_market_snapshot")
+        )
+
+        _ = harness.process(
+            toolName: "get_market_snapshot",
+            result: TrendResearchToolResult.content(
+                TrendResearchToolEnvelope.success(["quotes": []])
+            )
+        )
+        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: false))
+    }
+
     // MARK: - submit 归一化
 
     func testSubmitNormalizesTimestampsAndPrivacyMode() async throws {
@@ -600,7 +900,8 @@ final class TrendResearchToolTests: XCTestCase {
     private func makeSnapshot(
         assets: [TrendContextAsset] = [],
         signals: [TrendResearchSignal] = [],
-        quotes: [TrendResearchQuote] = []
+        quotes: [TrendResearchQuote] = [],
+        lookThrough: PortfolioLookThroughSnapshot? = nil
     ) -> TrendResearchSnapshot {
         TrendResearchSnapshot(
             runID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
@@ -622,6 +923,7 @@ final class TrendResearchToolTests: XCTestCase {
             platformSignals: signals,
             managerSignals: [],
             marketQuotes: quotes,
+            lookThrough: lookThrough,
             insightHeadline: "测试洞察",
             sourceWarnings: []
         )
@@ -746,6 +1048,26 @@ private actor CountingTavilySearchClient: TavilySearchClientProtocol {
     ) async throws -> TavilySearchResponse {
         count += 1
         return response
+    }
+
+    func callCount() -> Int {
+        count
+    }
+}
+
+private actor QuotaFailingTavilySearchClient: TavilySearchClientProtocol {
+    private var count = 0
+
+    func search(
+        _ searchRequest: TavilySearchRequest,
+        apiKey: String,
+        timeoutSeconds: Double
+    ) async throws -> TavilySearchResponse {
+        count += 1
+        throw TavilySearchClientError.requestFailed(
+            statusCode: 429,
+            detail: "This request exceeds your plan's set usage limit. Please contact support@tavily.com"
+        )
     }
 
     func callCount() -> Int {

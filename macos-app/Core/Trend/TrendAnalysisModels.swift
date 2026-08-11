@@ -74,6 +74,48 @@ enum TrendDirection: String, Codable, Hashable {
     case neutralNegative
     case bearish
     case uncertain
+
+    /// Agent 输出边界的容错解析。模型偶尔会忽略 schema，返回 up/down/flat
+    /// 或 snake_case 同义词；这不应让整个分模块报告解码失败。明确同义词映射到
+    /// 最接近的方向，无法识别的值保守降级为 uncertain。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        let normalized = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: " ", with: "")
+
+        switch normalized {
+        case "bullish", "strongbullish", "verybullish", "strongpositive",
+             "strongup", "up", "看多", "上涨", "向上":
+            self = .bullish
+        case "neutralpositive", "slightlybullish", "mildlybullish", "positive",
+             "positivebias", "upwardbias", "bullishbias", "偏强", "中性偏强":
+            self = .neutralPositive
+        case "neutral", "flat", "sideways", "rangebound", "mixed", "unchanged",
+             "中性", "震荡", "横盘":
+            self = .neutral
+        case "neutralnegative", "slightlybearish", "mildlybearish", "negative",
+             "negativebias", "downwardbias", "bearishbias", "偏弱", "中性偏弱":
+            self = .neutralNegative
+        case "bearish", "strongbearish", "verybearish", "strongnegative",
+             "strongdown", "down", "看空", "下跌", "向下":
+            self = .bearish
+        case "uncertain", "unknown", "unclear", "inconclusive", "na", "none",
+             "不确定", "未知":
+            self = .uncertain
+        default:
+            self = .uncertain
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 enum TrendHorizon: String, Codable, CaseIterable, Identifiable, Hashable {
@@ -447,6 +489,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
     var dailyAutoAnalysisTimes: [String]
     var lastAutoAnalysisDay: String?
     var lastAutoAnalysisSlotKey: String?
+    var lastModuleAutoAnalysisKeys: [String: String]
+    var lastModuleGeneratedAt: [String: String]
 
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
@@ -457,7 +501,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         dailyAutoAnalysisEnabled: false,
         dailyAutoAnalysisTimes: TrendAutoAnalysisSchedule.default.timeStrings,
         lastAutoAnalysisDay: nil,
-        lastAutoAnalysisSlotKey: nil
+        lastAutoAnalysisSlotKey: nil,
+        lastModuleAutoAnalysisKeys: [:],
+        lastModuleGeneratedAt: [:]
     )
 
     init(
@@ -469,7 +515,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         dailyAutoAnalysisEnabled: Bool,
         dailyAutoAnalysisTimes: [String] = TrendAutoAnalysisSchedule.default.timeStrings,
         lastAutoAnalysisDay: String? = nil,
-        lastAutoAnalysisSlotKey: String? = nil
+        lastAutoAnalysisSlotKey: String? = nil,
+        lastModuleAutoAnalysisKeys: [String: String] = [:],
+        lastModuleGeneratedAt: [String: String] = [:]
     ) {
         self.provider = provider
         self.webSearch = webSearch
@@ -480,6 +528,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         self.dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(timeStrings: dailyAutoAnalysisTimes).timeStrings
         self.lastAutoAnalysisDay = lastAutoAnalysisDay
         self.lastAutoAnalysisSlotKey = lastAutoAnalysisSlotKey
+        self.lastModuleAutoAnalysisKeys = lastModuleAutoAnalysisKeys
+        self.lastModuleGeneratedAt = lastModuleGeneratedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -505,6 +555,14 @@ struct TrendAnalysisSettings: Codable, Hashable {
         }
         lastAutoAnalysisDay = try container.decodeIfPresent(String.self, forKey: .lastAutoAnalysisDay)
         lastAutoAnalysisSlotKey = try container.decodeIfPresent(String.self, forKey: .lastAutoAnalysisSlotKey)
+        lastModuleAutoAnalysisKeys = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .lastModuleAutoAnalysisKeys
+        ) ?? [:]
+        lastModuleGeneratedAt = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .lastModuleGeneratedAt
+        ) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -518,6 +576,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         try container.encode(dailyAutoAnalysisTimes, forKey: .dailyAutoAnalysisTimes)
         try container.encodeIfPresent(lastAutoAnalysisDay, forKey: .lastAutoAnalysisDay)
         try container.encodeIfPresent(lastAutoAnalysisSlotKey, forKey: .lastAutoAnalysisSlotKey)
+        try container.encode(lastModuleAutoAnalysisKeys, forKey: .lastModuleAutoAnalysisKeys)
+        try container.encode(lastModuleGeneratedAt, forKey: .lastModuleGeneratedAt)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -531,6 +591,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         case dailyAutoAnalysisTime
         case lastAutoAnalysisDay
         case lastAutoAnalysisSlotKey
+        case lastModuleAutoAnalysisKeys
+        case lastModuleGeneratedAt
     }
 
     var dailyAutoAnalysisSchedule: TrendAutoAnalysisSchedule {
@@ -559,6 +621,34 @@ struct TrendAnalysisSettings: Codable, Hashable {
             lastCompletedSlotKey: lastAutoAnalysisSlotKey,
             legacyLastAutoAnalysisDay: lastAutoAnalysisDay
         )
+    }
+
+    func dueModuleAutoAnalysisSlot(at timestamp: String) -> TrendScheduledModuleSlot? {
+        TrendModuleAutoAnalysisSchedule.dueSlot(
+            at: timestamp,
+            lastCompletedKeys: lastModuleAutoAnalysisKeys,
+            lastGeneratedAtByScope: lastModuleGeneratedAt
+        )
+    }
+
+    mutating func markModuleAutoAnalysisCompleted(_ slot: TrendScheduledModuleSlot) {
+        lastModuleAutoAnalysisKeys[slot.scope.rawValue] = slot.key
+    }
+
+    mutating func markModuleGenerated(
+        scope: TrendResearchRunScope,
+        generatedAt: String
+    ) {
+        let scopes = scope == .full
+            ? [TrendResearchRunScope.marketRadar, .closeReview, .longTerm]
+            : [scope]
+        for moduleScope in scopes {
+            lastModuleGeneratedAt[moduleScope.rawValue] = generatedAt
+        }
+    }
+
+    func moduleGeneratedAt(_ scope: TrendResearchRunScope) -> String? {
+        lastModuleGeneratedAt[scope.rawValue]
     }
 }
 
@@ -1125,6 +1215,31 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
         }
         actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
         return ids
+    }
+
+    /// 只支撑个人组合结论的证据，不包含全市场扫描产生的板块与机会证据。
+    var portfolioReferencedEvidenceIDs: [String] {
+        var ids: [String] = []
+        var seen = Set<String>()
+        let append: (String) -> Void = { id in
+            if seen.insert(id).inserted {
+                ids.append(id)
+            }
+        }
+
+        portfolio.claimEvidence.allEvidenceIDs.forEach(append)
+        horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        (keyAssets + assetTrends).forEach { asset in
+            asset.claimEvidence.allEvidenceIDs.forEach(append)
+            asset.horizons.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        }
+        actions.forEach { $0.claimEvidence.allEvidenceIDs.forEach(append) }
+        return ids
+    }
+
+    var portfolioEvidence: [TrendEvidence] {
+        let referencedIDs = Set(portfolioReferencedEvidenceIDs)
+        return evidence.filter { referencedIDs.contains($0.id) }
     }
 
     init(

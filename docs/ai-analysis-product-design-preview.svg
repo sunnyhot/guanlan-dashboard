@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1670" viewBox="0 0 1800 1670">
+  <defs>
+    <filter id="windowShadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#2C3442" flood-opacity="0.16"/></filter>
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#344054" flood-opacity="0.08"/></filter>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #0A0F1C; }
+      .muted { fill: #647086; }
+      .tertiary { fill: #8A94A5; }
+      .blue { fill: #2966E0; }
+      .blue-dark { fill: #1E54BD; }
+      .gain { fill: #B31F1F; }
+      .loss { fill: #057A47; }
+      .amber { fill: #8C5A0A; }
+      .caption { font-size: 10px; }
+      .meta { font-size: 11px; }
+      .body { font-size: 12px; }
+      .subhead { font-size: 14px; font-weight: 650; }
+      .heading { font-size: 17px; font-weight: 720; }
+      .display { font-size: 24px; font-weight: 760; }
+      .board-title { font-size: 30px; font-weight: 760; }
+      .semibold { font-weight: 650; }
+      .bold { font-weight: 740; }
+      .mono { font-family: "SFMono-Regular", Menlo, monospace; }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1670" fill="#EEF1F5"/>
+  <text x="60" y="54" class="board-title">AI 研判 · 产品设计稿</text>
+  <text x="60" y="84" class="body muted">推荐：信息型单页。全市场负责发现机会，个人组合负责长期管理，专项深研按需启动。</text>
+  <g transform="translate(60 96)"><rect width="180" height="32" rx="16" fill="#2966E0"/><text x="90" y="21" text-anchor="middle" class="meta bold" fill="#FFFFFF">A · 单页时间轴（推荐）</text></g>
+  <g transform="translate(252 96)"><rect width="148" height="32" rx="16" fill="#FFFFFF" stroke="#B4BECE"/><text x="74" y="21" text-anchor="middle" class="meta muted">B · 双视角切换</text></g>
+  <g transform="translate(412 96)"><rect width="148" height="32" rx="16" fill="#FFFFFF" stroke="#B4BECE"/><text x="74" y="21" text-anchor="middle" class="meta muted">C · 研究工作台</text></g>
+
+  <g filter="url(#windowShadow)">
+    <rect x="60" y="145" width="1680" height="1115" rx="18" fill="#F0F5FC" stroke="#AAB5C5"/>
+    <path d="M60 193 H1740" stroke="#D8DEE8"/>
+    <path d="M280 193 V1260" stroke="#DDE2E9"/>
+    <path d="M78 145 H1722 Q1740 145 1740 163 V193 H60 V163 Q60 145 78 145" fill="#FCFCFB"/>
+    <circle cx="86" cy="169" r="7" fill="#FF5F57"/><circle cx="108" cy="169" r="7" fill="#FEBB2E"/><circle cx="130" cy="169" r="7" fill="#28C840"/>
+    <text x="156" y="175" class="subhead">且慢主理人</text>
+    <path d="M60 193 H280 V1260 H78 Q60 1260 60 1242 Z" fill="#FBFAF7"/>
+  </g>
+
+  <text x="84" y="229" class="caption tertiary bold">工作区</text>
+  <g class="body muted"><text x="98" y="272">总览</text><text x="98" y="318">我的持仓</text><text x="98" y="364">平台调仓</text><text x="98" y="410">论坛发言</text></g>
+  <rect x="76" y="432" width="188" height="40" rx="10" fill="#E5EDFF" stroke="#B7CBFF"/>
+  <circle cx="96" cy="452" r="7" fill="none" stroke="#2966E0" stroke-width="2"/><path d="M91 452 H101 M96 447 V457" stroke="#2966E0" stroke-width="1.5"/>
+  <text x="116" y="457" class="body blue-dark bold">AI 研判</text>
+  <text x="98" y="510" class="body muted">设置</text>
+  <circle cx="86" cy="1195" r="5" fill="#2D9B64"/><text x="100" y="1199" class="meta muted semibold">数据已连接</text><text x="84" y="1221" class="caption tertiary">上次同步 15:31</text>
+
+  <text x="312" y="242" class="display">AI 研判</text>
+  <text x="312" y="267" class="meta muted">今日 15:32 · 最近全市场扫描 2 分钟前</text>
+  <g transform="translate(1450 222)"><rect width="112" height="36" rx="9" fill="#FFFFFF" stroke="#B8C2D2"/><text x="56" y="23" text-anchor="middle" class="meta muted">模型与数据源</text></g>
+  <g transform="translate(1574 222)"><rect width="134" height="36" rx="9" fill="#2966E0"/><text x="67" y="23" text-anchor="middle" class="body bold" fill="#FFFFFF">扫描全市场</text></g>
+
+  <g transform="translate(312 281)">
+    <rect width="1396" height="58" rx="10" fill="#EAF1FF" stroke="#AFC5F6"/>
+    <text x="18" y="23" class="body blue-dark bold">正在扫描全市场 · 行业分组 4/6</text>
+    <text x="18" y="44" class="caption" fill="#5D6D8A">行情快照 ✓　基金穿透 ✓　联网检索 4/6　报告组装　证据校验　　缓存命中 8 次</text>
+    <rect x="928" y="21" width="326" height="6" rx="3" fill="#C8D7F6"/><rect x="928" y="21" width="210" height="6" rx="3" fill="#2966E0"/>
+    <text x="1270" y="29" class="caption blue-dark bold">64%</text>
+    <rect x="1312" y="14" width="66" height="28" rx="7" fill="#FFFFFF" stroke="#AFC5F6"/><text x="1345" y="32" text-anchor="middle" class="caption muted">取消</text>
+  </g>
+
+  <g filter="url(#cardShadow)">
+    <rect x="312" y="355" width="1396" height="210" rx="12" fill="#FFFFFF" stroke="#D2D9E5"/>
+  </g>
+  <text x="336" y="389" class="caption blue bold">今日收盘复盘 · 15:31</text>
+  <text x="336" y="429" class="display">市场结构分化，红利与黄金相对占优</text>
+  <text x="336" y="458" class="body muted">宽基指数承压，但避险与高股息方向维持强势。</text>
+  <text x="336" y="479" class="body muted">明日重点确认成交量是否回升，以及成长板块能否止跌。</text>
+  <g transform="translate(336 507)"><rect width="158" height="32" rx="16" fill="#EDF8F2" stroke="#B9DDCA"/><text x="79" y="21" text-anchor="middle" class="caption loss bold">沪深300　偏弱 −0.8%</text></g>
+  <g transform="translate(506 507)"><rect width="170" height="32" rx="16" fill="#FCEEEE" stroke="#E8C0C0"/><text x="85" y="21" text-anchor="middle" class="caption gain bold">中证红利　偏强 +1.2%</text></g>
+  <g transform="translate(688 507)"><rect width="148" height="32" rx="16" fill="#FFF6E7" stroke="#E9CC93"/><text x="74" y="21" text-anchor="middle" class="caption amber bold">黄金　偏强 +0.7%</text></g>
+  <g transform="translate(848 507)"><rect width="112" height="32" rx="16" fill="#F2F4F7" stroke="#D2D7E0"/><text x="56" y="21" text-anchor="middle" class="caption muted bold">债券　中性</text></g>
+  <path d="M1100 383 V537" stroke="#E5E8EE"/>
+  <text x="1128" y="392" class="body bold">明日三件事</text>
+  <circle cx="1134" cy="425" r="10" fill="#EAF1FF"/><text x="1134" y="429" text-anchor="middle" class="caption blue-dark bold">1</text><text x="1156" y="430" class="meta muted">确认红利主线能否放量延续</text>
+  <circle cx="1134" cy="460" r="10" fill="#EAF1FF"/><text x="1134" y="464" text-anchor="middle" class="caption blue-dark bold">2</text><text x="1156" y="465" class="meta muted">观察成长板块跌幅是否收敛</text>
+  <circle cx="1134" cy="495" r="10" fill="#EAF1FF"/><text x="1134" y="499" text-anchor="middle" class="caption blue-dark bold">3</text><text x="1156" y="500" class="meta muted">黄金突破后是否出现快速回落</text>
+  <text x="1128" y="536" class="caption tertiary">基于 18 条去重证据 · 不读取个人持仓</text>
+
+  <g transform="translate(312 581)">
+    <rect width="1396" height="196" rx="12" fill="#FBFCFE" stroke="#D2D9E5"/>
+    <text x="24" y="34" class="heading">盘中实时指引</text>
+    <rect x="178" y="15" width="98" height="28" rx="14" fill="#FFF4E5" stroke="#E8C98A"/><text x="227" y="33" text-anchor="middle" class="caption amber bold">均衡偏防守</text>
+    <text x="928" y="33" class="caption muted">有效至 14:50 · 剩余 43 分钟 · 依据 9 条</text>
+    <rect x="1150" y="14" width="108" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="1204" y="32" text-anchor="middle" class="caption muted">查看完整依据</text>
+    <rect x="1270" y="14" width="102" height="28" rx="7" fill="#2966E0"/><text x="1321" y="32" text-anchor="middle" class="caption bold" fill="#FFFFFF">重新生成</text>
+    <text x="24" y="69" class="subhead">下一小时：不追高，等待成长止跌；黄金维持持有</text>
+    <text x="24" y="94" class="caption tertiary bold">优先动作</text>
+    <text x="24" y="119" class="caption muted"><tspan font-weight="700" fill="#293142">黄金 ETF</tspan>　持有　<tspan fill="#8C5A0A" font-weight="700">把握 78</tspan>　维持现有仓位　·　失效：跌破日内均线</text>
+    <text x="24" y="147" class="caption muted"><tspan font-weight="700" fill="#293142">中证红利</tspan>　不追高　<tspan fill="#B31F1F" font-weight="700">把握 72</tspan>　等待回踩　·　触发：缩量回落后企稳</text>
+    <text x="24" y="175" class="caption muted"><tspan font-weight="700" fill="#293142">成长 ETF</tspan>　继续观望　<tspan fill="#647086" font-weight="700">把握 61</tspan>　暂不补仓　·　触发：放量收复午盘高点</text>
+    <path d="M700 56 V178" stroke="#E1E6ED"/>
+    <text x="728" y="70" class="caption tertiary bold">3 个分析团队给出的约束</text>
+    <rect x="728" y="82" width="640" height="30" rx="8" fill="#F3F7FE" stroke="#D8E2F2"/><text x="742" y="101" class="caption muted"><tspan font-weight="700" fill="#293142">行情</tspan>　宽基偏弱，日内波动正在放大</text>
+    <rect x="728" y="120" width="640" height="30" rx="8" fill="#F7F9FC" stroke="#E0E5EC"/><text x="742" y="139" class="caption muted"><tspan font-weight="700" fill="#293142">事件</tspan>　没有新增重大利空，黄金仍有避险支撑</text>
+    <rect x="728" y="158" width="640" height="30" rx="8" fill="#FFF8EE" stroke="#EDD7B5"/><text x="742" y="177" class="caption muted"><tspan font-weight="700" fill="#293142">持仓</tspan>　红利方向已经偏高配，继续追涨性价比不足</text>
+  </g>
+
+  <g transform="translate(0 142)">
+  <rect x="312" y="651" width="850" height="350" rx="12" fill="#FFFFFF" stroke="#D2D9E5"/>
+  <text x="336" y="685" class="heading">全市场机会雷达</text><text x="336" y="708" class="caption muted">只看市场，不读取个人持仓</text>
+  <g transform="translate(844 672)"><rect width="68" height="28" rx="14" fill="#E5EDFF" stroke="#B7CBFF"/><text x="34" y="18" text-anchor="middle" class="caption blue-dark bold">全部 12</text></g>
+  <g transform="translate(920 672)"><rect width="68" height="28" rx="14" fill="#FFFFFF" stroke="#D2D9E5"/><text x="34" y="18" text-anchor="middle" class="caption muted">板块 6</text></g>
+  <g transform="translate(996 672)"><rect width="68" height="28" rx="14" fill="#FFFFFF" stroke="#D2D9E5"/><text x="34" y="18" text-anchor="middle" class="caption muted">宽基 3</text></g>
+  <g transform="translate(1072 672)"><rect width="68" height="28" rx="14" fill="#FFFFFF" stroke="#D2D9E5"/><text x="34" y="18" text-anchor="middle" class="caption muted">大类 3</text></g>
+  <text x="336" y="744" class="caption tertiary">方向</text><text x="534" y="744" class="caption tertiary">判断</text><text x="650" y="744" class="caption tertiary">触发条件</text><text x="918" y="744" class="caption tertiary">证据</text>
+
+  <text x="336" y="778" class="meta bold">黄金与贵金属</text><text x="336" y="797" class="caption tertiary">大类资产 · 更新 15:29</text>
+  <g transform="translate(534 762)"><rect width="92" height="26" rx="13" fill="#FFF4DD" stroke="#E7C57B"/><text x="46" y="17" text-anchor="middle" class="caption amber bold">重点机会 82</text></g>
+  <text x="650" y="781" class="caption muted">突破前高且实际利率继续回落</text><text x="918" y="781" class="caption muted">5 条 · 2 权威</text>
+  <g transform="translate(1044 760)"><rect width="92" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="46" y="18" text-anchor="middle" class="caption blue-dark bold">专项研究</text></g>
+  <path d="M336 812 H1136" stroke="#E6EAF0"/>
+  <text x="336" y="844" class="meta bold">高股息红利</text><text x="336" y="863" class="caption tertiary">市场板块 · 更新 15:27</text>
+  <g transform="translate(534 828)"><rect width="92" height="26" rx="13" fill="#FCEEEE" stroke="#E8C0C0"/><text x="46" y="17" text-anchor="middle" class="caption gain bold">重点机会 76</text></g>
+  <text x="650" y="847" class="caption muted">成交额回升且防御风格持续占优</text><text x="918" y="847" class="caption muted">4 条 · 1 权威</text>
+  <g transform="translate(1044 826)"><rect width="92" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="46" y="18" text-anchor="middle" class="caption blue-dark bold">专项研究</text></g>
+  <path d="M336 878 H1136" stroke="#E6EAF0"/>
+  <text x="336" y="910" class="meta bold">AI 算力链</text><text x="336" y="929" class="caption tertiary">市场板块 · 更新 15:25</text>
+  <g transform="translate(534 894)"><rect width="92" height="26" rx="13" fill="#EEF3FA" stroke="#C9D3E0"/><text x="46" y="17" text-anchor="middle" class="caption muted bold">开始关注 63</text></g>
+  <text x="650" y="913" class="caption muted">指数止跌并出现两日量价确认</text><text x="918" y="913" class="caption muted">3 条 · 1 权威</text>
+  <g transform="translate(1044 892)"><rect width="92" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="46" y="18" text-anchor="middle" class="caption blue-dark bold">专项研究</text></g>
+  <text x="964" y="974" class="caption blue bold">查看全部 12 个方向 →</text>
+
+  <rect x="1178" y="651" width="530" height="350" rx="12" fill="#FFFFFF" stroke="#D2D9E5"/>
+  <text x="1202" y="685" class="heading">我的组合长期研判</text><text x="1202" y="708" class="caption muted">本周报告 · 持仓版本 #28</text>
+  <g transform="translate(1558 670)"><rect width="126" height="26" rx="13" fill="#F1F4F8" stroke="#D2D9E5"/><text x="63" y="17" text-anchor="middle" class="caption muted">持仓变化时更新</text></g>
+  <text x="1202" y="752" class="heading">中期中性偏多</text>
+  <g transform="translate(1448 731)"><rect width="210" height="28" rx="14" fill="#FFF4E5" stroke="#E8C98A"/><text x="105" y="18" text-anchor="middle" class="caption amber bold">主要风险：行业重叠偏高</text></g>
+  <g transform="translate(1202 777)"><rect width="458" height="38" rx="8" fill="#F7F9FC" stroke="#E0E5EC"/><text x="12" y="24" class="caption muted">短期　<tspan font-weight="700" fill="#293142">谨慎</tspan>　等待成长板块止跌</text></g>
+  <g transform="translate(1202 823)"><rect width="458" height="38" rx="8" fill="#F7F9FC" stroke="#E0E5EC"/><text x="12" y="24" class="caption muted">中期　<tspan font-weight="700" fill="#293142">中性偏多</tspan>　红利与黄金提供支撑</text></g>
+  <g transform="translate(1202 869)"><rect width="458" height="38" rx="8" fill="#F7F9FC" stroke="#E0E5EC"/><text x="12" y="24" class="caption muted">长期　<tspan font-weight="700" fill="#293142">结构健康</tspan>　保持多资产分散</text></g>
+  <text x="1202" y="943" class="caption muted"><tspan font-weight="700" fill="#293142">需要关注</tspan>　半导体穿透重叠 28%　·　穿透覆盖 83%</text>
+  <g transform="translate(1538 924)"><rect width="98" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="49" y="18" text-anchor="middle" class="caption blue-dark bold">研究该问题</text></g>
+  <text x="1482" y="976" class="caption blue bold">查看完整组合报告 →</text>
+  </g>
+
+  <g transform="translate(0 142)">
+  <rect x="312" y="1017" width="1396" height="84" rx="11" fill="#FBFCFE" stroke="#D2D9E5"/>
+  <text x="336" y="1050" class="subhead">判断与复盘</text>
+  <text x="530" y="1049" class="caption muted"><tspan font-weight="700" fill="#8C5A0A">待复盘 1</tspan>　半导体重叠风险 · 8 月 16 日复查</text>
+  <text x="900" y="1049" class="caption muted"><tspan font-weight="700" fill="#2D7A57">最近完成</tspan>　黄金突破判断 · 条件成立 · 结果偏正向</text>
+  <g transform="translate(1570 1031)"><rect width="110" height="28" rx="7" fill="#FFFFFF" stroke="#AEB9CA"/><text x="55" y="18" text-anchor="middle" class="caption muted">查看全部记录</text></g>
+  <text x="336" y="1082" class="caption tertiary">穿透覆盖 83% · 季报截至 2026-06-30 · 本轮外部证据 18 条 · 所有判断均为非投资建议</text>
+  </g>
+
+  <g transform="translate(0 140)">
+  <text x="60" y="1174" class="subhead muted">备选产品方向</text>
+  <g filter="url(#cardShadow)"><rect x="60" y="1192" width="800" height="280" rx="14" fill="#FFFFFF" stroke="#B8C2D2"/><rect x="900" y="1192" width="840" height="280" rx="14" fill="#FFFFFF" stroke="#B8C2D2"/></g>
+  <text x="88" y="1228" class="heading">B · 双视角切换</text><text x="88" y="1254" class="meta muted">顶部保留今日复盘与盘中指引，主体使用“全市场 / 我的组合”切换。</text>
+  <g transform="translate(280 1280)"><rect width="360" height="36" rx="18" fill="#F1F4F8" stroke="#CBD3DF"/><rect width="180" height="36" rx="18" fill="#E5EDFF" stroke="#B7CBFF"/><text x="90" y="23" text-anchor="middle" class="meta blue-dark bold">全市场</text><text x="270" y="23" text-anchor="middle" class="meta muted">我的组合</text></g>
+  <rect x="112" y="1336" width="696" height="106" rx="9" fill="#F7F9FC" stroke="#D9DFE8"/>
+  <text x="132" y="1364" class="meta bold">黄金与贵金属</text><text x="390" y="1364" class="caption amber bold">重点机会 82</text><text x="714" y="1364" class="caption blue">专项研究</text><path d="M132 1380 H788" stroke="#E2E6EC"/>
+  <text x="132" y="1402" class="meta bold">高股息红利</text><text x="390" y="1402" class="caption gain bold">重点机会 76</text><text x="714" y="1402" class="caption blue">专项研究</text><path d="M132 1417 H788" stroke="#E2E6EC"/>
+  <text x="88" y="1456" class="caption muted">优点：页面更短、更专注　·　缺点：跨域对照需要来回切换</text>
+
+  <text x="928" y="1228" class="heading">C · 研究工作台</text><text x="928" y="1254" class="meta muted">左侧研究队列，右侧常驻详情、证据和运行日志。</text>
+  <rect x="948" y="1280" width="230" height="162" rx="9" fill="#F3F6FA" stroke="#D9DFE8"/><text x="968" y="1308" class="meta bold">研究队列</text>
+  <rect x="960" y="1322" width="206" height="30" rx="7" fill="#E5EDFF"/><circle cx="976" cy="1337" r="5" fill="#2966E0"/><text x="990" y="1341" class="caption blue-dark bold">黄金与贵金属</text>
+  <text x="968" y="1373" class="caption muted">○ 半导体重叠风险</text><text x="968" y="1398" class="caption muted">○ 高股息红利</text><text x="968" y="1423" class="caption muted">○ AI 算力链</text>
+  <rect x="1196" y="1280" width="494" height="162" rx="9" fill="#F9FAFC" stroke="#D9DFE8"/>
+  <text x="1216" y="1310" class="subhead">黄金与贵金属 · 专项研究</text><text x="1216" y="1336" class="caption amber bold">重点机会 82　　证据 5 条</text>
+  <text x="1216" y="1364" class="caption muted">触发　突破前高且实际利率继续回落</text><text x="1216" y="1388" class="caption muted">失效　美元与实际利率同步快速上行</text>
+  <rect x="1216" y="1410" width="360" height="6" rx="3" fill="#D7DDEA"/><rect x="1216" y="1410" width="246" height="6" rx="3" fill="#2966E0"/><text x="1588" y="1417" class="caption blue-dark bold">68%</text>
+  <text x="928" y="1456" class="caption muted">优点：深研效率最高　·　缺点：更重，更适合专业模式而非默认首页</text>
+  </g>
+</svg>

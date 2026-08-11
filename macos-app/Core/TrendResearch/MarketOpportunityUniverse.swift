@@ -5,6 +5,11 @@ import Foundation
 /// 它只决定 Agent 可以主动研究哪些通用方向，不代表系统看多这些方向，
 /// 也不会因为用户是否持有而增删候选。
 enum MarketOpportunityUniverse {
+    /// 允许 Agent 用一个结构化目标表达“扫描主要市场”，避免强迫模型随意挑选
+    /// 某一个指数或资产类别来冒充全市场覆盖。
+    static let aggregateIndexKey = "大盘宽基指数"
+    static let aggregateAssetClassKey = "大类资产配置"
+
     static let indices = [
         "上证指数", "沪深300", "中证500", "中证1000", "科创50", "创业板指",
         "恒生指数", "恒生科技", "标普500", "纳斯达克", "纳斯达克100", "道琼斯",
@@ -68,6 +73,22 @@ enum MarketOpportunityUniverse {
         return Set(target.sectorKeys.map(normalized)) == Set(group.sectors.map(normalized))
     }
 
+    /// 六个全市场板块分组是 App 自己维护的受控研究池。模型只要给出合法分组名，
+    /// App 就确定性补齐完整成员，避免因为漏抄一个 sectorKeys 而反复消耗 Agent 预算。
+    static func canonicalizedTarget(_ target: TrendResearchTarget) -> TrendResearchTarget {
+        guard target.kind == .sector,
+              let group = sectorGroup(matching: target.key) else {
+            return target
+        }
+        return TrendResearchTarget(
+            kind: .sector,
+            key: group.key,
+            entityCodes: target.entityCodes,
+            sectorKeys: group.sectors,
+            assetClassKeys: target.assetClassKeys
+        )
+    }
+
     static func contains(_ key: String, kind: TrendResearchTargetKind) -> Bool {
         let normalizedKey = normalized(key)
         let values: [String]
@@ -82,6 +103,43 @@ enum MarketOpportunityUniverse {
             return false
         }
         return values.contains { normalized($0) == normalizedKey }
+    }
+
+    static func isAggregateTarget(_ key: String, kind: TrendResearchTargetKind) -> Bool {
+        let normalizedKey = normalized(key)
+        switch kind {
+        case .index:
+            return normalizedKey == normalized(aggregateIndexKey)
+        case .assetClass:
+            return normalizedKey == normalized(aggregateAssetClassKey)
+        case .asset, .sector, .macro:
+            return false
+        }
+    }
+
+    static func stableSearchCacheScope(for target: TrendResearchTarget) -> String? {
+        switch target.kind {
+        case .index:
+            guard isAggregateTarget(target.key, kind: .index)
+                    || contains(target.key, kind: .index) else {
+                return nil
+            }
+        case .sector:
+            guard contains(target.key, kind: .sector) else { return nil }
+        case .assetClass:
+            guard isAggregateTarget(target.key, kind: .assetClass)
+                    || contains(target.key, kind: .assetClass) else {
+                return nil
+            }
+        case .asset, .macro:
+            return nil
+        }
+        return ([target.kind.rawValue, target.key]
+            + target.entityCodes.sorted()
+            + target.sectorKeys.sorted()
+            + target.assetClassKeys.sorted())
+            .map(normalized)
+            .joined(separator: "|")
     }
 
     private static func normalized(_ value: String) -> String {

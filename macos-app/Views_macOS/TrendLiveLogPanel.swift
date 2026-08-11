@@ -71,7 +71,7 @@ struct TrendLiveLogPanel: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
-                    Text("AI 分析实时日志")
+                    Text("\(model.trendResearchScope.displayName)进度")
                         .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     TintedCapsuleBadge(
@@ -87,6 +87,18 @@ struct TrendLiveLogPanel: View {
                     .font(AppPalette.appFont(.footnote, weight: .medium))
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
+                if model.trendGenerationState == .generating {
+                    HStack(spacing: 7) {
+                        ProgressView(value: model.trendResearchProgress.fraction)
+                            .progressViewStyle(.linear)
+                            .tint(stateTint)
+                            .frame(width: 132)
+                        Text(model.trendResearchProgress.detailText)
+                            .font(AppPalette.appFont(.caption, weight: .medium))
+                            .foregroundStyle(AppPalette.muted)
+                            .lineLimit(1)
+                    }
+                }
             }
 
             Spacer(minLength: AppPalette.spaceS)
@@ -110,9 +122,9 @@ struct TrendLiveLogPanel: View {
                 copyLogs()
             }
 
-            if model.trendAgentRunLogFileURL != nil {
-                iconButton("在 Finder 中显示日志文件", systemImage: "folder") {
-                    revealLogFile()
+            if model.aiAnalysisDiagnosticLogsDirectoryURL != nil {
+                iconButton("打开完整诊断日志目录", systemImage: "folder") {
+                    model.openAIAnalysisDiagnosticLogsDirectory()
                 }
             }
 
@@ -262,11 +274,6 @@ struct TrendLiveLogPanel: View {
         }
         .joined(separator: "\n")
         PasteboardHelper.copy(text)
-    }
-
-    private func revealLogFile() {
-        guard let url = model.trendAgentRunLogFileURL else { return }
-        FilePresenter.reveal(url)
     }
 
     private func logTime(_ timestamp: String) -> String {

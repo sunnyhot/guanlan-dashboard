@@ -5,8 +5,10 @@ import Foundation
 /// 它不替 Agent 选择研究主题，只记录已经读取的数据、去除重复网页证据，
 /// 并把剩余预算与缺口附加到每个工具结果中，让模型能及时收敛到提交阶段。
 struct TrendResearchHarnessState: Sendable {
+    private let scope: TrendResearchRunScope
     private let requiredAssetIDs: Set<String>
     private let lookThroughRequired: Bool
+    private let marketSnapshotRequired: Bool
     private let officialSourceRequired: Bool
     private let alphaVantageRequired: Bool
     private(set) var overviewRead = false
@@ -34,11 +36,16 @@ struct TrendResearchHarnessState: Sendable {
 
     init(
         snapshot: TrendResearchSnapshot,
+        scope: TrendResearchRunScope = .full,
         officialSourceRequired: Bool = false,
         alphaVantageRequired: Bool = false
     ) {
-        requiredAssetIDs = Set(snapshot.assets.map(\.id))
-        lookThroughRequired = snapshot.lookThrough != nil
+        self.scope = scope
+        requiredAssetIDs = scope.requiresPortfolioAssets
+            ? Set(snapshot.assets.map(\.id))
+            : []
+        lookThroughRequired = scope.requiresFundLookThrough && snapshot.lookThrough != nil
+        marketSnapshotRequired = scope.requiresMarketSnapshot && !snapshot.marketQuotes.isEmpty
         self.officialSourceRequired = officialSourceRequired
         self.alphaVantageRequired = alphaVantageRequired
     }
@@ -88,19 +95,21 @@ struct TrendResearchHarnessState: Sendable {
         webSearchConfigured: Bool,
         allowInsufficientWebEvidence: Bool = false
     ) -> Bool {
-        overviewRead
+        (!scope.requiresPortfolioOverview || overviewRead)
             && assetCoverageComplete
             && lookThroughCoverageComplete
+            && (!marketSnapshotRequired || marketSnapshotRead)
             && (!officialSourceRequired || officialSourceAttempted)
             && (!alphaVantageRequired || alphaVantageAttempts > 0)
             && (
                 !webSearchConfigured
+                    || allowInsufficientWebEvidence
+                    || (!scope.requiresOpportunitySearchCoverage && successfulWebSearches > 0)
                     || (
+                        scope.requiresOpportunitySearchCoverage
+                            &&
                         opportunitySearchCoverageComplete
-                            && (
-                                successfulWebSearches > 0
-                                    || allowInsufficientWebEvidence
-                            )
+                            && successfulWebSearches > 0
                     )
             )
     }
@@ -197,18 +206,24 @@ struct TrendResearchHarnessState: Sendable {
         webSearchConfigured: Bool
     ) -> TrendResearchToolResult {
         guard var envelope = Self.jsonObject(result.contentJSON) else { return result }
+        let remainingResearchToolCalls = max(
+            0,
+            maxToolCalls - reservedSubmitToolCalls - toolCallsUsed
+        )
         envelope["harness"] = [
             "turn": turn,
             "turns_remaining": max(0, maxTurns - turn),
             "tool_calls_used": toolCallsUsed,
             "tool_calls_remaining": max(0, maxToolCalls - toolCallsUsed),
             "submit_calls_reserved": reservedSubmitToolCalls,
+            "research_tool_calls_remaining": remainingResearchToolCalls,
             "overview_read": overviewRead,
             "portfolio_assets_read": readAssetCount,
             "portfolio_assets_total": requiredAssetCount,
             "portfolio_coverage_complete": assetCoverageComplete,
             "fund_look_through_required": lookThroughRequired,
             "fund_look_through_read": lookThroughRead,
+            "market_snapshot_required": marketSnapshotRequired,
             "market_snapshot_read": marketSnapshotRead,
             "official_source_required": officialSourceRequired,
             "official_source_attempts": officialSourceAttempts,
@@ -236,11 +251,15 @@ struct TrendResearchHarnessState: Sendable {
             "ready_for_submission": readyForSubmission(
                 webSearchConfigured: webSearchConfigured,
                 allowInsufficientWebEvidence: webSearchAttempts > 0
-                    && webStatus.remainingNetworkSearches == 0
+                    && (
+                        webStatus.remainingNetworkSearches == 0
+                            || remainingResearchToolCalls == 0
+                    )
             ),
             "next_step_hint": nextStepHint(
                 webSearchConfigured: webSearchConfigured,
-                remainingWebSearches: webStatus.remainingNetworkSearches
+                remainingWebSearches: webStatus.remainingNetworkSearches,
+                remainingResearchToolCalls: remainingResearchToolCalls
             )
         ]
 
@@ -257,9 +276,10 @@ struct TrendResearchHarnessState: Sendable {
 
     func nextStepHint(
         webSearchConfigured: Bool,
-        remainingWebSearches: Int
+        remainingWebSearches: Int,
+        remainingResearchToolCalls: Int = .max
     ) -> String {
-        if !overviewRead {
+        if scope.requiresPortfolioOverview, !overviewRead {
             return "先调用 get_portfolio_overview。"
         }
         if !assetCoverageComplete {
@@ -267,6 +287,9 @@ struct TrendResearchHarnessState: Sendable {
         }
         if lookThroughRequired, !lookThroughRead {
             return "调用 get_fund_lookthrough 读取基金底层资产、披露日期与未知仓位。"
+        }
+        if marketSnapshotRequired, !marketSnapshotRead {
+            return "调用 get_market_snapshot 读取基金净值、大盘与底层证券当日涨跌；基金归因不能只复述持仓结构。"
         }
         if officialSourceRequired, !officialSourceAttempted {
             return "先调用 official_sec_research 查询组合相关美股或底层美股的 SEC 官方申报；官方源完成或明确失败后，才使用网页搜索补缺。"
@@ -279,7 +302,14 @@ struct TrendResearchHarnessState: Sendable {
             }
             return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方源，不得覆盖 SEC 等一手证据。"
         }
-        if webSearchConfigured, !opportunitySearchCoverageComplete {
+        if webSearchConfigured,
+           webSearchAttempts > 0,
+           remainingResearchToolCalls == 0 {
+            return "研究工具预算已收敛；停止新增搜索，使用现有证据提交当前模块。未覆盖的全市场维度不得生成机会结论。"
+        }
+        if webSearchConfigured,
+           scope.requiresOpportunitySearchCoverage,
+           !opportunitySearchCoverageComplete {
             if remainingWebSearches == 0 {
                 return "全市场机会扫描未覆盖全部维度且联网预算已用完；本次不得提交新的机会报告，也不得用组合长期观点填充机会清单。"
             }
@@ -301,7 +331,7 @@ struct TrendResearchHarnessState: Sendable {
         if remainingWebSearches == 0 {
             return "联网搜索预算已用完；可读取尚需的本地行情，然后使用现有证据提交报告。"
         }
-        return "必需数据已覆盖；立即停止新增研究，进入组合、市场、持仓分批、操作风险的分模块提交。"
+        return "「\(scope.displayName)」必需数据已覆盖；立即停止新增研究，只提交当前开放模块。"
     }
 
     private mutating func deduplicatingWebEvidence(

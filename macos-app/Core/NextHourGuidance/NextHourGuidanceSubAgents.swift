@@ -334,9 +334,28 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             if let submitCall = result.toolCalls.first(where: { $0.function.name == submitToolName }) {
                 guard let data = submitCall.function.arguments.data(using: .utf8) else { break }
                 if let decoded = try? JSONDecoder().decode(T.self, from: data) {
+                    let accepted = TrendResearchToolEnvelope.success(["accepted": true])
+                    await AIAgentDiagnosticLog.recordToolResult(
+                        turn: turn + 1,
+                        call: submitCall,
+                        contentJSON: accepted,
+                        modelContentJSON: accepted,
+                        isError: false
+                    )
                     return decoded
                 }
                 // 解码失败，提示重试
+                let error = TrendResearchToolEnvelope.error(
+                    code: "invalid_submission_json",
+                    message: "提交参数解码失败，请检查 JSON 格式后重新提交。"
+                )
+                await AIAgentDiagnosticLog.recordToolResult(
+                    turn: turn + 1,
+                    call: submitCall,
+                    contentJSON: error,
+                    modelContentJSON: error,
+                    isError: true
+                )
                 messages.append(AgentChatMessage(
                     role: .user,
                     content: "提交参数解码失败，请检查 JSON 格式后重新提交。"
@@ -347,6 +366,13 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             // 执行非提交工具（web_search / lookthrough 等）
             for call in result.toolCalls where call.function.name != submitToolName {
                 let toolResult = await registry.execute(call, context: makeDummyContext())
+                await AIAgentDiagnosticLog.recordToolResult(
+                    turn: turn + 1,
+                    call: call,
+                    contentJSON: toolResult.contentJSON,
+                    modelContentJSON: toolResult.contentJSON,
+                    isError: toolResult.isError
+                )
                 messages.append(AgentChatMessage(
                     role: .tool, content: toolResult.contentJSON, toolCallID: call.id
                 ))

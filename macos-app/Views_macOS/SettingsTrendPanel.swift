@@ -4,12 +4,11 @@ import SwiftUI
 
 struct TrendSettingsPanel: View {
     @EnvironmentObject var model: AppModel
-    @State var trendAutoAnalysisTimesDraft = ""
 
     var body: some View {
         SettingsPanel(
             title: "AI 研判",
-            subtitle: "配置模型连接、官方数据、结构化行情补充、联网搜索与每日自动分析",
+            subtitle: "配置模型连接、数据来源、共享缓存与分模块自动分析",
             icon: "sparkles"
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceXL) {
@@ -41,11 +40,6 @@ struct TrendSettingsPanel: View {
                 trendActionsRow
             }
         }
-        .onAppear {
-            if trendAutoAnalysisTimesDraft.isEmpty {
-                trendAutoAnalysisTimesDraft = model.trendSettings.dailyAutoAnalysisTimesText
-            }
-        }
     }
 
     // MARK: - Cards
@@ -53,7 +47,7 @@ struct TrendSettingsPanel: View {
     private var trendAutoAnalysisCard: some View {
         SettingsCardGroup(
             title: "自动分析",
-            subtitle: "每日定时生成，错过会补跑最近一次",
+            subtitle: "按产品模块错峰生成，盘中周期保持不变",
             icon: "clock.badge.checkmark",
             tint: model.trendSettings.dailyAutoAnalysisEnabled ? AppPalette.positive : AppPalette.muted
         ) {
@@ -69,8 +63,8 @@ struct TrendSettingsPanel: View {
                 SettingsDivider(isInset: true)
 
                 SettingsToggleRow(
-                    title: "每日定时分析",
-                    detail: "默认 09:30、14:30；打开主界面时会补跑错过的最近一次",
+                    title: "分模块自动分析",
+                    detail: "市场、收盘与长期研判使用独立任务；同一时间只运行一个 AI 任务",
                     icon: "clock.badge.checkmark",
                     tint: model.trendSettings.dailyAutoAnalysisEnabled ? AppPalette.positive : AppPalette.muted,
                     isOn: trendAutoAnalysisBinding
@@ -78,10 +72,70 @@ struct TrendSettingsPanel: View {
 
                 SettingsDivider(isInset: true)
 
-                trendField("每日时间", text: trendAutoAnalysisTimesBinding, placeholder: "09:30, 14:30")
-                    .disabled(!model.trendSettings.dailyAutoAnalysisEnabled)
-                    .opacity(model.trendSettings.dailyAutoAnalysisEnabled ? 1 : 0.55)
-                    .padding(.vertical, 12)
+                SettingsRow(
+                    title: "盘中实时指引",
+                    value: "按现有交易时段",
+                    detail: model.nextHourGuidanceScheduleText,
+                    icon: "clock.arrow.circlepath",
+                    tint: AppPalette.info
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsRow(
+                    title: "全市场机会雷达",
+                    value: "每日 09:00",
+                    detail: "只更新大类资产、宽基与行业机会，不读取个人持仓",
+                    icon: "scope",
+                    tint: AppPalette.brand
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsRow(
+                    title: "今日收盘复盘",
+                    value: "每日 21:00",
+                    detail: "只更新组合当日涨跌归因与次日观察",
+                    icon: "sunset.fill",
+                    tint: AppPalette.warning
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsRow(
+                    title: "组合长期研判",
+                    value: "每周日 20:00",
+                    detail: "更新组合周期、持仓趋势与行动候选；错过后在下一个 20:00 窗口补跑",
+                    icon: "calendar.badge.clock",
+                    tint: AppPalette.positive
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsRow(
+                    title: "共享数据缓存",
+                    value: "自动复用",
+                    detail: "基金披露 24 小时；Tavily 搜索 6 小时；SEC 与结构化行情按来源时效缓存",
+                    icon: "externaldrive.badge.checkmark",
+                    tint: AppPalette.muted
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsControlRow(
+                    title: "完整诊断日志",
+                    detail: "每次 AI 任务独立保存请求、响应、工具结果、校验和最终状态；保留最近 20 份且总量不超过 200 MB",
+                    icon: "doc.text.magnifyingglass",
+                    tint: AppPalette.info
+                ) {
+                    Button(
+                        "打开日志目录",
+                        systemImage: "folder",
+                        action: model.openAIAnalysisDiagnosticLogsDirectory
+                    )
+                    .buttonStyle(.appSecondary)
+                    .disabled(model.aiAnalysisDiagnosticLogsDirectoryURL == nil)
+                }
             }
         }
     }
@@ -390,20 +444,7 @@ struct TrendSettingsPanel: View {
         )
     }
 
-    private var trendAutoAnalysisTimesBinding: Binding<String> {
-        Binding(
-            get: {
-                trendAutoAnalysisTimesDraft.isEmpty
-                    ? model.trendSettings.dailyAutoAnalysisTimesText
-                    : trendAutoAnalysisTimesDraft
-            },
-            set: { trendAutoAnalysisTimesDraft = $0 }
-        )
-    }
-
     private func saveTrendSettingsFromDraft() {
-        model.trendSettings.updateDailyAutoAnalysisTimes(from: trendAutoAnalysisTimesDraft)
-        trendAutoAnalysisTimesDraft = model.trendSettings.dailyAutoAnalysisTimesText
         model.saveTrendAnalysisSettings()
     }
 

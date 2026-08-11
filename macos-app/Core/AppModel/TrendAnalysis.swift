@@ -50,6 +50,11 @@ extension AppModel {
             do {
                 trendReport = try TrendAnalysisReportStore().load(from: trendAnalysisReportFileURL)
                 lastTrendGeneratedAt = trendReport?.generatedAt
+                if let generatedAt = trendReport?.generatedAt,
+                   trendSettings.lastModuleGeneratedAt.isEmpty {
+                    trendSettings.markModuleGenerated(scope: .full, generatedAt: generatedAt)
+                    saveTrendAnalysisSettings()
+                }
             } catch {
                 lastTrendError = error.localizedDescription
             }
@@ -102,6 +107,88 @@ extension AppModel {
         }
     }
 
+    func loadMarketCloseReviewArchive() {
+        guard let marketCloseReviewArchiveFileURL else { return }
+        do {
+            let storedArchive = try MarketCloseReviewArchiveStore().load(
+                from: marketCloseReviewArchiveFileURL
+            )
+            marketCloseReviewArchive = storedArchive
+
+            let needsRepair = storedArchive == nil
+                || (storedArchive?.schemaVersion ?? 0) < MarketCloseReviewArchive.currentSchemaVersion
+                || storedArchive?.snapshot.state == .noScan
+                || storedArchive?.snapshot.portfolioReview == nil
+            guard needsRepair,
+                  let generatedAt = storedArchive?.generatedAt
+                    ?? trendSettings.moduleGeneratedAt(.closeReview) else { return }
+
+            let recoveredRun = aiAnalysisDiagnosticLogsDirectoryURL.flatMap { directoryURL in
+                MarketCloseReviewArchiveRecovery().latestRun(
+                    in: directoryURL,
+                    generatedAt: generatedAt
+                )
+            }
+            let report = trendReport.flatMap { candidate in
+                String(candidate.generatedAt.prefix(10)) == String(generatedAt.prefix(10))
+                    ? candidate
+                    : nil
+            } ?? recoveredRun?.report
+
+            guard let report else {
+                // 诊断日志可能已轮转清理。有效旧快照仍原样保留，只升级存储版本。
+                if let storedArchive,
+                   storedArchive.schemaVersion < MarketCloseReviewArchive.currentSchemaVersion {
+                    let upgraded = MarketCloseReviewArchive(
+                        generatedAt: storedArchive.generatedAt,
+                        snapshot: storedArchive.snapshot
+                    )
+                    marketCloseReviewArchive = upgraded
+                    saveMarketCloseReviewArchive(upgraded)
+                }
+                return
+            }
+
+            // 旧版本的「无全市场结论」空快照是错误耦合产物。从同一次本地
+            // 运行日志恢复当时的冻结持仓，只在同日时允许使用内存中的估值快照。
+            let portfolioSnapshot = userPortfolioSnapshot.flatMap { snapshot in
+                String(snapshot.refreshedAt.prefix(10)) == String(generatedAt.prefix(10))
+                    ? snapshot
+                    : nil
+            }
+            let snapshot = MarketCloseReviewSnapshot.make(
+                report: report,
+                portfolioSnapshot: portfolioSnapshot,
+                recoveredPortfolioAssets: recoveredRun?.portfolioAssets ?? [],
+                generationState: .succeeded,
+                currentTimestamp: generatedAt,
+                closeReviewGeneratedAt: generatedAt
+            )
+            let repaired = MarketCloseReviewArchive(
+                generatedAt: generatedAt,
+                snapshot: snapshot
+            )
+            marketCloseReviewArchive = repaired
+            saveMarketCloseReviewArchive(repaired)
+        } catch {
+            if lastTrendError.isEmpty {
+                lastTrendError = "读取收盘复盘快照失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
+    func saveMarketCloseReviewArchive(_ archive: MarketCloseReviewArchive) {
+        guard let marketCloseReviewArchiveFileURL else { return }
+        do {
+            try MarketCloseReviewArchiveStore().save(
+                archive,
+                to: marketCloseReviewArchiveFileURL
+            )
+        } catch {
+            lastTrendError = "保存收盘复盘快照失败：\(error.localizedDescription)"
+        }
+    }
+
     // MARK: - 连通性与能力检测
 
     /// 检测模型是否支持原生工具调用（内嵌 Agent 的硬性前提）。
@@ -141,11 +228,22 @@ extension AppModel {
 
     // MARK: - 趋势分析主入口（内嵌 Agent）
 
-    func generateTrendAnalysis(userInitiated: Bool, createdAt: String? = nil) async {
+    func generateTrendAnalysis(
+        userInitiated: Bool,
+        createdAt: String? = nil,
+        scope requestedScope: TrendResearchRunScope = .full,
+        scheduledSlot: TrendScheduledModuleSlot? = nil
+    ) async {
         let telemetryStart = PerformanceTelemetry.start()
         var telemetryResult = "completed"
         var telemetryProvider = "unknown"
         let telemetryTrigger = userInitiated ? "manual" : "scheduled"
+        let preliminaryFundCodes = trendResearchFundCodes()
+        var scope = TrendReportDraftStore.effectiveScope(
+            requestedScope: requestedScope,
+            baselineReport: trendReport,
+            expectedFundCodes: preliminaryFundCodes
+        )
         defer {
             PerformanceTelemetry.record(
                 "trend.generate",
@@ -154,6 +252,7 @@ extension AppModel {
                     "result": telemetryResult,
                     "provider": telemetryProvider,
                     "trigger": telemetryTrigger,
+                    "scope": scope.rawValue,
                     "toolCalls": "\(trendProviderCapabilities?.supportsToolCalls ?? false)"
                 ]
             )
@@ -165,14 +264,16 @@ extension AppModel {
             return
         }
         let generatedAt = createdAt ?? Self.timestampString()
-        let autoAnalysisSlot = userInitiated ? nil : trendSettings.dueAutoAnalysisSlot(at: generatedAt)
         let provider = trendSettings.provider.upgradedForTrendGeneration
         telemetryProvider = provider.model
         trendGenerationState = .generating
+        trendResearchRequestedScope = requestedScope
+        trendResearchScope = scope
+        trendResearchProgress = .idle
         lastTrendError = ""
         trendProgressLogs = []
         trendSettings.defaultPrivacyMode = trendPrivacyMode
-        let triggerText = userInitiated ? "手动分析" : "定时自动分析"
+        let triggerText = userInitiated ? "手动更新" : scope.triggerDescription
         if let trendAgentRunLogFileURL {
             try? TrendAgentRunLogStore().beginRun(
                 at: trendAgentRunLogFileURL,
@@ -182,8 +283,8 @@ extension AppModel {
             )
         }
         appendTrendProgress(
-            "\(triggerText)已启动",
-            detail: "模型：\(provider.model)；隐私：\(trendPrivacyMode.rawValue)；SEC：\(trendSettings.officialSources.isSECConfigured ? "已配置" : "未配置")；Alpha Vantage：\(trendSettings.alphaVantage.isConfigured ? "已配置" : "未配置")；Tavily：\(trendSettings.webSearch.isConfigured ? "已配置" : "未配置")",
+            "\(scope.displayName)已启动",
+            detail: "触发：\(triggerText)；模型：\(provider.model)；未更新模块复用上一份报告；基金披露缓存 24 小时；联网搜索缓存 6 小时",
             level: .activity
         )
 
@@ -216,30 +317,37 @@ extension AppModel {
             }
         }
 
-        appendTrendProgress("开始内嵌趋势 Agent：\(provider.model)", level: .activity)
+        appendTrendProgress("开始\(scope.displayName)：\(provider.model)", level: .activity)
 
         let marketSourceStatuses = await refreshTrendResearchMarketData(
-            generatedAt: generatedAt
+            generatedAt: generatedAt,
+            scope: scope
         )
 
-        let fundCodes = personalAssetRows.compactMap { row -> String? in
-            guard row.assetType == .fund,
-                  row.effectiveHoldingAmount > 0.001,
-                  let code = row.fundCode,
-                  !code.isEmpty else {
-                return nil
-            }
-            return code
+        let fundCodes = trendResearchFundCodes()
+        let resolvedScope = TrendReportDraftStore.effectiveScope(
+            requestedScope: requestedScope,
+            baselineReport: trendReport,
+            expectedFundCodes: fundCodes
+        )
+        if resolvedScope != scope {
+            appendTrendProgress(
+                "运行范围已根据最新持仓调整为\(resolvedScope.displayName)",
+                level: .info
+            )
+            scope = resolvedScope
+            trendResearchScope = resolvedScope
         }
         var lookThrough: PortfolioLookThroughSnapshot?
         var lookThroughWarnings: [String] = []
+        var underlyingStockQuotes: [String: NativeStockQuote] = [:]
         var fundDisclosureStatus = TrendSourceStatus(
             source: .fundDisclosure,
             status: .notRequested,
             receivedAt: generatedAt,
             detail: "当前组合没有需要穿透的基金持仓。"
         )
-        if !fundCodes.isEmpty {
+        if scope.requiresFundLookThrough, !fundCodes.isEmpty {
             appendTrendProgress(
                 "读取基金底层资产披露",
                 detail: "\(Set(fundCodes).count) 只基金；股票、债券、行业与资产配置",
@@ -278,16 +386,48 @@ extension AppModel {
                     detail: "覆盖 \(lookThrough.coveredFundCount)/\(lookThrough.expectedFundCount) 只基金；底层证券覆盖组合 \(String(format: "%.2f%%", lookThrough.disclosedSecurityCoveragePct))",
                     level: lookThrough.coveredFundCount > 0 ? .success : .warning
                 )
+
+                let attributionCodes = TrendAssetDailyAttributionPolicy.underlyingQuoteCodes(
+                    in: lookThrough
+                )
+                if !attributionCodes.isEmpty {
+                    appendTrendProgress(
+                        "刷新底层证券行情",
+                        detail: "读取每只基金前三大披露股票的当日涨跌，用于解释净值变化",
+                        level: .activity
+                    )
+                    let fetchedQuotes = await platformClient.fetchStockQuotes(
+                        codes: attributionCodes,
+                        forceRefresh: true
+                    )
+                    underlyingStockQuotes = fetchedQuotes.filter { $0.value.hasUsableData }
+                    let attributedCount = underlyingStockQuotes.values.count(where: {
+                        $0.changePct != nil
+                    })
+                    appendTrendProgress(
+                        "底层证券行情已准备",
+                        detail: "取得 \(underlyingStockQuotes.count)/\(attributionCodes.count) 只报价，其中 \(attributedCount) 只有当日涨跌",
+                        level: attributedCount > 0 ? .success : .warning
+                    )
+                    if attributedCount == 0 {
+                        lookThroughWarnings.append(
+                            "未取得基金底层证券的当日涨跌，基金净值只能标记为原因待确认，不能用静态持仓结构替代归因。"
+                        )
+                    }
+                }
             }
         }
         // 让投资方向模块复用本次冻结前生成的同一份穿透快照，避免 UI 再次抓取，
         // 也避免把报告中的一般板块观点误判成用户已持有板块。
-        portfolioLookThroughSnapshot = lookThrough
-        portfolioLookThroughSourceWarnings = lookThroughWarnings
+        if scope.requiresFundLookThrough {
+            portfolioLookThroughSnapshot = lookThrough
+            portfolioLookThroughSourceWarnings = lookThroughWarnings
+        }
 
         let snapshot = makeTrendResearchSnapshot(
             generatedAt: generatedAt,
             lookThrough: lookThrough,
+            underlyingStockQuotes: underlyingStockQuotes,
             additionalSourceWarnings: lookThroughWarnings,
             sourceStatuses: marketSourceStatuses + [fundDisclosureStatus]
         )
@@ -299,7 +439,7 @@ extension AppModel {
             ? "Alpha Vantage 已配置"
             : "Alpha Vantage 未配置"
         appendTrendProgress(
-            "分析快照已冻结",
+            "\(scope.displayName)快照已冻结",
             detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(officialText)；\(alphaText)；\(searchText)；隐私 \(snapshot.privacyMode.rawValue)",
             level: .success
         )
@@ -310,34 +450,89 @@ extension AppModel {
             level: .activity
         )
 
+        let diagnosticRecorder: AIAgentDiagnosticRecorder?
         do {
-            let report = try await trendResearchAgent.run(
-                snapshot: snapshot,
-                settings: provider,
-                webSearchSettings: trendSettings.webSearch,
-                officialSourceSettings: trendSettings.officialSources,
-                alphaVantageSettings: trendSettings.alphaVantage,
-                eventHandler: { [weak self] event in
-                    if case .auditArtifactReady(let artifact) = event {
-                        self?.saveTrendAgentRunArtifact(
-                            artifact,
-                            trigger: userInitiated ? "manual" : "scheduled"
-                        )
-                    }
-                    self?.handleTrendAgentEvent(event)
-                }
+            diagnosticRecorder = try makeAIAgentDiagnosticRecorder(
+                runID: snapshot.runID,
+                agentKind: "trend-research",
+                scope: scope.rawValue,
+                trigger: userInitiated ? "manual" : "scheduled",
+                provider: provider,
+                privacyMode: snapshot.privacyMode,
+                startedAt: generatedAt
             )
+            if let diagnosticRecorder {
+                appendTrendProgress(
+                    "完整诊断日志已启用",
+                    detail: diagnosticRecorder.fileURL.path,
+                    level: .info
+                )
+            }
+        } catch {
+            diagnosticRecorder = nil
+            appendTrendProgress(
+                "完整诊断日志初始化失败",
+                detail: error.localizedDescription,
+                level: .warning
+            )
+        }
+
+        do {
+            let report = try await AIAgentDiagnosticLog.$recorder.withValue(
+                diagnosticRecorder
+            ) {
+                try await trendResearchAgent.run(
+                    snapshot: snapshot,
+                    settings: provider,
+                    webSearchSettings: trendSettings.webSearch,
+                    officialSourceSettings: trendSettings.officialSources,
+                    alphaVantageSettings: trendSettings.alphaVantage,
+                    scope: scope,
+                    baselineReport: trendReport,
+                    eventHandler: { [weak self] event in
+                        if case .auditArtifactReady(let artifact) = event {
+                            self?.saveTrendAgentRunArtifact(
+                                artifact,
+                                trigger: userInitiated ? "manual" : "scheduled"
+                            )
+                        }
+                        self?.handleTrendAgentEvent(event)
+                    }
+                )
+            }
             trendReport = report
             lastTrendGeneratedAt = report.generatedAt
+            // effective scope 可能因增量合并约束从 marketRadar/closeReview 回退为 full；
+            // 产品层新鲜度仍只能推进用户或调度器真正请求的模块。
+            trendSettings.markModuleGenerated(
+                scope: requestedScope,
+                generatedAt: report.generatedAt
+            )
+            if requestedScope == .closeReview {
+                let snapshot = MarketCloseReviewSnapshot.make(
+                    report: report,
+                    portfolioSnapshot: userPortfolioSnapshot,
+                    generationState: .succeeded,
+                    currentTimestamp: report.generatedAt,
+                    closeReviewGeneratedAt: report.generatedAt
+                )
+                let archive = MarketCloseReviewArchive(
+                    generatedAt: report.generatedAt,
+                    snapshot: snapshot
+                )
+                marketCloseReviewArchive = archive
+                saveMarketCloseReviewArchive(archive)
+            }
             if !userInitiated {
-                trendSettings.lastAutoAnalysisDay = trendDayString(from: generatedAt)
-                trendSettings.lastAutoAnalysisSlotKey = autoAnalysisSlot?.key
+                if let scheduledSlot {
+                    trendSettings.markModuleAutoAnalysisCompleted(scheduledSlot)
+                }
             }
             appendTrendProgress("保存趋势报告", level: .activity)
             saveTrendAnalysisReport(report)
             saveTrendAnalysisSettings()
             trendGenerationState = .succeeded
-            appendTrendProgress("趋势分析完成", level: .success)
+            appendTrendProgress("\(scope.displayName)完成", level: .success)
         } catch is CancellationError {
             telemetryResult = "cancelled"
             trendGenerationState = .failed
@@ -363,10 +558,17 @@ extension AppModel {
     // MARK: - 生成任务管理（支持取消）
 
     /// 由 UI 触发：取消上一次（若有）并启动新的趋势分析任务。
-    func startTrendAnalysis(userInitiated: Bool) {
+    func startTrendAnalysis(
+        userInitiated: Bool,
+        scope: TrendResearchRunScope = .full
+    ) {
         trendGenerationTask?.cancel()
         trendGenerationTask = Task { [weak self] in
-            await self?.generateTrendAnalysis(userInitiated: userInitiated, createdAt: nil)
+            await self?.generateTrendAnalysis(
+                userInitiated: userInitiated,
+                createdAt: nil,
+                scope: scope
+            )
             self?.trendGenerationTask = nil
         }
     }
@@ -384,10 +586,19 @@ extension AppModel {
         guard decisionCaseResearchState != .generating else { return }
 
         let generatedAt = createdAt ?? Self.timestampString()
-        trendSettings.normalizeDailyAutoAnalysisTimes()
-        guard trendSettings.dueAutoAnalysisSlot(at: generatedAt) != nil else { return }
+        guard let slot = trendSettings.dueModuleAutoAnalysisSlot(at: generatedAt) else { return }
 
-        await generateTrendAnalysis(userInitiated: false, createdAt: generatedAt)
+        // 自动模块按时间窗口至多尝试一次。先落盘再启动，避免失败后 60 秒轮询或
+        // 下次打开 App 时继续反复调用模型与行情接口；失败后仍可由用户手动重试。
+        trendSettings.markModuleAutoAnalysisCompleted(slot)
+        saveTrendAnalysisSettings()
+
+        await generateTrendAnalysis(
+            userInitiated: false,
+            createdAt: generatedAt,
+            scope: slot.scope,
+            scheduledSlot: slot
+        )
     }
 
     // MARK: - 快照组装
@@ -395,6 +606,7 @@ extension AppModel {
     private func makeTrendResearchSnapshot(
         generatedAt: String,
         lookThrough: PortfolioLookThroughSnapshot?,
+        underlyingStockQuotes: [String: NativeStockQuote],
         additionalSourceWarnings: [String],
         sourceStatuses: [TrendSourceStatus]
     ) -> TrendResearchSnapshot {
@@ -441,6 +653,7 @@ extension AppModel {
             managerWatchEvents: managerWatchTimelineEvents,
             marketIndexQuotes: marketIndexQuotes,
             fundEstimates: makeTrendResearchFundEstimates(),
+            underlyingStockQuotes: underlyingStockQuotes,
             lookThrough: lookThrough,
             watchSummary: managerWatchTimelineSummary,
             insightSummary: portfolioSnapshotInsightSummary,
@@ -454,6 +667,16 @@ extension AppModel {
     }
 
     /// 从个人持仓估值行组装基金估值（已持有基金的最可靠来源）。非持有标的不纳入。
+    private func trendResearchFundCodes() -> [String] {
+        personalAssetRows.compactMap { row in
+            guard row.assetType == .fund,
+                  row.effectiveHoldingAmount > 0.001,
+                  let code = row.fundCode,
+                  !code.isEmpty else { return nil }
+            return code
+        }
+    }
+
     private func makeTrendResearchFundEstimates() -> [String: TrendResearchFundEstimate] {
         var estimates: [String: TrendResearchFundEstimate] = [:]
         for row in personalAssetRows {
@@ -473,7 +696,8 @@ extension AppModel {
     }
 
     private func refreshTrendResearchMarketData(
-        generatedAt: String
+        generatedAt: String,
+        scope: TrendResearchRunScope
     ) async -> [TrendSourceStatus] {
         var statuses: [TrendSourceStatus] = []
 
@@ -483,7 +707,20 @@ extension AppModel {
             level: .activity
         )
 
-        if activeUserPortfolioHoldings.isEmpty {
+        if !scope.requiresPortfolioAssets {
+            statuses.append(
+                TrendSourceStatus(
+                    source: .portfolioQuote,
+                    status: .notRequested,
+                    asOf: personalAssetRows.compactMap(trendQuoteTime).max(),
+                    receivedAt: generatedAt,
+                    itemCount: personalAssetRows.filter {
+                        $0.currentPrice != nil || $0.currentEstimatePrice != nil
+                    }.count,
+                    detail: "\(scope.displayName)不读取个人持仓行情，复用上一份组合模块。"
+                )
+            )
+        } else if activeUserPortfolioHoldings.isEmpty {
             statuses.append(
                 TrendSourceStatus(
                     source: .portfolioQuote,
@@ -733,6 +970,12 @@ extension AppModel {
                 "Agent Harness 预算已配置",
                 detail: "最多 \(maxTurns) 轮、\(maxToolCalls) 次工具调用；Tavily 建议 \(preferredWebSearches) 次、硬上限 \(maxWebSearches) 次；提交与修复预算已预留。",
                 level: .info
+            )
+        case .moduleProgress(let completedSections, let totalSections, let nextToolName):
+            trendResearchProgress = TrendResearchModuleProgress(
+                completedSections: completedSections,
+                totalSections: totalSections,
+                nextToolName: nextToolName
             )
         case .harnessGuidance(let message):
             appendTrendProgress("Harness 正在收敛研究", detail: message, level: .warning)

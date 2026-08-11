@@ -492,6 +492,14 @@ final class QiemanPlatformNativeClient {
         return names
     }
 
+    /// 批量读取股票最新行情，供基金底层持仓的当日涨跌归因使用。
+    func fetchStockQuotes(
+        codes: [String],
+        forceRefresh: Bool = false
+    ) async -> [String: NativeStockQuote] {
+        await preloadStockQuotes(codes, forceRefresh: forceRefresh)
+    }
+
     private func userPortfolioPricePayload(
         for holding: UserPortfolioHolding,
         histories: [String: NativeFundHistory],
@@ -970,14 +978,18 @@ final class QiemanPlatformNativeClient {
         return (histories, quotes)
     }
 
-    private func preloadStockQuotes(_ stockCodes: [String]) async -> [String: NativeStockQuote] {
+    private func preloadStockQuotes(
+        _ stockCodes: [String],
+        forceRefresh: Bool = false
+    ) async -> [String: NativeStockQuote] {
         var results: [String: NativeStockQuote] = [:]
         let uniqueCodes = uniqueNonEmptyCodes(stockCodes)
         await withTaskGroup(of: (String, NativeStockQuote).self) { group in
             var nextIndex = 0
             func enqueue(_ code: String) {
                 group.addTask {
-                    if let cached = await self.cache.stockQuote(for: code, ttl: self.quoteTTL) {
+                    if !forceRefresh,
+                       let cached = await self.cache.stockQuote(for: code, ttl: self.quoteTTL) {
                         return (code, cached)
                     }
                     let quote = (try? await self.fetchStockQuote(code)) ?? NativeStockQuote.empty(code)

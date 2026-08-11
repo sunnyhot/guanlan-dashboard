@@ -515,9 +515,12 @@ final class UIExperienceRegressionTests: XCTestCase {
         )
 
         XCTAssertTrue(view.contains(".sheet(item: $selectedSignal)"))
-        XCTAssertTrue(view.contains("我已持有的板块"))
+        XCTAssertFalse(view.contains("全市场扫描 · 不读取个人持仓"))
+        XCTAssertFalse(view.contains("共呈现"))
+        XCTAssertFalse(view.contains("更新于"))
         XCTAssertTrue(view.contains("全市场板块机会"))
-        XCTAssertTrue(view.contains("F10 统计行业不直接生成卡片"))
+        XCTAssertFalse(view.contains("我已持有的板块"))
+        XCTAssertFalse(view.contains("analysis?.heldSectors"))
         XCTAssertTrue(view.contains("analysis?.marketScanCompleted == true"))
         XCTAssertTrue(view.contains("已隐藏旧机会和空白占位"))
         XCTAssertFalse(card.contains("dynamicTypeSize"))
@@ -528,10 +531,72 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(card.contains("查看详情"))
         XCTAssertTrue(detail.contains("ScrollView"))
         XCTAssertTrue(detail.contains("完整证据"))
-        XCTAssertTrue(detail.contains("组合暴露依据"))
+        XCTAssertFalse(detail.contains("组合暴露依据"))
         XCTAssertTrue(detail.contains("触发条件"))
         XCTAssertTrue(detail.contains("失效与反向信号"))
         XCTAssertTrue(scanState.contains("arrow.clockwise.circle.fill"))
+    }
+
+    func testInvestmentIntelligenceSeparatesMarketPortfolioAndIntradayResponsibilities() throws {
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
+        let intraday = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceDecisionConsole.swift"
+        )
+        let progress = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceProgressView.swift"
+        )
+        let actionRow = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidancePriorityActionRow.swift"
+        )
+        let priorityActions = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidancePriorityActionsView.swift"
+        )
+        let teamInsights = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceTeamInsightsView.swift"
+        )
+        let actionDetail = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceActionDetailSheet.swift"
+        )
+        let marketEngine = try source(
+            at: "Core/InvestmentIntelligence/MarketOpportunityEngine.swift"
+        )
+
+        XCTAssertTrue(today.contains("title: \"全市场机会雷达\""))
+        XCTAssertTrue(today.contains("subtitle: \"市场强弱主线、触发条件与失效信号\""))
+        XCTAssertTrue(today.contains("title: \"我的组合长期研判\""))
+        XCTAssertTrue(today.contains("portfolioLongTermReportView(report)"))
+
+        let portfolioStart = try XCTUnwrap(
+            today.range(of: "func portfolioLongTermReportView")
+        )
+        let portfolioEnd = try XCTUnwrap(
+            today.range(
+                of: "// 行动候选",
+                range: portfolioStart.upperBound..<today.endIndex
+            )
+        )
+        let portfolioSource = today[portfolioStart.lowerBound..<portfolioEnd.lowerBound]
+        XCTAssertTrue(portfolioSource.contains("portfolioAssetTrendSection(report)"))
+        XCTAssertFalse(portfolioSource.contains("marketSection(report)"))
+        XCTAssertFalse(portfolioSource.contains("report.marketOutlook"))
+        XCTAssertFalse(portfolioSource.contains("report.opportunities"))
+
+        XCTAssertTrue(intraday.contains("NextHourGuidancePriorityActionsView"))
+        XCTAssertFalse(intraday.contains("NextHourGuidanceTeamInsightsView"))
+        XCTAssertTrue(priorityActions.contains("下一小时优先动作"))
+        XCTAssertTrue(actionDetail.contains("NextHourGuidanceTeamInsightsView"))
+        XCTAssertTrue(teamInsights.contains("三方判断约束"))
+        XCTAssertTrue(teamInsights.contains("行情信号分析"))
+        XCTAssertTrue(teamInsights.contains("新闻事件分析"))
+        XCTAssertTrue(teamInsights.contains("持仓结构分析"))
+        XCTAssertTrue(actionRow.contains("action.trigger"))
+        XCTAssertTrue(actionRow.contains("action.invalidation"))
+        XCTAssertTrue(progress.contains("stage.completedStepCount"))
+        XCTAssertTrue(progress.contains("三方分析"))
+        XCTAssertTrue(progress.contains("汇总校验"))
+        XCTAssertTrue(marketEngine.contains("$0.scope == .marketWide"))
+        XCTAssertFalse(marketEngine.contains("report.sectors"))
+        XCTAssertFalse(marketEngine.contains("portfolioExposureText"))
     }
 
     private func source(at relativePath: String) throws -> String {

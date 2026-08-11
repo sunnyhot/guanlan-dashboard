@@ -26,7 +26,8 @@ struct TavilyWebSearchTool: TrendResearchTool {
                     "key": [
                         "type": "string",
                         "minLength": 1,
-                        "maxLength": 120
+                        "maxLength": 120,
+                        "description": "单项研究填写受控池中的具体名称；全市场聚合扫描固定使用“大类资产配置”或“大盘宽基指数”。六个受控板块分组只需填写分组名，App 会自动补齐完整 sectorKeys。"
                     ],
                     "entityCodes": [
                         "type": "array",
@@ -108,8 +109,13 @@ struct TavilyWebSearchTool: TrendResearchTool {
         guard TrendAgentAuditRedactor.redactedSensitiveText(query) == query else {
             return invalidArguments("query 包含金额、密钥或认证信息，已在联网请求前拒绝")
         }
-        guard validate(target: params.research_target, snapshot: context.snapshot) else {
-            return invalidArguments("research_target 与本次组合快照或全市场研究池不匹配")
+        let researchTarget = MarketOpportunityUniverse.canonicalizedTarget(
+            params.research_target
+        )
+        guard validate(target: researchTarget, snapshot: context.snapshot) else {
+            return invalidArguments(
+                "research_target 与本次组合快照或全市场研究池不匹配。全市场板块分组仅接受：\(MarketOpportunityUniverse.requiredSectorGroupKeys.joined(separator: "、"))。"
+            )
         }
 
         let topic = params.topic ?? "news"
@@ -151,12 +157,15 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 request,
                 apiKey: context.webSearchSettings.apiKey,
                 timeoutSeconds: 30,
-                client: client
+                client: client,
+                cacheKeyOverride: MarketOpportunityUniverse.stableSearchCacheScope(
+                    for: researchTarget
+                )
             )
             return await makeResult(
                 response: outcome.response,
                 query: query,
-                researchTarget: params.research_target,
+                researchTarget: researchTarget,
                 cacheHit: outcome.cacheHit,
                 remainingSearchBudget: outcome.remainingNetworkSearches,
                 context: context
@@ -167,17 +176,13 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 isError: true
             )
         } catch let error as TrendWebSearchGovernorError {
-            return .content(
-                TrendResearchToolEnvelope.error(
-                    code: "web_search_budget_exhausted",
-                    message: error.localizedDescription
-                ),
-                isError: true
-            )
+            return webSearchFailure(code: error.toolErrorCode, message: error.localizedDescription)
+        } catch let error as TavilySearchClientError {
+            return webSearchFailure(code: error.toolErrorCode, message: error.userFacingToolMessage)
         } catch {
-            return .content(
-                TrendResearchToolEnvelope.error(code: "web_search_failed", message: error.localizedDescription),
-                isError: true
+            return webSearchFailure(
+                code: "web_search_failed",
+                message: "Tavily 联网搜索暂不可用，本次已停止继续请求。"
             )
         }
     }
@@ -230,15 +235,32 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 let matchedAssetClasses = researchTarget.assetClassKeys.filter {
                     content.contains($0.lowercased())
                 }
-                let entityNames = [.asset, .index].contains(researchTarget.kind) && keyIsMentioned
-                    ? [researchTarget.key]
+                let matchedIndexNames = researchTarget.kind == .index
+                    ? MarketOpportunityUniverse.indices.filter {
+                        content.contains($0.lowercased())
+                    }
                     : []
+                let entityNames = Array(Set(
+                    ([.asset, .index].contains(researchTarget.kind) && keyIsMentioned
+                        ? [researchTarget.key]
+                        : []) + matchedIndexNames
+                )).sorted()
                 let sectorKeys = researchTarget.kind == .sector && keyIsMentioned
                     ? Array(Set(matchedSectors + [researchTarget.key])).sorted()
                     : matchedSectors
+                let assetClassCandidates = researchTarget.kind == .assetClass
+                    && MarketOpportunityUniverse.isAggregateTarget(
+                        researchTarget.key,
+                        kind: .assetClass
+                    )
+                    ? MarketOpportunityUniverse.assetClasses
+                    : researchTarget.assetClassKeys
+                let matchedAggregateAssetClasses = assetClassCandidates.filter {
+                    content.contains($0.lowercased())
+                }
                 let assetClassKeys = researchTarget.kind == .assetClass && keyIsMentioned
-                    ? Array(Set(matchedAssetClasses + [researchTarget.key])).sorted()
-                    : matchedAssetClasses
+                    ? Array(Set(matchedAssetClasses + matchedAggregateAssetClasses + [researchTarget.key])).sorted()
+                    : Array(Set(matchedAssetClasses + matchedAggregateAssetClasses)).sorted()
                 let hasContentTags = !matchedCodes.isEmpty
                     || !entityNames.isEmpty
                     || !sectorKeys.isEmpty
@@ -334,7 +356,8 @@ struct TavilyWebSearchTool: TrendResearchTool {
                     || asset.code.map { requestedCodes.contains($0.lowercased()) } == true
             }
         case .index:
-            return MarketOpportunityUniverse.contains(target.key, kind: .index)
+            return MarketOpportunityUniverse.isAggregateTarget(target.key, kind: .index)
+                || MarketOpportunityUniverse.contains(target.key, kind: .index)
                 || snapshot.marketQuotes.contains { quote in
                 quote.kind == "index"
                     && [quote.code.lowercased(), quote.name.lowercased()].contains(key)
@@ -350,12 +373,20 @@ struct TavilyWebSearchTool: TrendResearchTool {
                 || target.sectorKeys.contains { known.contains($0.lowercased()) }
         case .assetClass:
             let known = snapshot.lookThrough?.assetClasses.map { $0.name.lowercased() } ?? []
-            return MarketOpportunityUniverse.contains(target.key, kind: .assetClass)
+            return MarketOpportunityUniverse.isAggregateTarget(target.key, kind: .assetClass)
+                || MarketOpportunityUniverse.contains(target.key, kind: .assetClass)
                 || known.contains(key)
                 || target.assetClassKeys.contains { known.contains($0.lowercased()) }
         case .macro:
             return true
         }
+    }
+
+    private func webSearchFailure(code: String, message: String) -> TrendResearchToolResult {
+        .content(
+            TrendResearchToolEnvelope.error(code: code, message: message),
+            isError: true
+        )
     }
 
     private func encodedObject<T: Encodable>(_ value: T) -> Any {

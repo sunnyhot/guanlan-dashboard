@@ -76,15 +76,6 @@ struct InvestmentDirectionDetailSheet: View {
                         in: RoundedRectangle(cornerRadius: AppPalette.controlRadius)
                     )
 
-                    if let exposureText = signal.portfolioExposureText {
-                        InvestmentDirectionDetailBlock(
-                            title: "组合暴露依据",
-                            systemImage: "briefcase.fill",
-                            items: [exposureText],
-                            emptyText: ""
-                        )
-                    }
-
                     InvestmentDirectionDetailBlock(
                         title: "触发条件",
                         systemImage: "bolt.fill",

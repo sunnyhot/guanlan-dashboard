@@ -23,8 +23,10 @@ extension AppModel {
             }
             if nextHourGuidanceReport != nil {
                 nextHourGuidanceGenerationState = .succeeded
+                nextHourGuidanceProgressStage = .completed
             }
         } catch {
+            nextHourGuidanceProgressStage = .failed
             nextHourGuidanceError = "读取下一小时买卖建议失败：\(error.localizedDescription)"
         }
     }
@@ -100,12 +102,14 @@ extension AppModel {
     ) async {
         guard trendSettings.provider.isConfigured else {
             nextHourGuidanceGenerationState = .failed
+            nextHourGuidanceProgressStage = .failed
             nextHourGuidanceError = NextHourGuidanceAgentError.missingConfiguration.localizedDescription
             return
         }
         guard nextHourGuidanceGenerationState != .generating else { return }
 
         nextHourGuidanceGenerationState = .generating
+        nextHourGuidanceProgressStage = .refreshingPortfolio
         nextHourGuidanceError = ""
         nextHourGuidanceArchive.lastAttemptedSlotKey = slot.key
         saveNextHourGuidanceArchive()
@@ -116,6 +120,7 @@ extension AppModel {
                 forceQuoteRefresh: true
             )
         }
+        nextHourGuidanceProgressStage = .refreshingMarket
         await refreshMarketIndices(
             kinds: [.sseComposite, .csi300, .chinext],
             updateNotice: false
@@ -124,6 +129,7 @@ extension AppModel {
         let rows = nextHourEligibleRows(for: slot)
         guard !rows.isEmpty else {
             nextHourGuidanceGenerationState = .failed
+            nextHourGuidanceProgressStage = .failed
             nextHourGuidanceError = slot.scope.includesOffExchangeFunds
                 ? "当前没有可用于收盘前研判的持仓。"
                 : "当前没有可盘中交易的 A 股、股票或场内基金持仓。"
@@ -133,6 +139,7 @@ extension AppModel {
 
         let provider = trendSettings.provider.upgradedForTrendGeneration
         do {
+            nextHourGuidanceProgressStage = .preparingResearch
             if trendProviderCapabilities?.providerFingerprint != provider.fingerprint
                 || trendProviderCapabilities?.supportsToolCalls != true {
                 let capabilities = try await trendCapabilityProbe(provider)
@@ -160,25 +167,65 @@ extension AppModel {
                 lookThrough: lookThroughResult.snapshot,
                 sourceWarnings: context.marketDataWarnings + lookThroughResult.warnings
             )
+            let diagnosticRecorder: AIAgentDiagnosticRecorder?
+            do {
+                diagnosticRecorder = try makeAIAgentDiagnosticRecorder(
+                    runID: researchSnapshot.runID,
+                    agentKind: "next-hour-guidance",
+                    scope: slot.scope.rawValue,
+                    trigger: userInitiated ? "manual" : "scheduled",
+                    provider: provider,
+                    privacyMode: researchSnapshot.privacyMode,
+                    startedAt: generatedAt
+                )
+            } catch {
+                diagnosticRecorder = nil
+                if userInitiated {
+                    noticeMessage = "盘中研判会继续，但完整诊断日志初始化失败：\(error.localizedDescription)"
+                }
+            }
             // 投资智能启用时走 V2（3+1 子 Agent 编排），否则走原 V1 单体循环
             let report: NextHourGuidanceReport
-            if InvestmentIntelligence.enabled {
-                report = try await nextHourGuidanceAgent.runV2(
-                    context: context,
-                    researchSnapshot: researchSnapshot,
-                    settings: provider,
-                    webSearchSettings: trendSettings.webSearch,
-                    officialSourceSettings: trendSettings.officialSources
-                )
-            } else {
-                report = try await nextHourGuidanceAgent.run(
-                    context: context,
-                    researchSnapshot: researchSnapshot,
-                    settings: provider,
-                    webSearchSettings: trendSettings.webSearch,
-                    officialSourceSettings: trendSettings.officialSources
-                )
+            nextHourGuidanceProgressStage = .analyzing
+            report = try await AIAgentDiagnosticLog.$recorder.withValue(
+                diagnosticRecorder
+            ) {
+                do {
+                    let result: NextHourGuidanceReport
+                    if InvestmentIntelligence.enabled {
+                        result = try await nextHourGuidanceAgent.runV2(
+                            context: context,
+                            researchSnapshot: researchSnapshot,
+                            settings: provider,
+                            webSearchSettings: trendSettings.webSearch,
+                            officialSourceSettings: trendSettings.officialSources
+                        )
+                    } else {
+                        result = try await nextHourGuidanceAgent.run(
+                            context: context,
+                            researchSnapshot: researchSnapshot,
+                            settings: provider,
+                            webSearchSettings: trendSettings.webSearch,
+                            officialSourceSettings: trendSettings.officialSources
+                        )
+                    }
+                    await AIAgentDiagnosticLog.record("run_completed", payload: result)
+                    return result
+                } catch is CancellationError {
+                    await AIAgentDiagnosticLog.record(
+                        "run_cancelled",
+                        message: "盘中研判已取消"
+                    )
+                    throw CancellationError()
+                } catch {
+                    await AIAgentDiagnosticLog.record(
+                        "run_failed",
+                        message: error.localizedDescription
+                    )
+                    throw error
+                }
             }
+            nextHourGuidanceProgressStage = .finalizing
             saveTrendAgentRunArtifact(
                 TrendAgentRunArtifact.makeNextHour(
                     snapshot: researchSnapshot,
@@ -191,6 +238,7 @@ extension AppModel {
             nextHourGuidanceArchive.report = report
             nextHourGuidanceArchive.lastCompletedSlotKey = slot.key
             nextHourGuidanceGenerationState = .succeeded
+            nextHourGuidanceProgressStage = .completed
             saveNextHourGuidanceArchive()
             if userInitiated {
                 noticeMessage = "下一小时买卖建议已更新。"
@@ -198,10 +246,12 @@ extension AppModel {
             await nextHourGuidanceNotificationSender(report)
         } catch is CancellationError {
             nextHourGuidanceGenerationState = .failed
+            nextHourGuidanceProgressStage = .failed
             nextHourGuidanceError = "下一小时买卖建议生成已取消。"
             saveNextHourGuidanceArchive()
         } catch {
             nextHourGuidanceGenerationState = .failed
+            nextHourGuidanceProgressStage = .failed
             nextHourGuidanceError = error.localizedDescription
             saveNextHourGuidanceArchive()
         }

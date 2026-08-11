@@ -122,23 +122,47 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         XCTAssertTrue(model.lastTrendError.contains("不支持工具调用"))
     }
 
-    func testDailyAutoAnalysisRunsOncePerScheduledSlot() async {
+    func testModuleAutoAnalysisRunsOncePerScheduledWindow() async {
         let model = AppModel()
         model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
-        model.trendSettings.dailyAutoAnalysisTimes = ["09:30", "14:30"]
         installSupportingProbe(model)
         let agent = FakeTrendResearchAgent(result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-22 09:30:00", externalSignalStatus: .partial)))
         model.trendResearchAgent = agent
 
-        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 09:30:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 09:00:00")
         await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 10:00:00")
-        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 15:00:00")
-        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 16:00:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 21:00:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 22:00:00")
 
         XCTAssertEqual(agent.runCount, 2)
-        XCTAssertEqual(model.trendSettings.lastAutoAnalysisDay, "2026-06-22")
-        XCTAssertEqual(model.trendSettings.lastAutoAnalysisSlotKey, "2026-06-22 14:30")
-        XCTAssertEqual(model.trendProgressLogs.first?.message, "定时自动分析已启动")
+        XCTAssertEqual(
+            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue],
+            "2026-06-22 09:00"
+        )
+        XCTAssertEqual(
+            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.closeReview.rawValue],
+            "2026-06-22 21:00"
+        )
+        XCTAssertEqual(model.trendProgressLogs.first?.message, "完整 AI 分析已启动")
+    }
+
+    func testFailedAutomaticModuleIsNotRetriedByPollingOrNextLaunchCheck() async {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
+        installSupportingProbe(model)
+        let agent = FakeTrendResearchAgent(
+            result: .failure(TrendResearchAgentError.turnLimitExceeded)
+        )
+        model.trendResearchAgent = agent
+
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 09:00:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 10:00:00")
+
+        XCTAssertEqual(agent.runCount, 1)
+        XCTAssertEqual(
+            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue],
+            "2026-06-22 09:00"
+        )
     }
 
     func testProgressLogsReflectAgentEvents() async {
@@ -151,9 +175,9 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 12:00:00")
 
         let messages = model.trendProgressLogs.map(\.message)
-        XCTAssertEqual(messages.first, "手动分析已启动")
+        XCTAssertEqual(messages.first, "完整 AI 分析已启动")
         XCTAssertTrue(messages.contains { $0.contains("内嵌趋势 Agent") })
-        XCTAssertTrue(messages.contains { $0.contains("趋势分析完成") })
+        XCTAssertTrue(messages.contains { $0.contains("完整 AI 分析完成") })
         let startedIndex = messages.firstIndex(of: "内嵌趋势 Agent 已启动")
         let turnIndex = messages.firstIndex(of: "进入第 1 轮")
         let completedIndex = messages.firstIndex(of: "Agent 已生成有效报告")
@@ -218,6 +242,8 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
         webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
+        scope: TrendResearchRunScope = .full,
+        baselineReport: TrendAnalysisReport? = nil,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport {
         lock.lock()

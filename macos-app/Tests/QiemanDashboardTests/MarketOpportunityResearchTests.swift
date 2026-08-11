@@ -2,7 +2,7 @@ import XCTest
 @testable import QiemanDashboard
 
 final class MarketOpportunityResearchTests: XCTestCase {
-    func testEngineSeparatesHeldSectorActionsFromUnheldMarketOpportunities() throws {
+    func testEngineIgnoresPortfolioSectorsAndKeepsWholeMarketOpportunities() throws {
         let consumerEvidence = makeEvidence(
             id: "consumer-risk",
             publisher: "news.cn",
@@ -38,14 +38,73 @@ final class MarketOpportunityResearchTests: XCTestCase {
 
         let analysis = try XCTUnwrap(MarketOpportunityEngine.analyze(report: report))
 
-        XCTAssertEqual(analysis.heldSectors.map(\.name), ["消费"])
-        XCTAssertEqual(analysis.heldSectors.first?.recommendation, .considerReduce)
-        XCTAssertEqual(analysis.heldSectors.first?.portfolioExposureText, "组合已有暴露")
         XCTAssertEqual(analysis.marketSectorOpportunities.map(\.name), ["机器人"])
-        XCTAssertFalse(analysis.marketSectorOpportunities.contains { $0.name == "消费" })
+        XCTAssertEqual(analysis.marketSignalCount, 1)
     }
 
-    func testHeldMarketOpportunityIsMergedIntoHeldSectorInsteadOfDuplicated() throws {
+    func testPortfolioEvidenceExcludesWholeMarketResearch() throws {
+        let portfolioEvidence = makeEvidence(
+            id: "portfolio-only",
+            publisher: "portfolio.local",
+            tier: .primary,
+            sector: "组合"
+        )
+        let marketEvidence = makeEvidence(
+            id: "market-only",
+            publisher: "market.example",
+            tier: .authoritative,
+            sector: "机器人"
+        )
+        let base = makeReport(evidence: [portfolioEvidence, marketEvidence])
+        let report = TrendAnalysisReport(
+            id: base.id,
+            generatedAt: base.generatedAt,
+            dataAsOf: base.dataAsOf,
+            privacyMode: base.privacyMode,
+            externalSignalStatus: base.externalSignalStatus,
+            portfolio: TrendPortfolioSummary(
+                headline: base.portfolio.headline,
+                riskLevel: base.portfolio.riskLevel,
+                summary: base.portfolio.summary,
+                claimEvidence: TrendClaimEvidence(
+                    supportingEvidenceIDs: [portfolioEvidence.id]
+                )
+            ),
+            horizons: base.horizons,
+            marketOutlook: [
+                TrendMarketOutlook(
+                    id: "whole-market",
+                    name: "全市场",
+                    category: "index",
+                    direction: .neutralPositive,
+                    confidence: TrendConfidence(score: 65, label: "中"),
+                    rationale: "全市场研究结论。",
+                    evidenceIDs: [marketEvidence.id],
+                    counterSignals: [],
+                    claimEvidence: TrendClaimEvidence(
+                        supportingEvidenceIDs: [marketEvidence.id]
+                    )
+                )
+            ],
+            sectors: base.sectors,
+            opportunities: base.opportunities,
+            keyAssets: base.keyAssets,
+            assetTrends: base.assetTrends,
+            actions: base.actions,
+            evidence: base.evidence,
+            warnings: base.warnings,
+            disclaimer: base.disclaimer,
+            schemaVersion: base.schemaVersion,
+            disposition: base.disposition,
+            sourceStatuses: base.sourceStatuses
+        )
+
+        XCTAssertEqual(report.portfolioReferencedEvidenceIDs, [portfolioEvidence.id])
+        XCTAssertEqual(report.portfolioEvidence.map(\.id), [portfolioEvidence.id])
+        XCTAssertTrue(report.referencedEvidenceIDs.contains(marketEvidence.id))
+    }
+
+    func testMarketOpportunityRemainsVisibleWhenPortfolioOwnsSameSector() throws {
         let evidence = makeEvidence(
             id: "semiconductor-positive",
             publisher: "news.cn",
@@ -75,8 +134,8 @@ final class MarketOpportunityResearchTests: XCTestCase {
 
         let analysis = try XCTUnwrap(MarketOpportunityEngine.analyze(report: report))
 
-        XCTAssertEqual(analysis.heldSectors.first?.recommendation, .considerAdd)
-        XCTAssertTrue(analysis.marketSectorOpportunities.isEmpty)
+        XCTAssertEqual(analysis.marketSectorOpportunities.map(\.name), ["半导体"])
+        XCTAssertEqual(analysis.marketSectorOpportunities.first?.recommendation, .keyOpportunity)
     }
 
     func testHighConvictionBuyRequiresTwoIndependentSourcesAndAuthoritativeEvidence() throws {
@@ -163,14 +222,10 @@ final class MarketOpportunityResearchTests: XCTestCase {
             evidence: [evidence]
         )
 
-        let analysis = try XCTUnwrap(MarketOpportunityEngine.analyze(report: report))
-
-        XCTAssertEqual(analysis.heldSectors.map(\.name), ["消费"])
-        XCTAssertTrue(analysis.marketSectorOpportunities.isEmpty)
-        XCTAssertFalse(analysis.marketScanCompleted)
+        XCTAssertNil(MarketOpportunityEngine.analyze(report: report))
     }
 
-    func testEngineDoesNotCreateDefaultHeldCardsWithoutEvidence() {
+    func testEngineDoesNotProjectPortfolioSectorsIntoMarketRadar() {
         let report = makeReport(
             sectors: [makeSector(name: "制造业", direction: .uncertain, score: 25)]
         )
@@ -219,7 +274,7 @@ final class MarketOpportunityResearchTests: XCTestCase {
 
         XCTAssertFalse(harness.opportunitySearchCoverageComplete)
         XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: true))
-        XCTAssertFalse(
+        XCTAssertTrue(
             harness.readyForSubmission(
                 webSearchConfigured: true,
                 allowInsufficientWebEvidence: true
@@ -257,6 +312,9 @@ final class MarketOpportunityResearchTests: XCTestCase {
         XCTAssertTrue(prompt.contains("跨组比较"))
         XCTAssertTrue(prompt.contains("statistical_industries"))
         XCTAssertTrue(prompt.contains("不得直接输出为 sectors"))
+        XCTAssertTrue(prompt.contains("assetTrends.impactText 是「当日涨跌归因」"))
+        XCTAssertTrue(prompt.contains("原因待确认："))
+        XCTAssertTrue(prompt.contains("market:stock:*"))
         XCTAssertTrue(prompt.contains("\"scope\":\"marketWide\""))
     }
 

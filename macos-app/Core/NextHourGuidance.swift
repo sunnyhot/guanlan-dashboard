@@ -279,6 +279,90 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     let warnings: [String]
     let disclaimer: String
 
+    /// 完整运行证据账本。`evidence` 只保存最终动作直接引用的证据，
+    /// 三个分析团队的独立结论可能只存在于 `auditEvidence`。
+    var completeEvidenceLedger: [TrendEvidence] {
+        var seen = Set<String>()
+        return (evidence + auditEvidence).filter { seen.insert($0.id).inserted }
+    }
+
+    /// 当前行动对应的行情、新闻和持仓三方判断，只在条目详情中展示。
+    func teamEvidence(for action: NextHourGuidanceAction) -> [TrendEvidence] {
+        completeEvidenceLedger
+            .filter { item in
+                isTeamAssessment(item) && evidence(item, relatesTo: action)
+            }
+            .sorted { lhs, rhs in
+                let lhsRank = teamAssessmentRank(lhs)
+                let rhsRank = teamAssessmentRank(rhs)
+                if lhsRank != rhsRank { return lhsRank < rhsRank }
+                return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
+            }
+    }
+
+    private func teamAssessmentRank(_ evidence: TrendEvidence) -> Int {
+        if evidence.id.hasPrefix("analysis:market:") || evidence.sourceName == "行情信号分析" {
+            return 0
+        }
+        if evidence.id.hasPrefix("analysis:news:") || evidence.sourceName == "新闻事件分析" {
+            return 1
+        }
+        if evidence.id.hasPrefix("analysis:portfolio:") || evidence.sourceName == "持仓结构分析" {
+            return 2
+        }
+        return 3
+    }
+
+    /// 当前行动引用的其他研究依据，排除已经单独归入三方判断的结论。
+    func supportingEvidence(for action: NextHourGuidanceAction) -> [TrendEvidence] {
+        let ledger = completeEvidenceLedger
+        let teamIDs = Set(teamEvidence(for: action).map(\.id))
+        let nonTeamEvidence = ledger.filter { !teamIDs.contains($0.id) && !isTeamAssessment($0) }
+        let referencedIDs = Set(action.evidenceIDs)
+        let directlyReferenced = nonTeamEvidence.filter { referencedIDs.contains($0.id) }
+        if !directlyReferenced.isEmpty { return directlyReferenced }
+
+        let related = nonTeamEvidence.filter { evidence($0, relatesTo: action) }
+        return related.isEmpty ? nonTeamEvidence : related
+    }
+
+    private func isTeamAssessment(_ evidence: TrendEvidence) -> Bool {
+        evidence.id.hasPrefix("analysis:market:")
+            || evidence.id.hasPrefix("analysis:news:")
+            || evidence.id.hasPrefix("analysis:portfolio:")
+            || evidence.sourceName == "行情信号分析"
+            || evidence.sourceName == "新闻事件分析"
+            || evidence.sourceName == "持仓结构分析"
+    }
+
+    private func evidence(
+        _ evidence: TrendEvidence,
+        relatesTo action: NextHourGuidanceAction
+    ) -> Bool {
+        if let targetID = action.targetID?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !targetID.isEmpty,
+           evidence.id.hasSuffix(":\(targetID)") {
+            return true
+        }
+
+        let normalizedTarget = action.targetName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalizedTarget.isEmpty else { return false }
+        if evidence.metadata.entityNames.contains(where: { name in
+            name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedTarget
+        }) {
+            return true
+        }
+
+        // 兼容旧报告：早期三方证据可能没有 targetID 或结构化实体标签，
+        // 但标题仍以标的名称开头。
+        return evidence.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .contains(normalizedTarget)
+    }
+
     init(
         id: UUID = UUID(),
         runID: UUID = UUID(),
@@ -864,6 +948,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                         result: acceptedResult
                                     )
                                 ]
+                                await AIAgentDiagnosticLog.recordToolResult(
+                                    turn: turnCount,
+                                    call: call,
+                                    contentJSON: acceptedResult.contentJSON,
+                                    modelContentJSON: acceptedResult.contentJSON,
+                                    isError: false
+                                )
                                 return await Self.makeReport(
                                     submission: submission,
                                     context: context,
@@ -916,6 +1007,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                         call: call,
                         result: toolResult
                     )
+                )
+                await AIAgentDiagnosticLog.recordToolResult(
+                    turn: turnCount,
+                    call: call,
+                    contentJSON: toolResult.contentJSON,
+                    modelContentJSON: toolResult.contentJSON,
+                    isError: toolResult.isError
                 )
                 messages.append(.init(
                     role: .tool,

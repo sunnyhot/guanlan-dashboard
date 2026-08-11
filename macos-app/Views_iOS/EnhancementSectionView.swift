@@ -122,74 +122,183 @@ struct EnhancementSectionView: View {
                 }
             }
 
-            if !review.marketPulse.isEmpty {
-                Divider()
-                Text("市场温度").font(.headline).foregroundStyle(IOSDesign.ink)
-                ForEach(review.marketPulse) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(item.name).font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text(item.direction.dashboardText)
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(iosCloseReviewTint(item.direction))
-                        }
-                        Text("\(item.category) · 置信度 \(item.confidenceText)")
-                            .font(.caption)
-                            .foregroundStyle(IOSDesign.muted)
-                        Text(item.rationale)
-                            .font(.caption)
-                            .foregroundStyle(IOSDesign.muted)
-                            .lineLimit(3)
-                    }
-                }
-            }
+            Divider()
+            Text("今日得失")
+                .font(.headline)
+                .foregroundStyle(IOSDesign.ink)
 
-            if !review.strongThemes.isEmpty || !review.weakThemes.isEmpty {
-                Divider()
-                Text("主线与风险").font(.headline).foregroundStyle(IOSDesign.ink)
-                ForEach(review.strongThemes) { item in
-                    Label {
-                        Text("\(item.name) · \(item.rationale)")
-                            .font(.subheadline)
-                    } icon: {
-                        Image(systemName: "arrow.up.right.circle.fill")
-                            .foregroundStyle(AppPalette.positive)
+            if let portfolio = review.portfolioReview {
+                HStack(spacing: IOSDesign.spaceM) {
+                    VStack(alignment: .leading, spacing: IOSDesign.spaceXS) {
+                        Text(portfolio.changeTitle)
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                        Text(dailyChangeCurrencyText(portfolio.dailyChangeAmount))
+                            .font(.headline)
+                            .foregroundStyle(AppPalette.marketTint(
+                                for: portfolio.dailyChangeAmount ?? portfolio.dailyChangePct
+                            ))
+                        Text(dailyChangePercentText(portfolio.dailyChangePct))
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: IOSDesign.spaceXS) {
+                        Text("涨跌覆盖")
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                        Text("\(portfolio.coveredHoldingCount)/\(portfolio.holdingCount)")
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(IOSDesign.ink)
+                        Text("组合市值 \(currencyText(portfolio.totalMarketValue))")
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
                     }
                 }
-                ForEach(review.weakThemes) { item in
-                    Label {
-                        Text("\(item.name) · \(item.rationale)")
-                            .font(.subheadline)
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(AppPalette.warning)
+
+                if !portfolio.holdingImpacts.isEmpty {
+                    Text("组合影响")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(IOSDesign.ink)
+                    ForEach(portfolio.holdingImpacts.prefix(3)) { item in
+                        VStack(alignment: .leading, spacing: IOSDesign.spaceXS) {
+                            HStack {
+                                Text(item.name)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(IOSDesign.ink)
+                                Spacer()
+                                Text(dailyChangeCurrencyText(item.changeAmount, market: item.market))
+                                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(AppPalette.marketTint(
+                                        for: item.changeAmount ?? item.changePct
+                                    ))
+                            }
+                            Text("\(item.code) · \(dailyChangePercentText(item.changePct))")
+                                .font(.caption)
+                                .foregroundStyle(IOSDesign.muted)
+                            if let analysis = item.analysis {
+                                Text(analysis)
+                                    .font(.caption)
+                                    .foregroundStyle(IOSDesign.muted)
+                            }
+                        }
                     }
                 }
+            } else {
+                ContentUnavailableView(
+                    "暂无持仓复盘",
+                    systemImage: "chart.line.uptrend.xyaxis",
+                    description: Text("刷新个人持仓后显示组合涨跌和主要持仓影响。")
+                )
             }
 
             if !review.tomorrowWatch.isEmpty {
                 Divider()
-                Text("次日观察").font(.headline).foregroundStyle(IOSDesign.ink)
-                ForEach(Array(review.tomorrowWatch.enumerated()), id: \.offset) { _, item in
-                    Label(item, systemImage: "circle.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(IOSDesign.muted)
-                        .fixedSize(horizontal: false, vertical: true)
+                Text("明日关注").font(.headline).foregroundStyle(IOSDesign.ink)
+                ForEach(Array(review.tomorrowWatch.prefix(3).enumerated()), id: \.offset) { offset, item in
+                    HStack(alignment: .firstTextBaseline, spacing: IOSDesign.spaceS) {
+                        Text("\(offset + 1)")
+                            .font(.caption.weight(.bold).monospacedDigit())
+                            .foregroundStyle(IOSDesign.accent)
+                        Text(item)
+                            .font(.subheadline)
+                            .foregroundStyle(IOSDesign.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 
-            Label(review.dataBoundary, systemImage: "shield.lefthalf.filled")
-                .font(.caption)
-                .foregroundStyle(IOSDesign.muted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            DisclosureGroup("研究依据") {
+            DisclosureGroup("展开复盘详情") {
                 VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
-                    reportContent
-                    if let evidence = model.trendReport?.evidence, !evidence.isEmpty {
-                        IOSTrendEvidenceListView(evidence: evidence)
+                    if let portfolio = review.portfolioReview {
+                        Text("组合明细")
+                            .font(.headline)
+                            .foregroundStyle(IOSDesign.ink)
+                        Text("市值 \(currencyText(portfolio.totalMarketValue)) · 更新于 \(String(portfolio.refreshedAt.prefix(16)))")
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+
+                        ForEach(portfolio.holdingImpacts) { item in
+                            VStack(alignment: .leading, spacing: IOSDesign.spaceXS) {
+                                HStack {
+                                    Text(item.name)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(IOSDesign.ink)
+                                    Spacer()
+                                    Text(dailyChangeCurrencyText(item.changeAmount, market: item.market))
+                                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                                        .foregroundStyle(AppPalette.marketTint(
+                                            for: item.changeAmount ?? item.changePct
+                                        ))
+                                }
+                                if let watchText = item.watchText {
+                                    Text("次日验证：\(watchText)")
+                                        .font(.caption)
+                                        .foregroundStyle(IOSDesign.muted)
+                                }
+                            }
+                        }
                     }
+
+                    if !review.marketPulse.isEmpty {
+                        Divider()
+                        Text("市场温度").font(.headline).foregroundStyle(IOSDesign.ink)
+                        ForEach(review.marketPulse) { item in
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(item.name).font(.subheadline.weight(.semibold))
+                                    Spacer()
+                                    Text("\(item.direction.dashboardText) · \(item.confidenceText)")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(iosCloseReviewTint(item.direction))
+                                }
+                                Text(item.rationale)
+                                    .font(.caption)
+                                    .foregroundStyle(IOSDesign.muted)
+                                    .lineLimit(3)
+                            }
+                        }
+                    }
+
+                    if !review.strongThemes.isEmpty || !review.weakThemes.isEmpty {
+                        Divider()
+                        Text("主线与风险").font(.headline).foregroundStyle(IOSDesign.ink)
+                        ForEach(review.strongThemes) { item in
+                            Label {
+                                Text("\(item.name) · \(item.rationale)")
+                                    .font(.subheadline)
+                            } icon: {
+                                Image(systemName: "arrow.up.right.circle.fill")
+                                    .foregroundStyle(AppPalette.positive)
+                            }
+                        }
+                        ForEach(review.weakThemes) { item in
+                            Label {
+                                Text("\(item.name) · \(item.rationale)")
+                                    .font(.subheadline)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundStyle(AppPalette.warning)
+                            }
+                        }
+                    }
+
+                    Label(review.dataBoundary, systemImage: "shield.lefthalf.filled")
+                        .font(.caption)
+                        .foregroundStyle(IOSDesign.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    DisclosureGroup("研究依据") {
+                        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+                            reportContent
+                            if let evidence = model.trendReport?.evidence, !evidence.isEmpty {
+                                IOSTrendEvidenceListView(evidence: evidence)
+                            }
+                        }
+                        .padding(.top, IOSDesign.spaceS)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .tint(IOSDesign.accent)
                 }
                 .padding(.top, IOSDesign.spaceS)
             }

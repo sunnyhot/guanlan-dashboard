@@ -22,8 +22,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  链路 A:趋势研究(每日/手动,长期)                                   │
-│  AppModel.generateTrendAnalysis                                  │
+│  链路 A:趋势研究(分模块错峰/手动)                                  │
+│  AppModel.generateTrendAnalysis(scope:)                           │
 │    → TrendResearchAgent.run(多轮 Tool Calling)                   │
 │    → SubmitTrendReportTool(校验+归一化)                           │
 │    → TrendAnalysisReportStore 落盘                                │
@@ -52,12 +52,31 @@
 
 ## 2. 链路 A:趋势研究(TrendResearch)
 
+### 2.0 分模块运行与调度
+
+链路 A 不再在每个定时点生成整份报告，而是用 `TrendResearchRunScope` 增量更新并在本地合并上一份已校验报告：
+
+| scope | 自动时刻 | 本次生成 | 复用 |
+|---|---|---|---|
+| `marketRadar` | 每日 09:00 | marketOutlook / sectors / opportunities | 组合、持仓、行动 |
+| `closeReview` | 每日 21:00 | assetTrends（当日涨跌归因） | 市场雷达、组合长期判断、行动 |
+| `longTerm` | 每周日 20:00（错过后下一个 20:00 窗口补跑） | portfolio / horizons / assetTrends / keyAssets / actions | 市场雷达 |
+| `full` | 首次无基线或显式完整分析 | 全部模块 | 无 |
+
+盘中链路 B 仍按原交易时段运行。`TrendReportDraftStore` 以旧报告预填非本次模块，旧 evidence 同步写入新运行 Ledger；最终仍必须经过 `SubmitTrendReportTool` 统一归一化和完整 Validator。市场雷达若检测到持仓代码已经变化、增量合并无法保持完整性，会一次性回退为 `full`。
+
+各模块的新鲜度时间独立保存在 `TrendAnalysisSettings.lastModuleGeneratedAt`。增量更新只推进当前模块时间；`full` 同时推进三项。旧配置首次加载时用旧报告 `generatedAt` 初始化三项，避免早晨市场雷达更新后把昨晚的收盘复盘误标为“今天已复盘”。
+
+收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受次日市场雷达覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
+
+中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily，`marketRadar` 不读取个人持仓工具。
+
 ### 2.1 调用图
 
 ```
 UI / 定时器 / 手动
-  └─ AppModel.startTrendAnalysis(userInitiated:)              [TrendAnalysis.swift:340]
-       └─ Task { generateTrendAnalysis(userInitiated:createdAt:) }   [:144]
+  └─ AppModel.startTrendAnalysis(userInitiated:scope:)
+       └─ Task { generateTrendAnalysis(userInitiated:createdAt:scope:) }
             ├─ checkTrendAIConnection / capability probe       (must supportToolCalls, fail-closed)
             ├─ refreshTrendResearchMarketData(...)             [:201, :450]
             ├─ fundLookThroughClient.fetchDisclosures          [:228]
@@ -65,6 +84,8 @@ UI / 定时器 / 手动
             │     → TrendResearchSnapshot (runID, assets, marketQuotes, sectors,
             │       expectedFundCodes, privacyMode, dataAsOf ...)
             ├─ TrendAgentRunLogStore().beginRun(...)           [:159]  (覆盖写 trend-agent.log)
+            ├─ AIAgentDiagnosticRecorder                       (每次运行独立 JSONL)
+            │     → <dataDir>/ai-analysis-logs/<date>-<scope>-<runID>.jsonl
             └─ trendResearchAgent.run(snapshot:settings:...eventHandler:)   [:290]
                  ↑ AppModel.trendResearchAgent: any TrendResearchAgentProtocol
                    ↓ TrendResearchAgent.run                        [TrendResearchAgent.swift:220]
@@ -95,6 +116,8 @@ protocol TrendResearchAgentProtocol: Sendable {
         webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings,
         alphaVantageSettings: AlphaVantageSettings,
+        scope: TrendResearchRunScope,
+        baselineReport: TrendAnalysisReport?,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) -> Void
     ) async throws -> TrendAnalysisReport
 }
@@ -116,6 +139,7 @@ AppModel 持有 `var trendResearchAgent: any TrendResearchAgentProtocol`(默认 
 | `preferredWebSearches` | 6 | 期望搜索次数 |
 | `maxWebSearches` | 10 | 基础搜索上限 |
 | `expandedMaxWebSearches` | 12 | 扩张后搜索上限 |
+| `reservedSubmitToolCalls` | 8 | 研究阶段不可消耗的结构化提交预留预算；触及边界后停止搜索并进入提交 |
 | `maxInvalidSubmissions` | 4 | 无效提交上限(第 5 次抛错) |
 | `maxPlainTextResponses` | 2 | 纯文本响应上限 |
 | `perRequestTimeoutSeconds` | 180 | 单请求超时 |
@@ -131,13 +155,16 @@ submit 前必须满足(否则 submit 被拒并要求重试):
 - `get_portfolio_overview` 已读
 - `assetCoverageComplete`
 - `lookThroughCoverageComplete`(若有穿透快照)
+- `get_market_snapshot` 已读(快照存在指数、基金估值或底层证券行情时；用于当日涨跌归因)
 - `official_sec_research`(若 SEC 配置且有美股标的)
 - `alpha_vantage_research`(若配置)
 - `web_search`(若 Tavily 配置,至少一次)
-- `web_search` 全市场机会覆盖（若 Tavily 配置，必须完成 assetClass / index，并逐一完成科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值六个 sector 分组；候选来自受控研究池，不要求已在当前持仓中）
+- `web_search` 全市场机会覆盖（若 Tavily 配置且可用，必须完成 assetClass / index，并逐一完成科技成长、医药消费、金融地产、制造新能源、周期资源、防御价值六个 sector 分组；聚合目标固定使用“大类资产配置”与“大盘宽基指数”；候选来自受控研究池，不要求已在当前持仓中）
+- Tavily 额度、鉴权或服务不可用时进入安全降级：停止重复联网请求，保留本地行情/穿透/官方证据形成复盘，但强制清空 `opportunities` 与 `actions`，不得用模型记忆或持仓长期观点填充全市场机会。
 - 基金 F10 `statistical_industries` 属于宽泛统计行业口径，只用于披露结构说明；不得直接生成投资板块卡片或作为 `sectors` 名称，投资板块必须结合底层证券、ETF/基金主题和持仓来源归纳。
+- `assetTrends.impactText` 必须提供带底层证券行情/外部研究证据的「涨跌归因」，或明确输出「原因待确认」；不得用市值、累计盈亏、持仓占比、穿透名单或净值涨跌本身替代原因。
 
-工具结果按 `executedByID`/`executedBySignature` 缓存复用;web_search 不可恢复失败会熔断。
+工具结果按 `executedByID`/`executedBySignature` 缓存复用；受控全市场目标按结构化 `research_target` 使用跨运行磁盘缓存，不因模型改写查询文案而重复消耗额度；web_search 不可恢复失败会熔断，额度/鉴权失败还会跨运行冷却。
 
 ### 2.5 失败/取消契约
 
@@ -256,14 +283,18 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 | 文件 | 路径 | 编码 | 权限 | schemaVersion | 历史 | Store |
 |---|---|---|---|---|---|---|
 | 趋势报告 | `trend-analysis-report.json` | prettyPrinted + sortedKeys | **0o600** | `currentSchemaVersion=2`,解码宽容 | **单文件覆盖写,无历史** | `TrendAnalysisReportStore` |
+| 收盘复盘冻结快照 | `market-close-review.json` | prettyPrinted + sortedKeys | **0o600** | 3 | 单文件覆盖，只保留最近一次成功复盘 | `MarketCloseReviewArchiveStore` |
 | 趋势设置 | `trend-analysis-settings.json` | prettyPrinted | **0o600** | 无 | 单文件覆盖 | `TrendAnalysisSettingsStore`(API Key 在 Keychain) |
 | Agent 日志 | `trend-agent.log` | 文本 | **0o600** | 无 | 每次运行覆盖写 header + append 进度 | `TrendAgentRunLogStore` |
+| AI 完整诊断日志 | `ai-analysis-logs/<YYYY-MM-DD>-<scope>-<runID>.jsonl` | 每行独立 JSON + sortedKeys | **0o600**（目录 0o700） | 无 | 最近 20 份且总量不超过 200 MB；始终保留最新一份 | `AIAgentDiagnosticRecorder` |
 | Agent 审计产物 | `trend-agent-runs/<YYYY-MM-DD>-<runID>.json` | prettyPrinted | **0o600** | 无 | **最近 20 个**,超出按 mtime 删除 | `TrendAgentRunArtifactStore` |
 | 下一小时研判 | `next-hour-guidance.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `NextHourGuidanceStore` |
 | 跟踪清单 | `trend-tracking-items.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `TrendTrackingStore` |
 | 基金穿透缓存 | `fund-look-through-cache.json` | — | — | — | — | `FundLookThroughClient` |
 | Tavily 搜索缓存 | `~/Library/Caches/QiemanDashboard/AIResearch/Tavily/*.json` | prettyPrinted + sortedKeys | **0o600** | 1 | 每请求一文件，最多 64 个；长期 6 小时、盘中读取门槛 10 分钟 | `TrendWebSearchResponseCache` |
 | (已预留)组合洞察快照 | `portfolio-insight-snapshots.json` | — | — | — | — | URL 已定义,暂无 Store 消费 |
+
+完整诊断日志通过 `AIAgentDiagnosticLog.recorder` TaskLocal 贯穿趋势研究、市场雷达、收盘复盘、长期研判、盘中 V1/V2 子 Agent 与 DecisionCase 专项研究。按执行顺序保存：运行元数据、完整模型 messages/tools 请求、完整 assistant 响应、工具参数、工具原始结果、实际回灌模型的结果、校验错误、重试以及最终报告或失败状态。API Key、Authorization、Cookie、Token、Secret 和 Password 字段递归替换为 `[redacted]`；为了定位持仓归因问题，其余业务数据会保留，因此日志只应在本机受控范围内使用。设置页“AI 研判 → 完整诊断日志”可直接打开目录。
 
 ### 当前已知不一致(改造时需注意)
 
@@ -283,6 +314,7 @@ Evidence ID 由 **App 生成**(非模型创造),对同一快照**确定性可复
 | 单基金穿透 | `fund:look-through:<fundCode>:<asOf>` | TrendResearchToolRegistry:370 |
 | 行情(指数) | `market:index:<kind>:<quotedAt>` | TrendResearchSnapshot:398 |
 | 行情(基金估值) | `market:fund-estimate:<code>:<quotedAt>` | TrendResearchSnapshot:423 |
+| 行情(基金底层证券) | `market:stock:<code>:<quotedAt>` | TrendResearchSnapshotBuilder，由公开披露持仓筛选并刷新当日行情 |
 | 平台信号 | `platform:<source>:<platformActionID>` | TrendResearchSnapshot:328 |
 | 主理人信号 | `manager:<kind>:<targetID??eventID>` | TrendResearchSnapshot:355 |
 | SEC 官方 | `official:sec:filing:<accessionNumber.lowercased()>` | SECOfficialResearchTool:235 |

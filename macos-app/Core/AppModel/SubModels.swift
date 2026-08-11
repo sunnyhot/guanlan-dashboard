@@ -110,6 +110,10 @@ final class EnhancementState: ObservableObject {
     @Published var trendReport: TrendAnalysisReport?
     @Published var trendSettings: TrendAnalysisSettings = .default
     @Published var trendGenerationState: TrendGenerationState = .idle
+    @Published var trendResearchScope: TrendResearchRunScope = .full
+    @Published var trendResearchRequestedScope: TrendResearchRunScope = .full
+    @Published var trendResearchProgress: TrendResearchModuleProgress = .idle
+    @Published var marketCloseReviewArchive: MarketCloseReviewArchive?
     @Published var trendConnectionState: TrendConnectionState = .idle
     @Published var trendProviderCapabilities: TrendProviderCapabilities?
     @Published var trendPrivacyMode: TrendPrivacyMode = .sanitized
@@ -119,6 +123,7 @@ final class EnhancementState: ObservableObject {
     @Published var trendProgressLogs: [TrendProgressLog] = []
     @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
+    @Published var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage = .idle
     @Published var nextHourGuidanceError = ""
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
