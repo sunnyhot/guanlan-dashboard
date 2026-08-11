@@ -57,7 +57,8 @@ final class UIExperienceRegressionTests: XCTestCase {
         let enhancement = try source(at: "Views_macOS/EnhancementCenterView.swift")
 
         XCTAssertTrue(components.contains("struct ModuleTabBar<"))
-        XCTAssertTrue(components.contains("private func moduleTabButton"))
+        XCTAssertTrue(components.contains("private func tabLabel"))
+        XCTAssertTrue(components.contains("private func tabCell"))
         XCTAssertTrue(components.contains("selectedFill: AppPalette.brand"))
         XCTAssertTrue(components.contains("fill: AppPalette.cardStrong"))
         XCTAssertTrue(components.contains("hoverFill: AppPalette.cardHover"))

@@ -22,5 +22,4 @@ struct EnhancementCenterView: View {
             TrendEvidenceDetailSheet(selection: selection)
         }
     }
-
 }

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct PlatformActivitySectionView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var orderedTabs: [PlatformActivityTab] = PlatformActivityTab.allCases
+    private let tabOrderStore = TabOrderStore(namespace: "platform")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,6 +16,9 @@ struct PlatformActivitySectionView: View {
                 ForumSectionView()
             }
         }
+        .onAppear {
+            orderedTabs = tabOrderStore.ordered(PlatformActivityTab.self, id: { $0.rawValue })
+        }
         .onChange(of: model.selectedPlatformActivityTab) { _, tab in
             if tab == .forum {
                 model.ensureSelectedForumPost()
@@ -24,10 +29,17 @@ struct PlatformActivitySectionView: View {
 
     private var activityTabBar: some View {
         ModuleTabBar(
-            items: PlatformActivityTab.allCases,
+            items: orderedTabs,
             selection: $model.selectedPlatformActivityTab,
+            onReorder: { from, to in
+                var arranged = orderedTabs
+                arranged.move(fromOffsets: from, toOffset: to)
+                tabOrderStore.save(arranged.map { $0.rawValue })
+                orderedTabs = arranged
+            },
             title: { $0.rawValue },
-            systemImage: { $0.systemImage }
+            systemImage: { $0.systemImage },
+            trailingContent: { EmptyView() }
         )
     }
 }
