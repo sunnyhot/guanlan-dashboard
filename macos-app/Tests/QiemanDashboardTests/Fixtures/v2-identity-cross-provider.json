@@ -1,0 +1,118 @@
+{
+  "instruments": [
+    {
+      "id": "inst_110022",
+      "issuerID": "ent_efund",
+      "kind": "FUND",
+      "displayName": "易方达消费行业股票",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_600519",
+      "issuerID": "ent_kweichow",
+      "kind": "STOCK",
+      "displayName": "贵州茅台",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": "CNE0000009C6"
+    }
+  ],
+  "listings": [
+    {
+      "id": "list_sh600519",
+      "instrumentID": "inst_600519",
+      "exchange": "SSE",
+      "symbol": "600519",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    }
+  ],
+  "legalEntities": [
+    {
+      "id": "ent_efund",
+      "displayName": "易方达基金管理有限公司",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_kweichow",
+      "displayName": "贵州茅台股份有限公司",
+      "jurisdiction": "CN",
+      "kind": "LISTED_COMPANY",
+      "regulatoryIDs": []
+    }
+  ],
+  "fundProducts": [
+    {
+      "id": "prod_110022",
+      "instrumentID": "inst_110022",
+      "fundType": "OPEN_END",
+      "displayName": "易方达消费行业股票",
+      "regulatoryIDs": [
+        {"scheme": "CSRC_FUND_CODE", "value": "110022"}
+      ]
+    }
+  ],
+  "fundShareClasses": [
+    {
+      "id": "sc_110022_A",
+      "productID": "prod_110022",
+      "instrumentID": "inst_110022_A",
+      "shareClassCode": "A",
+      "displayName": "易方达消费行业股票 A",
+      "feeStructure": {
+        "frontEndLoad": 0.015,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": 0.015,
+        "custodyFee": 0.0025
+      },
+      "regulatoryIDs": [
+        {"scheme": "ISIN", "value": "CN0000110022"}
+      ]
+    }
+  ],
+  "providerIdentifiers": [
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "110022",
+      "canonical": {"fundShareClass": "sc_110022_A"},
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "qieman",
+      "identifierScheme": "prodCode",
+      "identifierValue": "CONSUMER_STOCK",
+      "canonical": {"fundShareClass": "sc_110022_A"},
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600519",
+      "canonical": {"listing": "list_sh600519"},
+      "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "stooq",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600519.SS",
+      "canonical": {"listing": "list_sh600519"},
+      "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
+      "resolvedAt": 1717200000
+    }
+  ],
+  "relationships": null,
+  "dailyBars": null,
+  "navObservations": null,
+  "holdingSnapshots": null,
+  "macroObservations": null,
+  "corporateActions": null
+}

@@ -184,6 +184,12 @@ final class InMemoryRepository: Repository {
         return relationships[instrument] ?? []
     }
 
+    /// 导出所有已登记的 ProviderIdentifier（供 IdentityResolver 构造）。
+    func allProviderIdentifiers() -> [ProviderIdentifier] {
+        lock.lock(); defer { lock.unlock() }
+        return Array(providerIdentifiers.values)
+    }
+
     // MARK: - MarketTimeSeriesRepository
 
     func dailyBars(listingID: ListingID, context: KnowledgeContext) -> [DailyBar] {

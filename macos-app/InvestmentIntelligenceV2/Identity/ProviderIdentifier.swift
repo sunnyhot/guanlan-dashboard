@@ -63,6 +63,43 @@ enum CanonicalRef: Sendable, Codable, Hashable {
         case .fundShareClass(let id): return "fundShareClass:\(id.rawValue)"
         }
     }
+
+    // 自定义 Codable：编码为单键字典 {"fundShareClass": <id>}，
+    // 避免 enum with associated value 合成 Codable 的 `_0` 中间层，
+    // 让 fixture JSON 可读（`{"canonical": {"fundShareClass": "sc_110022_A"}}`）。
+    private enum CodingKeys: String, CodingKey {
+        case legalEntity, instrument, listing, fundProduct, fundShareClass
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let id = try? c.decode(LegalEntityID.self, forKey: .legalEntity) {
+            self = .legalEntity(id)
+        } else if let id = try? c.decode(InstrumentID.self, forKey: .instrument) {
+            self = .instrument(id)
+        } else if let id = try? c.decode(ListingID.self, forKey: .listing) {
+            self = .listing(id)
+        } else if let id = try? c.decode(FundProductID.self, forKey: .fundProduct) {
+            self = .fundProduct(id)
+        } else if let id = try? c.decode(FundShareClassID.self, forKey: .fundShareClass) {
+            self = .fundShareClass(id)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                forKey: c.allKeys.first ?? .legalEntity,
+                in: c,
+                debugDescription: "CanonicalRef: no recognized key"
+            )
+        }
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .legalEntity(let id): try c.encode(id, forKey: .legalEntity)
+        case .instrument(let id): try c.encode(id, forKey: .instrument)
+        case .listing(let id): try c.encode(id, forKey: .listing)
+        case .fundProduct(let id): try c.encode(id, forKey: .fundProduct)
+        case .fundShareClass(let id): try c.encode(id, forKey: .fundShareClass)
+        }
+    }
 }
 
 // MARK: - IdentityResolutionMethod（ADR-DATA001 §13 四路径 + fuzzy）
