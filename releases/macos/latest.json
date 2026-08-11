@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.3/QiemanDashboard-3.16.3.zip",
-    "name" : "QiemanDashboard-3.16.3.zip",
-    "sha256" : "ff9c7bec7db9c0374ddb32190c013c8f48a9a2bb600b685aeec11b81202e059d",
-    "size" : 7051541
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
+    "name" : "QiemanDashboard-4.0.0.zip",
+    "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
+    "size" : 7733719
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v3.16.3/QiemanDashboard-3.16.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-3.16.3.zip",
-      "size" : 7051541
+      "name" : "QiemanDashboard-4.0.0.zip",
+      "size" : 7733719
     }
   ],
-  "body" : "拆分我的关注视图为独立组件文件\n启动解耦趋势分析、修复列表 diff、统一圆角 token\n菜单栏 popover 打开即刷新，5 秒内防抖\nDecisionCaseCard 改用统一 AppActionButtonStyle\niOS 能力补齐 + Core 性能/健壮性优化\nSlice 1 集中度风险完整闭环(投资智能)\nSlice 0 冻结 AI 研判链路行为 + 投资智能 Feature Flag",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v3.16.3",
-  "name" : "QiemanDashboard v3.16.3",
-  "notes" : "拆分我的关注视图为独立组件文件\n启动解耦趋势分析、修复列表 diff、统一圆角 token\n菜单栏 popover 打开即刷新，5 秒内防抖\nDecisionCaseCard 改用统一 AppActionButtonStyle\niOS 能力补齐 + Core 性能/健壮性优化\nSlice 1 集中度风险完整闭环(投资智能)\nSlice 0 冻结 AI 研判链路行为 + 投资智能 Feature Flag",
+  "body" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.0.0",
+  "name" : "QiemanDashboard v4.0.0",
+  "notes" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
   "published_at" : "",
-  "sha256" : "ff9c7bec7db9c0374ddb32190c013c8f48a9a2bb600b685aeec11b81202e059d",
-  "tag" : "v3.16.3",
-  "tag_name" : "v3.16.3",
-  "version" : "3.16.3"
+  "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
+  "tag" : "v4.0.0",
+  "tag_name" : "v4.0.0",
+  "version" : "4.0.0"
 }
