@@ -142,9 +142,9 @@ final class IdentityEntityTests: XCTestCase {
                 managementFee: 0.015,
                 custodyFee: 0.0025
             ),
-            officialCodes: [
-                FundShareClass.OfficialCode(scheme: "eastmoney_6digit", value: "110022")
-            ]
+            // 监管中立标识（ISIN）。Provider 原始代码（天天基金 110022、且慢
+            // prodCode）走 ProviderIdentifier，不进 Canonical（ADR-DATA001 防火墙 1）
+            regulatoryIDs: [RegulatoryID(scheme: "ISIN", value: "CN0000110022")]
         )
         let cClass = FundShareClass(
             id: FundShareClassID(rawValue: "sc_110022_C"),
@@ -159,9 +159,7 @@ final class IdentityEntityTests: XCTestCase {
                 managementFee: 0.015,
                 custodyFee: 0.0025
             ),
-            officialCodes: [
-                FundShareClass.OfficialCode(scheme: "eastmoney_6digit", value: "110023")
-            ]
+            regulatoryIDs: [RegulatoryID(scheme: "ISIN", value: "CN0000110023")]
         )
         // 同一产品
         XCTAssertEqual(aClass.productID, cClass.productID)
@@ -182,12 +180,12 @@ final class IdentityEntityTests: XCTestCase {
             instrumentID: InstrumentID(rawValue: "inst_110022"),
             fundType: .openEnd,
             displayName: "易方达消费行业股票",
-            primaryCode: "110022"
+            regulatoryIDs: [RegulatoryID(scheme: "CSRC_FUND_CODE", value: "110022")]
         )
         let data = try JSONEncoder().encode(product)
         let decoded = try JSONDecoder().decode(FundProduct.self, from: data)
         XCTAssertEqual(product, decoded)
-        XCTAssertEqual(decoded.primaryCode, "110022")
+        XCTAssertEqual(decoded.regulatoryIDs.first?.value, "110022")
     }
 
     func testFundShareClass_codableRoundTrip() throws {
@@ -204,15 +202,50 @@ final class IdentityEntityTests: XCTestCase {
                 managementFee: 0.015,
                 custodyFee: 0.0025
             ),
-            officialCodes: [
-                FundShareClass.OfficialCode(scheme: "eastmoney_6digit", value: "110022"),
-                FundShareClass.OfficialCode(scheme: "qieman_prodCode", value: "SI000192")
+            regulatoryIDs: [
+                RegulatoryID(scheme: "ISIN", value: "CN0000110022"),
+                RegulatoryID(scheme: "CSRC_FUND_CODE", value: "110022"),
             ]
         )
         let data = try JSONEncoder().encode(shareClass)
         let decoded = try JSONDecoder().decode(FundShareClass.self, from: data)
         XCTAssertEqual(shareClass, decoded)
-        XCTAssertEqual(decoded.officialCodes.count, 2)
+        XCTAssertEqual(decoded.regulatoryIDs.count, 2)
+    }
+
+    // MARK: - ADR-DATA001 防火墙 1：Provider 代码不泄漏到 Canonical
+
+    func testCanonicalEntities_doNotCarryProviderCodes() {
+        // FundProduct / FundShareClass 不含 primaryCode / officialCodes 字段。
+        // Provider 原始代码（天天基金 6 位码、且慢 prodCode）只能通过
+        // ProviderIdentifier 表达（见 ProviderIdentifierTests）。
+        let product = FundProduct(
+            id: FundProductID(rawValue: "prod_x"),
+            instrumentID: InstrumentID(rawValue: "inst_x"),
+            fundType: .openEnd,
+            displayName: "X"
+        )
+        let shareClass = FundShareClass(
+            id: FundShareClassID(rawValue: "sc_x"),
+            productID: product.id,
+            instrumentID: product.instrumentID,
+            shareClassCode: "A",
+            displayName: "X A",
+            feeStructure: FundShareClass.FeeStructure(
+                frontEndLoad: nil, backEndLoad: nil,
+                annualSalesFee: nil, managementFee: nil, custodyFee: nil
+            )
+        )
+        // Mirror 检查：字段名里不应出现 "primaryCode" / "officialCodes"
+        let productFieldNames = Mirror(reflecting: product).children.compactMap(\.label)
+        XCTAssertFalse(productFieldNames.contains("primaryCode"),
+                       "FundProduct 不应携带 primaryCode（违反 ADR-DATA001 防火墙 1）")
+        XCTAssertFalse(productFieldNames.contains("officialCodes"))
+
+        let shareClassFieldNames = Mirror(reflecting: shareClass).children.compactMap(\.label)
+        XCTAssertFalse(shareClassFieldNames.contains("officialCodes"),
+                       "FundShareClass 不应携带 officialCodes（违反 ADR-DATA001 防火墙 1）")
+        XCTAssertFalse(shareClassFieldNames.contains("primaryCode"))
     }
 
     // MARK: - Sendable across actor
@@ -249,8 +282,7 @@ final class IdentityEntityTests: XCTestCase {
             feeStructure: FundShareClass.FeeStructure(
                 frontEndLoad: nil, backEndLoad: nil,
                 annualSalesFee: nil, managementFee: nil, custodyFee: nil
-            ),
-            officialCodes: []
+            )
         )
         _ = await receiver.receiveInstrument(instrument)
         _ = await receiver.receiveListing(listing)

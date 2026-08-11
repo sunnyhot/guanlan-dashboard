@@ -109,53 +109,81 @@ enum IdentityResolutionMethod: String, Sendable, Codable, Hashable, CaseIterable
 // 4 类关系：ETF→Index（跟踪）/ ShareClass→Product（归属）/ Stock→Entity（发行）/
 // ADR→Stock（存托）。
 
-/// 两个 Instrument 之间的显式关系。
-struct InstrumentRelationship: Sendable, Codable, Hashable {
-    let id: DomainID
-    /// 关系类型
-    let kind: RelationshipKind
-    /// 源 Instrument（如 ETF）
-    let fromInstrumentID: InstrumentID
-    /// 目标 Instrument（如被跟踪的 Index）
-    let toInstrumentID: InstrumentID
-    /// 关系强度（如跟踪误差、A/C 类的归属比例，部分关系无值）
-    let strength: Decimal?
-    /// 建立此关系的来源（manual / provider / derived）
-    let provenance: RelationshipProvenance
+/// 两个 Canonical 实体之间的显式关系（ADR-DATA001 §14）。
+///
+/// 用 enum with associated values 让每类关系的端点类型在编译期固定，
+/// 避免「ShareClass→Product」或「Instrument→LegalEntity」被错误地用
+/// InstrumentID 表达。每类关系携带正确的源/目标 ID 类型。
+enum InstrumentRelationship: Sendable, Codable, Hashable {
+    case tracksIndex(TracksIndex)
+    case shareClassOf(ShareClassOf)
+    case issuedBy(IssuedBy)
+    case adrUnderlying(ADRUnderlying)
 
-    init(
-        id: DomainID,
-        kind: RelationshipKind,
-        fromInstrumentID: InstrumentID,
-        toInstrumentID: InstrumentID,
-        strength: Decimal? = nil,
-        provenance: RelationshipProvenance
-    ) {
-        self.id = id
-        self.kind = kind
-        self.fromInstrumentID = fromInstrumentID
-        self.toInstrumentID = toInstrumentID
-        self.strength = strength
-        self.provenance = provenance
+    /// 关系实例的唯一 ID（便于在 Repository 中索引 / 引用）。
+    var id: DomainID {
+        switch self {
+        case .tracksIndex(let r): return r.id
+        case .shareClassOf(let r): return r.id
+        case .issuedBy(let r): return r.id
+        case .adrUnderlying(let r): return r.id
+        }
     }
 
-    /// 关系类型（ADR-DATA001 §14）。
-    enum RelationshipKind: String, Sendable, Codable, Hashable, CaseIterable {
-        /// ETF 跟踪指数（如「沪深300ETF」→「沪深300指数」）
-        case tracksIndex = "TRACKS_INDEX"
-        /// 份额类别归属产品（如「易方达消费 A」→「易方达消费产品」）
-        case shareClassOf = "SHARE_CLASS_OF"
-        /// 股票归属发行人（Instrument → LegalEntity 通过 Instrument.issuerID
-        /// 隐含，但跨 Instrument 的「同一发行人多只股票」用此关系）
-        case sameIssuer = "SAME_ISSUER"
-        /// ADR 对应基础股票（海外存托凭证 → 本国市场股票）
-        case adrUnderlying = "ADR_UNDERLYING"
+    /// 建立此关系的来源（manual / provider / derived）。
+    var provenance: RelationshipProvenance {
+        switch self {
+        case .tracksIndex(let r): return r.provenance
+        case .shareClassOf(let r): return r.provenance
+        case .issuedBy(let r): return r.provenance
+        case .adrUnderlying(let r): return r.provenance
+        }
+    }
+
+    /// ETF 跟踪指数（如「沪深300ETF」→「沪深300指数」）。
+    /// 两端都是 InstrumentID（ETF 是 fund/ETF kind，指数是 index kind）。
+    struct TracksIndex: Sendable, Codable, Hashable {
+        let id: DomainID
+        let etf: InstrumentID
+        let index: InstrumentID
+        /// 跟踪紧密度（0-1，部分关系无值）
+        let strength: Decimal?
+        let provenance: RelationshipProvenance
+    }
+
+    /// 份额类别归属产品（如「易方达消费 A」→「易方达消费产品」）。
+    /// 源是 FundShareClassID，目标是 FundProductID（类型不同，编译期保证不混）。
+    struct ShareClassOf: Sendable, Codable, Hashable {
+        let id: DomainID
+        let shareClass: FundShareClassID
+        let product: FundProductID
+        let provenance: RelationshipProvenance
+    }
+
+    /// 股票 / 基金归属发行人（Instrument → LegalEntity）。
+    /// ADR-DATA001 §14 Stock→Entity：目标端是 LegalEntityID 而非 InstrumentID。
+    /// （单只 Instrument 的 issuer 可直接读 Instrument.issuerID，本关系用于
+    /// 跨 Instrument 的「同一发行人多只标的」图查询。）
+    struct IssuedBy: Sendable, Codable, Hashable {
+        let id: DomainID
+        let instrument: InstrumentID
+        let issuer: LegalEntityID
+        let provenance: RelationshipProvenance
+    }
+
+    /// ADR 对应基础股票（海外存托凭证 → 本国市场股票）。
+    /// 两端都是 InstrumentID（ADR instrument → underlying stock instrument）。
+    struct ADRUnderlying: Sendable, Codable, Hashable {
+        let id: DomainID
+        let adr: InstrumentID
+        let underlying: InstrumentID
+        let provenance: RelationshipProvenance
     }
 
     /// 关系来源。
     enum RelationshipProvenance: String, Sendable, Codable, Hashable {
         case manual = "MANUAL"
         case provider = "PROVIDER"
-        case derived = "DERIVED"  // 如从 issuerID 相同推导 sameIssuer
+        case derived = "DERIVED"  // 如从 issuerID 相同推导 issuedBy
     }
 }

@@ -87,55 +87,108 @@ final class ProviderIdentifierTests: XCTestCase {
         ])
     }
 
-    // MARK: - InstrumentRelationship
+    // MARK: - InstrumentRelationship（端点类型化，ADR-DATA001 §14）
 
-    func testInstrumentRelationship_etfTracksIndex() throws {
-        let rel = InstrumentRelationship(
-            id: DomainID(rawValue: "rel_1"),
-            kind: .tracksIndex,
-            fromInstrumentID: InstrumentID(rawValue: "inst_510300_etf"),
-            toInstrumentID: InstrumentID(rawValue: "inst_000300_index"),
-            strength: 0.999,  // 跟踪紧密度
-            provenance: .provider
+    func testInstrumentRelationship_tracksIndex() throws {
+        let rel = InstrumentRelationship.tracksIndex(
+            .init(
+                id: DomainID(rawValue: "rel_1"),
+                etf: InstrumentID(rawValue: "inst_510300_etf"),
+                index: InstrumentID(rawValue: "inst_000300_index"),
+                strength: 0.999,
+                provenance: .provider
+            )
         )
         let data = try JSONEncoder().encode(rel)
         let decoded = try JSONDecoder().decode(InstrumentRelationship.self, from: data)
         XCTAssertEqual(rel, decoded)
-        XCTAssertEqual(decoded.kind, .tracksIndex)
-        XCTAssertEqual(decoded.strength, 0.999)
+        XCTAssertEqual(rel.id, DomainID(rawValue: "rel_1"))
+        XCTAssertEqual(rel.provenance, .provider)
+        if case .tracksIndex(let r) = rel {
+            XCTAssertEqual(r.strength, 0.999)
+            XCTAssertEqual(r.etf, InstrumentID(rawValue: "inst_510300_etf"))
+        } else {
+            XCTFail("expected .tracksIndex")
+        }
     }
 
-    func testInstrumentRelationship_shareClassOf() {
-        let rel = InstrumentRelationship(
-            id: DomainID(rawValue: "rel_2"),
-            kind: .shareClassOf,
-            fromInstrumentID: InstrumentID(rawValue: "inst_110022_A"),
-            toInstrumentID: InstrumentID(rawValue: "inst_110022_product"),
-            provenance: .manual
+    func testInstrumentRelationship_shareClassOf_typedEndpoints() throws {
+        // ShareClass → Product：源是 FundShareClassID，目标是 FundProductID。
+        // 编译期保证不混（审查 P1 修复点）。
+        let rel = InstrumentRelationship.shareClassOf(
+            .init(
+                id: DomainID(rawValue: "rel_2"),
+                shareClass: FundShareClassID(rawValue: "sc_110022_A"),
+                product: FundProductID(rawValue: "prod_110022"),
+                provenance: .manual
+            )
         )
-        XCTAssertNil(rel.strength)  // 归属关系无强度
-        XCTAssertEqual(rel.kind, .shareClassOf)
+        let data = try JSONEncoder().encode(rel)
+        let decoded = try JSONDecoder().decode(InstrumentRelationship.self, from: data)
+        XCTAssertEqual(rel, decoded)
+        XCTAssertEqual(rel.provenance, .manual)
+        guard case .shareClassOf(let r) = rel else {
+            XCTFail("expected .shareClassOf"); return
+        }
+        XCTAssertEqual(r.shareClass, FundShareClassID(rawValue: "sc_110022_A"))
+        XCTAssertEqual(r.product, FundProductID(rawValue: "prod_110022"))
     }
 
-    func testInstrumentRelationship_adrUnderlying() {
-        let rel = InstrumentRelationship(
-            id: DomainID(rawValue: "rel_3"),
-            kind: .adrUnderlying,
-            fromInstrumentID: InstrumentID(rawValue: "inst_baba_adr_us"),
-            toInstrumentID: InstrumentID(rawValue: "inst_baba_hk"),
-            provenance: .provider
+    func testInstrumentRelationship_issuedBy_typedEndpoints() throws {
+        // Instrument → LegalEntity（ADR-DATA001 §14 Stock→Entity）：
+        // 目标端是 LegalEntityID 而非 InstrumentID。
+        let rel = InstrumentRelationship.issuedBy(
+            .init(
+                id: DomainID(rawValue: "rel_3"),
+                instrument: InstrumentID(rawValue: "inst_600519"),
+                issuer: LegalEntityID(rawValue: "ent_kweichow"),
+                provenance: .derived
+            )
         )
-        XCTAssertEqual(rel.kind, .adrUnderlying)
+        let data = try JSONEncoder().encode(rel)
+        let decoded = try JSONDecoder().decode(InstrumentRelationship.self, from: data)
+        XCTAssertEqual(rel, decoded)
+        guard case .issuedBy(let r) = rel else {
+            XCTFail("expected .issuedBy"); return
+        }
+        XCTAssertEqual(r.instrument, InstrumentID(rawValue: "inst_600519"))
+        XCTAssertEqual(r.issuer, LegalEntityID(rawValue: "ent_kweichow"))
     }
 
-    func testRelationshipKind_allCases() {
-        let allRaw = InstrumentRelationship.RelationshipKind.allCases.map(\.rawValue)
-        XCTAssertEqual(allRaw, [
-            "TRACKS_INDEX",
-            "SHARE_CLASS_OF",
-            "SAME_ISSUER",
-            "ADR_UNDERLYING",
-        ])
+    func testInstrumentRelationship_adrUnderlying() throws {
+        let rel = InstrumentRelationship.adrUnderlying(
+            .init(
+                id: DomainID(rawValue: "rel_4"),
+                adr: InstrumentID(rawValue: "inst_baba_adr_us"),
+                underlying: InstrumentID(rawValue: "inst_baba_hk"),
+                provenance: .provider
+            )
+        )
+        let data = try JSONEncoder().encode(rel)
+        let decoded = try JSONDecoder().decode(InstrumentRelationship.self, from: data)
+        XCTAssertEqual(rel, decoded)
+        XCTAssertEqual(rel.id, DomainID(rawValue: "rel_4"))
+    }
+
+    func testInstrumentRelationship_idAccessor_worksForAllCases() {
+        // id 访问器在 4 种 case 上都返回各自内部的 id
+        let r1 = InstrumentRelationship.tracksIndex(
+            .init(id: DomainID(rawValue: "a"), etf: InstrumentID(rawValue: "e"),
+                  index: InstrumentID(rawValue: "i"), strength: nil, provenance: .provider))
+        let r2 = InstrumentRelationship.shareClassOf(
+            .init(id: DomainID(rawValue: "b"), shareClass: FundShareClassID(rawValue: "s"),
+                  product: FundProductID(rawValue: "p"), provenance: .manual))
+        let r3 = InstrumentRelationship.issuedBy(
+            .init(id: DomainID(rawValue: "c"), instrument: InstrumentID(rawValue: "i"),
+                  issuer: LegalEntityID(rawValue: "l"), provenance: .derived))
+        let r4 = InstrumentRelationship.adrUnderlying(
+            .init(id: DomainID(rawValue: "d"), adr: InstrumentID(rawValue: "a"),
+                  underlying: InstrumentID(rawValue: "u"), provenance: .provider))
+        XCTAssertEqual(r1.id, DomainID(rawValue: "a"))
+        XCTAssertEqual(r2.id, DomainID(rawValue: "b"))
+        XCTAssertEqual(r3.id, DomainID(rawValue: "c"))
+        XCTAssertEqual(r4.id, DomainID(rawValue: "d"))
+        XCTAssertEqual(Set([r1.provenance, r2.provenance, r3.provenance, r4.provenance]).count, 3)
     }
 
     // MARK: - 跨 Provider 映射到同一 Canonical（M2 场景 1 预演）

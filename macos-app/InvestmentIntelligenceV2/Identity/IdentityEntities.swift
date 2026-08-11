@@ -193,8 +193,10 @@ struct FundProduct: Sendable, Codable, Hashable {
     let fundType: FundType
     /// 显示名（产品级）
     let displayName: String
-    /// 主代销代码（仅用于显示，业务用 ID）
-    let primaryCode: String?
+    /// 监管中立标识（证监会基金号等，跨 Provider 稳定）。
+    /// Provider 原始代码（如天天基金 6 位码、且慢 prodCode）**不放这里**，
+    /// 统一走 `ProviderIdentifier` 映射（ADR-DATA001 防火墙 1）。
+    let regulatoryIDs: [RegulatoryID]
 
     enum FundType: String, Sendable, Codable, Hashable {
         case openEnd = "OPEN_END"          // 开放式
@@ -210,13 +212,13 @@ struct FundProduct: Sendable, Codable, Hashable {
         instrumentID: InstrumentID,
         fundType: FundType,
         displayName: String,
-        primaryCode: String? = nil
+        regulatoryIDs: [RegulatoryID] = []
     ) {
         self.id = id
         self.instrumentID = instrumentID
         self.fundType = fundType
         self.displayName = displayName
-        self.primaryCode = primaryCode
+        self.regulatoryIDs = regulatoryIDs
     }
 }
 
@@ -236,8 +238,10 @@ struct FundShareClass: Sendable, Codable, Hashable {
     let displayName: String
     /// 费率结构
     let feeStructure: FeeStructure
-    /// 该份额类别的官方代码（如天天基金 6 位码、且慢 prodCode）
-    let officialCodes: [OfficialCode]
+    /// 监管中立标识（ISIN、证监会基金号等）。
+    /// Provider 原始代码（天天基金 6 位码、且慢 prodCode）**不放这里**，
+    /// 统一走 `ProviderIdentifier` 映射（ADR-DATA001 防火墙 1）。
+    let regulatoryIDs: [RegulatoryID]
 
     /// 费率结构（区分 A/C 类的核心）。
     struct FeeStructure: Sendable, Codable, Hashable {
@@ -253,13 +257,6 @@ struct FundShareClass: Sendable, Codable, Hashable {
         let custodyFee: Decimal?
     }
 
-    /// 官方代码（集中声明，用于 IdentityResolver 映射）。
-    struct OfficialCode: Sendable, Codable, Hashable {
-        /// 代码体系（如 "eastmoney_6digit"、"qieman_prodCode"、"csrc_fund_code"）
-        let scheme: String
-        let value: String
-    }
-
     init(
         id: FundShareClassID,
         productID: FundProductID,
@@ -267,7 +264,7 @@ struct FundShareClass: Sendable, Codable, Hashable {
         shareClassCode: String,
         displayName: String,
         feeStructure: FeeStructure,
-        officialCodes: [OfficialCode]
+        regulatoryIDs: [RegulatoryID] = []
     ) {
         self.id = id
         self.productID = productID
@@ -275,6 +272,6 @@ struct FundShareClass: Sendable, Codable, Hashable {
         self.shareClassCode = shareClassCode
         self.displayName = displayName
         self.feeStructure = feeStructure
-        self.officialCodes = officialCodes
+        self.regulatoryIDs = regulatoryIDs
     }
 }
