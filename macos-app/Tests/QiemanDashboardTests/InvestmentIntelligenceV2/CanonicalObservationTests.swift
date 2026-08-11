@@ -185,6 +185,32 @@ final class CanonicalObservationTests: XCTestCase {
         XCTAssertEqual(decoded.unit, .percent)
         XCTAssertEqual(decoded.frequency, .quarterly)
         XCTAssertTrue(decoded.isSeasonallyAdjusted)
+        XCTAssertNil(decoded.basePeriod)   // 百分比指标无基期
+    }
+
+    func testMacroObservation_indexCarriesBasePeriod() throws {
+        // DATA003 §Decision 4：指数 / 链式指标必须保留基期（如 CPI 2020=100），
+        // 否则跨 Provider 规范化会失去关键语义（审查 P2 修复点）。
+        let cpi = MacroObservation(
+            id: ObservationID(rawValue: "obs_cpi_2024_07"),
+            indicatorID: InstrumentID(rawValue: "ind_cpi_us"),
+            temporalEnvelope: envelope,
+            availabilityProvenance: prov,
+            dataQuality: DataQuality(providerReliability: .officialStable),
+            vintage: vintage1,
+            value: Decimal(string: "312.5")!,
+            unit: .index,
+            frequency: .monthly,
+            isSeasonallyAdjusted: true,
+            basePeriod: MacroObservation.MacroBasePeriod(
+                periodLabel: "1982-84=100", baseValue: 100
+            )
+        )
+        let data = try JSONEncoder().encode(cpi)
+        let decoded = try JSONDecoder().decode(MacroObservation.self, from: data)
+        XCTAssertEqual(cpi, decoded)
+        XCTAssertEqual(decoded.basePeriod?.periodLabel, "1982-84=100")
+        XCTAssertEqual(decoded.basePeriod?.baseValue, 100)
     }
 
     // MARK: - CorporateAction

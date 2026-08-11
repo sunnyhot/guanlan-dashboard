@@ -284,6 +284,9 @@ struct MacroObservation: CanonicalObservation {
     let frequency: MacroFrequency
     /// 是否季节调整
     let isSeasonallyAdjusted: Bool
+    /// 基期（DATA003 §Decision 4 要求）。仅 index / 链式指标有意义
+    /// （如 CPI「2020=100」、GDP deflator）。非指数指标（%、USD）留 nil。
+    let basePeriod: MacroBasePeriod?
 
     enum MacroUnit: String, Sendable, Codable, Hashable {
         case percent = "PERCENT"
@@ -302,6 +305,14 @@ struct MacroObservation: CanonicalObservation {
         case annual = "ANNUAL"
     }
 
+    /// 基期（指数 / 链式指标的口径，跨 Provider 规范化必须保留）。
+    struct MacroBasePeriod: Sendable, Codable, Hashable {
+        /// 基期描述（如 "2020" 表示 2020 年均值=100；"2020-01" 表示某月）
+        let periodLabel: String
+        /// 基期对应的值（通常 100）
+        let baseValue: Decimal
+    }
+
     init(
         id: ObservationID,
         indicatorID: InstrumentID,
@@ -312,7 +323,8 @@ struct MacroObservation: CanonicalObservation {
         value: Decimal,
         unit: MacroUnit,
         frequency: MacroFrequency,
-        isSeasonallyAdjusted: Bool
+        isSeasonallyAdjusted: Bool,
+        basePeriod: MacroBasePeriod? = nil
     ) {
         self.id = id
         self.indicatorID = indicatorID
@@ -324,6 +336,7 @@ struct MacroObservation: CanonicalObservation {
         self.unit = unit
         self.frequency = frequency
         self.isSeasonallyAdjusted = isSeasonallyAdjusted
+        self.basePeriod = basePeriod
     }
 }
 

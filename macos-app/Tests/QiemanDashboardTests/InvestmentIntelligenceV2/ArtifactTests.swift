@@ -34,9 +34,10 @@ final class ArtifactTests: XCTestCase {
     }
 
     func testTradingSession_validSameDay() {
+        // 必须带 Exchange，时区按交易所法域推导（审查 P2 修复点）
         let cal = Calendar(identifier: .gregorian)
         let sessionDate = cal.date(from: DateComponents(year: 2024, month: 7, day: 22))!
-        let policy = ValidityPolicy.tradingSession(sessionDate: sessionDate)
+        let policy = ValidityPolicy.tradingSession(exchange: .sse, sessionDate: sessionDate)
         let sameDay = cal.date(byAdding: .hour, value: 10, to: sessionDate)!
         XCTAssertTrue(policy.isStillValid(at: sameDay))
     }
@@ -44,9 +45,24 @@ final class ArtifactTests: XCTestCase {
     func testTradingSession_invalidNextDay() {
         let cal = Calendar(identifier: .gregorian)
         let sessionDate = cal.date(from: DateComponents(year: 2024, month: 7, day: 22))!
-        let policy = ValidityPolicy.tradingSession(sessionDate: sessionDate)
+        let policy = ValidityPolicy.tradingSession(exchange: .sse, sessionDate: sessionDate)
         let nextDay = cal.date(byAdding: .day, value: 1, to: sessionDate)!
         XCTAssertFalse(policy.isStillValid(at: nextDay))
+    }
+
+    func testTradingSession_usesExchangeTimezone() {
+        // 美股交易时段用 America/New_York 时区判断「同一天」。
+        // 同一 UTC 时刻在 Shanghai 是次日、在 New York 仍是当日。
+        // 带 exchange = .nasdaq 时应按 NY 时区判，不会因默认时区误判。
+        var nyCal = Calendar(identifier: .gregorian)
+        nyCal.timeZone = TimeZone(identifier: "America/New_York")!
+        // 2024-07-22 14:00 NY（盘中）= 2024-07-23 02:00 Beijing
+        let sessionDate = nyCal.date(from: DateComponents(
+            year: 2024, month: 7, day: 22, hour: 9, minute: 30))!
+        let policy = ValidityPolicy.tradingSession(exchange: .nasdaq, sessionDate: sessionDate)
+        // 同一交易日 14:00 NY 仍 valid
+        let sameSession = nyCal.date(byAdding: .hour, value: 5, to: sessionDate)!
+        XCTAssertTrue(policy.isStillValid(at: sameSession))
     }
 
     func testImmutableHistorical_alwaysValid() {

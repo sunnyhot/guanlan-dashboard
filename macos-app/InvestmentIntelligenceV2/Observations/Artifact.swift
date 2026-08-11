@@ -29,8 +29,10 @@ enum ValidityPolicy: Sendable, Codable, Hashable {
     case timeBound(validUntil: Date)
     /// 直到依赖变化：任一 dependency 失效则本 Artifact 失效
     case untilDependencyChanges
-    /// 交易时段绑定：本交易时段内有效，下一时段失效
-    case tradingSession(sessionDate: Date)
+    /// 交易时段绑定：本交易时段内有效，下一时段失效。
+    /// 必须带 Exchange（含 jurisdiction / timezone），避免裸 Date 在不同时区
+    /// 下判断错误（审查 P2 修复点）。
+    case tradingSession(exchange: Exchange, sessionDate: Date)
     /// 不可变历史：历史 Artifact 永不失效（如已发生的归因报告）
     case immutableHistorical
     /// 组合：多个条件任一满足即失效
@@ -44,15 +46,27 @@ enum ValidityPolicy: Sendable, Codable, Hashable {
         case .untilDependencyChanges:
             // 粗粒度：时间维度永远 valid，精确需查 dependency 是否变化
             return true
-        case .tradingSession(let sessionDate):
-            // 同一交易日内有效（简化：当日 00:00 ~ 次日 00:00）
-            let cal = Calendar(identifier: .gregorian)
+        case .tradingSession(let exchange, let sessionDate):
+            // 用交易所所在法域的时区判断「同一交易日」，避免裸 Calendar 默认时区
+            // 在跨时区场景下把同一 A 股 / 美股交易时段误判（审查 P2 修复点）。
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = Self.timeZone(for: exchange.jurisdiction)
             return cal.isDate(queryAt, inSameDayAs: sessionDate)
         case .immutableHistorical:
             return true
         case .composite(let policies):
             // 任一失效即失效
             return policies.allSatisfy { $0.isStillValid(at: queryAt) }
+        }
+    }
+
+    /// 法域对应的交易所时区。
+    private static func timeZone(for jurisdiction: Jurisdiction) -> TimeZone {
+        switch jurisdiction {
+        case .chinaMainland: return TimeZone(identifier: "Asia/Shanghai")!
+        case .hongKong: return TimeZone(identifier: "Asia/Hong_Kong")!
+        case .unitedStates: return TimeZone(identifier: "America/New_York")!
+        case .platform: return TimeZone.current
         }
     }
 }
