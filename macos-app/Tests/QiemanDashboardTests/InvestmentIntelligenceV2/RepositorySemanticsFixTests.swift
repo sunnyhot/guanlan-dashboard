@@ -268,4 +268,77 @@ final class RepositorySemanticsFixTests: XCTestCase {
             .fundShareClass(FundShareClassID(rawValue: "sc_110022_A"))
         )
     }
+
+    // MARK: - upsert 幂等（审查 P2 修复点）
+
+    func testUpsert_listing_isIdempotent() {
+        // 同一 listing 多次 upsert 不应在 instrumentsToListings 索引产生重复
+        let repo = makeRepo()
+        let listing = Listing(
+            id: ListingID(rawValue: "list_x"),
+            instrumentID: InstrumentID(rawValue: "inst_x"),
+            exchange: .sse, symbol: "X", tradingCurrency: .cny
+        )
+        repo.upsert(listing)
+        repo.upsert(listing)
+        repo.upsert(listing)
+
+        XCTAssertEqual(repo.listings(forInstrument: InstrumentID(rawValue: "inst_x")).count, 1)
+    }
+
+    func testUpsert_observation_isIdempotent() {
+        // 同一 observation（同 id）多次 upsert 应替换而非追加
+        let repo = makeRepo()
+        let d718 = date(2024, 7, 18)
+        let d719 = date(2024, 7, 19)
+        let env = TemporalEnvelope(
+            effectiveAt: d718, publishedAt: d718,
+            availableAt: d719, ingestedAt: d719
+        )
+        let p = { (v: Decimal) -> Price in Price(value: v, currency: .cny) }
+        let mkBar: (Decimal) -> DailyBar = { close in
+            DailyBar(
+                id: ObservationID(rawValue: "bar_1"),   // 固定 id
+                listingID: ListingID(rawValue: "L"),
+                temporalEnvelope: env,
+                availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: d718),
+                dataQuality: .from(.officialStable),
+                vintage: Vintage(announcementDate: d719, publisherVersion: 1),
+                rawOpen: p(100), rawHigh: p(101), rawLow: p(99), rawClose: p(close),
+                volume: 1000, adjustmentFactor: 1.0
+            )
+        }
+        repo.upsert(mkBar(100))
+        repo.upsert(mkBar(101))   // 同 id，应替换
+        repo.upsert(mkBar(102))   // 同 id，应替换
+
+        let bars = repo.dailyBars(
+            listingID: ListingID(rawValue: "L"),
+            context: .economicKnowledge(asOf: date(2024, 9, 1))
+        )
+        XCTAssertEqual(bars.count, 1, "同 id observation 多次 upsert 应替换，不应追加")
+        XCTAssertEqual(bars.first?.rawClose.value, 102)   // 最后一次的值
+    }
+
+    func testUpsert_fixtureReloadDoesNotDuplicate() throws {
+        // 重复加载 fixture 不应产生重复条目（REPO-3 fixture 多次 load 的幂等性）
+        let bundle = Bundle.module
+        let loadOnce = try InMemoryRepository.loadFromTestsBundle(
+            name: "v2-identity-cross-provider", calendarBackend: WeekdayCalendar(), bundle: bundle
+        )
+        // 再加载一次到同一 repo
+        let fixtureData = try Data(contentsOf: bundle.url(
+            forResource: "v2-identity-cross-provider", withExtension: "json", subdirectory: "Fixtures"
+        )!)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let fixture = try decoder.decode(RepositoryFixture.self, from: fixtureData)
+        loadOnce.load(fixture)
+
+        // instruments 不应有重复（按 id 字典天然去重）
+        XCTAssertNotNil(loadOnce.instrument(InstrumentID(rawValue: "inst_110022")))
+        // listings forInstrument 不应有重复条目
+        let listings = loadOnce.listings(forInstrument: InstrumentID(rawValue: "inst_600519"))
+        XCTAssertEqual(listings.count, 1, "重复加载 fixture 不应在 instrumentsToListings 索引产生重复")
+    }
 }

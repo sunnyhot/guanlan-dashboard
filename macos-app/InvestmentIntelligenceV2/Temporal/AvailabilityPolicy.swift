@@ -182,9 +182,11 @@ enum AvailabilityPolicyV1 {
             let decodedID = try c.decode(String.self, forKey: .policyID)
             let decodedVersion = try c.decode(String.self, forKey: .version)
             let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedProvenance = try c.decode(AvailabilityPolicyProvenance.self, forKey: .provenance)
             let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
             guard decodedID == "fund_nav", decodedVersion == "v1",
                   decodedKind == .fundNAV,
+                  decodedProvenance == .manual,   // 审查 P2：provenance 必须匹配，防静默重置
                   decodedRule == AvailabilityRule(
                       base: .effectiveAt, offset: .init(tradingDays: 1),
                       jurisdictionSource: .fixed(.chinaMainland)
@@ -194,8 +196,7 @@ enum AvailabilityPolicyV1 {
                     policyID: decodedID, version: decodedVersion
                 )
             }
-            // policyID/version/applicableKind/provenance 是常量（保留默认值）；
-            // rule 是唯一非常量字段，从解码值取
+            // 所有字段都是常量，校验通过后保留默认值；rule 从解码值取
             rule = decodedRule
         }
         func encode(to encoder: Encoder) throws {
@@ -232,9 +233,11 @@ enum AvailabilityPolicyV1 {
             let decodedID = try c.decode(String.self, forKey: .policyID)
             let decodedVersion = try c.decode(String.self, forKey: .version)
             let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedProvenance = try c.decode(AvailabilityPolicyProvenance.self, forKey: .provenance)
             let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
             guard decodedID == "market_close", decodedVersion == "v1",
                   decodedKind == .marketClose,
+                  decodedProvenance == .manual,   // 审查 P2：provenance 必须匹配
                   decodedRule == AvailabilityRule(
                       base: .effectiveAt, offset: .init(tradingDays: 1),
                       jurisdictionSource: .fromListing
@@ -280,9 +283,11 @@ enum AvailabilityPolicyV1 {
             let decodedID = try c.decode(String.self, forKey: .policyID)
             let decodedVersion = try c.decode(String.self, forKey: .version)
             let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedProvenance = try c.decode(AvailabilityPolicyProvenance.self, forKey: .provenance)
             let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
             guard decodedID == "fund_disclosure", decodedVersion == "v1",
                   decodedKind == .fundDisclosure,
+                  decodedProvenance == .manual,   // 审查 P2：provenance 必须匹配
                   decodedRule == AvailabilityRule(
                       base: .publishedAt, offset: .init(tradingDays: 1),
                       jurisdictionSource: .fromListing

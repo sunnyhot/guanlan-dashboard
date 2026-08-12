@@ -70,8 +70,17 @@ final class M2AcceptanceTests: XCTestCase {
         XCTAssertEqual(emRef, qmRef)
         XCTAssertEqual(emRef, .fundShareClass(FundShareClassID(rawValue: "sc_110022_A")))
         // 背后的 ShareClass / Product / Instrument 可查
-        XCTAssertEqual(repo.fundShareClass(FundShareClassID(rawValue: "sc_110022_A"))?.shareClassCode, "A")
+        let shareClass = repo.fundShareClass(FundShareClassID(rawValue: "sc_110022_A"))
+        XCTAssertEqual(shareClass?.shareClassCode, "A")
         XCTAssertEqual(repo.fundProduct(FundProductID(rawValue: "prod_110022"))?.displayName, "易方达消费行业股票")
+        // 审查 P2：FundShareClass.instrumentID 指向的 Instrument 必须存在（不能断链）
+        XCTAssertNotNil(shareClass?.instrumentID)
+        let shareClassInstrumentID = shareClass!.instrumentID
+        XCTAssertNotNil(repo.instrument(shareClassInstrumentID),
+                        "FundShareClass.instrumentID 必须在 instruments 中存在，不能断链")
+        // 两个 Provider 跨代码最终能追溯到同一 ShareClass InstrumentID
+        // （M2 场景 1 文档要求验证同一 InstrumentID）
+        XCTAssertEqual(shareClassInstrumentID, InstrumentID(rawValue: "inst_110022_A"))
     }
 
     // MARK: - M2 场景 2：股票跨 Provider 同一 ListingID

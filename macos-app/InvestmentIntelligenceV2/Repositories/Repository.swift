@@ -20,6 +20,13 @@ import Foundation
 // - 缺口段返回空数组 / nil，不返回默认值或 0（ADR-DATA006）
 
 // MARK: - Identity 域
+//
+// Identity / Calendar 域是 **PIT 例外**（ADR-DATA002 §Decision 3a）：
+// 这些实体的定义本身是 timeless 的（Instrument 的发行人、Listing 的交易所、
+// 法域的节假日历），不随 effectiveAt 变化。Identity 的「修订」走新 InstrumentID
+// （而非新 vintage），Calendar 是静态参考数据。因此这些 API 不带 KnowledgeContext。
+// 若未来某 Identity 字段需要历史追溯（如变更过交易所的 Listing），会另立
+// 带版本号的实体，而非给本协议加 context。
 
 /// Instrument / Listing / LegalEntity / FundProduct / FundShareClass 查询。
 protocol InstrumentRepository: Sendable {

@@ -1,14 +1,22 @@
 import Foundation
 
-// MARK: - IdentityResolver（REPO-4，ADR-DATA001 §13 四路径 + fuzzy）
+// MARK: - IdentityResolver（REPO-4，ADR-DATA001 §13）
 //
-// 给定 Provider 代码，解析到 Canonical。4 条正式映射路径按优先级：
-// 1. providerAuthoritative：Provider 自带官方 cross-ref
-// 2. exchangeSymbolExact：交易所 + symbol 精确匹配
-// 3. isinOrCik：ISIN / CIK 全局唯一标识
-// 4. manualVerified：人工审核登记
-// fuzzy 匹配只产 candidate，必须经 Verification 才能写入 Canonical
-//（ADR-DATA001 §Decision 3：fuzzy 不直接写 canonical）。
+// 给定 Provider 代码，解析到 Canonical。
+//
+// **设计边界**（ADR-DATA001 §Decision 3 明确）：4 条正式映射路径
+// （providerAuthoritative / exchangeSymbolExact / isinOrCik / manualVerified）
+// 是 IdentitySync（SYNC-8）在 **登记** 一条 ProviderIdentifier 时使用的
+// 匹配方法，匹配成功后记为 resolutionMethod 元数据。IdentityResolver 是
+// **lookup 层**，只按 (provider, scheme, value) 查已登记映射 + 校验
+// isAuthoritative，**不在查询时重新执行匹配算法**。
+//
+// 这样职责清晰：建立时做重匹配（耗时可接受），查询时只查表（高频路径快）。
+// Resolver 不实现 4 路径运行时匹配是有意设计，非缺陷。
+//
+// fuzzy 匹配只产 candidate（resolutionMethod = .fuzzyCandidate），必须经
+// Verification 才能写入 Canonical。resolve 对 fuzzy 返回 .candidates 而非
+// .resolved（防火墙 1，ADR-DATA001 §Decision 3）。
 
 /// IdentityResolver 的解析结果。
 enum IdentityResolution: Sendable, Hashable {

@@ -58,7 +58,11 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     func upsert(_ listing: Listing) -> Self {
         lock.lock(); defer { lock.unlock() }
         listings[listing.id] = listing
-        instrumentsToListings[listing.instrumentID, default: []].append(listing.id)
+        // 幂等：只在首次登记时追加到 instrument→listings 索引（重复 upsert 同一
+        // listing 不产生重复条目，审查 P2 修复点）
+        var ids = instrumentsToListings[listing.instrumentID, default: []]
+        if !ids.contains(listing.id) { ids.append(listing.id) }
+        instrumentsToListings[listing.instrumentID] = ids
         return self
     }
 
@@ -111,36 +115,60 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ bar: DailyBar) -> Self {
         lock.lock(); defer { lock.unlock() }
-        dailyBars[bar.listingID, default: []].append(bar)
+        dailyBars[bar.listingID, default: []] = Self.upsertObservation(
+            dailyBars[bar.listingID, default: []], bar
+        )
         return self
     }
 
     @discardableResult
     func upsert(_ nav: NAVObservation) -> Self {
         lock.lock(); defer { lock.unlock() }
-        navObservations[nav.shareClassID, default: []].append(nav)
+        navObservations[nav.shareClassID, default: []] = Self.upsertObservation(
+            navObservations[nav.shareClassID, default: []], nav
+        )
         return self
     }
 
     @discardableResult
     func upsert(_ snapshot: FundHoldingSnapshot) -> Self {
         lock.lock(); defer { lock.unlock() }
-        holdingSnapshots[snapshot.productID, default: []].append(snapshot)
+        holdingSnapshots[snapshot.productID, default: []] = Self.upsertObservation(
+            holdingSnapshots[snapshot.productID, default: []], snapshot
+        )
         return self
     }
 
     @discardableResult
     func upsert(_ macro: MacroObservation) -> Self {
         lock.lock(); defer { lock.unlock() }
-        macroObservations[macro.indicatorID, default: []].append(macro)
+        macroObservations[macro.indicatorID, default: []] = Self.upsertObservation(
+            macroObservations[macro.indicatorID, default: []], macro
+        )
         return self
     }
 
     @discardableResult
     func upsert(_ action: CorporateAction) -> Self {
         lock.lock(); defer { lock.unlock() }
-        corporateActions[action.listingID, default: []].append(action)
+        corporateActions[action.listingID, default: []] = Self.upsertObservation(
+            corporateActions[action.listingID, default: []], action
+        )
         return self
+    }
+
+    /// 幂等 upsert helper：按 observation.id 替换已存在的同 id 条目，
+    /// 否则追加。重复 upsert 同一条 observation 不会产生重复（审查 P2 修复点）。
+    private static func upsertObservation<T: CanonicalObservation>(
+        _ existing: [T], _ observation: T
+    ) -> [T] {
+        var result = existing
+        if let idx = result.firstIndex(where: { $0.id == observation.id }) {
+            result[idx] = observation
+        } else {
+            result.append(observation)
+        }
+        return result
     }
 
     // MARK: - InstrumentRepository

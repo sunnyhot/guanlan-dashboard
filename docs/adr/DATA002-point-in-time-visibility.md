@@ -36,7 +36,8 @@
    - `operationalKnowledge(asOf: T)`：本机实际已知——返回同时满足 `availableAt ≤ T` **且** `ingestedAt ≤ T` 的观测。用于实时 UI / 历史界面还原「当时 App 实际能给用户看什么」，承认本机可能滞后于客观可知
    - `exactSnapshot(at: T)`：精确 vintage 查询——返回 `effectiveAt = T` 的所有 vintage（DATA008 revision 场景用）
 
-3. **Repository API 强制入参**（REPO-1）：每个 Repository 方法签名必须带 `KnowledgeContext`，不允许「无上下文查询」存在。没有 `KnowledgeContext` 入参的查询通不过协议审查。
+3. **Repository API 强制入参**（REPO-1）：每个 Observation 类 Repository 方法签名必须带 `KnowledgeContext`，不允许「无上下文查询」存在。没有 `KnowledgeContext` 入参的 Observation 查询通不过协议审查。
+   - **例外（Identity / Calendar 域）**：`InstrumentRepository`（Instrument / Listing / LegalEntity / FundProduct / FundShareClass 查询）和 `CalendarRepository`（交易日历）**不带 KnowledgeContext**。这些实体的定义本身是 timeless 的（Instrument 的发行人、Listing 的交易所、法域节假日历），不随 effectiveAt 变化。Identity 的「修订」走新 InstrumentID（而非新 vintage），Calendar 是静态参考数据。若未来某 Identity 字段需要历史追溯（如变更过交易所的 Listing），会另立带版本号的实体，而非给本协议加 context。此例外在 REPO-1 协议注释 + 本 ADR 显式声明，PR 审查不再就 Identity / Calendar 缺 context 提异议。
 
 4. **availableAt 与 ingestedAt 解耦**：`TemporalEnvelope.validate()` 只校验客观事件链 `effectiveAt ≤ publishedAt ≤ availableAt`，**不校验 `availableAt ≤ ingestedAt`**。两个语义不同的时间戳由不同 query mode 分别消费：economicKnowledge 只看 availableAt，operationalKnowledge 同时看两者。
 

@@ -253,7 +253,7 @@ final class InMemoryRepositoryTests: XCTestCase {
 
         let mkSnap: (Vintage, Decimal) -> FundHoldingSnapshot = { vintage, total in
             FundHoldingSnapshot(
-                id: ObservationID(rawValue: "snap_\(vintage.publisherVersion)"),
+                id: ObservationID(rawValue: "snap_\(Int(vintage.announcementDate.timeIntervalSince1970))"),
                 productID: productID,
                 temporalEnvelope: TemporalEnvelope(
                     effectiveAt: eff, publishedAt: vintage.announcementDate,

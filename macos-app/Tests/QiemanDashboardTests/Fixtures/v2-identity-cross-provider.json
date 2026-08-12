@@ -10,6 +10,15 @@
       "isin": null
     },
     {
+      "id": "inst_110022_A",
+      "issuerID": "ent_efund",
+      "kind": "FUND",
+      "displayName": "易方达消费行业股票 A",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
       "id": "inst_600519",
       "issuerID": "ent_kweichow",
       "kind": "STOCK",

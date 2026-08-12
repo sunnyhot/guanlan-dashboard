@@ -44,6 +44,13 @@
    3. ISIN / CIK（全球/监管唯一标识）
    4. Manual verified（人工审核登记）
    - **Fuzzy 匹配只产 candidate**，必须经 `Verification` 流程才能写入 Canonical。Fuzzy 不允许直接产生最终映射。
+   - **路径是「建立时」算法，不是「查询时」算法**：4 条路径描述 IdentitySync
+     （SYNC-8）在登记一条 `ProviderIdentifier` 时使用的匹配方法，匹配成功后
+     记为 `resolutionMethod` 元数据。`IdentityResolver`（REPO-4）是 lookup 层，
+     只按 `(provider, scheme, value)` 查已登记映射 + 校验 `resolutionMethod.isAuthoritative`，
+     不在查询时重新执行匹配。这样职责清晰：建立时做重匹配（耗时可接受），
+     查询时只查表（高频路径快）。Resolver 不实现 4 路径运行时匹配是有意设计，
+     非缺陷。
 
 4. **关系显式建模**（DOM-3）：ETF→Index（跟踪）、ShareClass→Product（归属）、Stock→Entity（发行）、ADR→Stock（存托），通过 `InstrumentRelationship` 表达，不靠命名约定推断。
 

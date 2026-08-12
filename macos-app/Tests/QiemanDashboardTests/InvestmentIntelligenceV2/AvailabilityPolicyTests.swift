@@ -352,6 +352,28 @@ final class AvailabilityPolicyTests: XCTestCase {
         XCTAssertEqual(p, decoded)
     }
 
+    // MARK: - Codable 验证 provenance（审查 P2 修复点）
+
+    func testCodable_rejectsTamperedProvenance() throws {
+        // 篡改 provenance（从 .manual 改成 .regulation）应抛错，而非静默重置为 .manual
+        let data = try mutatedJSON(AvailabilityPolicyV1.FundNAV()) { dict in
+            dict["provenance"] = "REGULATION"
+        }
+        XCTAssertThrowsError(try JSONDecoder().decode(AvailabilityPolicyV1.FundNAV.self, from: data)) { err in
+            // provenance 不匹配应抛 identityMismatch
+            XCTAssertNotNil(err as? AvailabilityPolicyDecodeError, "got \(err)")
+        }
+    }
+
+    func testCodable_rejectsMissingProvenance() throws {
+        // 缺失 provenance 字段应抛错（不能静默用默认值）
+        let correct = AvailabilityPolicyV1.FundNAV()
+        var dict = try JSONSerialization.jsonObject(with: JSONEncoder().encode(correct)) as! [String: Any]
+        dict.removeValue(forKey: "provenance")
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        XCTAssertThrowsError(try JSONDecoder().decode(AvailabilityPolicyV1.FundNAV.self, from: data))
+    }
+
     // MARK: - 辅助
 
     private func makeDate(_ y: Int, _ m: Int, _ d: Int) -> Date {
