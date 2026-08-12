@@ -23,6 +23,16 @@ struct EastmoneyNAVHistory: Sendable, Hashable {
     let fundName: String
     /// 单位净值序列（按时间升序，date 已归一化到 Asia/Shanghai 交易日界）
     let entries: [Entry]
+    /// 解析过程中因格式异常被丢弃的行数（审查 P2：让调用方能审计静默丢弃，
+    /// 默认 0；大量丢弃提示 schema 漂移）
+    let droppedMalformedCount: Int
+
+    init(fundCode: String, fundName: String, entries: [Entry], droppedMalformedCount: Int = 0) {
+        self.fundCode = fundCode
+        self.fundName = fundName
+        self.entries = entries
+        self.droppedMalformedCount = droppedMalformedCount
+    }
 
     struct Entry: Sendable, Hashable {
         /// 净值日期（**归一化到 Asia/Shanghai 00:00**，审查 P1：避免 pingzhongdata
@@ -34,6 +44,18 @@ struct EastmoneyNAVHistory: Sendable, Hashable {
         let changePct: Double?
         /// 累计净值（Data_ACWorthTrend / LJJZ 提供；缺失为 nil，不伪造）
         let accumulatedNAV: Double?
+
+        /// 字段级合并：以 self 为基准，用 other 填补 self 的 nil 字段。
+        /// 用于 pingzhongdata 与 LSJZ 同日条目合并（审查 P1：避免整条丢弃导致
+        /// LSJZ 的 LJJZ 在 ping 缺 accumulatedNAV 时丢失）。
+        func mergingFields(from other: EastmoneyNAVHistory.Entry) -> EastmoneyNAVHistory.Entry {
+            EastmoneyNAVHistory.Entry(
+                date: date,
+                unitNAV: unitNAV,
+                changePct: changePct ?? other.changePct,
+                accumulatedNAV: accumulatedNAV ?? other.accumulatedNAV
+            )
+        }
     }
 }
 
@@ -42,6 +64,8 @@ enum EastmoneyParseError: Error, Equatable, Sendable {
     case missingNetWorthTrend
     /// Data_netWorthTrend 数组存在但 JSON 解析失败（schema 漂移，审查 P1：不静默吞）
     case netWorthTrendDecodeFailed(detail: String)
+    /// Data_ACWorthTrend 变量存在但 JSON 解析失败（审查 P2：区分 missing 与 malformed）
+    case accumulatedTrendDecodeFailed(detail: String)
     /// lsjz JSON 结构异常
     case invalidLSJZ(detail: String)
     /// 响应体为空
@@ -97,16 +121,24 @@ struct EastmoneyResponseParser: Sendable {
             throw EastmoneyParseError.netWorthTrendDecodeFailed(detail: "\(error)")
         }
 
-        // Data_ACWorthTrend（累计净值历史，可选——缺失时 accumulatedNAV 为 nil）
+        // Data_ACWorthTrend（累计净值历史）。审查 P2：区分 missing 与 malformed——
+        // 变量不存在（extractJSArrayVar 返回 nil）→ 合法缺口，accumulatedNAV 留 nil；
+        // 变量存在但 decode 失败 → schema 漂移，抛 accumulatedTrendDecodeFailed。
         var accumulatedByDay: [Date: Double] = [:]
-        if let acJSON = extractJSArrayVar(body, name: "Data_ACWorthTrend"),
-           let acData = acJSON.data(using: .utf8) {
+        if let acJSON = extractJSArrayVar(body, name: "Data_ACWorthTrend") {
+            guard let acData = acJSON.data(using: .utf8) else {
+                throw EastmoneyParseError.accumulatedTrendDecodeFailed(detail: "ACWorthTrend not utf8")
+            }
             struct RawAC: Decodable { let x: Double; let y: Double }
-            if let acEntries = try? JSONDecoder().decode([RawAC].self, from: acData) {
-                for ac in acEntries {
-                    let day = Self.normalizeToTradingDay(Date(timeIntervalSince1970: ac.x / 1000.0))
-                    accumulatedByDay[day] = ac.y
-                }
+            let acEntries: [RawAC]
+            do {
+                acEntries = try JSONDecoder().decode([RawAC].self, from: acData)
+            } catch {
+                throw EastmoneyParseError.accumulatedTrendDecodeFailed(detail: "\(error)")
+            }
+            for ac in acEntries {
+                let day = Self.normalizeToTradingDay(Date(timeIntervalSince1970: ac.x / 1000.0))
+                accumulatedByDay[day] = ac.y
             }
         }
 
@@ -164,20 +196,33 @@ struct EastmoneyResponseParser: Sendable {
         dateFormatter.dateFormat = "yyyy-MM-dd"
         dateFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
 
-        let entries: [EastmoneyNAVHistory.Entry] = resp.Data.LSJZList.compactMap { e in
+        // 审查 P2：compactMap 会静默删除格式异常的行，改为显式计数。
+        // 个别行异常可能是边缘数据（保留 + 计入 droppedMalformedCount）；
+        // 全部行都异常视为整体 schema 失败（抛错）。
+        var entries: [EastmoneyNAVHistory.Entry] = []
+        var dropped = 0
+        for e in resp.Data.LSJZList {
             guard let parsedDate = dateFormatter.date(from: e.FSRQ),
                   let nav = Double(e.DWJZ)
-            else { return nil }
-            // 归一化到 Asia/Shanghai 交易日界（审查 P1：与 pingzhongdata 统一）
+            else {
+                dropped += 1
+                continue
+            }
             let day = Self.normalizeToTradingDay(parsedDate)
-            return EastmoneyNAVHistory.Entry(
+            entries.append(EastmoneyNAVHistory.Entry(
                 date: day,
                 unitNAV: nav,
                 changePct: e.JZZZL.flatMap { Double($0) }.map { $0 / 100.0 },
-                accumulatedNAV: e.LJJZ.flatMap(Double.init)   // 真实累计净值，缺失为 nil
-            )
+                accumulatedNAV: e.LJJZ.flatMap(Double.init)
+            ))
         }
-        return EastmoneyNAVHistory(fundCode: fundCode, fundName: fundCode, entries: entries)
+        if !resp.Data.LSJZList.isEmpty && entries.isEmpty {
+            throw EastmoneyParseError.invalidLSJZ(detail: "all \(resp.Data.LSJZList.count) LSJZList entries malformed")
+        }
+        return EastmoneyNAVHistory(
+            fundCode: fundCode, fundName: fundCode,
+            entries: entries, droppedMalformedCount: dropped
+        )
     }
 
     // MARK: - ProviderRecord 转换

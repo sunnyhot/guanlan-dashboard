@@ -262,4 +262,111 @@ final class RealProviderChainTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Data_ACWorthTrend missing vs malformed（审查 P2）
+
+    func testPingzhongdata_missingACWorthTrend_isLegitimateGap() throws {
+        // Data_ACWorthTrend 变量不存在 → 合法缺口，accumulatedNAV 留 nil，不抛错
+        let parser = EastmoneyResponseParser()
+        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];"#
+        let history = try parser.parsePingzhongdata(body, fundCode: "110022")
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertNil(history.entries[0].accumulatedNAV, "缺 Data_ACWorthTrend 时 accumulatedNAV 应为 nil（合法缺口）")
+    }
+
+    func testPingzhongdata_malformedACWorthTrend_throws() {
+        // Data_ACWorthTrend 变量存在但格式坏 → schema 漂移，抛 accumulatedTrendDecodeFailed，
+        // 不静默降级为 nil（审查 P2）
+        let parser = EastmoneyResponseParser()
+        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}]; var Data_ACWorthTrend = [{bad}];"#
+        XCTAssertThrowsError(try parser.parsePingzhongdata(body, fundCode: "110022")) { err in
+            if case .accumulatedTrendDecodeFailed = err as? EastmoneyParseError {
+                // ok
+            } else {
+                XCTFail("expected accumulatedTrendDecodeFailed, got \(err)")
+            }
+        }
+    }
+
+    // MARK: - 字段级合并（审查 P1：LSJZ 的 LJJZ 填补 ping 缺失的 accumulatedNAV）
+
+    func testMerge_pingMissingAccumulated_lsjzFillsIt() async throws {
+        // 构造 pingzhongdata 无 Data_ACWorthTrend（accumulatedNAV 全 nil），
+        // LSJZ 有 LJJZ。字段级合并应让合并结果的 accumulatedNAV 来自 LSJZ。
+        let pingBody = """
+        var fS_name = "测试";
+        var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];
+        """
+        let lsjzBody = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-18","DWJZ":"3.5000","JZZZL":"1.20","LJJZ":"4.20"}]}}
+        """
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { d723 }
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        // 合并后 1 条（同日），不应因 ping 缺 AC 而丢 LSJZ 的 LJJZ
+        XCTAssertEqual(records.count, 1)
+        let payload = try JSONDecoder().decode(NAVPayload.self, from: records[0].rawPayload)
+        XCTAssertEqual(payload.accumulatedNAV?.value, Decimal(string: "4.20"),
+                       "ping 缺 accumulatedNAV 时，LSJZ 的 LJJZ 应通过字段级合并填补")
+    }
+
+    func testMerge_lsjzOfficialPriorityForUnitNAV() async throws {
+        // 同日 pingzhongdata 与 LSJZ 都有 unitNAV，LSJZ（近期官方）应优先
+        let pingBody = """
+        var fS_name = "测试";
+        var Data_netWorthTrend = [{"x":1721308800000,"y":3.5,"equityReturn":0.01}];
+        var Data_ACWorthTrend = [{"x":1721308800000,"y":4.2}];
+        """
+        let lsjzBody = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-18","DWJZ":"3.55","JZZZL":"1.43","LJJZ":"4.25"}]}}
+        """
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { d723 }
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(records.count, 1)
+        let payload = try JSONDecoder().decode(NAVPayload.self, from: records[0].rawPayload)
+        // LSJZ 优先：unitNAV=3.55（LSJZ），accumulatedNAV=4.25（LSJZ）
+        XCTAssertEqual(payload.unitNAV.value, Decimal(string: "3.55"))
+        XCTAssertEqual(payload.accumulatedNAV?.value, Decimal(string: "4.25"))
+    }
+
+    func testParseLSJZ_countsDroppedMalformedEntries() throws {
+        // 个别行格式异常应被丢弃但计入 droppedMalformedCount，而非静默
+        let parser = EastmoneyResponseParser()
+        let body = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-18","DWJZ":"3.5"},{"FSRQ":"bad-date","DWJZ":"x"}]}}
+        """
+        let history = try parser.parseLSJZ(body, fundCode: "110022")
+        XCTAssertEqual(history.entries.count, 1, "1 条合法 + 1 条格式异常")
+        XCTAssertEqual(history.droppedMalformedCount, 1, "格式异常的行应被计入")
+    }
+
+    func testParseLSJZ_allMalformedThrows() {
+        // 所有行都异常 → 整体 schema 失败，抛错
+        let parser = EastmoneyResponseParser()
+        let body = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"bad","DWJZ":"x"},{"FSRQ":"also-bad","DWJZ":"y"}]}}
+        """
+        XCTAssertThrowsError(try parser.parseLSJZ(body, fundCode: "110022")) { err in
+            if case .invalidLSJZ = err as? EastmoneyParseError {
+                // ok
+            } else {
+                XCTFail("expected invalidLSJZ, got \(err)")
+            }
+        }
+    }
 }

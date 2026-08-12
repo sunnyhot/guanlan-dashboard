@@ -184,12 +184,27 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
         let lsjzHistory = try parser.parseLSJZ(lsjzBody, fundCode: code.value)
 
         // 合并 + 去重。entry.date 已在 parser 归一化到 Asia/Shanghai 交易日界，
-        // 所以 pingzhongdata 与 LSJZ 的同一交易日 Date 完全一致，可直接按 date 去重。
-        // （EastmoneyResponseParser.normalizeToTradingDay 保证两个来源的日期对齐。）
+        // 所以 pingzhongdata 与 LSJZ 的同一交易日 Date 完全一致。
+        //
+        // 审查 P1：字段级合并，不能整条丢弃。
+        // 先用 pingzhongdata（历史长序列）seed，LSJZ（近期官方净值）覆盖同日：
+        //   - LSJZ 的 unitNAV/changePct 是「近期官方」，作为权威覆盖
+        //   - accumulatedNAV 优先取 LSJZ 的 LJJZ（若 LSJZ 无则保留 pingzhongdata 的）
+        // 这样 pingzhongdata 缺 accumulatedNAV 而 LSJZ 有 LJJZ 时，真实累计净值不丢失。
         var mergedByDay: [Date: EastmoneyNAVHistory.Entry] = [:]
         for e in pingzhongHistory.entries { mergedByDay[e.date] = e }
-        for e in lsjzHistory.entries where mergedByDay[e.date] == nil {
-            mergedByDay[e.date] = e
+        for official in lsjzHistory.entries {
+            if let historical = mergedByDay[official.date] {
+                // 同日：LSJZ 字段优先，pingzhongdata 填补 LSJZ 的 nil
+                mergedByDay[official.date] = EastmoneyNAVHistory.Entry(
+                    date: official.date,
+                    unitNAV: official.unitNAV,
+                    changePct: official.changePct ?? historical.changePct,
+                    accumulatedNAV: official.accumulatedNAV ?? historical.accumulatedNAV
+                )
+            } else {
+                mergedByDay[official.date] = official
+            }
         }
 
         let merged = EastmoneyNAVHistory(
