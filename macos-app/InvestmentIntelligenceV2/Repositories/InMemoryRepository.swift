@@ -329,13 +329,9 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     /// - `economicKnowledge` / `operationalKnowledge`：先按 mode 过滤可见性，
     ///   再按 `effectiveAt` 分组、每组只保留可见的最新 vintage（防修订版与原版
     ///   同时进入时间序列导致因子重复计算，审查 P1 修复点）。
+    ///   同 (effectiveAt, vintage) 跨 Provider 时按确定性 tie-breaker 择优（REPO-2b）。
     ///   若 `context.vintageFilter` 非空且精确匹配某 vintage，则只返回那一条。
     /// - `exactSnapshot`：返回 `effectiveAt == at` 的全部 vintage（不分组、不去重）。
-    ///
-    /// `preferredProvider` **未生效**：CanonicalObservation 当前不含 sourceProviderID 字段，
-    /// 多 Provider 同 (effectiveAt, vintage) 跨源去重无确定性 tie-breaker。
-    /// 该能力从 REPO-2 拆到 **REPO-2b**（rollout 2026-08-12 修订），需先给
-    /// CanonicalObservation 加 sourceProviderID/provenance，再实现稳定选择规则。
     static func filterByContext<T: CanonicalObservation>(
         _ observations: [T],
         context: KnowledgeContext
@@ -357,20 +353,66 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
             // 先按可见性过滤
             // swiftlint:disable:next identifier_name
             let visible = observations.filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
-            // 按 effectiveAt 分组，每组只保留最新 vintage
-            var latestPerDay: [Date: T] = [:]
+            // 按 effectiveAt 分组，每组只保留择优后的单条（REPO-2b：含跨源去重）
+            var bestPerDay: [Date: T] = [:]
             for obs in visible {
                 let day = obs.temporalEnvelope.effectiveAt
-                if let existing = latestPerDay[day] {
-                    if obs.vintage > existing.vintage { latestPerDay[day] = obs }
+                if let existing = bestPerDay[day] {
+                    if isPreferred(candidate: obs, over: existing) {
+                        bestPerDay[day] = obs
+                    }
                 } else {
-                    latestPerDay[day] = obs
+                    bestPerDay[day] = obs
                 }
             }
-            return latestPerDay.values.sorted {
+            return bestPerDay.values.sorted {
                 $0.temporalEnvelope.effectiveAt < $1.temporalEnvelope.effectiveAt
             }
         }
+    }
+
+    // MARK: - REPO-2b：跨源确定性择优（preferredProvider tie-breaker）
+
+    /// 同 effectiveAt 分组内的择优比较：candidate 是否优于 existing。
+    ///
+    /// 全序、确定性（不依赖数组顺序），规则（ADR-DATA006 §Decision 1 + rollout REPO-2b）：
+    /// 1. 更高 vintage 优先（数据修订，ADR-DATA008）
+    /// 2. 同 vintage：更高 reliabilityClass 优先（更可信的 Provider 胜）
+    /// 3. 同 reliability：sourceProviderID 确定性 tie-break（"unspecified" 排最后，
+    ///    其余按 rawValue 字典序，保证跨运行稳定）
+    /// 4. 完全同源：ObservationID rawValue 字典序（最终稳定兜底）
+    static func isPreferred<T: CanonicalObservation>(candidate: T, over existing: T) -> Bool {
+        // 1. vintage（数据修订）
+        if candidate.vintage > existing.vintage { return true }
+        if candidate.vintage < existing.vintage { return false }
+        // 2. reliabilityClass（跨源偏好）
+        let candRel = reliabilityPreferenceRank(candidate.dataQuality.providerReliability)
+        let exRel = reliabilityPreferenceRank(existing.dataQuality.providerReliability)
+        if candRel != exRel { return candRel > exRel }
+        // 3. sourceProviderID 确定性 tie-break
+        let candProv = providerSortKey(candidate.dataQuality.sourceProviderID.rawValue)
+        let exProv = providerSortKey(existing.dataQuality.sourceProviderID.rawValue)
+        if candProv != exProv { return candProv < exProv }
+        // 4. ObservationID 兜底
+        return candidate.id.rawValue < existing.id.rawValue
+    }
+
+    /// ProviderReliabilityClass 的偏好序（越高越优先）。
+    /// officialStable > documentFreeAPI > communityAggregated > undocumentedPublicEndpoint
+    static func reliabilityPreferenceRank(_ cls: ProviderReliabilityClass) -> Int {
+        switch cls {
+        case .officialStable: return 4
+        case .documentFreeAPI: return 3
+        case .communityAggregated: return 2
+        case .undocumentedPublicEndpoint: return 1
+        }
+    }
+
+    /// sourceProviderID 的稳定排序键。"unspecified"（测试 fixture 默认值）排最后，
+    /// 其余按 rawValue 字典序。返回值越小越优先。
+    static func providerSortKey(_ rawValue: String) -> String {
+        // 用高位字符前缀确保 unspecified 永远大于任何真实 providerID
+        rawValue == "unspecified" ? "\u{10FFFF}\(rawValue)" : rawValue
     }
 
     /// 单个 envelope 是否符合 context 的可见性部分（包内 helper）。

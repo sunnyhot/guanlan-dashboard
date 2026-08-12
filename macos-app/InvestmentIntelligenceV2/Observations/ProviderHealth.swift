@@ -112,9 +112,10 @@ struct QuotaSnapshot: Sendable, Codable, Hashable {
 // DOM-5 已定义 DataQuality struct，这里加便捷构造与判断方法。
 
 extension DataQuality {
-    /// 基于 Provider 的 reliabilityClass 构造（isRevised / isSuperseded 默认 false）。
-    static func from(_ cls: ProviderReliabilityClass) -> DataQuality {
-        DataQuality(providerReliability: cls)
+    /// 基于 Provider 的 reliabilityClass + providerID 构造（REPO-2b：注入来源 Provider）。
+    /// isRevised / isSuperseded 默认 false。
+    static func from(_ cls: ProviderReliabilityClass, providerID: DataProviderID) -> DataQuality {
+        DataQuality(providerReliability: cls, sourceProviderID: providerID)
     }
 
     /// 该观测是否可信（用于业务层决定是否消费）。

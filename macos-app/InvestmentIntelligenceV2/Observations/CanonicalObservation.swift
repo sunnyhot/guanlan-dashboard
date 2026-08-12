@@ -35,6 +35,10 @@ protocol CanonicalObservation: Sendable, Codable, Hashable {
 struct DataQuality: Sendable, Codable, Hashable {
     /// 来源 Provider 的可靠性档位（ADR-DATA006 四档）
     let providerReliability: ProviderReliabilityClass
+    /// 来源 Provider 标识（REPO-2b：跨源去重的确定性 tie-breaker 依据）。
+    /// 真实链路由 ObservationFactory 从 ProviderRecord.providerID 注入；
+    /// 测试 fixture 未指定时为 "unspecified"，在跨源择优中排最后（不抢占真实 Provider）。
+    let sourceProviderID: DataProviderID
     /// 是否经过修订（vintage > 1 即修订过）
     let isRevised: Bool
     /// 是否仍活跃（未被撤回 / 重述替代）
@@ -42,10 +46,12 @@ struct DataQuality: Sendable, Codable, Hashable {
 
     init(
         providerReliability: ProviderReliabilityClass,
+        sourceProviderID: DataProviderID = DataProviderID(rawValue: "unspecified"),
         isRevised: Bool = false,
         isSuperseded: Bool = false
     ) {
         self.providerReliability = providerReliability
+        self.sourceProviderID = sourceProviderID
         self.isRevised = isRevised
         self.isSuperseded = isSuperseded
     }

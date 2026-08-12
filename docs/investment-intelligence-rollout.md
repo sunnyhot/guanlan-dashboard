@@ -235,13 +235,16 @@ macos-app/
 
 > **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
 >
-> **已签收 Story（15 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
-> REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）。
+> **已签收 Story（17 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
+> REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）、REPO-2b（2）。
 >
 > **当前实现状态**（避免与下方 Story 表述冲突）：
 > - REPO-1 Repository 协议（七域，Fundamental 拆到 REPO-1b）——完整
 > - REPO-2 InMemoryRepository：economic/exact/operational 三 query mode、
 >   multi-vintage 每 (effectiveAt) 取最新、Sendable、upsert 幂等——完整
+> - REPO-2b preferredProvider 跨源去重：DataQuality 加 sourceProviderID（工厂从
+>   ProviderRecord 注入），filterByContext 同 (effectiveAt, vintage) 多 Provider 时按
+>   reliability → sourceProviderID → id 确定性 tie-break 择优；exactSnapshot 不去重——完整
 > - REPO-3 JSON Fixture loader——完整
 > - REPO-4 IdentityResolver lookup 层——完整（4 路径建立算法在 SYNC-8）
 > - REPO-5a ObservationFactory（DailyBar + NAV 完整链，含 ProviderRecord 所有权 +
@@ -263,7 +266,6 @@ macos-app/
 > - REPO-7 持仓链路未接（仅 NAV 链路真实）
 > - REPO-8 M2 验收测试（§4.1 五场景真实链路）未跑通
 > - live network 集成测试留 Epic 4（需登录态/网络）
-> - REPO-2b preferredProvider 多源去重未实现（CanonicalObservation 待加 sourceProviderID）
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
 > 待 Epic 4 补 live network 集成测试后，M2 可正式标记 Pass。
 

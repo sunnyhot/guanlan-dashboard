@@ -140,8 +140,9 @@ final class ProviderHealthTests: XCTestCase {
     // MARK: - DataQuality 联动
 
     func testDataQuality_fromReliabilityClass() {
-        let dq1 = DataQuality.from(.officialStable)
+        let dq1 = DataQuality.from(.officialStable, providerID: .fred)
         XCTAssertEqual(dq1.providerReliability, .officialStable)
+        XCTAssertEqual(dq1.sourceProviderID, .fred)
         XCTAssertFalse(dq1.isRevised)
         XCTAssertFalse(dq1.isSuperseded)
 
@@ -151,12 +152,12 @@ final class ProviderHealthTests: XCTestCase {
 
     func testDataQuality_undocumentedRequiresSecondaryValidation() {
         // ADR-DATA006：undocumentedPublicEndpoint 需 secondary 验证
-        let dq = DataQuality.from(.undocumentedPublicEndpoint)
+        let dq = DataQuality.from(.undocumentedPublicEndpoint, providerID: .qieman)
         XCTAssertTrue(dq.requiresSecondaryValidation)
     }
 
     func testDataQuality_officialDoesNotRequireSecondary() {
-        let dq = DataQuality.from(.officialStable)
+        let dq = DataQuality.from(.officialStable, providerID: .fred)
         XCTAssertFalse(dq.requiresSecondaryValidation)
     }
 

@@ -96,14 +96,14 @@ final class InMemoryRepositoryTests: XCTestCase {
         repo.upsert(DailyBar(
             id: ObservationID(rawValue: "b1"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: env1, availabilityProvenance: makeProv(),
-            dataQuality: .from(.officialStable),
+            dataQuality: .from(.officialStable, providerID: .stooq),
             vintage: Vintage(announcementDate: date(2024, 7, 18), publisherVersion: 1),
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(100),
             volume: 1000, adjustmentFactor: 1.0
         )).upsert(DailyBar(
             id: ObservationID(rawValue: "b2"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: env2, availabilityProvenance: makeProv(),
-            dataQuality: .from(.officialStable),
+            dataQuality: .from(.officialStable, providerID: .stooq),
             vintage: Vintage(announcementDate: date(2024, 7, 19), publisherVersion: 1),
             rawOpen: price(105), rawHigh: price(106), rawLow: price(104), rawClose: price(105),
             volume: 1100, adjustmentFactor: 1.0
@@ -136,7 +136,7 @@ final class InMemoryRepositoryTests: XCTestCase {
         repo.upsert(DailyBar(
             id: ObservationID(rawValue: "b1"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: env, availabilityProvenance: makeProv(),
-            dataQuality: .from(.officialStable),
+            dataQuality: .from(.officialStable, providerID: .stooq),
             vintage: Vintage(announcementDate: date(2024, 7, 19), publisherVersion: 1),
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(100),
             volume: 1000, adjustmentFactor: 1.0
@@ -335,6 +335,145 @@ final class InMemoryRepositoryTests: XCTestCase {
         XCTAssertEqual(k1, "eastmoney::fund_code::110022")
         XCTAssertNotEqual(k1, k2)   // 不同 provider 不冲突
         XCTAssertEqual(k1, k3)      // 相同入参稳定
+    }
+
+    // MARK: - REPO-2b：跨源确定性去重（preferredProvider tie-breaker）
+
+    /// 构造单条 NAVObservation（指定 sourceProviderID + reliability，用于跨源测试）。
+    private func makeNAV(
+        id: String, day: Date, availableAt: Date,
+        vintage: Vintage, unitNAV: Decimal,
+        reliability: ProviderReliabilityClass, provider: DataProviderID
+    ) -> NAVObservation {
+        NAVObservation(
+            id: ObservationID(rawValue: id),
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            temporalEnvelope: TemporalEnvelope(
+                effectiveAt: day, publishedAt: day, availableAt: availableAt, ingestedAt: availableAt
+            ),
+            availabilityProvenance: makeProv(),
+            dataQuality: DataQuality(providerReliability: reliability, sourceProviderID: provider),
+            vintage: vintage,
+            unitNAV: Price(value: unitNAV, currency: .cny),
+            accumulatedNAV: nil, cumulativeDividendPerShare: nil
+        )
+    }
+
+    func testCrossSourceDedup_higherReliabilityWins() {
+        // 同 (effectiveAt, vintage)：eastmoney(communityAggregated, nav=3.5) vs
+        // fred(officialStable, nav=3.6) → fred 更可信，胜出
+        let repo = makeRepo()
+        let day = date(2024, 7, 18)
+        let v1 = Vintage(announcementDate: day, publisherVersion: 1)
+        repo.upsert(makeNAV(id: "em", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.5, reliability: .communityAggregated, provider: .eastmoney))
+        repo.upsert(makeNAV(id: "fred", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.6, reliability: .officialStable, provider: .fred))
+
+        let result = repo.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .economicKnowledge(asOf: date(2024, 7, 19))
+        )
+        XCTAssertEqual(result.count, 1, "同 effectiveAt+vintage 应去重为一条")
+        XCTAssertEqual(result.first?.id, ObservationID(rawValue: "fred"), "更高 reliability 的 Provider 胜出")
+        XCTAssertEqual(result.first?.unitNAV.value, 3.6)
+        XCTAssertEqual(result.first?.dataQuality.sourceProviderID, .fred)
+    }
+
+    func testCrossSourceDedup_sameReliabilityDeterministicByProvider() {
+        // 同 (effectiveAt, vintage, reliabilityClass)：eastmoney vs akshare 都 communityAggregated
+        // → sourceProviderID 字典序确定性择优（akshare < eastmoney → akshare 胜）
+        let repo = makeRepo()
+        let day = date(2024, 7, 18)
+        let v1 = Vintage(announcementDate: day, publisherVersion: 1)
+        repo.upsert(makeNAV(id: "em", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.5, reliability: .communityAggregated, provider: .eastmoney))
+        repo.upsert(makeNAV(id: "ak", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.7, reliability: .communityAggregated, provider: .akshare))
+
+        let result = repo.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .economicKnowledge(asOf: date(2024, 7, 19))
+        )
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.id, ObservationID(rawValue: "ak"),
+                       "同 reliability 时按 providerID 字典序确定性选 akshare")
+        // 反序插入也应得到同一结果（确定性，不依赖数组顺序）
+        let repo2 = makeRepo()
+        repo2.upsert(makeNAV(id: "ak", day: day, availableAt: day, vintage: v1,
+                             unitNAV: 3.7, reliability: .communityAggregated, provider: .akshare))
+        repo2.upsert(makeNAV(id: "em", day: day, availableAt: day, vintage: v1,
+                             unitNAV: 3.5, reliability: .communityAggregated, provider: .eastmoney))
+        let result2 = repo2.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .economicKnowledge(asOf: date(2024, 7, 19))
+        )
+        XCTAssertEqual(result2.first?.id, result.first?.id, "插入顺序不影响择优结果")
+    }
+
+    func testCrossSourceDedup_higherVintageBeatsAnyProvider() {
+        // 数据修订优先于跨源：fred v1(officialStable) vs eastmoney v2(communityAggregated)
+        // → v2 胜（修订版无论来源都优先，ADR-DATA008）
+        let repo = makeRepo()
+        let day = date(2024, 7, 18)
+        repo.upsert(makeNAV(id: "fred_v1", day: day, availableAt: day,
+                            vintage: Vintage(announcementDate: day, publisherVersion: 1),
+                            unitNAV: 3.5, reliability: .officialStable, provider: .fred))
+        repo.upsert(makeNAV(id: "em_v2", day: day, availableAt: day,
+                            vintage: Vintage(announcementDate: day, publisherVersion: 2),
+                            unitNAV: 3.6, reliability: .communityAggregated, provider: .eastmoney))
+
+        let result = repo.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .economicKnowledge(asOf: date(2024, 7, 19))
+        )
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.id, ObservationID(rawValue: "em_v2"),
+                       "更高 vintage 优先于 reliability（修订 > 跨源）")
+    }
+
+    func testCrossSourceDedup_exactSnapshotReturnsAllSources() {
+        // exactSnapshot 不去重：同 effectiveAt 的两个 Provider 各自保留
+        let repo = makeRepo()
+        let day = date(2024, 7, 18)
+        let v1 = Vintage(announcementDate: day, publisherVersion: 1)
+        repo.upsert(makeNAV(id: "em", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.5, reliability: .communityAggregated, provider: .eastmoney))
+        repo.upsert(makeNAV(id: "fred", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.6, reliability: .officialStable, provider: .fred))
+
+        let result = repo.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .exactSnapshot(at: day)
+        )
+        XCTAssertEqual(result.count, 2, "exactSnapshot 返回全部 vintage，跨源不去重")
+    }
+
+    func testCrossSourceDedup_unspecifiedProviderLosesToReal() {
+        // 同 (effectiveAt, vintage, reliabilityClass)：默认 fixture（provider=unspecified）
+        // vs 真实 Provider（eastmoney）→ 真实 Provider 胜（unspecified 排最后）
+        let repo = makeRepo()
+        let day = date(2024, 7, 18)
+        let v1 = Vintage(announcementDate: day, publisherVersion: 1)
+        repo.upsert(NAVObservation(
+            id: ObservationID(rawValue: "default"), shareClassID: FundShareClassID(rawValue: "sc_x"),
+            temporalEnvelope: TemporalEnvelope(
+                effectiveAt: day, publishedAt: day, availableAt: day, ingestedAt: day),
+            availabilityProvenance: makeProv(),
+            dataQuality: DataQuality(providerReliability: .communityAggregated),  // 未指定 provider（默认 unspecified）
+            vintage: v1, unitNAV: Price(value: 3.5, currency: .cny),
+            accumulatedNAV: nil, cumulativeDividendPerShare: nil
+        ))
+        repo.upsert(makeNAV(id: "real", day: day, availableAt: day, vintage: v1,
+                            unitNAV: 3.6, reliability: .communityAggregated, provider: .eastmoney))
+
+        let result = repo.navObservations(
+            shareClassID: FundShareClassID(rawValue: "sc_x"),
+            context: .economicKnowledge(asOf: date(2024, 7, 19))
+        )
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.id, ObservationID(rawValue: "real"),
+                       "同 reliability 时未指定 provider 的 fixture 应让位于真实 Provider")
     }
 
     // MARK: - 辅助

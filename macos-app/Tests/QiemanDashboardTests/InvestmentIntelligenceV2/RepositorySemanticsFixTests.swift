@@ -140,7 +140,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
             id: ObservationID(rawValue: "v1"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: mkEnv(v1),
             availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: eff),
-            dataQuality: .from(.officialStable), vintage: v1,
+            dataQuality: .from(.officialStable, providerID: .stooq), vintage: v1,
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(100),
             volume: 1000, adjustmentFactor: 1.0
         ))
@@ -148,7 +148,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
             id: ObservationID(rawValue: "v2"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: mkEnv(v2),
             availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: eff),
-            dataQuality: .from(.officialStable), vintage: v2,
+            dataQuality: .from(.officialStable, providerID: .stooq), vintage: v2,
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(102),
             volume: 1000, adjustmentFactor: 1.0
         ))
@@ -174,7 +174,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
                     availableAt: vintage.announcementDate, ingestedAt: vintage.announcementDate
                 ),
                 availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: day),
-                dataQuality: .from(.officialStable), vintage: vintage,
+                dataQuality: .from(.officialStable, providerID: .stooq), vintage: vintage,
                 rawOpen: Price(value: close, currency: .cny),
                 rawHigh: Price(value: close, currency: .cny),
                 rawLow: Price(value: close, currency: .cny),
@@ -215,7 +215,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
             id: ObservationID(rawValue: "v1"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: mkEnv(v1),
             availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: eff),
-            dataQuality: .from(.officialStable), vintage: v1,
+            dataQuality: .from(.officialStable, providerID: .stooq), vintage: v1,
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(100),
             volume: 1000, adjustmentFactor: 1.0
         ))
@@ -223,7 +223,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
             id: ObservationID(rawValue: "v2"), listingID: ListingID(rawValue: "L"),
             temporalEnvelope: mkEnv(v2),
             availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: eff),
-            dataQuality: .from(.officialStable), vintage: v2,
+            dataQuality: .from(.officialStable, providerID: .stooq), vintage: v2,
             rawOpen: price(100), rawHigh: price(101), rawLow: price(99), rawClose: price(102),
             volume: 1000, adjustmentFactor: 1.0
         ))
@@ -302,7 +302,7 @@ final class RepositorySemanticsFixTests: XCTestCase {
                 listingID: ListingID(rawValue: "L"),
                 temporalEnvelope: env,
                 availabilityProvenance: AvailabilityProvenance(policyID: "market_close", policyVersion: "v1", derivedAt: d718),
-                dataQuality: .from(.officialStable),
+                dataQuality: .from(.officialStable, providerID: .stooq),
                 vintage: Vintage(announcementDate: d719, publisherVersion: 1),
                 rawOpen: p(100), rawHigh: p(101), rawLow: p(99), rawClose: p(close),
                 volume: 1000, adjustmentFactor: 1.0

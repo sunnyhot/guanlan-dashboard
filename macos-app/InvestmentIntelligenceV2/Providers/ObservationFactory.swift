@@ -68,8 +68,8 @@ struct ObservationFactory: Sendable {
             throw ObservationFactoryError.temporalNormalizeFailed
         }
 
-        // 3. 按 kind 解析 payload + 组装
-        let dataQuality = DataQuality.from(record.reliabilityClass)
+        // 3. 按 kind 解析 payload + 组装（REPO-2b：注入 sourceProviderID 供跨源去重）
+        let dataQuality = DataQuality.from(record.reliabilityClass, providerID: record.providerID)
         switch record.kind {
         case .dailyBar:
             let payload = try Self.decode(DailyBarPayload.self, from: record, kind: .dailyBar)
