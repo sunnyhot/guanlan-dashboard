@@ -315,6 +315,8 @@ enum ProviderEndpoint: Sendable, Hashable {
     case pingzhongdata(fundCode: String)
     /// 天天基金 lsjz：`api.fund.eastmoney.com/f10/lsjz?fundCode=...`
     case lsjz(fundCode: String)
+    /// Stooq 历史日线 CSV：`stooq.com/q/d/l/?s={symbol}&i=d`（PROV-2，美股 primary）
+    case stooqHistory(symbol: String)
 }
 
 /// 静态响应 fetcher（测试用：注入预录真实响应文本）。
@@ -349,22 +351,40 @@ struct URLSessionResponseFetcher: ResponseFetcher {
             urlString = "https://fund.eastmoney.com/pingzhongdata/\(code).js"
         case .lsjz(let code):
             urlString = "https://api.fund.eastmoney.com/f10/lsjz?fundCode=\(code)&pageIndex=1&pageSize=20"
+        case .stooqHistory(let symbol):
+            // Stooq 日线 CSV 下载端点（personal-use，FREE001 合规：免费、无 key）
+            urlString = "https://stooq.com/q/d/l/?s=\(symbol)&i=d"
         }
+        let providerID = Self.providerID(for: endpoint)
         guard let url = URL(string: urlString) else {
-            throw ProviderError.unavailable(providerID: .eastmoney, underlying: "bad url")
+            throw ProviderError.unavailable(providerID: providerID, underlying: "bad url")
         }
         var request = URLRequest(url: url, timeoutInterval: 15)
-        request.setValue("https://fund.eastmoney.com/", forHTTPHeaderField: "Referer")
+        // Referer 按端点来源设置（天天基金需要，Stooq 不需要但无害）
+        switch endpoint {
+        case .pingzhongdata, .lsjz:
+            request.setValue("https://fund.eastmoney.com/", forHTTPHeaderField: "Referer")
+        case .stooqHistory:
+            break
+        }
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw ProviderError.unavailable(providerID: .eastmoney, underlying: "http error")
+                throw ProviderError.unavailable(providerID: providerID, underlying: "http error")
             }
             return String(data: data, encoding: .utf8) ?? ""
         } catch let e as ProviderError {
             throw e
         } catch {
-            throw ProviderError.unavailable(providerID: .eastmoney, underlying: "\(error)")
+            throw ProviderError.unavailable(providerID: providerID, underlying: "\(error)")
+        }
+    }
+
+    /// 端点 → Provider 标识（错误上报用，不再硬编码 eastmoney）。
+    private static func providerID(for endpoint: ProviderEndpoint) -> DataProviderID {
+        switch endpoint {
+        case .pingzhongdata, .lsjz: return .eastmoney
+        case .stooqHistory: return .stooq
         }
     }
 }

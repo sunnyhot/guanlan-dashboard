@@ -288,17 +288,23 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-12）**：M3 进行中（2/23 点，PROV-1 签收）。
+> **状态（2026-08-12）**：M3 进行中（5/23 点，PROV-1/2 签收）。
 >
-> **已签收**：PROV-1（2）—— `ProviderStaging`（JSONL spool 读写，append-only，
-> `Persistence/` 新目录）+ `ProviderRecordSchemaValidator`（结构前置闸门：字段非空、
-> 时间序 effectiveAt≤publishedAt、rawPayload 按声明 kind 解码匹配；与 ObservationFactory
-> 的语义转换互补不重叠）。ADR-DATA003 Pipeline 第 1+4 步可独立单测。
+> **已签收**：
+> - PROV-1（2）—— `ProviderStaging`（JSONL spool 读写，append-only，
+>   `Persistence/` 新目录）+ `ProviderRecordSchemaValidator`（结构前置闸门：字段非空、
+>   时间序 effectiveAt≤publishedAt、rawPayload 按声明 kind 解码匹配；与 ObservationFactory
+>   的语义转换互补不重叠）。ADR-DATA003 Pipeline 第 1+4 步可独立单测。
+> - PROV-2（3）—— Stooq 美股日线 Adapter：`StooqResponseParser`（CSV 表头列名分派、
+>   非有限 OHLC 防护、Volume 缺失为 nil、dropped 计数）+ `StooqProviderAdapter`（产
+>   DailyBar ProviderRecord，USD、unitedStates、adjustmentFactor=1.0 raw 不伪造复权）。
+>   端到端验证 CSV→ProviderRecord→SchemaValidator→staging round-trip。ProviderEndpoint
+>   加 stooqHistory，URLSession 按 endpoint 映射 providerID（不再硬编码 eastmoney）。
 >
-> **未达成（M3 blocked 原因）**：PROV-2/3/4/5/6/7 各 Adapter 需接外部数据源
-> （Stooq CSV / AKShare Python / SEC / FRED / Alpha Vantage / Tavily），PROV-8
+> **未达成（M3 blocked 原因）**：PROV-3/4/5/6/7 各 Adapter 需接外部数据源
+> （AKShare Python / SEC / FRED / Alpha Vantage / Tavily），PROV-8
 > ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
-> （参考 EastmoneyProviderAdapter 的 StaticResponseFetcher 注入模式），但完整验收
+> （参考 Stooq/Eastmoney 的 StaticResponseFetcher 注入模式），但完整验收
 > 需对应外部服务的真实连通。
 
 ---
