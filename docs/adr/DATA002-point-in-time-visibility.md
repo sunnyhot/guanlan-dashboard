@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-11
-- **Epic / Story**: Epic 1 / ADR-3；Epic 2 DOM-4/6；Epic 3 REPO-5；Epic 7 FAC-8
+- **Epic / Story**: Epic 1 / ADR-3；Epic 2 DOM-4/6；Epic 3 REPO-5a；Epic 7 FAC-8
 
 ## Context
 
@@ -41,7 +41,7 @@
 
 4. **availableAt 与 ingestedAt 解耦**：`TemporalEnvelope.validate()` 只校验客观事件链 `effectiveAt ≤ publishedAt ≤ availableAt`，**不校验 `availableAt ≤ ingestedAt`**。两个语义不同的时间戳由不同 query mode 分别消费：economicKnowledge 只看 availableAt，operationalKnowledge 同时看两者。
 
-5. **PIT 标注由 TemporalNormalizer 完成**（REPO-5）：ProviderRecord → CanonicalObservation 时，基于 AvailabilityPolicy（DOM-7）自动计算 `availableAt`，不让 Provider 自己声明。例如基金 Q2 持仓 `effectiveAt = 2024-06-30`、`publishedAt = 2024-07-20`，AvailabilityPolicy 推导 `availableAt = nextTradingDay(2024-07-20) = 2024-07-22`（2024 中国日历，7-20 周六）。Provider 故障延迟到 `ingestedAt = 2024-08-01` 时，availableAt 仍记客观的 7-22。
+5. **PIT 标注由 TemporalNormalizer 完成**（REPO-5a）：ProviderRecord → CanonicalObservation 时，基于 AvailabilityPolicy（DOM-7）自动计算 `availableAt`，不让 Provider 自己声明。例如基金 Q2 持仓 `effectiveAt = 2024-06-30`、`publishedAt = 2024-07-20`，AvailabilityPolicy 推导 `availableAt = nextTradingDay(2024-07-20) = 2024-07-22`（2024 中国日历，7-20 周六）。Provider 故障延迟到 `ingestedAt = 2024-08-01` 时，availableAt 仍记客观的 7-22。
 
 ## Consequences
 
@@ -66,7 +66,7 @@
 - **DOM-4 测试**：`TemporalEnvelope` 的四时间字段齐全，Codable round-trip；validate() **不校验** availableAt ≤ ingestedAt
 - **DOM-6 测试**：`KnowledgeContext` 三种 mode 的 API 不可互换；operationalKnowledge 同时校验 availableAt + ingestedAt
 - **REPO-1 协议审查**：Repository 协议每个方法签名都有 `KnowledgeContext` 参数；编译期不可省略
-- **REPO-5 测试**：`TemporalNormalizer` 把 ingestedAt 与 availableAt 分开标注；M2 验收场景 4 通过
+- **REPO-5a 测试**：`TemporalNormalizer` 把 ingestedAt 与 availableAt 分开标注；M2 验收场景 4 通过
 - **FAC-8 golden test**：固定历史序列 → 固定 factor 输出，跨 vintage 一致
 - **M2 验收场景 3**：基金 Q2 持仓 7-20 公告（→ availableAt = 7-22），`economicKnowledge(asOf: 7-10)` 查不到（rollout §4.1）
 - **PR checklist**：任何业务层代码直接读「最新值」、绕过 KnowledgeContext，直接拒绝；任何代码假设 `availableAt ≤ ingestedAt` 恒成立，直接拒绝

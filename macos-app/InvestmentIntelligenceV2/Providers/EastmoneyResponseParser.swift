@@ -222,8 +222,11 @@ struct EastmoneyResponseParser: Sendable {
         var entries: [EastmoneyNAVHistory.Entry] = []
         var dropped = 0
         for e in resp.Data.LSJZList {
+            // 审查 P1：Double("NaN") / Double("Infinity") 会成功解析，但后续
+            // Decimal(nonFinite)（toProviderRecords 里）会触发运行时 trap。
+            // 必须用 isFinite 拦截非有限数；NAV 还应 > 0（业务合理范围）。
             guard let parsedDate = dateFormatter.date(from: e.FSRQ),
-                  let nav = Double(e.DWJZ)
+                  let nav = Double(e.DWJZ), nav.isFinite, nav > 0
             else {
                 dropped += 1
                 continue
@@ -232,8 +235,8 @@ struct EastmoneyResponseParser: Sendable {
             entries.append(EastmoneyNAVHistory.Entry(
                 date: day,
                 unitNAV: nav,
-                changePct: e.JZZZL.flatMap { Double($0) }.map { $0 / 100.0 },
-                accumulatedNAV: e.LJJZ.flatMap(Double.init)
+                changePct: e.JZZZL.flatMap { Double($0) }.flatMap { $0.isFinite ? $0 / 100.0 : nil },
+                accumulatedNAV: e.LJJZ.flatMap(Double.init).flatMap { $0.isFinite ? $0 : nil }
             ))
         }
         if !resp.Data.LSJZList.isEmpty && entries.isEmpty {
@@ -350,14 +353,5 @@ struct EastmoneyResponseParser: Sendable {
             return .declaredButMalformed(reason: "array literal not closed")
         }
         return .extracted(String(body[startPos...end]))
-    }
-
-    /// 旧接口保留兼容（Data_netWorthTrend 用，那里 nil 仍表示「变量不存在」，
-    /// 因为必填项缺失已经走 missingNetWorthTrend 错误）。
-    private func extractJSArrayVar(_ body: String, name: String) -> String? {
-        switch extractJSArrayVarTyped(body, name: name) {
-        case .extracted(let s): return s
-        case .notDeclared, .declaredButMalformed: return nil
-        }
     }
 }

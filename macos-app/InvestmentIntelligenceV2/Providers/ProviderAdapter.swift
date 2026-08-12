@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - ProviderRecord（PROV-1 / REPO-6/7 共用，ADR-DATA003 raw + adjustment）
+// MARK: - ProviderRecord（REPO-5a 拥有；REPO-6/7 Adapter 产、ObservationFactory 消费，ADR-DATA003 raw + adjustment）
 //
 // Provider Adapter 只产 ProviderRecord，不写 Canonical。
 // ProviderRecord = raw 字段 + Provider 给的时间戳 + Provider 原始代码。
@@ -105,7 +105,7 @@ protocol ProviderAdapter: Sendable {
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord]
 
     /// 抓取 + 诊断（审查 P2：让生产调用方能观察部分数据丢失，如 LSJZ 异常行计数）。
-    /// 默认实现调 fetch 返回空诊断；EastmoneyProviderAdapter 等真实 Adapter 覆写。
+    /// 默认实现调 fetch 返回 `.unsupported` 诊断；EastmoneyProviderAdapter 等真实 Adapter 覆写。
     func fetchWithDiagnostics(
         code: ProviderCode, from: Date, to: Date
     ) async throws -> ProviderFetchResult
@@ -116,7 +116,12 @@ extension ProviderAdapter {
         code: ProviderCode, from: Date, to: Date
     ) async throws -> ProviderFetchResult {
         let records = try await fetch(code: code, from: from, to: to)
-        return ProviderFetchResult(records: records, diagnostics: ProviderFetchDiagnostics())
+        // 默认实现不产诊断：completeness = .unsupported，totalDropped == 0
+        // **不代表**「确认零丢弃」，只代表该 Adapter 未实现诊断出口（审查 P2）。
+        return ProviderFetchResult(
+            records: records,
+            diagnostics: ProviderFetchDiagnostics(completeness: .unsupported)
+        )
     }
 }
 
@@ -126,20 +131,40 @@ struct ProviderFetchResult: Sendable {
     let diagnostics: ProviderFetchDiagnostics
 }
 
+/// 诊断覆盖度（审查 P2：区分「确认零丢弃」与「Adapter 未实现诊断」）。
+enum DiagnosticCompleteness: Sendable, Equatable {
+    /// Adapter 实现了诊断出口：totalDropped 可信，0 即确认零丢弃。
+    case complete
+    /// Adapter 走默认实现，未覆盖诊断：totalDropped 恒为 0 但不代表无丢弃。
+    /// ProviderHealth 不应据此判定该 Provider「无数据丢失」。
+    case unsupported
+}
+
 /// Provider 抓取诊断（审查 P2：部分数据丢失的可审计出口）。
 /// 生产调用方（Sync / Pipeline）可据此更新 ProviderHealth 或决定降级。
 struct ProviderFetchDiagnostics: Sendable, Equatable {
+    /// 诊断覆盖度：真实 Adapter 标 .complete，桩/默认实现标 .unsupported。
+    /// 调用方（ProviderHealth）必须先看此字段再决定是否信任 totalDropped。
+    var completeness: DiagnosticCompleteness
     /// 解析过程中因格式异常被丢弃的行数（按上游来源分桶）
     var droppedMalformedBySource: [String: Int] = [:]
     /// 合并阶段因日期未对齐等被丢弃的条目数
     var droppedOnMerge: Int = 0
 
-    /// 总丢弃数（用于快速判断是否触发告警阈值）。
+    /// 总丢弃数（仅当 completeness == .complete 时可信；用于快速判断是否触发告警阈值）。
     var totalDropped: Int {
         droppedMalformedBySource.values.reduce(0, +) + droppedOnMerge
     }
 
-    init(droppedMalformedBySource: [String: Int] = [:], droppedOnMerge: Int = 0) {
+    /// - Parameters:
+    ///   - completeness: 真实 Adapter 默认 .complete（含丢弃计数即确认覆盖）；
+    ///     默认 extension 构造时显式传 .unsupported。
+    init(
+        completeness: DiagnosticCompleteness = .complete,
+        droppedMalformedBySource: [String: Int] = [:],
+        droppedOnMerge: Int = 0
+    ) {
+        self.completeness = completeness
         self.droppedMalformedBySource = droppedMalformedBySource
         self.droppedOnMerge = droppedOnMerge
     }

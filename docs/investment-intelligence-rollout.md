@@ -225,7 +225,7 @@ macos-app/
 | REPO-3 | JSON Fixture loader（`Tests/.../Fixtures/*.json`）| REPO-2 | 2 | 能加载真实样本 |
 | REPO-4 | `IdentityResolver` **lookup 层**：按 (provider,scheme,value) 查已登记映射 + 校验 isAuthoritative + fuzzy 返回 candidate 经 Verification。**4 条建立路径是 IdentitySync（SYNC-8）建立时的匹配算法**，不是 resolver 运行时匹配（ADR-DATA001 §3 明确）| DOM-3, REPO-2 | 3 | V3.1 §13；fuzzy 不直接写 canonical；4 路径建立算法移到 SYNC-8 |
 | REPO-4b | **初始 Identity 映射数据**：手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 2 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
-| REPO-5a | `ObservationFactory` **DailyBar + NAV 完整链**：ProviderRecord → CanonicalObservation（identity 解析 + policy 选 + PIT 标注 + payload 解析）| DOM-4,7, REPO-2 | 2 | 不会把 ingestedAt 当 availableAt；2 kind 端到端 |
+| REPO-5a | `ObservationFactory` **DailyBar + NAV 完整链**：拥有 `ProviderRecord` 定义 + ProviderRecord → CanonicalObservation（identity 解析 + policy 选 + PIT 标注 + payload 解析）| DOM-4,7, REPO-2 | 2 | 不会把 ingestedAt 当 availableAt；2 kind 端到端 |
 | REPO-5b | `ObservationFactory` **FundHolding + Macro + CorporateAction 三类**：从 REPO-5 拆出（审查 2026-08-12），FundamentalObservation 与持仓 raw payload schema 就绪后实现 | REPO-5a | 2 | 5 kind 完整；持仓 schema 解析 |
 | REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
 | REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
@@ -235,25 +235,31 @@ macos-app/
 
 > **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
 >
-> **已签收 Story（8 点，审查确认）**：REPO-2（3）、REPO-3（2）、REPO-4（3，按新 lookup 定义）。
+> **已签收 Story（13 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
+> REPO-4（3，按新 lookup 定义）、REPO-5a（2）。
 >
 > **当前实现状态**（避免与下方 Story 表述冲突）：
+> - REPO-1 Repository 协议（七域，Fundamental 拆到 REPO-1b）——完整
 > - REPO-2 InMemoryRepository：economic/exact/operational 三 query mode、
 >   multi-vintage 每 (effectiveAt) 取最新、Sendable、upsert 幂等——完整
 > - REPO-3 JSON Fixture loader——完整
 > - REPO-4 IdentityResolver lookup 层——完整（4 路径建立算法在 SYNC-8）
-> - REPO-5 拆为 REPO-5a（DailyBar/NAV 完整，含 ObservationFactory 全链）+
->   REPO-5b（FundHolding/Macro/CorporateAction，留 Epic 4）
+> - REPO-5a ObservationFactory（DailyBar + NAV 完整链，含 ProviderRecord 所有权 +
+>   identity 解析 + policy 选 + PIT 标注 + payload 解析 + 非有限数防护）——完整
+> - REPO-5b（FundHolding/Macro/CorporateAction，从 REPO-5 拆出）——未实现，留 Epic 4
 > - REPO-7 天天基金 NAV 解析链：pingzhongdata + lsjz 真实 wire 格式（基于现有
 >   QiemanPlatformFundQuoteFallbackTests inline mock 派生，**非 live network 录制**），
 >   日期归一化、字段级合并、真实累计净值（Data_ACWorthTrend/LJJZ）、分红 Optional 不伪造、
->   schema 漂移抛错——NAV 这一条链路真实；**持仓未接**（FundLookThroughClient 是独立 actor，
->   留 Epic 4）
+>   schema 漂移抛错、NaN/Infinity 防护、诊断覆盖度（complete/unsupported）——NAV 这一条
+>   链路真实；**持仓未接**（FundLookThroughClient 是独立 actor，留 Epic 4）
 > - 字段缺口：天天基金 pingzhongdata 不直接披露分红（cumulativeDividendPerShare 留 nil）；
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
+> - REPO-5b ObservationFactory FundHolding/Macro/CorporateAction 三类未实现
 > - REPO-6 且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4）
+> - REPO-7 持仓链路未接（仅 NAV 链路真实）
+> - REPO-8 M2 验收测试（§4.1 五场景真实链路）未跑通
 > - live network 集成测试留 Epic 4（需登录态/网络）
 > - REPO-2b preferredProvider 多源去重未实现（CanonicalObservation 待加 sourceProviderID）
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
@@ -267,7 +273,7 @@ macos-app/
 
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
-| PROV-1 | `ProviderRecord` + `ProviderStaging`（JSONL spool dir）格式定义 + Schema Validator | REPO-5a | 2 | V3.1 §26 |
+| PROV-1 | `ProviderStaging`（JSONL spool dir）格式定义 + Schema Validator（`ProviderRecord` 所有权在 REPO-5a，PROV-1 只消费做 Staging/校验，审查 P2 消除所有权倒置）| REPO-5a | 2 | V3.1 §26 |
 | PROV-2 | Stooq Adapter（美股历史日线 primary，CSV 下载 + 解析）| PROV-1 | 3 | personal-use 合规标注 |
 | PROV-3 | AKShare Collector（macOS 进程外 Python，输出 staging；覆盖股票/基金/债券/指数多 dataset 对接 + staging 格式 + 异常处理）| PROV-1 | 8 | DATA007 隔离；不进 iOS；不直接写 Canonical；多 dataset 覆盖 |
 | PROV-4 | SEC Adapter（封装现有 `SECOfficialSourceClient`）| PROV-1 | 2 | XBRL facts 带 extractionMethod |
@@ -293,7 +299,7 @@ macos-app/
 | GRDB-5 | Fundamental/Macro schema（对齐 FRED vintage）| GRDB-1 | 2 | |
 | GRDB-6 | Intelligence/Decision/Agent schema（evidence / evidence_facts / signals / theses / artifacts / artifact_dependencies / decisions / agent_jobs / agent_job_events / agent_checkpoints）| GRDB-1 | 5 | |
 | GRDB-7 | `GRDBRepository` 实现所有 Repository 协议（替代 InMemory）| GRDB-2..6 | 8 | Repository 契约不变；golden test 同样过 |
-| GRDB-8 | Data Pipeline：Staging → IdentityResolver → TemporalNormalizer → SchemaValidator → DataValidator → Canonical Commit | GRDB-7, REPO-4,5 | 5 | 四防火墙都在 commit 前 |
+| GRDB-8 | Data Pipeline：Staging → IdentityResolver → TemporalNormalizer → SchemaValidator → DataValidator → Canonical Commit | GRDB-7, REPO-4,5a,5b | 5 | 四防火墙都在 commit 前 |
 | GRDB-9 | 更新 AGENTS.md 第 6 条（数据持久化约定）承认 GRDB 引入 + iOS framework 链接 + Package.swift/Xcode 配置 + 数据目录规划 | GRDB-1 | 2 | 约定与代码一致；两端构建通过 |
 
 **里程碑 M4：Canonical Store 上线**。

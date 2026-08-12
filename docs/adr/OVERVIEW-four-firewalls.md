@@ -71,7 +71,7 @@ LLM (用户 key) ──┤                   │
 - `availableAt` 由版本化 AvailabilityPolicy 推导，保守优先（次交易日而非当日）
 - TemporalNormalizer 在 ProviderRecord → Canonical 时算 availableAt，不让 Provider 自己声明
 
-**首次落地**：Epic 2 DOM-4/6/7、Epic 3 REPO-5、M2 验收场景 3/4/5、Epic 7 FAC-8 golden test
+**首次落地**：Epic 2 DOM-4/6/7、Epic 3 REPO-5a、M2 验收场景 3/4/5、Epic 7 FAC-8 golden test
 
 ---
 

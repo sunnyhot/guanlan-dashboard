@@ -317,13 +317,9 @@ final class RealProviderChainTests: XCTestCase {
         }
     }
 
-    func testPingzhongdata_acWorthTrendAbsent_isLegitimateGap() throws {
-        // 变量完全未声明 → 合法缺口，accumulatedNAV 留 nil（区别于 null/截断）
-        let parser = EastmoneyResponseParser()
-        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];"#
-        let history = try parser.parsePingzhongdata(body, fundCode: "110022")
-        XCTAssertNil(history.entries[0].accumulatedNAV)
-    }
+    // 注：原 testPingzhongdata_acWorthTrendAbsent_isLegitimateGap 与
+    // testPingzhongdata_missingACWorthTrend_isLegitimateGap 完全重复（都验证变量未声明
+    // 时 accumulatedNAV 留 nil），合并为上面的 missing 版本（审查 P3）。
 
     // MARK: - Provider 诊断出口（审查 P2：LSJZ droppedMalformedCount 离开解析层）
 
@@ -453,5 +449,106 @@ final class RealProviderChainTests: XCTestCase {
                 XCTFail("expected invalidLSJZ, got \(err)")
             }
         }
+    }
+
+    // MARK: - 非有限数（NaN/Infinity）不崩溃（审查 P1）
+
+    func testParseLSJZ_nonFiniteNumbersDroppedNotCrash() throws {
+        // Double("NaN") / Double("Infinity") 会成功，但 Decimal(nonFinite) 会 trap。
+        // 这些异常值必须进入 dropped 计数，绝不进入 entry（否则 toProviderRecords 崩溃）。
+        let parser = EastmoneyResponseParser()
+        let body = """
+        {"ErrCode":0,"Data":{"LSJZList":[
+            {"FSRQ":"2024-07-18","DWJZ":"3.5","JZZZL":"1.2","LJJZ":"4.2"},
+            {"FSRQ":"2024-07-19","DWJZ":"NaN"},
+            {"FSRQ":"2024-07-22","DWJZ":"Infinity","LJJZ":"Infinity"},
+            {"FSRQ":"2024-07-23","DWJZ":"3.55","JZZZL":"NaN","LJJZ":"Infinity"}
+        ]}}
+        """
+        let history = try parser.parseLSJZ(body, fundCode: "110022")
+        // 2 条 NaN/Infinity 的 DWJZ 被丢弃（7-19、7-22）
+        XCTAssertEqual(history.entries.count, 2, "DWJZ 为 NaN/Infinity 的行应被丢弃")
+        XCTAssertEqual(history.droppedMalformedCount, 2, "两条非有限 NAV 计入 dropped")
+        // 合法 entry 的 unitNAV 必须有限（绝不能让 NaN 漏到 Decimal 转换）
+        XCTAssertTrue(history.entries.allSatisfy { $0.unitNAV.isFinite && $0.unitNAV > 0 })
+        // 7-23 行 DWJZ 合法但 LJJZ=Infinity/JZZZL=NaN：这两个 Optional 字段应被滤为 nil，
+        // 不进入 entry（否则后续 Decimal(accumulatedNAV) 仍会 trap）
+        let lateEntry = history.entries.first { $0.unitNAV == 3.55 }
+        XCTAssertNotNil(lateEntry)
+        XCTAssertNil(lateEntry?.accumulatedNAV, "Infinity 的 LJJZ 应滤为 nil 而非保留非有限值")
+        XCTAssertNil(lateEntry?.changePct, "NaN 的 JZZZL 应滤为 nil 而非保留非有限值")
+    }
+
+    func testAdapter_nonFiniteValues_toProviderRecordsDoesNotCrash() async throws {
+        // 端到端：NaN/Infinity 经 Adapter → toProviderRecords（Decimal 转换）不得崩溃，
+        // 且诊断出口应反映丢弃（审查 P1 + P2）。
+        let pingBody = #"var fS_name = "T"; var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];"#
+        let lsjzBody = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-19","DWJZ":"NaN"},{"FSRQ":"2024-07-18","DWJZ":"3.5"}]}}
+        """
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { d723 }
+        // 若 NaN 漏到 Decimal 转换，此调用会 trap 而非返回
+        let result = try await adapter.fetchWithDiagnostics(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(result.diagnostics.droppedMalformedBySource["lsjz"], 1,
+                       "NaN 的 LSJZ 行应计入诊断")
+        // 每条存活的 record 其 payload 都能安全解码（Decimal 已避开非有限数）。
+        // 若 NaN 漏进 Decimal 转换，上文 fetchWithDiagnostics 就已 trap，不会执行到这里。
+        for record in result.records {
+            let payload = try JSONDecoder().decode(NAVPayload.self, from: record.rawPayload)
+            XCTAssertGreaterThan(payload.unitNAV.value, 0, "存活净值必须为正有限值")
+        }
+    }
+
+    // MARK: - 诊断覆盖度：unsupported vs complete（审查 P2）
+
+    func testDiagnostics_stubAdapter_reportsUnsupported() async throws {
+        // 走默认 fetchWithDiagnostics 的桩 Adapter：completeness 必须是 .unsupported，
+        // totalDropped == 0 不代表「确认零丢弃」（审查 P2）
+        let stub = QiemanProviderAdapter(stubRecords: [
+            ProviderRecord(
+                providerID: .qieman, providerCode: ProviderCode(scheme: "fund_code", value: "X"),
+                effectiveAt: date(2024, 7, 1), publishedAt: date(2024, 7, 1), ingestedAt: date(2024, 7, 1),
+                kind: .navObservation, rawPayload: Data(), reliabilityClass: .undocumentedPublicEndpoint,
+                jurisdiction: .chinaMainland
+            )
+        ])
+        let result = try await stub.fetchWithDiagnostics(
+            code: ProviderCode(scheme: "fund_code", value: "X"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(result.diagnostics.completeness, .unsupported,
+                       "默认实现未覆盖诊断，应标 .unsupported")
+        XCTAssertEqual(result.diagnostics.totalDropped, 0)
+    }
+
+    func testDiagnostics_eastmoneyAdapter_reportsComplete() async throws {
+        // 真实 Adapter 实现了诊断出口：completeness 为 .complete，
+        // totalDropped == 0 即确认零丢弃
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(
+            fetcher: StaticResponseFetcher([
+                .pingzhongdata(fundCode: "110022"): try String(contentsOf: Bundle.module.url(
+                    forResource: "v2-eastmoney-pingzhongdata-110022", withExtension: "json.txt", subdirectory: "Fixtures"
+                )!, encoding: .utf8),
+                .lsjz(fundCode: "110022"): try String(contentsOf: Bundle.module.url(
+                    forResource: "v2-eastmoney-lsjz-110022", withExtension: "json", subdirectory: "Fixtures"
+                )!, encoding: .utf8)
+            ])
+        ) { d723 }
+        let result = try await adapter.fetchWithDiagnostics(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(result.diagnostics.completeness, .complete,
+                       "Eastmoney 覆盖诊断，应标 .complete")
+        XCTAssertEqual(result.diagnostics.totalDropped, 0, "clean fixture 确认零丢弃")
     }
 }

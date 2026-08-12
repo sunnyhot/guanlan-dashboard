@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-08-11
-- **Epic / Story**: Epic 1 / ADR-3；Epic 2 DOM-4/7；Epic 3 REPO-5
+- **Epic / Story**: Epic 1 / ADR-3；Epic 2 DOM-4/7；Epic 3 REPO-5a
 
 ## Context
 
@@ -34,7 +34,7 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
      - **Market Close**：`availableAt = tradingDay + 1 trading day 00:00`，且确认数据源已发布（盘后清算 + 数据源更新延迟）
      - **Fund Disclosure**：`availableAt = announcementDate + 1 trading day 00:00`，公告日次日才可知
 
-2. **TemporalNormalizer 用 Policy 算 availableAt**（REPO-5）：
+2. **TemporalNormalizer 用 Policy 算 availableAt**（REPO-5a）：
    - ProviderRecord 不带 availableAt，由 TemporalNormalizer 基于 AvailabilityPolicy 推导
    - Provider 故障延迟到 8-01 抓到的 7-20 公告数据，`availableAt` 仍记为 `nextTradingDay(7-20)`。以 2024 中国日历为例，7-20 是周六，`availableAt = 2024-07-22`（客观）；`ingestedAt` 记为 8-01
    - 7-22 的决策回放用 `economicKnowledge(asOf: 7-22)` 仍能看到这条数据（M2 场景 4）。注意：若用 `operationalKnowledge(asOf: 7-22)` 则看不到（本机 8-01 才抓到）——这正是两种 mode 的区别
@@ -63,7 +63,7 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 ## Compliance Check
 
 - **DOM-7 测试**：`AvailabilityPolicy` 结构含 id/version/rule/provenance；V1 三类规则各自有测试
-- **REPO-5 测试**：`TemporalNormalizer` 基于 policy 算 availableAt；测试断言「ingestedAt ≠ availableAt」
+- **REPO-5a 测试**：`TemporalNormalizer` 基于 policy 算 availableAt；测试断言「ingestedAt ≠ availableAt」
 - **M2 验收场景 4**（rollout §4.1）：Provider 故障 8-01 抓到的 7-20 公告数据（7-20 为 2024 年周六），`availableAt = nextTradingDay(7-20) = 2024-07-22`、`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见
 - **M2 验收场景 3**：基金 Q2 持仓 7-20 公告，`availableAt = 7-22`，`economicKnowledge(asOf: 7-10)` 查不到
 - **PR checklist**：
@@ -73,7 +73,7 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 
 ## References
 
-- rollout §3 Epic 2 DOM-4/7、Epic 3 REPO-5
+- rollout §3 Epic 2 DOM-4/7、Epic 3 REPO-5a
 - rollout §4.1 M2 验收场景 3/4
 - 关联 ADR：
   - DATA002（PIT Visibility）：availableAt 是 economicKnowledge 模式的核心字段
