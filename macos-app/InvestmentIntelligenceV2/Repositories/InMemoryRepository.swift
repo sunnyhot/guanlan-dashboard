@@ -282,9 +282,9 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
         }
     }
 
-    // MARK: - FundamentalRepository（占位，Epic 7+ 扩展）
-
-    // 无方法
+    // MARK: - FundamentalRepository
+    // Fundamental 域推迟到 REPO-1b（FundamentalObservation 类型未定义），
+    // 不在 Repository 聚合协议内，本类无需实现。
 
     // MARK: - MacroRepository
 

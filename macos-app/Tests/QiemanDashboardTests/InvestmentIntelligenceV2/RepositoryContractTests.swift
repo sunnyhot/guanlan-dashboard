@@ -12,20 +12,19 @@ final class RepositoryContractTests: XCTestCase {
     // MARK: - 子协议存在性（编译期检查：这些协议类型可被引用）
 
     func testRepositorySubProtocols_exist() {
-        // 八个子协议都存在（编译期保证：能引用协议类型即存在）。
+        // 七个子协议都存在（Fundamental 域推迟到 REPO-1b，审查 P2 2026-08-12）。
         // 用元类型断言验证协议可被引用。
         let protos: [Any] = [
             InstrumentRepository.self,
             MarketTimeSeriesRepository.self,
             NAVTimeSeriesRepository.self,
             FundHoldingRepository.self,
-            FundamentalRepository.self,
             MacroRepository.self,
             CorporateActionRepository.self,
             CalendarRepository.self,
-            Repository.self,   // 聚合协议
+            Repository.self,   // 聚合协议（七域）
         ]
-        XCTAssertEqual(protos.count, 9)
+        XCTAssertEqual(protos.count, 8)
         // 每个元素都是非空（协议类型引用成功）
         protos.forEach { XCTAssertNotNil($0) }
     }

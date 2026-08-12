@@ -218,40 +218,45 @@ macos-app/
 
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
-| REPO-1 | Repository 协议：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding / Fundamental / Macro / CorporateAction / Calendar，Observation 类 API 强制 `KnowledgeContext`（Identity/Calendar 例外见 ADR-DATA002 §3a） | DOM-* | 3 | ADR-DATA002 强制 |
+| REPO-1 | Repository 协议（七域）：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding / Macro / CorporateAction / Calendar，Observation 类 API 强制 `KnowledgeContext`（Identity/Calendar 例外见 ADR-DATA002 §3a）。**Fundamental 域拆到 REPO-1b**（FundamentalObservation 类型未定义前不强行空协议占位，审查 P2）| DOM-* | 3 | ADR-DATA002 强制 |
+| REPO-1b | **FundamentalRepository**：FundamentalObservation 类型定义 + Repository 协议加入（从 REPO-1 拆出，Epic 7+ 引入 factor 时补）| REPO-1 | 2 | FundamentalObservation 定义；Fundamental 查询带 KnowledgeContext |
 | REPO-2 | InMemoryRepository 实现（Dictionary-backed）| REPO-1 | 3 | economic/exact 两种 query 都支持；multi-vintage 每 (effectiveAt) 取最新 |
 | REPO-2b | **preferredProvider 多源去重**：CanonicalObservation 加 sourceProviderID/provenance + 稳定 tie-breaker（从 REPO-2 拆出，审查 2026-08-12）| REPO-2 | 2 | preferredProvider 生效；同 effectiveAt+vintage 跨源确定性选一 |
 | REPO-3 | JSON Fixture loader（`Tests/.../Fixtures/*.json`）| REPO-2 | 2 | 能加载真实样本 |
 | REPO-4 | `IdentityResolver` **lookup 层**：按 (provider,scheme,value) 查已登记映射 + 校验 isAuthoritative + fuzzy 返回 candidate 经 Verification。**4 条建立路径是 IdentitySync（SYNC-8）建立时的匹配算法**，不是 resolver 运行时匹配（ADR-DATA001 §3 明确）| DOM-3, REPO-2 | 3 | V3.1 §13；fuzzy 不直接写 canonical；4 路径建立算法移到 SYNC-8 |
 | REPO-4b | **初始 Identity 映射数据**：手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 2 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
-| REPO-5 | `ObservationFactory`：ProviderRecord → CanonicalObservation 完整转换（identity 解析 + policy 选 + PIT 标注 + payload 解析）。**当前支持 2/5 kind（DailyBar/NAV），持仓/宏观/公司行动留 Epic 4** | DOM-4,7, REPO-2 | 3 | 不会把 ingestedAt 当 availableAt；5 kind 完整在 Epic 4 |
+| REPO-5a | `ObservationFactory` **DailyBar + NAV 完整链**：ProviderRecord → CanonicalObservation（identity 解析 + policy 选 + PIT 标注 + payload 解析）| DOM-4,7, REPO-2 | 2 | 不会把 ingestedAt 当 availableAt；2 kind 端到端 |
+| REPO-5b | `ObservationFactory` **FundHolding + Macro + CorporateAction 三类**：从 REPO-5 拆出（审查 2026-08-12），FundamentalObservation 与持仓 raw payload schema 就绪后实现 | REPO-5a | 2 | 5 kind 完整；持仓 schema 解析 |
 | REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
 | REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
 | REPO-8 | M2 验收测试（§4.1 的 5 个场景，真实 Provider 链路）| REPO-4,4b,5,6,7 | 3 | 五个场景全过（真 gate，非形态预演） |
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
-> **状态修正（2026-08-12）**：M2 当前为 **Blocked**。初版实现（commit `58dd465`）
-> 用 stub Provider Adapter + 手写 fixture 通过了 5 个场景的形态预演，但 REPO-6/7
-> 未真正接入 `QiemanPlatformNativeClient` / 天天基金抓取，REPO-5 只完成时间包裹
-> 未做 ProviderRecord → CanonicalObservation 完整链路，economic 查询泄漏旧 vintage，
-> resolve 绕过 fuzzy 防火墙。详见审查反馈。正在修复，未重新达成前不得进 Epic 5。
+> **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
 >
-> **修复进度（2026-08-12，commit `caf3f33`→后续）**：
-> - [x] economic vintage 去重 + resolve fuzzy 防火墙 + Sendable（P1）
-> - [x] ObservationFactory 完整链 ProviderRecord → CanonicalObservation（P1，REPO-5 真正完成）
-> - [x] IdentityResolver 设计明确（4 路径是建立时算法，resolver 是 lookup 层，ADR 显式）
-> - [x] fixture 一致性 + REPO-1 KnowledgeContext 例外 + provenance 验证 + upsert 幂等（P2）
-> - [x] 天天基金真实响应解析链（pingzhongdata + lsjz 真实 wire 格式 fixture，
->      EastmoneyResponseParser 真实解析，不再是 stub filter）
-> - [ ] **残留限制 1**：且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4 完整接入）
-> - [ ] **残留限制 2**：M2 测试用「录制自真实响应的 fixture」，**未跑 live network**（审查
->      明确 fixture 是 M2 标准，live network 属集成测试，需登录态/网络，留 Epic 4 集成测试）
-> - [ ] **字段缺口**：天天基金 pingzhongdata 只给单位净值（累计净值/分红需扩展
->      Data_ACWorthTrend 解析，留 Epic 4）；持仓只有 weightPct（无 shares/marketValue）
+> **已签收 Story（8 点，审查确认）**：REPO-2（3）、REPO-3（2）、REPO-4（3，按新 lookup 定义）。
 >
-> 现在的 M2 证据：`RealProviderChainTests` 从真实 wire 格式 fixture → Adapter 解析 →
-> ObservationFactory → Repository → PIT 三模式查询，全链路真实数据。
+> **当前实现状态**（避免与下方 Story 表述冲突）：
+> - REPO-2 InMemoryRepository：economic/exact/operational 三 query mode、
+>   multi-vintage 每 (effectiveAt) 取最新、Sendable、upsert 幂等——完整
+> - REPO-3 JSON Fixture loader——完整
+> - REPO-4 IdentityResolver lookup 层——完整（4 路径建立算法在 SYNC-8）
+> - REPO-5 拆为 REPO-5a（DailyBar/NAV 完整，含 ObservationFactory 全链）+
+>   REPO-5b（FundHolding/Macro/CorporateAction，留 Epic 4）
+> - REPO-7 天天基金 NAV 解析链：pingzhongdata + lsjz 真实 wire 格式（基于现有
+>   QiemanPlatformFundQuoteFallbackTests inline mock 派生，**非 live network 录制**），
+>   日期归一化、字段级合并、真实累计净值（Data_ACWorthTrend/LJJZ）、分红 Optional 不伪造、
+>   schema 漂移抛错——NAV 这一条链路真实；**持仓未接**（FundLookThroughClient 是独立 actor，
+>   留 Epic 4）
+> - 字段缺口：天天基金 pingzhongdata 不直接披露分红（cumulativeDividendPerShare 留 nil）；
+>   持仓只有 weightPct（无 shares/marketValue）
+>
+> **未达成项（M2 blocked 原因）**：
+> - REPO-6 且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4）
+> - live network 集成测试留 Epic 4（需登录态/网络）
+> - REPO-2b preferredProvider 多源去重未实现（CanonicalObservation 待加 sourceProviderID）
+> - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
 > 待 Epic 4 补 live network 集成测试后，M2 可正式标记 Pass。
 
 ---

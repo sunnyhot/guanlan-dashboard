@@ -96,13 +96,13 @@ protocol FundHoldingRepository: Sendable {
     ) -> FundHoldingSnapshot?
 }
 
-// MARK: - 基本面域
-
-/// 基本面观测（财务指标、估值等）。Epic 2 DOM-5 未定义具体 FundamentalObservation
-/// 类型，此处先占位，Epic 7-8 引入 factor 需要时再补。
-protocol FundamentalRepository: Sendable {
-    // 占位：待 Epic 7+ 引入 FundamentalObservation 后扩展
-}
+// MARK: - 基本面域（推迟到 REPO-1b，审查 P2 2026-08-12）
+//
+// FundamentalObservation 类型在 DOM-5 未定义（Epic 7+ 引入 factor 时补），
+// 此前不强行定义空 FundamentalRepository 占位（空协议会让 REPO-1 的「八域协议」
+// 名不副实）。该域拆到 REPO-1b（rollout），类型就绪后再加入 Repository 聚合。
+// 当前 Repository 聚合覆盖七域（Instrument/Market/NAV/FundHolding/Macro/
+// CorporateAction/Calendar），不含 Fundamental。
 
 // MARK: - 宏观域
 
@@ -139,16 +139,19 @@ protocol CalendarRepository: Sendable {
 
 // MARK: - 聚合 Repository
 
-/// 所有 Repository 子协议的聚合。
+/// 所有 Repository 子协议的聚合（七域，Fundamental 域推迟到 REPO-1b）。
 ///
 /// InMemoryRepository / GRDBRepository 实现此聚合协议，业务层只依赖此接口
 /// （或具体子协议，按需）。这样测试可以 mock 单个域，生产用全量实现。
+///
+/// 当前覆盖七域：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding /
+/// Macro / CorporateAction / Calendar。Fundamental 域待 FundamentalObservation
+/// 类型定义后加入（REPO-1b，Epic 7+）。
 protocol Repository: Sendable,
     InstrumentRepository,
     MarketTimeSeriesRepository,
     NAVTimeSeriesRepository,
     FundHoldingRepository,
-    FundamentalRepository,
     MacroRepository,
     CorporateActionRepository,
     CalendarRepository {
