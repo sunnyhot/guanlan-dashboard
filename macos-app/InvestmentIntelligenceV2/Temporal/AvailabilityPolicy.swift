@@ -46,6 +46,8 @@ enum AvailabilityPolicyKind: String, Sendable, Codable, Hashable, CaseIterable {
     case fundNAV = "FUND_NAV"
     case marketClose = "MARKET_CLOSE"
     case fundDisclosure = "FUND_DISCLOSURE"
+    /// 宏观指标发布（如 FRED GDP/CPI）：availableAt 基于发布日 realtime_start（PROV-5）
+    case macroRelease = "MACRO_RELEASE"
 }
 
 /// Policy 来源。
@@ -309,11 +311,65 @@ enum AvailabilityPolicyV1 {
         }
     }
 
+    /// 宏观指标发布：以发布日（realtime_start）+1 交易日才可知（PROV-5）。
+    ///
+    /// 宏观数据（FRED GDP/CPI 等）的 availableAt 应基于「发布日」而非观测期
+    /// （GDP Q1 值 effectiveAt=2024-01-01，但 2024-04-25 才发布）。base=publishedAt
+    /// 让 MarketClose 式推导用发布日做基准。法域固定 US（FRED 按美国联邦日历发布）。
+    struct MacroRelease: AvailabilityPolicy {
+        let policyID = "macro_release"
+        let version = "v1"
+        let applicableKind: AvailabilityPolicyKind = .macroRelease
+        let provenance: AvailabilityPolicyProvenance = .manual
+        let rule: AvailabilityRule
+        init() {
+            rule = AvailabilityRule(
+                base: .publishedAt,
+                offset: .init(tradingDays: 1),
+                jurisdictionSource: .fixed(.unitedStates)
+            )
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case policyID, version, applicableKind, provenance, rule
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try c.decode(String.self, forKey: .policyID)
+            let decodedVersion = try c.decode(String.self, forKey: .version)
+            let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedProvenance = try c.decode(AvailabilityPolicyProvenance.self, forKey: .provenance)
+            let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
+            guard decodedID == "macro_release", decodedVersion == "v1",
+                  decodedKind == .macroRelease,
+                  decodedProvenance == .manual,
+                  decodedRule == AvailabilityRule(
+                      base: .publishedAt, offset: .init(tradingDays: 1),
+                      jurisdictionSource: .fixed(.unitedStates)
+                  )
+            else {
+                throw AvailabilityPolicyDecodeError.identityMismatch(
+                    policyID: decodedID, version: decodedVersion
+                )
+            }
+            rule = decodedRule
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(policyID, forKey: .policyID)
+            try c.encode(version, forKey: .version)
+            try c.encode(applicableKind, forKey: .applicableKind)
+            try c.encode(provenance, forKey: .provenance)
+            try c.encode(rule, forKey: .rule)
+        }
+    }
+
     /// V1 三类 policy 集合。
     static let all: [any AvailabilityPolicy] = [
         FundNAV(),
         MarketClose(),
         FundDisclosure(),
+        MacroRelease(),
     ]
 
     /// 按 kind 取 policy。
@@ -322,6 +378,7 @@ enum AvailabilityPolicyV1 {
         case .fundNAV: return FundNAV()
         case .marketClose: return MarketClose()
         case .fundDisclosure: return FundDisclosure()
+        case .macroRelease: return MacroRelease()
         }
     }
 }

@@ -191,7 +191,7 @@ struct ObservationFactory: Sendable {
         case .dailyBar: return AvailabilityPolicyV1.MarketClose()
         case .navObservation: return AvailabilityPolicyV1.FundNAV()
         case .fundHoldingSnapshot: return AvailabilityPolicyV1.FundDisclosure()
-        case .macroObservation: return AvailabilityPolicyV1.MarketClose()   // 宏观暂复用
+        case .macroObservation: return AvailabilityPolicyV1.MacroRelease()   // 基于发布日 realtime_start（PROV-5）
         case .corporateAction: return AvailabilityPolicyV1.FundDisclosure()
         }
     }

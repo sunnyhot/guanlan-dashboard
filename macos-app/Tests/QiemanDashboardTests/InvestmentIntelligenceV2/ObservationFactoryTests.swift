@@ -473,9 +473,9 @@ final class ObservationFactoryTests: XCTestCase {
         XCTAssertEqual(macro.unit, .percent)
         XCTAssertEqual(macro.frequency, .quarterly)
         XCTAssertTrue(macro.isSeasonallyAdjusted)
-        // PIT：MarketClose policy（宏观暂复用），base=effectiveAt=7-18 → availableAt=7-19
+        // PIT：MacroRelease policy（PROV-5），base=publishedAt=7-18 → availableAt=7-19
         XCTAssertEqual(macro.temporalEnvelope.availableAt, date(2024, 7, 19))
-        XCTAssertEqual(macro.availabilityProvenance.policyID, "market_close")
+        XCTAssertEqual(macro.availabilityProvenance.policyID, "macro_release")
         XCTAssertEqual(macro.dataQuality.providerReliability, .officialStable)
     }
 

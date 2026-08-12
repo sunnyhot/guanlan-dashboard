@@ -288,7 +288,7 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-12）**：M3 进行中（5/23 点，PROV-1/2 签收）。
+> **状态（2026-08-12）**：M3 进行中（8/23 点，PROV-1/2/5 签收）。
 >
 > **已签收**：
 > - PROV-1（2）—— `ProviderStaging`（JSONL spool 读写，append-only，
@@ -300,11 +300,16 @@ macos-app/
 >   DailyBar ProviderRecord，USD、unitedStates、adjustmentFactor=1.0 raw 不伪造复权）。
 >   端到端验证 CSV→ProviderRecord→SchemaValidator→staging round-trip。ProviderEndpoint
 >   加 stooqHistory，URLSession 按 endpoint 映射 providerID（不再硬编码 eastmoney）。
+> - PROV-5（3）—— FRED 宏观 Adapter：`FREDResponseParser`（observations JSON，realtime_start
+>   →publishedAt 做 PIT 锚点，"." 缺值丢弃+计数）+ `FREDProviderAdapter`（series config 驱动，
+>   officialStable，产 MacroPayload ProviderRecord）。新增 `MacroRelease` availability policy
+>   （base=publishedAt、US 法域）——修正 macro 不再误用 MarketClose（GDP Q1 值 dated 1-01 但
+>   4-25 才发布，availableAt 应基于发布日）。端到端验证 FRED→MacroObservation→PIT。
 >
-> **未达成（M3 blocked 原因）**：PROV-3/4/5/6/7 各 Adapter 需接外部数据源
-> （AKShare Python / SEC / FRED / Alpha Vantage / Tavily），PROV-8
+> **未达成（M3 blocked 原因）**：PROV-3/4/6/7 各 Adapter 需接外部数据源
+> （AKShare Python / SEC XBRL / Alpha Vantage / Tavily），PROV-8
 > ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
-> （参考 Stooq/Eastmoney 的 StaticResponseFetcher 注入模式），但完整验收
+> （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
 > 需对应外部服务的真实连通。
 
 ---

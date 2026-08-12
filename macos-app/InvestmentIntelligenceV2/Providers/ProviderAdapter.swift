@@ -317,6 +317,8 @@ enum ProviderEndpoint: Sendable, Hashable {
     case lsjz(fundCode: String)
     /// Stooq 历史日线 CSV：`stooq.com/q/d/l/?s={symbol}&i=d`（PROV-2，美股 primary）
     case stooqHistory(symbol: String)
+    /// FRED 宏观指标观测：`api.stlouisfed.org/fred/series/observations?series_id=...`（PROV-5）
+    case fredObservations(seriesID: String)
 }
 
 /// 静态响应 fetcher（测试用：注入预录真实响应文本）。
@@ -354,17 +356,21 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         case .stooqHistory(let symbol):
             // Stooq 日线 CSV 下载端点（personal-use，FREE001 合规：免费、无 key）
             urlString = "https://stooq.com/q/d/l/?s=\(symbol)&i=d"
+        case .fredObservations(let seriesID):
+            // FRED 观测序列（免费 API，需 api_key；realtime_start/end 用于 PIT vintage）
+            // 生产由 adapter 注入 api_key；此处占位供集成测试（Epic 4 补 key 管理）
+            urlString = "https://api.stlouisfed.org/fred/series/observations?series_id=\(seriesID)&file_type=json&api_key=PLACEHOLDER"
         }
         let providerID = Self.providerID(for: endpoint)
         guard let url = URL(string: urlString) else {
             throw ProviderError.unavailable(providerID: providerID, underlying: "bad url")
         }
         var request = URLRequest(url: url, timeoutInterval: 15)
-        // Referer 按端点来源设置（天天基金需要，Stooq 不需要但无害）
+        // Referer 按端点来源设置（天天基金需要，Stooq/FRED 不需要但无害）
         switch endpoint {
         case .pingzhongdata, .lsjz:
             request.setValue("https://fund.eastmoney.com/", forHTTPHeaderField: "Referer")
-        case .stooqHistory:
+        case .stooqHistory, .fredObservations:
             break
         }
         do {
@@ -385,6 +391,7 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         switch endpoint {
         case .pingzhongdata, .lsjz: return .eastmoney
         case .stooqHistory: return .stooq
+        case .fredObservations: return .fred
         }
     }
 }
