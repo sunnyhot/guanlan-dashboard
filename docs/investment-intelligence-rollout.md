@@ -230,6 +230,12 @@ macos-app/
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
+> **状态修正（2026-08-12）**：M2 当前为 **Blocked**。初版实现（commit `58dd465`）
+> 用 stub Provider Adapter + 手写 fixture 通过了 5 个场景的形态预演，但 REPO-6/7
+> 未真正接入 `QiemanPlatformNativeClient` / 天天基金抓取，REPO-5 只完成时间包裹
+> 未做 ProviderRecord → CanonicalObservation 完整链路，economic 查询泄漏旧 vintage，
+> resolve 绕过 fuzzy 防火墙。详见审查反馈。正在修复，未重新达成前不得进 Epic 5。
+
 ---
 
 ### Epic 4 — Provider Adapters（Acquisition Layer）
