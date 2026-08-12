@@ -279,7 +279,8 @@ macos-app/
 |---|---|---|---|---|
 | PROV-1 | `ProviderStaging`（JSONL spool dir）格式定义 + Schema Validator（`ProviderRecord` 所有权在 REPO-5a，PROV-1 只消费做 Staging/校验，审查 P2 消除所有权倒置）| REPO-5a | 2 | V3.1 §26 |
 | PROV-2 | Stooq Adapter（美股历史日线 primary，CSV 下载 + 解析）| PROV-1 | 3 | personal-use 合规标注 |
-| PROV-3 | AKShare Collector（macOS 进程外 Python，输出 staging；覆盖股票/基金/债券/指数多 dataset 对接 + staging 格式 + 异常处理）| PROV-1 | 8 | DATA007 隔离；不进 iOS；不直接写 Canonical；多 dataset 覆盖 |
+| PROV-3a | AKShare **本地** Collector（macOS 进程外 Python，输出 staging；多 dataset 对接 + 异常处理）。DATA007 方案，**进阶可选**——默认 App 不含，想用 A 股全量的用户自装。分发困境见 DATA010 | PROV-1 | 8 | DATA007 隔离；不进 iOS；不直接写 Canonical；多 dataset 覆盖 |
+| PROV-3b | AKShare **远程** Collector + App 端 `RemoteStagingProvider`（VPS 部署 Python collector 抓公开数据 → nginx 托管 JSONL → App HTTP 拉取 + 验签 + SchemaValidator）。DATA010 方案，**默认路径**——App 零 Python 依赖，A 股全量作远程增强，客户端三档降级。含跨语言 schema 契约测试 | PROV-1, PROV-8 | 5 | DATA010：公开数据 only / 鉴权反白嫖 / 三档降级 / 验签完整性；契约测试守护 Python↔Swift schema 对齐 |
 | PROV-4 | SEC Adapter（封装现有 `SECOfficialSourceClient`）| PROV-1 | 2 | XBRL facts 带 extractionMethod |
 | PROV-5 | FRED Adapter（宏观，利用 real-time periods/vintage）| PROV-1 | 3 | vintage 对齐 PIT |
 | PROV-6 | Alpha Vantage Adapter（已有，降级 supplemental，加 25/天 quota 感知）| PROV-1 | 2 | quota 用完降级不阻塞 |
@@ -288,13 +289,18 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-12）**：M3 进行中（8/23 点，PROV-1/2/5 签收）。
+> **状态（2026-08-12）**：M3 进行中（8/28 点，PROV-1/2/5 签收）。
+> PROV-3 拆为 PROV-3a（本地 Python collector，DATA007，8pt，进阶可选）+
+> PROV-3b（远程 VPS collector + RemoteStagingProvider，DATA010，5pt，默认路径）。
+> DATA010 ADR 已 Proposed，定死凭证边界（公开数据 only）/ 反爬（聚合去重）/
+> 三档降级 / 鉴权反白嫖 / 验签完整性。
 >
 > **已签收**：
 > - PROV-1（2）—— `ProviderStaging`（JSONL spool 读写，append-only，
 >   `Persistence/` 新目录）+ `ProviderRecordSchemaValidator`（结构前置闸门：字段非空、
 >   时间序 effectiveAt≤publishedAt、rawPayload 按声明 kind 解码匹配；与 ObservationFactory
->   的语义转换互补不重叠）。ADR-DATA003 Pipeline 第 1+4 步可独立单测。
+>   的语义转换互补不重叠）。ADR-DATA003 Pipeline 第 1+4 步可独立单测。**且为 PROV-3b
+>   远程 collector 的接收侧基础**（RemoteStagingProvider 复用 Reader + Validator）。
 > - PROV-2（3）—— Stooq 美股日线 Adapter：`StooqResponseParser`（CSV 表头列名分派、
 >   非有限 OHLC 防护、Volume 缺失为 nil、dropped 计数）+ `StooqProviderAdapter`（产
 >   DailyBar ProviderRecord，USD、unitedStates、adjustmentFactor=1.0 raw 不伪造复权）。
@@ -306,11 +312,11 @@ macos-app/
 >   （base=publishedAt、US 法域）——修正 macro 不再误用 MarketClose（GDP Q1 值 dated 1-01 但
 >   4-25 才发布，availableAt 应基于发布日）。端到端验证 FRED→MacroObservation→PIT。
 >
-> **未达成（M3 blocked 原因）**：PROV-3/4/6/7 各 Adapter 需接外部数据源
-> （AKShare Python / SEC XBRL / Alpha Vantage / Tavily），PROV-8
+> **未达成（M3 blocked 原因）**：PROV-3a/3b/4/6/7 各 Adapter 需接外部数据源
+> （AKShare 本地/远程 Python / SEC XBRL / Alpha Vantage / Tavily），PROV-8
 > ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
 > （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
-> 需对应外部服务的真实连通。
+> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行。
 
 ---
 
@@ -339,7 +345,7 @@ macos-app/
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | SYNC-1 | `TradingCalendar`（A 股交易日历 + 基金净值公布日历）| GRDB-7 | 3 | exchangeScheduleDerived 依赖此 |
-| SYNC-2 | Market Daily Sync（收盘后增量：stocks/ETF/indexes）| SYNC-1, PROV-3 | 2 | |
+| SYNC-2 | Market Daily Sync（收盘后增量：stocks/ETF/indexes）| SYNC-1, PROV-3b | 2 | |
 | SYNC-3 | Fund NAV Sync | SYNC-1, REPO-7 | 2 | |
 | SYNC-4 | Fund Holding Sync（披露检测，新 snapshot 自动入库）| REPO-7 | 2 | |
 | SYNC-5 | Macro Sync（daily/weekly）| PROV-5 | 1 | |
@@ -565,6 +571,7 @@ M2 不过不进 Epic 5（GRDB schema 冻结）。
 | DATA007 | External Collector Isolation | 1 |
 | DATA008 | Observation Revision Policy | 1 |
 | DATA009 | Model Validation Before Persistence Freeze | 1 |
+| DATA010 | Remote Public-Data Collector（VPS 方案，PROV-3b 产出）| 4 |
 | D000 | Strategic Target Provenance | 1 |
 | D001 | Sizing Provenance | 1 |
 | D002 | Criterion Provenance | 1 |
