@@ -34,7 +34,7 @@ Investment Intelligence V3.1 的目标是给个人投资者一个可信、可审
 
 2. **LLM 接入必须支持「用户自备 key」**。模型网关（Epic 11 RES-1）只支持 OpenAI 兼容协议，密钥由用户配置，本项目不内置任何付费模型 token。无 key 时 LLM Research 子系统降级，Deterministic 路径（Factor / Exposure / Risk / Attribution / Decision）仍完整可用。
 
-3. **基础设施零付费**。不使用云数据库、云函数、云对象存储。本地持久化用 GRDB（Epic 5，AGENTS.md 第 6 条会在此 Epic 起更新）；进程外 Collector 用本机 Python（见 ADR-DATA007）。
+3. **基础设施零付费**（DATA010 远程 Collector 是受控例外，见下）。不使用云数据库、云函数、云对象存储。本地持久化用 GRDB（Epic 5，AGENTS.md 第 6 条会在此 Epic 起更新）。AKShare Collector 有两条路径：本地进程外 Python（[DATA007](DATA007-external-collector-isolation.md)，PROV-3a，零付费）或远程 VPS（[DATA010](DATA010-remote-public-data-collector.md)，PROV-3b，**VPS 付费是 FREE001 的受控让步**——PROV-3b 实施前须在 PR 显式声明此让步，并评估个人 SRE 承担能力）。
 
 4. **强制配额感知**。每个免费 Provider 必须在 Adapter 层暴露：
    - 当前剩余配额（如 Alpha Vantage 的 25/天）
@@ -79,4 +79,5 @@ Investment Intelligence V3.1 的目标是给个人投资者一个可信、可审
 - 关联 ADR：
   - ADR-DATA006（Free Provider Fragility）：免费 Provider 的失败降级路径
   - ADR-DATA007（External Collector Isolation）：本机 Python Collector 的隔离
+  - ADR-DATA010（Remote Public-Data Collector）：远程 VPS Collector 的受控付费让步
   - ADR-DATA004（Local Accumulation）：免费配额不足时的本地累积策略

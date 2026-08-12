@@ -37,9 +37,10 @@ LLM (用户 key) ──┤                   │
 - [DATA003](DATA003-raw-market-canonicalization.md) Raw Market Canonicalization（Pipeline 5 步）
 - [DATA004](DATA004-local-accumulation.md) Local Accumulation（永久入库 + 增量同步）
 - [DATA006](DATA006-free-provider-fragility.md) Free Provider Fragility（三档降级 + unknown）
-- [DATA007](DATA007-external-collector-isolation.md) External Collector Isolation（进程外 Python）
+- [DATA007](DATA007-external-collector-isolation.md) External Collector Isolation（本地进程外 Python，PROV-3a 备选）
 - [DATA008](DATA008-observation-revision-policy.md) Observation Revision（multi-vintage）
 - [DATA009](DATA009-model-validation-before-persistence-freeze.md) Model Validation Before Freeze（M2 go/no-go）
+- [DATA010](DATA010-remote-public-data-collector.md) Remote Public-Data Collector（远程 VPS，PROV-3b 默认，FREE001 受控让步）
 
 ---
 
@@ -171,7 +172,7 @@ LLM 在这条路径里只能影响「Signal」，不能直接改 Target / Δw / 
 - [ ] **DATA003**：Provider Adapter 是否只产 ProviderRecord？Pipeline 是否完整 5 步？
 - [ ] **DATA004**：同步是否增量补缺口？是否覆盖旧 vintage？
 - [ ] **DATA006**：Provider 失败是否走三档降级？缺口是否标 unavailable 而非 0？
-- [ ] **DATA007**：Python 是否进程外？iOS 是否不含 Collector？
+- [ ] **DATA007 / DATA010**：本地 Collector 是否进程外？远程 Collector 是否只做公开数据？iOS 是否不含 Collector？远程方案是否在 PR 声明 FREE001 让步？
 - [ ] **DATA008**：修订是否走新 vintage？vintage 是否可删？
 - [ ] **DATA009**：M2 未通过前是否引入 SQLite / Factor？
 - [ ] **D000**：Target 是否只来自 explicitUserAllocation / userSelectedTemplate？

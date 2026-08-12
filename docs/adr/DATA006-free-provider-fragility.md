@@ -93,3 +93,4 @@ FREE001 决定了系统只能用免费 Provider，但免费 Provider 不可靠�
   - DATA004（Local Accumulation）：local 兜底依赖本地积累
   - DATA003（Raw Market Canonicalization）：Secondary Provider 也走 Pipeline
   - DATA007（External Collector Isolation）：Collector 进程外失败不影响主进程
+  - DATA010（Remote Collector）：远程 collector 不可用时客户端三档降级到原生 provider

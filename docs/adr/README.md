@@ -34,6 +34,7 @@
 | DATA007 | External Collector Isolation | Accepted |
 | DATA008 | Observation Revision Policy | Accepted |
 | DATA009 | Model Validation Before Persistence Freeze | Accepted |
+| DATA010 | Remote Public-Data Collector | Proposed |
 | D000 | Strategic Target Provenance | Accepted |
 | D001 | Sizing Provenance | Accepted |
 | D002 | Criterion Provenance | Accepted |

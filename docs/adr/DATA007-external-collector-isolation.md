@@ -1,8 +1,13 @@
 # DATA007. External Collector Isolation
 
-- **Status**: Accepted
-- **Date**: 2026-08-11
-- **Epic / Story**: Epic 1 / ADR-3；Epic 4 PROV-3
+- **Status**: Accepted（本地 Collector 备选路径；默认路径见 DATA010）
+- **Date**: 2026-08-11（2026-08-12 补充与 DATA010 的关系）
+- **Epic / Story**: Epic 1 / ADR-3；Epic 4 PROV-3a
+
+> **与 DATA010 的关系**：本 ADR 定义「本地进程外 Collector」（PROV-3a，进阶可选）。
+> [DATA010](DATA010-remote-public-data-collector.md) 定义「远程 VPS Collector」（PROV-3b，默认路径）。
+> 两者共用 PROV-1 的 JSONL staging schema 与 Pipeline；差别在 Collector 跑在哪
+> （本机 vs VPS）以及 App 如何拿到 staging（本地文件 vs HTTP 拉取）。
 
 ## Context
 
@@ -31,7 +36,7 @@ AKShare 是覆盖最全的免费 A 股 / 基金 / 债券 / 指数数据源，但
 
 **AKShare 只能作为 macOS 进程外 Collector，输出 JSONL staging 文件，Swift 主进程只读 staging。Collector 失败不影响主进程。**
 
-1. **进程边界**（PROV-3）：
+1. **进程边界**（PROV-3a）：
    - Collector 是独立 Python 进程（脚本 / CLI），可以独立启动、独立崩溃、独立升级
    - Collector 与 Swift 主进程的唯一接口是文件系统的 JSONL spool 目录（ProviderStaging，PROV-1）
    - Swift 主进程不 import Python，不内嵌 Python runtime
@@ -51,7 +56,7 @@ AKShare 是覆盖最全的免费 A 股 / 基金 / 债券 / 指数数据源，但
    - Collector 不写 Canonical，不直接写 GRDB；所有写入都过 commit pipeline（GRDB-8）
    - staging 带来源时间戳、collector version，便于审计
 
-5. **多 dataset 覆盖**（PROV-3 8 点）：
+5. **多 dataset 覆盖**（PROV-3a 8 点）：
    - Collector 支持 A 股股票 / ETF / 指数 / 基金 / 债券多类 dataset
    - 每个 dataset 独立 staging 文件，独立异常处理
    - 同一 Collector 进程可以并发抓多 dataset，但写入 staging 时分类清晰
@@ -76,7 +81,7 @@ AKShare 是覆盖最全的免费 A 股 / 基金 / 债券 / 指数数据源，但
 
 ## Compliance Check
 
-- **PROV-3 验收**：Collector 输出 staging，主进程通过 SchemaValidator 读取；任何主进程代码 `import Python` / 内嵌 Python runtime → 拒绝
+- **PROV-3a 验收**：Collector 输出 staging，主进程通过 SchemaValidator 读取；任何主进程代码 `import Python` / 内嵌 Python runtime → 拒绝
 - **iOS 构建验证**：iOS target 必须能独立构建，不依赖 Collector / Python
 - **故障隔离测试**：模拟 Collector 崩溃 / 超时 / 输出非法 JSON，主进程不崩，staging 不污染 Canonical
 - **`AGENTS.md` 第 3 条**：本 ADR 引入 Python 是「进程外 Collector」例外，必须在 `AGENTS.md` 注明（Epic 4 起更新）
@@ -87,7 +92,7 @@ AKShare 是覆盖最全的免费 A 股 / 基金 / 债券 / 指数数据源，但
 
 ## References
 
-- rollout §3 Epic 4 PROV-3
+- rollout §3 Epic 4 PROV-3a（本地备选）/ PROV-3b（远程默认，见 DATA010）
 - `AGENTS.md` 第 3 条（纯 Swift 运行时）、iOS 视图说明
 - 关联 ADR：
   - FREE001（Zero Paid Dependency）：AKShare 免费是选用根因

@@ -85,3 +85,4 @@ Provider 给出的原始行情字段千差万别：
   - DATA002（PIT Visibility）：Canonical 化时必须保留 vintage
   - DATA008（Observation Revision）：raw + adjustment 分离支撑 vintage 重算
   - DATA007（External Collector Isolation）：AKShare 进程外产 staging，再过 Pipeline
+  - DATA010（Remote Collector）：远程 collector 产的 staging 同样过 Pipeline（不绕过任何防火墙）
