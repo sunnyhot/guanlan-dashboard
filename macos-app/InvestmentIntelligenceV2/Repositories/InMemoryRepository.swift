@@ -332,8 +332,10 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     ///   若 `context.vintageFilter` 非空且精确匹配某 vintage，则只返回那一条。
     /// - `exactSnapshot`：返回 `effectiveAt == at` 的全部 vintage（不分组、不去重）。
     ///
-    /// `preferredProvider` 暂未生效（CanonicalObservation 当前不含 providerID 字段，
-    /// 见 P1 跟进项；多 Provider 同观测去重将在 Repository 补 providerID 后实现）。
+    /// `preferredProvider` **未生效**：CanonicalObservation 当前不含 sourceProviderID 字段，
+    /// 多 Provider 同 (effectiveAt, vintage) 跨源去重无确定性 tie-breaker。
+    /// 该能力从 REPO-2 拆到 **REPO-2b**（rollout 2026-08-12 修订），需先给
+    /// CanonicalObservation 加 sourceProviderID/provenance，再实现稳定选择规则。
     static func filterByContext<T: CanonicalObservation>(
         _ observations: [T],
         context: KnowledgeContext

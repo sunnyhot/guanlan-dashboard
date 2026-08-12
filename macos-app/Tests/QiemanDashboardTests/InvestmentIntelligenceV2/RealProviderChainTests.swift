@@ -1,14 +1,16 @@
 import XCTest
 @testable import QiemanDashboard
 
-/// 真实 Provider 链路端到端测试（审查 P0 修复）。
+/// 天天基金真实解析链端到端测试（审查 P0 修复）。
 ///
-/// 这是 M2 的「真实数据」验证：从预录真实响应（天天基金 wire 格式）→
+/// 从 fixture（基于现有 QiemanPlatformFundQuoteFallbackTests inline mock 的真实
+/// wire 格式派生——**不是 live network 录制**，审查 P1-4 修正表述）→
 /// EastmoneyProviderAdapter 解析 → ProviderRecord → ObservationFactory 转换 →
 /// CanonicalObservation → InMemoryRepository → PIT 查询。
 ///
-/// 审查 P0 要求：M2 测试至少要使用录制自真实响应的 fixture，验证 Adapter
-/// 解析链路。本测试满足该要求——不再是 stub filter，而是真实解析 + 完整转换。
+/// 这验证了天天基金这一条 Provider 链路的真实解析（不是 stub filter）。
+/// 但 **M2 仍未通过**：且慢 Provider 仍是 stub，live network 集成测试留 Epic 4。
+/// 这些测试是 M2 的部分证据（天天基金链路），不是完整 M2 gate。
 final class RealProviderChainTests: XCTestCase {
 
     private struct WeekdayCalendar: TradingCalendar {

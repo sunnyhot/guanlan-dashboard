@@ -74,7 +74,7 @@
 ## Compliance Check
 
 - **DOM-1..3 测试**：每个 ID 类型的 `Sendable + Codable + Hashable` round-trip 测试（M1 验收）
-- **REPO-4 测试**：4 条正式映射路径各有单元测试；fuzzy 路径断言「只产 candidate，不直接写 canonical」
+- **REPO-4 测试（lookup 层）**：resolve 按 (provider,scheme,value) 查已登记映射 + 校验 isAuthoritative；fuzzy 路径断言「只产 candidate，不直接写 canonical」。**4 条建立路径的匹配算法测试在 SYNC-8**（建立时执行，非 resolver 运行时，见 §Decision 3）
 - **REPO-1 协议审查**：Repository 协议中不得出现 Provider 原始代码类型（用 grep / 编译期约束）
 - **M2 验收场景 1/2**（rollout §4.1）：跨 Provider 同一基金/股票必须解析到同一 Canonical ID
 - **GRDB-2 schema**：Identity schema 7 表必须完整覆盖五层 + provider_identifiers + instrument_relationships

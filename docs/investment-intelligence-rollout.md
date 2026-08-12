@@ -218,15 +218,16 @@ macos-app/
 
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
-| REPO-1 | Repository 协议：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding / Fundamental / Macro / CorporateAction / Calendar，每个 API 强制 `KnowledgeContext` 入参 | DOM-* | 3 | ADR-DATA002 强制 |
-| REPO-2 | InMemoryRepository 实现（Dictionary-backed）| REPO-1 | 3 | economic/exact 两种 query 都支持 |
+| REPO-1 | Repository 协议：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding / Fundamental / Macro / CorporateAction / Calendar，Observation 类 API 强制 `KnowledgeContext`（Identity/Calendar 例外见 ADR-DATA002 §3a） | DOM-* | 3 | ADR-DATA002 强制 |
+| REPO-2 | InMemoryRepository 实现（Dictionary-backed）| REPO-1 | 3 | economic/exact 两种 query 都支持；multi-vintage 每 (effectiveAt) 取最新 |
+| REPO-2b | **preferredProvider 多源去重**：CanonicalObservation 加 sourceProviderID/provenance + 稳定 tie-breaker（从 REPO-2 拆出，审查 2026-08-12）| REPO-2 | 2 | preferredProvider 生效；同 effectiveAt+vintage 跨源确定性选一 |
 | REPO-3 | JSON Fixture loader（`Tests/.../Fixtures/*.json`）| REPO-2 | 2 | 能加载真实样本 |
-| REPO-4 | `IdentityResolver`：4 条正式映射路径（provider authoritative / exchange+symbol exact / ISIN/CIK / manual verified）+ fuzzy 只产 candidate 经 Verification | DOM-3, REPO-2 | 5 | V3.1 §13；fuzzy 不直接写 canonical |
-| REPO-4b | **初始 Identity 映射数据**：从 Qieman + 天天基金 provider hints 推导基金映射 + 手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 3 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
-| REPO-5 | `TemporalNormalizer`：ProviderRecord → CanonicalObservation 的 PIT 标注（基于 AvailabilityPolicy）| DOM-4,7, REPO-2 | 3 | 不会把 ingestedAt 当 availableAt |
+| REPO-4 | `IdentityResolver` **lookup 层**：按 (provider,scheme,value) 查已登记映射 + 校验 isAuthoritative + fuzzy 返回 candidate 经 Verification。**4 条建立路径是 IdentitySync（SYNC-8）建立时的匹配算法**，不是 resolver 运行时匹配（ADR-DATA001 §3 明确）| DOM-3, REPO-2 | 3 | V3.1 §13；fuzzy 不直接写 canonical；4 路径建立算法移到 SYNC-8 |
+| REPO-4b | **初始 Identity 映射数据**：手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 2 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
+| REPO-5 | `ObservationFactory`：ProviderRecord → CanonicalObservation 完整转换（identity 解析 + policy 选 + PIT 标注 + payload 解析）。**当前支持 2/5 kind（DailyBar/NAV），持仓/宏观/公司行动留 Epic 4** | DOM-4,7, REPO-2 | 3 | 不会把 ingestedAt 当 availableAt；5 kind 完整在 Epic 4 |
 | REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
 | REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
-| REPO-8 | M2 验收测试（§4.1 的 5 个场景）| REPO-4,4b,5,6,7 | 3 | 五个场景全过 |
+| REPO-8 | M2 验收测试（§4.1 的 5 个场景，真实 Provider 链路）| REPO-4,4b,5,6,7 | 3 | 五个场景全过（真 gate，非形态预演） |
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
@@ -306,7 +307,7 @@ macos-app/
 | SYNC-6a | **持仓 universe Historical Backfill**（用户当前持仓涉及的标的，回填 ≥252 交易日）| SYNC-2,3 | 3 | 持仓内全部标的有历史 |
 | SYNC-6b | **全市场 universe Historical Backfill**（Market Discovery 用的 300+ 行业/指数/资产标的，分批回填；受免费 Provider 额度限制，可分阶段）| SYNC-2,3 | 5 | WF-2 依赖的 universe 有基础覆盖；允许增量补全 |
 | SYNC-7 | Provider 失败降级路径（local 兜底 + secondary + unavailable）| GRDB-8 | 3 | DATA006 + FREE001 |
-| SYNC-8 | Identity Sync（发现新资产时 resolve → validate → commit；非持仓标的的 identity 增量建立）| SYNC-2, REPO-4 | 3 | 新标的能进 Instrument Master |
+| SYNC-8 | Identity Sync（发现新资产时 4 路径建立算法：provider authoritative / exchange+symbol exact / ISIN/CIK / manual verified → fuzzy 产 candidate → Verification → commit；非持仓标的的 identity 增量建立）| SYNC-2, REPO-4 | 5 | 新标的能进 Instrument Master；4 路径各有测试 |
 
 **里程碑 M5：数据自给**。Factor Engine 才有可信输入。
 
