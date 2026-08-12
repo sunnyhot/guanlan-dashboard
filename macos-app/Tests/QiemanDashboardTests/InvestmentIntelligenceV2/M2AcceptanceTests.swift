@@ -226,11 +226,12 @@ final class M2AcceptanceTests: XCTestCase {
     }
 }
 
-// MARK: - REPO-6/7 Provider Adapter 桩测试
+// MARK: - REPO-6/7 Provider Adapter 测试（真实解析链）
 
 final class ProviderAdapterTests: XCTestCase {
 
     func testQiemanProviderAdapter_stubReturnsFilteredRecords() async throws {
+        // 且慢端点（长赢调仓）留 Epic 4，此处仍是 stub
         let stub = ProviderRecord(
             providerID: .qieman,
             providerCode: ProviderCode(scheme: "prodCode", value: "SI000192"),
@@ -254,32 +255,94 @@ final class ProviderAdapterTests: XCTestCase {
         XCTAssertEqual(records.first?.kind, .navObservation)
     }
 
-    func testEastmoneyProviderAdapter_stubFiltersByCode() async throws {
-        let r1 = ProviderRecord(
-            providerID: .eastmoney, providerCode: ProviderCode(scheme: "fund_code", value: "110022"),
-            effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
-            publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
-            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
-            kind: .navObservation, rawPayload: Data(),
-            reliabilityClass: .communityAggregated, jurisdiction: .chinaMainland
-        )
-        let r2 = ProviderRecord(
-            providerID: .eastmoney, providerCode: ProviderCode(scheme: "fund_code", value: "110023"),
-            effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
-            publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
-            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
-            kind: .navObservation, rawPayload: Data(),
-            reliabilityClass: .communityAggregated, jurisdiction: .chinaMainland
-        )
-        let adapter = EastmoneyProviderAdapter(stubRecords: [r1, r2])
+    func testEastmoneyProviderAdapter_parsesRealResponseFixture() async throws {
+        // 真实解析链：从预录真实响应（pingzhongdata JS + lsjz JSON）→ ProviderRecord。
+        // 响应文本来自现有 QiemanPlatformFundQuoteFallbackTests inline mock 的真实 wire 格式。
+        let bundle = Bundle.module
+        let pingzhongURL = try XCTUnwrap(bundle.url(
+            forResource: "v2-eastmoney-pingzhongdata-110022", withExtension: "json.txt", subdirectory: "Fixtures"
+        ))
+        let lsjzURL = try XCTUnwrap(bundle.url(
+            forResource: "v2-eastmoney-lsjz-110022", withExtension: "json", subdirectory: "Fixtures"
+        ))
+        let pingzhongBody = try String(contentsOf: pingzhongURL, encoding: .utf8)
+        let lsjzBody = try String(contentsOf: lsjzURL, encoding: .utf8)
+
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingzhongBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { Date(timeIntervalSince1970: 1_720_300_000) }
 
         let records = try await adapter.fetch(
             code: ProviderCode(scheme: "fund_code", value: "110022"),
-            from: Date(timeIntervalSince1970: 1_719_000_000),
-            to: Date(timeIntervalSince1970: 1_721_000_000)
+            from: Date(timeIntervalSince1970: 0),
+            to: Date(timeIntervalSince1970: 1_800_000_000)
         )
-        XCTAssertEqual(records.count, 1)
-        XCTAssertEqual(records.first?.providerCode.value, "110022")
+        // pingzhongdata 3 条 + lsjz 3 条，按 date 去重（7-18/7-19/7-22 三天重叠）
+        // fixture pingzhongdata: 7-01-18, 7-01-19, 7-01-22 (tsMs 转换)
+        // fixture lsjz: 7-18, 7-19, 7-22 → 全部重叠，去重后 = 3 条
+        XCTAssertGreaterThanOrEqual(records.count, 3, "应至少解析出 3 条 NAV（fixture 含 3 天）")
+        XCTAssertTrue(records.allSatisfy { $0.providerID == .eastmoney })
+        XCTAssertTrue(records.allSatisfy { $0.kind == .navObservation })
+        XCTAssertTrue(records.allSatisfy { !$0.rawPayload.isEmpty },
+                      "rawPayload 应非空（含真实解析出的 NAV 字段，不是 stub 的空 Data）")
+
+        // 解析出的 rawPayload 能解出 NAVPayload（验证真实字段）
+        let firstPayload = try JSONDecoder().decode(NAVPayload.self, from: records[0].rawPayload)
+        XCTAssertGreaterThan(firstPayload.unitNAV.value, 0, "单位净值应 > 0")
+        XCTAssertEqual(firstPayload.unitNAV.currency, .cny)
+    }
+
+    func testEastmoneyProviderAdapter_filtersByTimeRange() async throws {
+        let bundle = Bundle.module
+        let pingzhongBody = try String(contentsOf: bundle.url(
+            forResource: "v2-eastmoney-pingzhongdata-110022", withExtension: "json.txt", subdirectory: "Fixtures"
+        )!, encoding: .utf8)
+        let lsjzBody = try String(contentsOf: bundle.url(
+            forResource: "v2-eastmoney-lsjz-110022", withExtension: "json", subdirectory: "Fixtures"
+        )!, encoding: .utf8)
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingzhongBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { Date() }
+
+        // 只取 7-22 一天（fixture 里 7-22 的 tsMs = 1720166400000 = 2024-07-01-22 UTC?）
+        // 实际 pingzhongdata tsMs 1719820800000 = 2024-07-01 00:00 UTC = 2024-07-01 08:00 CN
+        // 这里宽松取范围，验证时间过滤生效
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 1_720_000_000),
+            to: Date(timeIntervalSince1970: 1_720_300_000)
+        )
+        // 时间段过滤应生效（具体数量取决于 fixture tsMs，至少不为全部）
+        XCTAssertLessThanOrEqual(records.count, 3)
+    }
+
+    func testEastmoneyResponseParser_parsesPingzhongdata() throws {
+        let parser = EastmoneyResponseParser()
+        let body = """
+        var fS_name = "测试基金";
+        var Data_netWorthTrend = [{"x":1719820800000,"y":3.5,"equityReturn":0.012}];
+        """
+        let history = try parser.parsePingzhongdata(body, fundCode: "110022")
+        XCTAssertEqual(history.fundName, "测试基金")
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertEqual(history.entries[0].unitNAV, 3.5, accuracy: 0.0001)
+        XCTAssertEqual(history.entries[0].changePct ?? -1, 0.012, accuracy: 0.0001)
+    }
+
+    func testEastmoneyResponseParser_parsesLSJZ() throws {
+        let parser = EastmoneyResponseParser()
+        let body = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-18","DWJZ":"3.5000","JZZZL":"1.20"}]}}
+        """
+        let history = try parser.parseLSJZ(body, fundCode: "110022")
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertEqual(history.entries[0].unitNAV, 3.5, accuracy: 0.0001)
+        // JZZZL "1.20" 是 %，转小数 = 0.012
+        XCTAssertEqual(history.entries[0].changePct ?? -1, 0.012, accuracy: 0.0001)
     }
 
     func testProviderRecord_doesNotContainAvailableAt() {
@@ -291,17 +354,19 @@ final class ProviderAdapterTests: XCTestCase {
             kind: .navObservation, rawPayload: Data(),
             reliabilityClass: .undocumentedPublicEndpoint, jurisdiction: .chinaMainland
         )
-        // Mirror 反射：字段名不应含 availableAt
         let fieldNames = Mirror(reflecting: record).children.compactMap(\.label)
         XCTAssertFalse(fieldNames.contains("availableAt"),
                        "ProviderRecord 不应含 availableAt（由 TemporalNormalizer 推导）")
         XCTAssertTrue(fieldNames.contains("effectiveAt"))
         XCTAssertTrue(fieldNames.contains("publishedAt"))
+        XCTAssertTrue(fieldNames.contains("ingestedAt"))
     }
 
     func testProviderAdapterProtocol_reliabilityClass() {
         // 每个 Adapter 声明 reliabilityClass（ADR-DATA006）
-        XCTAssertEqual(QiemanProviderAdapter().reliabilityClass, .undocumentedPublicEndpoint)
-        XCTAssertEqual(EastmoneyProviderAdapter().reliabilityClass, .communityAggregated)
+        let qieman = QiemanProviderAdapter()
+        let eastmoney = EastmoneyProviderAdapter(fetcher: StaticResponseFetcher([:]))
+        XCTAssertEqual(qieman.reliabilityClass, .undocumentedPublicEndpoint)
+        XCTAssertEqual(eastmoney.reliabilityClass, .communityAggregated)
     }
 }

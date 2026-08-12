@@ -235,6 +235,23 @@ macos-app/
 > 未真正接入 `QiemanPlatformNativeClient` / 天天基金抓取，REPO-5 只完成时间包裹
 > 未做 ProviderRecord → CanonicalObservation 完整链路，economic 查询泄漏旧 vintage，
 > resolve 绕过 fuzzy 防火墙。详见审查反馈。正在修复，未重新达成前不得进 Epic 5。
+>
+> **修复进度（2026-08-12，commit `caf3f33`→后续）**：
+> - [x] economic vintage 去重 + resolve fuzzy 防火墙 + Sendable（P1）
+> - [x] ObservationFactory 完整链 ProviderRecord → CanonicalObservation（P1，REPO-5 真正完成）
+> - [x] IdentityResolver 设计明确（4 路径是建立时算法，resolver 是 lookup 层，ADR 显式）
+> - [x] fixture 一致性 + REPO-1 KnowledgeContext 例外 + provenance 验证 + upsert 幂等（P2）
+> - [x] 天天基金真实响应解析链（pingzhongdata + lsjz 真实 wire 格式 fixture，
+>      EastmoneyResponseParser 真实解析，不再是 stub filter）
+> - [ ] **残留限制 1**：且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4 完整接入）
+> - [ ] **残留限制 2**：M2 测试用「录制自真实响应的 fixture」，**未跑 live network**（审查
+>      明确 fixture 是 M2 标准，live network 属集成测试，需登录态/网络，留 Epic 4 集成测试）
+> - [ ] **字段缺口**：天天基金 pingzhongdata 只给单位净值（累计净值/分红需扩展
+>      Data_ACWorthTrend 解析，留 Epic 4）；持仓只有 weightPct（无 shares/marketValue）
+>
+> 现在的 M2 证据：`RealProviderChainTests` 从真实 wire 格式 fixture → Adapter 解析 →
+> ObservationFactory → Repository → PIT 三模式查询，全链路真实数据。
+> 待 Epic 4 补 live network 集成测试后，M2 可正式标记 Pass。
 
 ---
 

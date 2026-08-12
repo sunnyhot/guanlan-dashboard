@@ -151,23 +151,123 @@ struct QiemanProviderAdapter: ProviderAdapter {
 
 /// 天天基金 Provider Adapter（REPO-7）。
 ///
-/// 生产实现：调用现有天天基金抓取逻辑（基金 NAV / 持仓披露）→ ProviderRecord。
-/// 此处提供桩实现，真实抓取在 Epic 4 + 集成测试。
+/// 真实解析链：通过 fetcher 取天天基金 pingzhongdata / lsjz 真实响应，
+/// 用 EastmoneyResponseParser 解析为 ProviderRecord 流。
+///
+/// 生产用 `URLSessionResponseFetcher`（直接 GET 上游 URL，复用现有 client 的
+/// 上游地址）；测试注入 `StaticResponseFetcher`（返回预录真实响应）。
+/// 不依赖现有 QiemanPlatformNativeClient 的公共 API（其 NAV 公共接口字段有损），
+/// 但解析格式与现有 client 内部一致（见 QiemanPlatformFundQuoteFallbackTests inline mock）。
 struct EastmoneyProviderAdapter: ProviderAdapter {
     let providerID: DataProviderID = .eastmoney
     let reliabilityClass: ProviderReliabilityClass = .communityAggregated
 
-    let stubRecords: [ProviderRecord]
+    private let parser = EastmoneyResponseParser()
+    private let fetcher: any ResponseFetcher
+    private let ingestedAt: () -> Date
 
-    init(stubRecords: [ProviderRecord] = []) {
-        self.stubRecords = stubRecords
+    init(fetcher: any ResponseFetcher, ingestedAt: @escaping () -> Date = { Date() }) {
+        self.fetcher = fetcher
+        self.ingestedAt = ingestedAt
     }
 
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
-        return stubRecords.filter { record in
-            record.providerCode == code
-                && record.effectiveAt >= from
-                && record.effectiveAt <= to
+        guard code.scheme == "fund_code" else {
+            // 非 fund_code scheme 留 Epic 4（stock_symbol 走不同上游）
+            return []
+        }
+        // 取 pingzhongdata（NAV 历史）+ lsjz（近期官方净值）
+        let pingzhongBody = try await fetcher.fetch(.pingzhongdata(fundCode: code.value))
+        let lsjzBody = try await fetcher.fetch(.lsjz(fundCode: code.value))
+
+        let pingzhongHistory = try parser.parsePingzhongdata(pingzhongBody, fundCode: code.value)
+        let lsjzHistory = try parser.parseLSJZ(lsjzBody, fundCode: code.value)
+
+        // 合并 + 去重（lsjz 与 pingzhongdata 末段重叠，按 date 取并集，pingzhongdata 优先）
+        var mergedByDate: [Date: EastmoneyNAVHistory.Entry] = [:]
+        for e in pingzhongHistory.entries { mergedByDate[e.date] = e }
+        for e in lsjzHistory.entries where mergedByDate[e.date] == nil { mergedByDate[e.date] = e }
+
+        let merged = EastmoneyNAVHistory(
+            fundCode: code.value,
+            fundName: pingzhongHistory.fundName,
+            entries: mergedByDate.values.sorted { $0.date < $1.date }
+        )
+        let allRecords = parser.toProviderRecords(
+            merged,
+            providerID: providerID,
+            reliabilityClass: reliabilityClass,
+            jurisdiction: .chinaMainland,
+            ingestedAt: ingestedAt()
+        )
+        // 时间段过滤
+        return allRecords.filter { $0.effectiveAt >= from && $0.effectiveAt <= to }
+    }
+}
+
+// MARK: - ResponseFetcher（生产/测试切换）
+
+/// Provider 上游响应获取器（解耦网络层，便于测试注入预录响应）。
+protocol ResponseFetcher: Sendable {
+    func fetch(_ endpoint: ProviderEndpoint) async throws -> String
+}
+
+/// Provider 上游端点（决定 URL 与解析路径）。
+enum ProviderEndpoint: Sendable, Hashable {
+    /// 天天基金 pingzhongdata：`fund.eastmoney.com/pingzhongdata/{code}.js`
+    case pingzhongdata(fundCode: String)
+    /// 天天基金 lsjz：`api.fund.eastmoney.com/f10/lsjz?fundCode=...`
+    case lsjz(fundCode: String)
+}
+
+/// 静态响应 fetcher（测试用：注入预录真实响应文本）。
+struct StaticResponseFetcher: ResponseFetcher {
+    let responses: [ProviderEndpoint: String]
+
+    init(_ responses: [ProviderEndpoint: String]) {
+        self.responses = responses
+    }
+
+    func fetch(_ endpoint: ProviderEndpoint) async throws -> String {
+        guard let body = responses[endpoint] else {
+            throw ProviderError.notFound(code: ProviderCode(scheme: "endpoint", value: String(describing: endpoint)))
+        }
+        return body
+    }
+}
+
+/// URLSession fetcher（生产用：构造真实上游 URL，GET 取响应文本）。
+/// Epic 4 会补全 URL 构造 + Referer header + 超时；此处占位供集成测试。
+struct URLSessionResponseFetcher: ResponseFetcher {
+    private let session: URLSession
+
+    init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    func fetch(_ endpoint: ProviderEndpoint) async throws -> String {
+        let urlString: String
+        switch endpoint {
+        case .pingzhongdata(let code):
+            urlString = "https://fund.eastmoney.com/pingzhongdata/\(code).js"
+        case .lsjz(let code):
+            urlString = "https://api.fund.eastmoney.com/f10/lsjz?fundCode=\(code)&pageIndex=1&pageSize=20"
+        }
+        guard let url = URL(string: urlString) else {
+            throw ProviderError.unavailable(providerID: .eastmoney, underlying: "bad url")
+        }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue("https://fund.eastmoney.com/", forHTTPHeaderField: "Referer")
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw ProviderError.unavailable(providerID: .eastmoney, underlying: "http error")
+            }
+            return String(data: data, encoding: .utf8) ?? ""
+        } catch let e as ProviderError {
+            throw e
+        } catch {
+            throw ProviderError.unavailable(providerID: .eastmoney, underlying: "\(error)")
         }
     }
 }
