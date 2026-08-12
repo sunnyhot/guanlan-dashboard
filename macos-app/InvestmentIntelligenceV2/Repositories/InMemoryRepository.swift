@@ -13,9 +13,12 @@ import Foundation
 
 /// Dictionary-backed Repository 实现。
 ///
-/// 线程安全：内部用 NSLock 保护可变存储（多个 Repository 方法可并发读，
-/// 写入互斥）。M2 阶段够用；GRDB 阶段换数据库事务。
-final class InMemoryRepository: Repository {
+/// 线程安全：所有可变存储的读写都经由 `lock`（NSLock）串行化。
+/// Swift 6 严格并发默认不允许 `Sendable` class 持有 `var` 存储属性——
+/// 编译器无法证明 NSLock 能覆盖所有路径。这里显式声明 `@unchecked Sendable`，
+/// 责任在维护者：**任何新增的可变存储属性都必须经由 `lock.lock(); defer { lock.unlock() }` 访问**。
+/// 未来如需更高吞吐可换 actor / Mutex；M2 阶段 lock 足够。
+final class InMemoryRepository: @unchecked Sendable, Repository {
     // Identity
     private var instruments: [InstrumentID: Instrument] = [:]
     private var listings: [ListingID: Listing] = [:]
@@ -174,9 +177,14 @@ final class InMemoryRepository: Repository {
     }
 
     func resolve(providerID: DataProviderID, scheme: String, value: String) -> CanonicalRef? {
+        // 防火墙 1 入口：fuzzyCandidate 不能直接返回 canonical
+        // （ADR-DATA001 §Decision 3：fuzzy 只产 candidate，必须经 Verification）
         lock.lock(); defer { lock.unlock() }
         let key = Self.providerKey(providerID, scheme: scheme, value: value)
-        return providerIdentifiers[key]?.canonical
+        guard let pid = providerIdentifiers[key], pid.resolutionMethod.isAuthoritative else {
+            return nil
+        }
+        return pid.canonical
     }
 
     func relationships(for instrument: InstrumentID) -> [InstrumentRelationship] {
@@ -288,15 +296,54 @@ final class InMemoryRepository: Repository {
     }
 
     /// 按 KnowledgeContext 过滤观测序列（泛型，所有 Observation 域共用）。
+    ///
+    /// 行为（ADR-DATA002 §Decision 2 + ADR-DATA008）：
+    /// - `economicKnowledge` / `operationalKnowledge`：先按 mode 过滤可见性，
+    ///   再按 `effectiveAt` 分组、每组只保留可见的最新 vintage（防修订版与原版
+    ///   同时进入时间序列导致因子重复计算，审查 P1 修复点）。
+    ///   若 `context.vintageFilter` 非空且精确匹配某 vintage，则只返回那一条。
+    /// - `exactSnapshot`：返回 `effectiveAt == at` 的全部 vintage（不分组、不去重）。
+    ///
+    /// `preferredProvider` 暂未生效（CanonicalObservation 当前不含 providerID 字段，
+    /// 见 P1 跟进项；多 Provider 同观测去重将在 Repository 补 providerID 后实现）。
     static func filterByContext<T: CanonicalObservation>(
         _ observations: [T],
         context: KnowledgeContext
     ) -> [T] {
-        observations.filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
-            .sorted { $0.vintage < $1.vintage }
+        // 精确 vintage 过滤优先：若指定且匹配，只返回那一条
+        if let wanted = context.vintageFilter {
+            let matched = observations.filter { $0.vintage == wanted }
+            return matched.filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
+                .sorted { $0.vintage < $1.vintage }
+        }
+
+        switch context.mode {
+        case .exactSnapshot:
+            // 返回该 effectiveAt 的全部 vintage，按 vintage 排序
+            return observations
+                .filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
+                .sorted { $0.vintage < $1.vintage }
+        case .economicKnowledge, .operationalKnowledge:
+            // 先按可见性过滤
+            // swiftlint:disable:next identifier_name
+            let visible = observations.filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
+            // 按 effectiveAt 分组，每组只保留最新 vintage
+            var latestPerDay: [Date: T] = [:]
+            for obs in visible {
+                let day = obs.temporalEnvelope.effectiveAt
+                if let existing = latestPerDay[day] {
+                    if obs.vintage > existing.vintage { latestPerDay[day] = obs }
+                } else {
+                    latestPerDay[day] = obs
+                }
+            }
+            return latestPerDay.values.sorted {
+                $0.temporalEnvelope.effectiveAt < $1.temporalEnvelope.effectiveAt
+            }
+        }
     }
 
-    /// 单个 envelope 是否符合 context（包内 helper）。
+    /// 单个 envelope 是否符合 context 的可见性部分（包内 helper）。
     static func contextIncludes(_ context: KnowledgeContext, envelope: TemporalEnvelope) -> Bool {
         context.mode.includes(envelope: envelope)
     }
