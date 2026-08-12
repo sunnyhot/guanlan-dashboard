@@ -227,9 +227,9 @@ macos-app/
 | REPO-4b | **初始 Identity 映射数据**：手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 2 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
 | REPO-5a | `ObservationFactory` **DailyBar + NAV 完整链**：ProviderRecord → CanonicalObservation（identity 解析 + policy 选 + PIT 标注 + payload 解析）| DOM-4,7, REPO-2 | 2 | 不会把 ingestedAt 当 availableAt；2 kind 端到端 |
 | REPO-5b | `ObservationFactory` **FundHolding + Macro + CorporateAction 三类**：从 REPO-5 拆出（审查 2026-08-12），FundamentalObservation 与持仓 raw payload schema 就绪后实现 | REPO-5a | 2 | 5 kind 完整；持仓 schema 解析 |
-| REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
-| REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5 | 3 | 输出 staging |
-| REPO-8 | M2 验收测试（§4.1 的 5 个场景，真实 Provider 链路）| REPO-4,4b,5,6,7 | 3 | 五个场景全过（真 gate，非形态预演） |
+| REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
+| REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
+| REPO-8 | M2 验收测试（§4.1 的 5 个场景，真实 Provider 链路）| REPO-4,4b,5a,5b,6,7 | 3 | 五个场景全过（真 gate，非形态预演） |
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
@@ -267,7 +267,7 @@ macos-app/
 
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
-| PROV-1 | `ProviderRecord` + `ProviderStaging`（JSONL spool dir）格式定义 + Schema Validator | REPO-5 | 2 | V3.1 §26 |
+| PROV-1 | `ProviderRecord` + `ProviderStaging`（JSONL spool dir）格式定义 + Schema Validator | REPO-5a | 2 | V3.1 §26 |
 | PROV-2 | Stooq Adapter（美股历史日线 primary，CSV 下载 + 解析）| PROV-1 | 3 | personal-use 合规标注 |
 | PROV-3 | AKShare Collector（macOS 进程外 Python，输出 staging；覆盖股票/基金/债券/指数多 dataset 对接 + staging 格式 + 异常处理）| PROV-1 | 8 | DATA007 隔离；不进 iOS；不直接写 Canonical；多 dataset 覆盖 |
 | PROV-4 | SEC Adapter（封装现有 `SECOfficialSourceClient`）| PROV-1 | 2 | XBRL facts 带 extractionMethod |
