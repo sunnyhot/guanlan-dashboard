@@ -235,8 +235,8 @@ macos-app/
 
 > **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
 >
-> **已签收 Story（13 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
-> REPO-4（3，按新 lookup 定义）、REPO-5a（2）。
+> **已签收 Story（15 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
+> REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）。
 >
 > **当前实现状态**（避免与下方 Story 表述冲突）：
 > - REPO-1 Repository 协议（七域，Fundamental 拆到 REPO-1b）——完整
@@ -246,7 +246,10 @@ macos-app/
 > - REPO-4 IdentityResolver lookup 层——完整（4 路径建立算法在 SYNC-8）
 > - REPO-5a ObservationFactory（DailyBar + NAV 完整链，含 ProviderRecord 所有权 +
 >   identity 解析 + policy 选 + PIT 标注 + payload 解析 + 非有限数防护）——完整
-> - REPO-5b（FundHolding/Macro/CorporateAction，从 REPO-5 拆出）——未实现，留 Epic 4
+> - REPO-5b ObservationFactory（FundHolding + Macro + CorporateAction 三类）：
+>   5 kind 全覆盖，FundHolding position 逐个 identity 解析（持仓代码携带 providerID，
+>   支持跨 Provider——基金快照来自且慢、持仓股票代码来自天天基金），任意 position
+>   未解析即拒收整条 snapshot（覆盖缺口由 Epic 8 PortfolioLookthrough 处理）——完整
 > - REPO-7 天天基金 NAV 解析链：pingzhongdata + lsjz 真实 wire 格式（基于现有
 >   QiemanPlatformFundQuoteFallbackTests inline mock 派生，**非 live network 录制**），
 >   日期归一化、字段级合并、真实累计净值（Data_ACWorthTrend/LJJZ）、分红 Optional 不伪造、
@@ -256,7 +259,6 @@ macos-app/
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
-> - REPO-5b ObservationFactory FundHolding/Macro/CorporateAction 三类未实现
 > - REPO-6 且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4）
 > - REPO-7 持仓链路未接（仅 NAV 链路真实）
 > - REPO-8 M2 验收测试（§4.1 五场景真实链路）未跑通

@@ -1,9 +1,10 @@
 import Foundation
 
-// MARK: - ObservationFactory（REPO-5 完整链：ProviderRecord → CanonicalObservation）
+// MARK: - ObservationFactory（REPO-5a + REPO-5b：ProviderRecord → CanonicalObservation）
 //
 // 审查 P1 修复：TemporalNormalizer 只算时间包裹，ObservationFactory 才是完整的
-// ProviderRecord → CanonicalObservation 转换器。
+// ProviderRecord → CanonicalObservation 转换器。REPO-5a 覆盖 DailyBar + NAV，
+// REPO-5b 补 FundHolding + Macro + CorporateAction 三类（5 kind 完整）。
 //
 // 流程：
 // 1. 按 record.kind 选 AvailabilityPolicy
@@ -104,12 +105,81 @@ struct ObservationFactory: Sendable {
                 accumulatedNAV: payload.accumulatedNAV,
                 cumulativeDividendPerShare: payload.cumulativeDividendPerShare
             ))
-        case .fundHoldingSnapshot, .macroObservation, .corporateAction:
-            // 这些 kind 的 payload schema 在 Epic 4 各 Provider Adapter 完整定义
-            throw ObservationFactoryError.payloadDecodeFailed(
-                kind: record.kind,
-                detail: "payload schema for \(record.kind) not yet implemented (Epic 4)"
-            )
+        case .fundHoldingSnapshot:
+            let payload = try Self.decode(FundHoldingPayload.self, from: record, kind: .fundHoldingSnapshot)
+            guard case .fundProduct(let productID) = canonical else {
+                throw ObservationFactoryError.identityUnresolved(providerCode: record.providerCode)
+            }
+            // 每个 position 的 Provider 代码也要解析为 Canonical ListingID（防火墙 1）。
+            // 任意 position 未解析即抛错——持仓是 Product 维度的整体，部分解析会产生
+            // 误导性 coverage（disclosedWeightTotal 与实际 positions 不符）。未披露标的的
+            // 覆盖缺口由 Epic 8 PortfolioLookthroughCalculator 在更高层处理（unknownWeight）。
+            let positions: [FundHoldingPosition] = try payload.positions.map { pos in
+                let posResolution = resolver.resolve(
+                    providerID: pos.providerID,
+                    scheme: pos.providerCode.scheme,
+                    value: pos.providerCode.value
+                )
+                guard case .resolved(let posCanonical, _) = posResolution,
+                      case .listing(let listingID) = posCanonical else {
+                    throw ObservationFactoryError.identityUnresolved(providerCode: pos.providerCode)
+                }
+                return FundHoldingPosition(
+                    listingID: listingID,
+                    weight: pos.weight,
+                    shares: pos.shares,
+                    marketValue: pos.marketValue,
+                    isDisclosed: pos.isDisclosed
+                )
+            }
+            return .fundHoldingSnapshot(FundHoldingSnapshot(
+                id: observationID,
+                productID: productID,
+                temporalEnvelope: normalized.envelope,
+                availabilityProvenance: normalized.provenance,
+                dataQuality: dataQuality,
+                vintage: vintage,
+                reportPeriod: payload.reportPeriod,
+                positions: positions,
+                disclosedWeightTotal: payload.disclosedWeightTotal
+            ))
+        case .macroObservation:
+            let payload = try Self.decode(MacroPayload.self, from: record, kind: .macroObservation)
+            guard case .instrument(let indicatorID) = canonical else {
+                throw ObservationFactoryError.identityUnresolved(providerCode: record.providerCode)
+            }
+            return .macroObservation(MacroObservation(
+                id: observationID,
+                indicatorID: indicatorID,
+                temporalEnvelope: normalized.envelope,
+                availabilityProvenance: normalized.provenance,
+                dataQuality: dataQuality,
+                vintage: vintage,
+                value: payload.value,
+                unit: payload.unit,
+                frequency: payload.frequency,
+                isSeasonallyAdjusted: payload.isSeasonallyAdjusted,
+                basePeriod: payload.basePeriod
+            ))
+        case .corporateAction:
+            let payload = try Self.decode(CorporateActionPayload.self, from: record, kind: .corporateAction)
+            guard case .listing(let listingID) = canonical else {
+                throw ObservationFactoryError.identityUnresolved(providerCode: record.providerCode)
+            }
+            return .corporateAction(CorporateAction(
+                id: observationID,
+                listingID: listingID,
+                temporalEnvelope: normalized.envelope,
+                availabilityProvenance: normalized.provenance,
+                dataQuality: dataQuality,
+                vintage: vintage,
+                kind: payload.kind,
+                exDate: payload.exDate,
+                recordDate: payload.recordDate,
+                payDate: payload.payDate,
+                ratio: payload.ratio,
+                currency: payload.currency
+            ))
         }
     }
 
@@ -141,7 +211,9 @@ struct ObservationFactory: Sendable {
 enum CanonicalObservationKind: Sendable, Hashable {
     case dailyBar(DailyBar)
     case navObservation(NAVObservation)
-    // Epic 4 补 fundHoldingSnapshot / macroObservation / corporateAction
+    case fundHoldingSnapshot(FundHoldingSnapshot)
+    case macroObservation(MacroObservation)
+    case corporateAction(CorporateAction)
 }
 
 // MARK: - rawPayload schema（每种 ProviderRecordKind 对应一个 Codable struct）
@@ -164,4 +236,46 @@ struct NAVPayload: Codable, Hashable, Sendable {
     let accumulatedNAV: Price?
     /// 累计每份分红（可选——天天基金不直接披露，缺失为 nil，不伪造 0）
     let cumulativeDividendPerShare: Price?
+}
+
+/// FundHoldingSnapshot 的 rawPayload schema（REPO-5b）。
+///
+/// positions 携带的是 **Provider 代码**（非 Canonical）——Adapter 不做 identity 解析，
+/// 由 ObservationFactory 在转 Canonical 时逐个解析为 ListingID（ADR-DATA001 防火墙 1）。
+struct FundHoldingPayload: Codable, Hashable, Sendable {
+    let reportPeriod: FundHoldingSnapshot.ReportPeriod
+    let positions: [Position]
+    /// Provider 披露的已披露权重总和（0-1，用于 lookthrough coverage 判断）
+    let disclosedWeightTotal: Ratio
+
+    struct Position: Codable, Hashable, Sendable {
+        /// 持仓标的代码所属的 Provider（基金快照可能来自且慢，但持仓股票代码来自天天基金）
+        let providerID: DataProviderID
+        /// 持仓标的的 Provider 代码（Adapter 产出，Factory 解析为 Canonical ListingID）
+        let providerCode: ProviderCode
+        let weight: Ratio
+        let shares: Decimal?
+        let marketValue: Price?
+        let isDisclosed: Bool
+    }
+}
+
+/// MacroObservation 的 rawPayload schema（REPO-5b，对齐 FRED vintage）。
+struct MacroPayload: Codable, Hashable, Sendable {
+    let value: Decimal
+    let unit: MacroObservation.MacroUnit
+    let frequency: MacroObservation.MacroFrequency
+    let isSeasonallyAdjusted: Bool
+    let basePeriod: MacroObservation.MacroBasePeriod?
+}
+
+/// CorporateAction 的 rawPayload schema（REPO-5b）。
+struct CorporateActionPayload: Codable, Hashable, Sendable {
+    let kind: CorporateAction.Kind
+    let exDate: Date
+    let recordDate: Date?
+    let payDate: Date?
+    /// 行动比例（每股分红金额 / 送股比例 / 拆股比例）
+    let ratio: Decimal
+    let currency: Currency?
 }
