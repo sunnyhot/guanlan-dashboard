@@ -5,17 +5,21 @@ import Foundation
 // 解析天天基金（eastmoney）真实 HTTP 响应 → ProviderRecord。
 // 这不是 stub——解析真实的 wire 格式：
 //   - pingzhongdata JS：`var Data_netWorthTrend = [{"x":<tsMs>,"y":<nav>,"equityReturn":<pct>}];`
-//   - lsjz JSON：`{"ErrCode":0,"Data":{"LSJZList":[{"DWJZ":"<nav>","FSRQ":"YYYY-MM-DD","JZZZL":"<pct>"}]}}`
+//     `var Data_ACWorthTrend = [{"x":<tsMs>,"y":<accumulatedNAV>}];`
+//   - lsjz JSON：`{"ErrCode":0,"Data":{"LSJZList":[{"DWJZ":"<nav>","FSRQ":"YYYY-MM-DD","JZZZL":"<pct>","LJJZ":"<accumulatedNAV>"}]}}`
 //
 // 现有 QiemanPlatformNativeClient 内部也是解析这两个格式（见
 // QiemanPlatformNativeClient.swift fetchFundHistorySeries 私有方法 + 测试 inline mock）。
 // 本解析器独立实现，不修改现有 client（rollout REPO-7：不修改现有 client），
 // 让 Provider Adapter 层可独立测试。
 //
-// **已知字段缺口**（来自现有 client 的限制，非本解析器问题）：
-// - 累计净值（accumulated NAV）：pingzhongdata 上游有 Data_ACWorthTrend 但现有 client 不解析，
-//   本解析器暂只取单位净值，accumulatedNAV 与 cumulativeDividendPerShare 留 nil
-// - 持仓 shares / marketValue：天天基金 f10 不披露，weightPct 仅 FundLookThroughClient 有
+// **字段覆盖**（当前真实覆盖范围，审查 P3 更新）：
+// - 单位净值 unitNAV：Data_netWorthTrend.y / LSJZ.DWJZ —— 完整
+// - 累计净值 accumulatedNAV：Data_ACWorthTrend.y / LSJZ.LJJZ —— 完整（字段级合并填补缺失）
+// - 当日涨跌幅 changePct：Data_netWorthTrend.equityReturn / LSJZ.JZZZL —— 完整
+// - **每份分红 cumulativeDividendPerShare：天天基金 pingzhongdata 不直接披露**，
+//   留 nil（不伪造 0）；需独立数据源（Epic 4+）
+// - 持仓 shares / marketValue：天天基金 f10 不披露，weightPct 仅 FundLookThroughClient 有（Epic 4）
 
 /// 天天基金 pingzhongdata JS 响应解析结果（单位净值历史）。
 struct EastmoneyNAVHistory: Sendable, Hashable {
@@ -100,12 +104,20 @@ struct EastmoneyResponseParser: Sendable {
 
         let fundName = extractJSStringVar(body, name: "fS_name") ?? fundCode
 
-        // Data_netWorthTrend（单位净值历史，必填）
-        guard let trendJSON = extractJSArrayVar(body, name: "Data_netWorthTrend") else {
-            throw EastmoneyParseError.missingNetWorthTrend
+        // Data_netWorthTrend（单位净值历史，必填）。审查 P2：用 typed 提取，
+        // 声明缺失或值非数组都视为错误（必填字段不能合法缺失）
+        let trendExtraction = extractJSArrayVarTyped(body, name: "Data_netWorthTrend")
+        let trendJSON: String
+        switch trendExtraction {
+        case .extracted(let s): trendJSON = s
+        case .notDeclared: throw EastmoneyParseError.missingNetWorthTrend
+        case .declaredButMalformed(let reason):
+            throw EastmoneyParseError.netWorthTrendDecodeFailed(
+                detail: "Data_netWorthTrend declared but malformed: \(reason)"
+            )
         }
         guard let trendData = trendJSON.data(using: .utf8) else {
-            throw EastmoneyParseError.missingNetWorthTrend
+            throw EastmoneyParseError.netWorthTrendDecodeFailed(detail: "not utf8")
         }
 
         struct RawEntry: Decodable {
@@ -121,13 +133,21 @@ struct EastmoneyResponseParser: Sendable {
             throw EastmoneyParseError.netWorthTrendDecodeFailed(detail: "\(error)")
         }
 
-        // Data_ACWorthTrend（累计净值历史）。审查 P2：区分 missing 与 malformed——
-        // 变量不存在（extractJSArrayVar 返回 nil）→ 合法缺口，accumulatedNAV 留 nil；
-        // 变量存在但 decode 失败 → schema 漂移，抛 accumulatedTrendDecodeFailed。
+        // Data_ACWorthTrend（累计净值历史）。审查 P2：用 typed 提取区分三种情况：
+        // - .notDeclared：变量未声明 → 合法缺口，accumulatedNAV 留 nil
+        // - .declaredButMalformed：变量声明存在但值非数组（null / 截断）→ schema 漂移，抛错
+        // - .extracted：成功 → 解析；解析失败也抛错
         var accumulatedByDay: [Date: Double] = [:]
-        if let acJSON = extractJSArrayVar(body, name: "Data_ACWorthTrend") {
+        switch extractJSArrayVarTyped(body, name: "Data_ACWorthTrend") {
+        case .notDeclared:
+            break   // 合法缺口
+        case .declaredButMalformed(let reason):
+            throw EastmoneyParseError.accumulatedTrendDecodeFailed(
+                detail: "Data_ACWorthTrend declared but malformed: \(reason)"
+            )
+        case .extracted(let acJSON):
             guard let acData = acJSON.data(using: .utf8) else {
-                throw EastmoneyParseError.accumulatedTrendDecodeFailed(detail: "ACWorthTrend not utf8")
+                throw EastmoneyParseError.accumulatedTrendDecodeFailed(detail: "not utf8")
             }
             struct RawAC: Decodable { let x: Double; let y: Double }
             let acEntries: [RawAC]
@@ -277,19 +297,46 @@ struct EastmoneyResponseParser: Sendable {
         return String(body[captureRange])
     }
 
-    /// 从 JS body 提取 `var <name> = [...];` 的数组字面量（作为字符串返回，调用方再 JSON decode）。
-    private func extractJSArrayVar(_ body: String, name: String) -> String? {
+    /// 从 JS body 提取 `var <name> = [...];` 的数组字面量的结果（三态）。
+    /// 审查 P2：区分「变量声明不存在」（合法缺口）与「声明存在但值非数组 / 截断」
+    /// （schema 漂移，应抛错），不能都返回 nil 让调用方当成合法缺失。
+    enum JSArrayExtraction: Equatable {
+        /// 变量未声明（合法缺口）
+        case notDeclared
+        /// 变量声明存在但值不是合法数组字面量（null / 截断 / 非数组）
+        case declaredButMalformed(reason: String)
+        /// 成功提取的数组字面量字符串
+        case extracted(String)
+    }
+
+    private func extractJSArrayVarTyped(_ body: String, name: String) -> JSArrayExtraction {
         let pattern = "var\\s+\(name)\\s*=\\s*"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return .notDeclared
+        }
         let range = NSRange(body.startIndex..., in: body)
         guard let match = regex.firstMatch(in: body, range: range),
               let prefixRange = Range(match.range, in: body)
-        else { return nil }
-        // 从 = 之后开始扫描括号匹配
+        else {
+            return .notDeclared
+        }
         let pos = prefixRange.upperBound
-        guard pos < body.endIndex, body[pos] == "[" else { return nil }
+        // 跳过声明后的空白
+        let firstNonWhitespace = body[pos...].first { !$0.isWhitespace }
+        guard let firstChar = firstNonWhitespace else {
+            return .declaredButMalformed(reason: "empty value after =")
+        }
+        if firstChar != "[" {
+            // 声明存在但值不是数组（如 null、字符串、数字）→ schema 漂移
+            let preview = String(body[pos...].prefix(20))
+            return .declaredButMalformed(reason: "value is not an array literal: \(preview)")
+        }
+        // 从 [ 开始扫描括号匹配
+        guard let startPos = body[pos...].firstIndex(of: "[") else {
+            return .declaredButMalformed(reason: "no opening bracket")
+        }
         var depth = 0
-        var end = pos
+        var end = startPos
         while end < body.endIndex {
             let c = body[end]
             if c == "[" { depth += 1 }
@@ -299,7 +346,18 @@ struct EastmoneyResponseParser: Sendable {
             }
             end = body.index(after: end)
         }
-        guard end < body.endIndex, body[end] == "]" else { return nil }
-        return String(body[pos...end])
+        guard end < body.endIndex, body[end] == "]" else {
+            return .declaredButMalformed(reason: "array literal not closed")
+        }
+        return .extracted(String(body[startPos...end]))
+    }
+
+    /// 旧接口保留兼容（Data_netWorthTrend 用，那里 nil 仍表示「变量不存在」，
+    /// 因为必填项缺失已经走 missingNetWorthTrend 错误）。
+    private func extractJSArrayVar(_ body: String, name: String) -> String? {
+        switch extractJSArrayVarTyped(body, name: name) {
+        case .extracted(let s): return s
+        case .notDeclared, .declaredButMalformed: return nil
+        }
     }
 }

@@ -103,6 +103,46 @@ protocol ProviderAdapter: Sendable {
     /// 返回 ProviderRecord 流（可能跨多次网络调用）。
     /// 失败时抛 ProviderError（调用方按三档降级处理，ADR-DATA006 §Decision 3）。
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord]
+
+    /// 抓取 + 诊断（审查 P2：让生产调用方能观察部分数据丢失，如 LSJZ 异常行计数）。
+    /// 默认实现调 fetch 返回空诊断；EastmoneyProviderAdapter 等真实 Adapter 覆写。
+    func fetchWithDiagnostics(
+        code: ProviderCode, from: Date, to: Date
+    ) async throws -> ProviderFetchResult
+}
+
+extension ProviderAdapter {
+    func fetchWithDiagnostics(
+        code: ProviderCode, from: Date, to: Date
+    ) async throws -> ProviderFetchResult {
+        let records = try await fetch(code: code, from: from, to: to)
+        return ProviderFetchResult(records: records, diagnostics: ProviderFetchDiagnostics())
+    }
+}
+
+/// Provider 抓取结果（records + 诊断）。
+struct ProviderFetchResult: Sendable {
+    let records: [ProviderRecord]
+    let diagnostics: ProviderFetchDiagnostics
+}
+
+/// Provider 抓取诊断（审查 P2：部分数据丢失的可审计出口）。
+/// 生产调用方（Sync / Pipeline）可据此更新 ProviderHealth 或决定降级。
+struct ProviderFetchDiagnostics: Sendable, Equatable {
+    /// 解析过程中因格式异常被丢弃的行数（按上游来源分桶）
+    var droppedMalformedBySource: [String: Int] = [:]
+    /// 合并阶段因日期未对齐等被丢弃的条目数
+    var droppedOnMerge: Int = 0
+
+    /// 总丢弃数（用于快速判断是否触发告警阈值）。
+    var totalDropped: Int {
+        droppedMalformedBySource.values.reduce(0, +) + droppedOnMerge
+    }
+
+    init(droppedMalformedBySource: [String: Int] = [:], droppedOnMerge: Int = 0) {
+        self.droppedMalformedBySource = droppedMalformedBySource
+        self.droppedOnMerge = droppedOnMerge
+    }
 }
 
 /// Provider 抓取错误。
@@ -172,9 +212,16 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
     }
 
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
+        // fetch 是 fetchWithDiagnostics 的便捷包装（丢弃诊断）
+        try await fetchWithDiagnostics(code: code, from: from, to: to).records
+    }
+
+    /// 真实主实现：fetch + 诊断（审查 P2：透传 LSJZ droppedMalformedCount）。
+    func fetchWithDiagnostics(
+        code: ProviderCode, from: Date, to: Date
+    ) async throws -> ProviderFetchResult {
         guard code.scheme == "fund_code" else {
-            // 非 fund_code scheme 留 Epic 4（stock_symbol 走不同上游）
-            return []
+            return ProviderFetchResult(records: [], diagnostics: ProviderFetchDiagnostics())
         }
         // 取 pingzhongdata（NAV 历史）+ lsjz（近期官方净值）
         let pingzhongBody = try await fetcher.fetch(.pingzhongdata(fundCode: code.value))
@@ -195,7 +242,6 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
         for e in pingzhongHistory.entries { mergedByDay[e.date] = e }
         for official in lsjzHistory.entries {
             if let historical = mergedByDay[official.date] {
-                // 同日：LSJZ 字段优先，pingzhongdata 填补 LSJZ 的 nil
                 mergedByDay[official.date] = EastmoneyNAVHistory.Entry(
                     date: official.date,
                     unitNAV: official.unitNAV,
@@ -207,10 +253,13 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
             }
         }
 
+        // 审查 P2：保留两源的 droppedMalformedCount 透传到诊断出口，
+        // 不在重新构造 merged 时丢失（之前默认 0 让生产链路无法审计部分丢失）。
         let merged = EastmoneyNAVHistory(
             fundCode: code.value,
             fundName: pingzhongHistory.fundName,
-            entries: mergedByDay.values.sorted { $0.date < $1.date }
+            entries: mergedByDay.values.sorted { $0.date < $1.date },
+            droppedMalformedCount: pingzhongHistory.droppedMalformedCount + lsjzHistory.droppedMalformedCount
         )
         let allRecords = parser.toProviderRecords(
             merged,
@@ -219,8 +268,12 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
             jurisdiction: .chinaMainland,
             ingestedAt: ingestedAt()
         )
-        // 时间段过滤
-        return allRecords.filter { $0.effectiveAt >= from && $0.effectiveAt <= to }
+        let filtered = allRecords.filter { $0.effectiveAt >= from && $0.effectiveAt <= to }
+        let diagnostics = ProviderFetchDiagnostics(droppedMalformedBySource: [
+            "pingzhongdata": pingzhongHistory.droppedMalformedCount,
+            "lsjz": lsjzHistory.droppedMalformedCount
+        ])
+        return ProviderFetchResult(records: filtered, diagnostics: diagnostics)
     }
 }
 

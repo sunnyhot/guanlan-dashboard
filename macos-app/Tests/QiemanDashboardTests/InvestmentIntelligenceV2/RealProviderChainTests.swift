@@ -288,6 +288,91 @@ final class RealProviderChainTests: XCTestCase {
         }
     }
 
+    // MARK: - Data_ACWorthTrend 声明存在但值非数组（审查 P2）
+
+    func testPingzhongdata_acWorthTrendNull_throws() {
+        // `var Data_ACWorthTrend = null;` 声明存在但值非数组 → schema 漂移，抛错，
+        // 不当成合法缺失（审查 P2：先判断变量声明存在性）
+        let parser = EastmoneyResponseParser()
+        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}]; var Data_ACWorthTrend = null;"#
+        XCTAssertThrowsError(try parser.parsePingzhongdata(body, fundCode: "110022")) { err in
+            if case .accumulatedTrendDecodeFailed = err as? EastmoneyParseError {
+                // ok
+            } else {
+                XCTFail("expected accumulatedTrendDecodeFailed for null ACWorthTrend, got \(err)")
+            }
+        }
+    }
+
+    func testPingzhongdata_acWorthTrendUnclosedArray_throws() {
+        // 数组未闭合 `var Data_ACWorthTrend = [{"x":1,` → schema 漂移，抛错
+        let parser = EastmoneyResponseParser()
+        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}]; var Data_ACWorthTrend = [{"x":1,"#
+        XCTAssertThrowsError(try parser.parsePingzhongdata(body, fundCode: "110022")) { err in
+            if case .accumulatedTrendDecodeFailed = err as? EastmoneyParseError {
+                // ok
+            } else {
+                XCTFail("expected accumulatedTrendDecodeFailed for unclosed array, got \(err)")
+            }
+        }
+    }
+
+    func testPingzhongdata_acWorthTrendAbsent_isLegitimateGap() throws {
+        // 变量完全未声明 → 合法缺口，accumulatedNAV 留 nil（区别于 null/截断）
+        let parser = EastmoneyResponseParser()
+        let body = #"var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];"#
+        let history = try parser.parsePingzhongdata(body, fundCode: "110022")
+        XCTAssertNil(history.entries[0].accumulatedNAV)
+    }
+
+    // MARK: - Provider 诊断出口（审查 P2：LSJZ droppedMalformedCount 离开解析层）
+
+    func testFetchWithDiagnostics_surfacesLSJZDroppedCount() async throws {
+        // 个别 LSJZ 行格式异常 → diagnostics 应透传 droppedMalformedCount，
+        // 不在 Adapter 构造 merged 时丢失（审查 P2）
+        let pingBody = #"var fS_name = "T"; var Data_netWorthTrend = [{"x":1721308800000,"y":3.5}];"#
+        // LSJZ 有 2 条，其中 1 条格式异常
+        let lsjzBody = """
+        {"ErrCode":0,"Data":{"LSJZList":[{"FSRQ":"2024-07-18","DWJZ":"3.5"},{"FSRQ":"bad","DWJZ":"x"}]}}
+        """
+        let fetcher = StaticResponseFetcher([
+            .pingzhongdata(fundCode: "110022"): pingBody,
+            .lsjz(fundCode: "110022"): lsjzBody
+        ])
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(fetcher: fetcher) { d723 }
+
+        let result = try await adapter.fetchWithDiagnostics(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(result.diagnostics.droppedMalformedBySource["lsjz"], 1,
+                       "诊断应透传 LSJZ 的 droppedMalformedCount")
+        XCTAssertEqual(result.diagnostics.totalDropped, 1)
+        // records 仍返回（合法的那 1 条）
+        XCTAssertGreaterThanOrEqual(result.records.count, 1)
+    }
+
+    func testFetchWithDiagnostics_cleanFixture_noDrops() async throws {
+        // 正常 fixture 无丢弃，诊断应为空
+        let d723 = date(2024, 7, 23)
+        let adapter = EastmoneyProviderAdapter(
+            fetcher: StaticResponseFetcher([
+                .pingzhongdata(fundCode: "110022"): try String(contentsOf: Bundle.module.url(
+                    forResource: "v2-eastmoney-pingzhongdata-110022", withExtension: "json.txt", subdirectory: "Fixtures"
+                )!, encoding: .utf8),
+                .lsjz(fundCode: "110022"): try String(contentsOf: Bundle.module.url(
+                    forResource: "v2-eastmoney-lsjz-110022", withExtension: "json", subdirectory: "Fixtures"
+                )!, encoding: .utf8)
+            ])
+        ) { d723 }
+        let result = try await adapter.fetchWithDiagnostics(
+            code: ProviderCode(scheme: "fund_code", value: "110022"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(result.diagnostics.totalDropped, 0)
+    }
+
     // MARK: - 字段级合并（审查 P1：LSJZ 的 LJJZ 填补 ping 缺失的 accumulatedNAV）
 
     func testMerge_pingMissingAccumulated_lsjzFillsIt() async throws {
