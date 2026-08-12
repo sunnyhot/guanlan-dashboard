@@ -17,9 +17,12 @@ struct ProviderRecord: Sendable, Codable, Hashable {
     let providerID: DataProviderID
     /// Provider 原始代码（如 "110022"、"600519"）+ scheme（如 "fund_code"、"stock_symbol"）
     let providerCode: ProviderCode
-    /// Provider 给的时间戳（事件时间 + 公布时间；ingestedAt 在抓取时填）
+    /// Provider 给的时间戳：事件时间 + 公布时间
     let effectiveAt: Date
     let publishedAt: Date
+    /// 本系统抓取入库时间（ADR-DATA002 §4：与 availableAt 不建立全序，
+    /// Provider 故障时可能远晚于客观可知时间）
+    let ingestedAt: Date
     /// 数据类型（决定走哪个 AvailabilityPolicy）
     let kind: ProviderRecordKind
     /// raw payload（Provider 原始字段，JSON 编码）
@@ -40,6 +43,7 @@ struct ProviderRecord: Sendable, Codable, Hashable {
         providerCode: ProviderCode,
         effectiveAt: Date,
         publishedAt: Date,
+        ingestedAt: Date,
         kind: ProviderRecordKind,
         rawPayload: Data,
         reliabilityClass: ProviderReliabilityClass,
@@ -49,6 +53,7 @@ struct ProviderRecord: Sendable, Codable, Hashable {
         self.providerCode = providerCode
         self.effectiveAt = effectiveAt
         self.publishedAt = publishedAt
+        self.ingestedAt = ingestedAt
         self.kind = kind
         self.rawPayload = rawPayload
         self.reliabilityClass = reliabilityClass

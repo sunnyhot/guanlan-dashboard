@@ -227,6 +227,7 @@ final class ProviderAdapterTests: XCTestCase {
             providerCode: ProviderCode(scheme: "prodCode", value: "SI000192"),
             effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
             publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
+            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
             kind: .navObservation,
             rawPayload: Data(),
             reliabilityClass: .undocumentedPublicEndpoint,
@@ -249,6 +250,7 @@ final class ProviderAdapterTests: XCTestCase {
             providerID: .eastmoney, providerCode: ProviderCode(scheme: "fund_code", value: "110022"),
             effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
             publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
+            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
             kind: .navObservation, rawPayload: Data(),
             reliabilityClass: .communityAggregated, jurisdiction: .chinaMainland
         )
@@ -256,6 +258,7 @@ final class ProviderAdapterTests: XCTestCase {
             providerID: .eastmoney, providerCode: ProviderCode(scheme: "fund_code", value: "110023"),
             effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
             publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
+            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
             kind: .navObservation, rawPayload: Data(),
             reliabilityClass: .communityAggregated, jurisdiction: .chinaMainland
         )
@@ -275,7 +278,7 @@ final class ProviderAdapterTests: XCTestCase {
         let record = ProviderRecord(
             providerID: .qieman,
             providerCode: ProviderCode(scheme: "prodCode", value: "X"),
-            effectiveAt: Date(), publishedAt: Date(),
+            effectiveAt: Date(), publishedAt: Date(), ingestedAt: Date(),
             kind: .navObservation, rawPayload: Data(),
             reliabilityClass: .undocumentedPublicEndpoint, jurisdiction: .chinaMainland
         )
