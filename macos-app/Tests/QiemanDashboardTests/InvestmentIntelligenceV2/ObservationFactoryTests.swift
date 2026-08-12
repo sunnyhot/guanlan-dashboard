@@ -90,7 +90,7 @@ final class ObservationFactoryTests: XCTestCase {
         XCTAssertEqual(nav.temporalEnvelope.ingestedAt, date(2024, 7, 19))
         // raw payload 解析
         XCTAssertEqual(nav.unitNAV.value, 3.5)
-        XCTAssertEqual(nav.accumulatedNAV.value, 4.2)
+        XCTAssertEqual(nav.accumulatedNAV?.value, 4.2)
         // provenance 来自 FundNAV policy
         XCTAssertEqual(nav.availabilityProvenance.policyID, "fund_nav")
         // dataQuality 来自 Provider reliabilityClass

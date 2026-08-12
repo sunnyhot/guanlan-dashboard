@@ -160,6 +160,8 @@ struct DailyBarPayload: Codable, Hashable, Sendable {
 /// NAVObservation 的 rawPayload schema。
 struct NAVPayload: Codable, Hashable, Sendable {
     let unitNAV: Price
-    let accumulatedNAV: Price
-    let cumulativeDividendPerShare: Price
+    /// 累计净值（可选——pingzhongdata 的 Data_ACWorthTrend / LSJZ 的 LJJZ 提供，缺失为 nil）
+    let accumulatedNAV: Price?
+    /// 累计每份分红（可选——天天基金不直接披露，缺失为 nil，不伪造 0）
+    let cumulativeDividendPerShare: Price?
 }

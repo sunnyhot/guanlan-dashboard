@@ -158,10 +158,12 @@ struct NAVObservation: CanonicalObservation {
 
     /// 单位净值（每份基金值多少钱）
     let unitNAV: Price
-    /// 累计净值（含分红再投资）
-    let accumulatedNAV: Price
-    /// 累计每份分红（用于反推总回报）
-    let cumulativeDividendPerShare: Price
+    /// 累计净值（含分红再投资）。天天基金 pingzhongdata 的 Data_ACWorthTrend / LSJZ 的
+    /// LJJZ 可提供；缺失时为 nil，业务层应按缺口处理而非假设默认值（审查 P1）。
+    let accumulatedNAV: Price?
+    /// 累计每份分红（用于反推总回报）。天天基金 pingzhongdata 不直接披露，
+    /// 需单独数据源；缺失时为 nil，不能伪造为 0（审查 P1：伪造会污染总回报计算）。
+    let cumulativeDividendPerShare: Price?
 
     init(
         id: ObservationID,
@@ -171,8 +173,8 @@ struct NAVObservation: CanonicalObservation {
         dataQuality: DataQuality,
         vintage: Vintage,
         unitNAV: Price,
-        accumulatedNAV: Price,
-        cumulativeDividendPerShare: Price
+        accumulatedNAV: Price?,
+        cumulativeDividendPerShare: Price?
     ) {
         self.id = id
         self.shareClassID = shareClassID

@@ -191,6 +191,10 @@ final class RealProviderChainTests: XCTestCase {
     func testRealChain_rawPayloadContainsRealParsedValues() async throws {
         let records = try await fetchEastmoneyRecords(fundCode: "110022", ingestedAt: date(2024, 7, 23))
 
+        // pingzhongdata 与 LSJZ fixture 现在用同一组交易日（7-18/7-19/7-22），
+        // 去重后应正好 3 条（不再因日期未归一化而变成 6 条，审查 P1）
+        XCTAssertEqual(records.count, 3, "pingzhongdata + LSJZ 同一交易日应去重为 3 条")
+
         // 至少有一条 unitNAV = 3.5（pingzhongdata fixture 第一条 y=3.5）
         let payloads = try records.map { try JSONDecoder().decode(NAVPayload.self, from: $0.rawPayload) }
         let hasNav3_5 = payloads.contains { $0.unitNAV.value == Decimal(string: "3.5") }
@@ -199,5 +203,61 @@ final class RealProviderChainTests: XCTestCase {
         // 至少有一条 unitNAV = 3.55（pingzhongdata fixture 第三条 + lsjz 第三条）
         let hasNav3_55 = payloads.contains { $0.unitNAV.value == Decimal(string: "3.55") }
         XCTAssertTrue(hasNav3_55, "应解析出 fixture 里 y=3.55 的真实净值")
+    }
+
+    // MARK: - 真实累计净值解析（审查 P1：不伪造缺失字段）
+
+    func testRealChain_accumulatedNAVParsedFromACWorthTrend() async throws {
+        // fixture 的 Data_ACWorthTrend + LSJZ 的 LJJZ 都提供累计净值，
+        // 应解析出真实值，而不是用单位净值占位
+        let records = try await fetchEastmoneyRecords(fundCode: "110022", ingestedAt: date(2024, 7, 23))
+        let payloads = try records.map { try JSONDecoder().decode(NAVPayload.self, from: $0.rawPayload) }
+
+        // 每条都应有真实累计净值（4.2/4.19/4.25）
+        XCTAssertTrue(payloads.allSatisfy { $0.accumulatedNAV != nil }, "累计净值应解析自真实源，不是 nil")
+        let hasAc4_2 = payloads.contains { $0.accumulatedNAV?.value == Decimal(string: "4.2") }
+        XCTAssertTrue(hasAc4_2, "应解析出 fixture 里累计净值 4.2")
+        // 累计净值 ≠ 单位净值（证明不是伪造占位）
+        XCTAssertTrue(payloads.allSatisfy { $0.accumulatedNAV!.value != $0.unitNAV.value },
+                      "累计净值应不同于单位净值（证明解析了真实值，非伪造）")
+    }
+
+    func testRealChain_dividendIsNil_notFaked() async throws {
+        // 审查 P1：天天基金不直接披露分红，cumulativeDividendPerShare 必须是 nil，
+        // 不能伪造为 0（否则污染总回报计算）
+        let records = try await fetchEastmoneyRecords(fundCode: "110022", ingestedAt: date(2024, 7, 23))
+        let payloads = try records.map { try JSONDecoder().decode(NAVPayload.self, from: $0.rawPayload) }
+        XCTAssertTrue(payloads.allSatisfy { $0.cumulativeDividendPerShare == nil },
+                      "分红字段必须为 nil（天天基金不披露），不能伪造为 0")
+    }
+
+    func testRealChain_effectiveAtNormalizedToShanghaiTradingDay() async throws {
+        // 审查 P1：pingzhongdata 的 tsMs 是盘中 UTC 时刻，effectiveAt 应归一化到
+        // Asia/Shanghai 交易日界，否则 exactSnapshot 匹配不到
+        let records = try await fetchEastmoneyRecords(fundCode: "110022", ingestedAt: date(2024, 7, 23))
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        for record in records {
+            // effectiveAt 应是上海 00:00（交易日界）
+            let comps = cal.dateComponents([.hour, .minute, .second], from: record.effectiveAt)
+            XCTAssertEqual(comps.hour, 0, "effectiveAt 应归一化到上海 00:00")
+            XCTAssertEqual(comps.minute, 0)
+        }
+    }
+
+    // MARK: - schema 漂移抛错（审查 P1：不静默吞）
+
+    func testPingzhongdata_schemaDriftThrows() {
+        // Data_netWorthTrend 存在但 JSON 字段错（缺 y）应抛 netWorthTrendDecodeFailed，
+        // 而非静默解释为「零条数据」
+        let parser = EastmoneyResponseParser()
+        let badBody = #"var Data_netWorthTrend = [{"x":1719820800000}];"#
+        XCTAssertThrowsError(try parser.parsePingzhongdata(badBody, fundCode: "110022")) { err in
+            if case .netWorthTrendDecodeFailed = err as? EastmoneyParseError {
+                // ok
+            } else {
+                XCTFail("expected netWorthTrendDecodeFailed, got \(err)")
+            }
+        }
     }
 }

@@ -21,22 +21,27 @@ import Foundation
 struct EastmoneyNAVHistory: Sendable, Hashable {
     let fundCode: String
     let fundName: String
-    /// 单位净值序列（按时间升序）
+    /// 单位净值序列（按时间升序，date 已归一化到 Asia/Shanghai 交易日界）
     let entries: [Entry]
 
     struct Entry: Sendable, Hashable {
-        /// 净值日期（UTC 日界，由 tsMs 转换）
+        /// 净值日期（**归一化到 Asia/Shanghai 00:00**，审查 P1：避免 pingzhongdata
+        /// 的盘中时刻与 LSJZ 的零点解析错位导致去重失败）
         let date: Date
         /// 单位净值
         let unitNAV: Double
         /// 当日涨跌幅（小数，如 0.012 表示 1.2%）
         let changePct: Double?
+        /// 累计净值（Data_ACWorthTrend / LJJZ 提供；缺失为 nil，不伪造）
+        let accumulatedNAV: Double?
     }
 }
 
 enum EastmoneyParseError: Error, Equatable, Sendable {
     /// pingzhongdata JS 里找不到 Data_netWorthTrend 变量
     case missingNetWorthTrend
+    /// Data_netWorthTrend 数组存在但 JSON 解析失败（schema 漂移，审查 P1：不静默吞）
+    case netWorthTrendDecodeFailed(detail: String)
     /// lsjz JSON 结构异常
     case invalidLSJZ(detail: String)
     /// 响应体为空
@@ -46,20 +51,32 @@ enum EastmoneyParseError: Error, Equatable, Sendable {
 /// 天天基金真实响应解析器。
 struct EastmoneyResponseParser: Sendable {
 
-    /// 解析 pingzhongdata JS 响应（基金净值历史）。
+    /// Asia/Shanghai 日历（用于日期归一化）。
+    private static var shanghaiCalendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        return cal
+    }
+
+    /// 把任意时刻归一化到 Asia/Shanghai 当日 00:00（交易日界）。
+    static func normalizeToTradingDay(_ date: Date) -> Date {
+        shanghaiCalendar.startOfDay(for: date)
+    }
+
+    /// 解析 pingzhongdata JS 响应（基金净值历史 + 累计净值）。
     ///
     /// 真实 wire 格式（来自现有测试 QiemanPlatformFundQuoteFallbackTests 的 inline mock）：
     /// ```
     /// var fS_name = "易方达消费行业股票";
     /// var Data_netWorthTrend = [{"x":1719820800000,"y":3.5,"equityReturn":0.012}, ...];
+    /// var Data_ACWorthTrend = [{"x":1719820800000,"y":4.2}, ...];
     /// ```
     func parsePingzhongdata(_ body: String, fundCode: String) throws -> EastmoneyNAVHistory {
         guard !body.isEmpty else { throw EastmoneyParseError.emptyBody }
 
-        // 提取 fS_name
         let fundName = extractJSStringVar(body, name: "fS_name") ?? fundCode
 
-        // 提取 Data_netWorthTrend 数组
+        // Data_netWorthTrend（单位净值历史，必填）
         guard let trendJSON = extractJSArrayVar(body, name: "Data_netWorthTrend") else {
             throw EastmoneyParseError.missingNetWorthTrend
         }
@@ -72,13 +89,34 @@ struct EastmoneyResponseParser: Sendable {
             let y: Double        // 单位净值
             let equityReturn: Double?
         }
-        let rawEntries = (try? JSONDecoder().decode([RawEntry].self, from: trendData)) ?? []
+        // 审查 P1：schema 漂移不能静默吞为「零条数据」，应抛错
+        let rawEntries: [RawEntry]
+        do {
+            rawEntries = try JSONDecoder().decode([RawEntry].self, from: trendData)
+        } catch {
+            throw EastmoneyParseError.netWorthTrendDecodeFailed(detail: "\(error)")
+        }
+
+        // Data_ACWorthTrend（累计净值历史，可选——缺失时 accumulatedNAV 为 nil）
+        var accumulatedByDay: [Date: Double] = [:]
+        if let acJSON = extractJSArrayVar(body, name: "Data_ACWorthTrend"),
+           let acData = acJSON.data(using: .utf8) {
+            struct RawAC: Decodable { let x: Double; let y: Double }
+            if let acEntries = try? JSONDecoder().decode([RawAC].self, from: acData) {
+                for ac in acEntries {
+                    let day = Self.normalizeToTradingDay(Date(timeIntervalSince1970: ac.x / 1000.0))
+                    accumulatedByDay[day] = ac.y
+                }
+            }
+        }
 
         let entries: [EastmoneyNAVHistory.Entry] = rawEntries.map { raw in
-            EastmoneyNAVHistory.Entry(
-                date: Date(timeIntervalSince1970: raw.x / 1000.0),
+            let day = Self.normalizeToTradingDay(Date(timeIntervalSince1970: raw.x / 1000.0))
+            return EastmoneyNAVHistory.Entry(
+                date: day,
                 unitNAV: raw.y,
-                changePct: raw.equityReturn
+                changePct: raw.equityReturn,
+                accumulatedNAV: accumulatedByDay[day]   // 同交易日匹配，缺失为 nil
             )
         }
         return EastmoneyNAVHistory(
@@ -88,9 +126,9 @@ struct EastmoneyResponseParser: Sendable {
 
     /// 解析 lsjz JSON 响应（近期官方净值，用于补充 pingzhongdata 的最新段）。
     ///
-    /// 真实 wire 格式：
+    /// 真实 wire 格式（含 LJJZ 累计净值）：
     /// ```
-    /// {"ErrCode":0,"Data":{"LSJZList":[{"DWJZ":"3.5","FSRQ":"2024-07-18","JZZZL":"1.2"}, ...]}}
+    /// {"ErrCode":0,"Data":{"LSJZList":[{"DWJZ":"3.5","FSRQ":"2024-07-18","JZZZL":"1.2","LJJZ":"4.2"}, ...]}}
     /// ```
     func parseLSJZ(_ body: String, fundCode: String) throws -> EastmoneyNAVHistory {
         guard !body.isEmpty else { throw EastmoneyParseError.emptyBody }
@@ -105,6 +143,7 @@ struct EastmoneyResponseParser: Sendable {
                     let DWJZ: String    // 单位净值
                     let FSRQ: String     // YYYY-MM-DD
                     let JZZZL: String?   // 涨跌幅 %
+                    let LJJZ: String?    // 累计净值（审查 P1：解析真实值，不伪造）
                 }
                 let LSJZList: [Entry]
             }
@@ -126,12 +165,16 @@ struct EastmoneyResponseParser: Sendable {
         dateFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
 
         let entries: [EastmoneyNAVHistory.Entry] = resp.Data.LSJZList.compactMap { e in
-            guard let date = dateFormatter.date(from: e.FSRQ),
+            guard let parsedDate = dateFormatter.date(from: e.FSRQ),
                   let nav = Double(e.DWJZ)
             else { return nil }
+            // 归一化到 Asia/Shanghai 交易日界（审查 P1：与 pingzhongdata 统一）
+            let day = Self.normalizeToTradingDay(parsedDate)
             return EastmoneyNAVHistory.Entry(
-                date: date, unitNAV: nav,
-                changePct: e.JZZZL.flatMap { Double($0) }.map { $0 / 100.0 }
+                date: day,
+                unitNAV: nav,
+                changePct: e.JZZZL.flatMap { Double($0) }.map { $0 / 100.0 },
+                accumulatedNAV: e.LJJZ.flatMap(Double.init)   // 真实累计净值，缺失为 nil
             )
         }
         return EastmoneyNAVHistory(fundCode: fundCode, fundName: fundCode, entries: entries)
@@ -143,8 +186,8 @@ struct EastmoneyResponseParser: Sendable {
     ///
     /// 每条 entry 生成一条 ProviderRecord（kind = .navObservation），
     /// rawPayload 是 NAVPayload 的 JSON 编码。
-    /// 注意：天天基金只给单位净值，accumulatedNAV/cumulativeDividendPerShare 暂用单位净值占位
-    ///（字段缺口，已知限制，见文件头注释）。
+    /// accumulatedNAV 来自 Data_ACWorthTrend / LJJZ（真实值，缺失为 nil）；
+    /// cumulativeDividendPerShare 天天基金不直接披露，留 nil（审查 P1：不伪造默认值）。
     func toProviderRecords(
         _ history: EastmoneyNAVHistory,
         providerID: DataProviderID,
@@ -155,13 +198,11 @@ struct EastmoneyResponseParser: Sendable {
         history.entries.map { entry in
             let payload = NAVPayload(
                 unitNAV: Price(value: Decimal(entry.unitNAV), currency: .cny),
-                // 字段缺口：天天基金不披露累计净值与分红，暂用单位净值占位。
-                // 真正的累计净值需扩展 pingzhongdata 解析 Data_ACWorthTrend（Epic 4）。
-                accumulatedNAV: Price(value: Decimal(entry.unitNAV), currency: .cny),
-                cumulativeDividendPerShare: Price(value: 0, currency: .cny)
+                accumulatedNAV: entry.accumulatedNAV.map { Price(value: Decimal($0), currency: .cny) },
+                cumulativeDividendPerShare: nil   // 天天基金不直接披露，留缺口（业务层按 nil 处理）
             )
             let payloadData = (try? JSONEncoder().encode(payload)) ?? Data()
-            // 基金 NAV 的 effectiveAt = publishedAt = navDate（T 日净值 T 日产出）
+            // entry.date 已归一化到 Asia/Shanghai 交易日界，effectiveAt = publishedAt = navDate
             return ProviderRecord(
                 providerID: providerID,
                 providerCode: ProviderCode(scheme: "fund_code", value: history.fundCode),
@@ -200,7 +241,7 @@ struct EastmoneyResponseParser: Sendable {
               let prefixRange = Range(match.range, in: body)
         else { return nil }
         // 从 = 之后开始扫描括号匹配
-        var pos = prefixRange.upperBound
+        let pos = prefixRange.upperBound
         guard pos < body.endIndex, body[pos] == "[" else { return nil }
         var depth = 0
         var end = pos

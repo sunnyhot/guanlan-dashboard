@@ -164,9 +164,9 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
 
     private let parser = EastmoneyResponseParser()
     private let fetcher: any ResponseFetcher
-    private let ingestedAt: () -> Date
+    private let ingestedAt: @Sendable () -> Date
 
-    init(fetcher: any ResponseFetcher, ingestedAt: @escaping () -> Date = { Date() }) {
+    init(fetcher: any ResponseFetcher, ingestedAt: @escaping @Sendable () -> Date = { .now }) {
         self.fetcher = fetcher
         self.ingestedAt = ingestedAt
     }
@@ -183,15 +183,19 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
         let pingzhongHistory = try parser.parsePingzhongdata(pingzhongBody, fundCode: code.value)
         let lsjzHistory = try parser.parseLSJZ(lsjzBody, fundCode: code.value)
 
-        // 合并 + 去重（lsjz 与 pingzhongdata 末段重叠，按 date 取并集，pingzhongdata 优先）
-        var mergedByDate: [Date: EastmoneyNAVHistory.Entry] = [:]
-        for e in pingzhongHistory.entries { mergedByDate[e.date] = e }
-        for e in lsjzHistory.entries where mergedByDate[e.date] == nil { mergedByDate[e.date] = e }
+        // 合并 + 去重。entry.date 已在 parser 归一化到 Asia/Shanghai 交易日界，
+        // 所以 pingzhongdata 与 LSJZ 的同一交易日 Date 完全一致，可直接按 date 去重。
+        // （EastmoneyResponseParser.normalizeToTradingDay 保证两个来源的日期对齐。）
+        var mergedByDay: [Date: EastmoneyNAVHistory.Entry] = [:]
+        for e in pingzhongHistory.entries { mergedByDay[e.date] = e }
+        for e in lsjzHistory.entries where mergedByDay[e.date] == nil {
+            mergedByDay[e.date] = e
+        }
 
         let merged = EastmoneyNAVHistory(
             fundCode: code.value,
             fundName: pingzhongHistory.fundName,
-            entries: mergedByDate.values.sorted { $0.date < $1.date }
+            entries: mergedByDay.values.sorted { $0.date < $1.date }
         )
         let allRecords = parser.toProviderRecords(
             merged,
