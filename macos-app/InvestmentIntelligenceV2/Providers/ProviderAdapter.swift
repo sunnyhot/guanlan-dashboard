@@ -122,6 +122,30 @@ extension ProviderAdapter {
             diagnostics: ProviderFetchDiagnostics(completeness: .unsupported)
         )
     }
+
+    /// 抓取并写入 ProviderStaging JSONL。
+    ///
+    /// Staging 是 ProviderRecord 进入 Pipeline 前的边界：先按声明的 kind 做
+    /// SchemaValidator 分桶，只把合法记录落盘；非法记录不污染 spool，并通过
+    /// diagnostics 计数保留可审计出口。返回的 records 与实际落盘内容一致。
+    @discardableResult
+    func fetchAndStage(
+        code: ProviderCode,
+        from: Date,
+        to: Date,
+        to url: URL,
+        writer: ProviderStagingWriter = ProviderStagingWriter(),
+        validator: ProviderRecordSchemaValidator = ProviderRecordSchemaValidator()
+    ) async throws -> ProviderFetchResult {
+        let fetched = try await fetchWithDiagnostics(code: code, from: from, to: to)
+        let partition = validator.partition(fetched.records)
+        var diagnostics = fetched.diagnostics
+        if !partition.invalid.isEmpty {
+            diagnostics.droppedMalformedBySource["provider_record_schema", default: 0] += partition.invalid.count
+        }
+        try writer.write(partition.valid, to: url)
+        return ProviderFetchResult(records: partition.valid, diagnostics: diagnostics)
+    }
 }
 
 /// Provider 抓取结果（records + 诊断）。

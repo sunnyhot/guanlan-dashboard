@@ -116,10 +116,15 @@ final class EastmoneyHoldingProviderTests: XCTestCase {
             ingestedAt: { self.date(2024, 8, 1) }
         )
 
-        let result = try await adapter.fetchWithDiagnostics(
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("eastmoney-v2-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await adapter.fetchAndStage(
             code: ProviderCode(scheme: "fund_code", value: "110022"),
             from: date(2024, 6, 1),
-            to: date(2024, 8, 31)
+            to: date(2024, 8, 31),
+            to: url
         )
         XCTAssertEqual(result.records.filter { $0.kind == .navObservation }.count, 3)
         let holdingRecords = result.records.filter { $0.kind == .fundHoldingSnapshot }
@@ -131,10 +136,6 @@ final class EastmoneyHoldingProviderTests: XCTestCase {
         )
         XCTAssertEqual(holdingPayload.positions.count, 2)
 
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("eastmoney-v2-(UUID().uuidString).jsonl")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try ProviderStagingWriter().write(result.records, to: url)
         let staged = try ProviderStagingReader().read(from: url)
         XCTAssertEqual(staged, result.records)
         XCTAssertEqual(ProviderRecordSchemaValidator().partition(staged).invalid.count, 0)
