@@ -108,6 +108,14 @@
       "canonical": {"listing": "list_sh600519"},
       "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
       "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "stooq",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600519.cn",
+      "canonical": {"listing": "list_sh600519"},
+      "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
+      "resolvedAt": 1717200000
     }
   ],
   "relationships": null,

@@ -340,6 +340,14 @@ enum ProviderEndpoint: Sendable, Hashable {
     case pingzhongdata(fundCode: String)
     /// 天天基金 lsjz：`api.fund.eastmoney.com/f10/lsjz?fundCode=...`
     case lsjz(fundCode: String)
+    /// 天天基金基金定期报告持仓归档（历史季度表格）
+    case eastmoneyHoldingArchive(
+        fundCode: String,
+        kind: EastmoneyHoldingArchiveKind,
+        reportDate: String
+    )
+    /// 天天基金基金公告 API（用于取得定期报告的真实公告日）
+    case eastmoneyFundAnnouncements(fundCode: String, reportType: Int)
     /// Stooq 历史日线 CSV：`stooq.com/q/d/l/?s={symbol}&i=d`（PROV-2，美股 primary）
     case stooqHistory(symbol: String)
     /// FRED 宏观指标观测：`api.stlouisfed.org/fred/series/observations?series_id=...`（PROV-5）
@@ -378,6 +386,25 @@ struct URLSessionResponseFetcher: ResponseFetcher {
             urlString = "https://fund.eastmoney.com/pingzhongdata/\(code).js"
         case .lsjz(let code):
             urlString = "https://api.fund.eastmoney.com/f10/lsjz?fundCode=\(code)&pageIndex=1&pageSize=20"
+        case .eastmoneyHoldingArchive(let code, let kind, let reportDate):
+            var components = URLComponents(string: "https://fundf10.eastmoney.com/FundArchivesDatas.aspx")!
+            components.queryItems = [
+                URLQueryItem(name: "type", value: kind.rawValue),
+                URLQueryItem(name: "code", value: code),
+                URLQueryItem(name: "topline", value: "10"),
+                URLQueryItem(name: "year", value: String(reportDate.prefix(4))),
+                URLQueryItem(name: "month", value: String(reportDate.dropFirst(5).prefix(2)))
+            ]
+            urlString = components.url!.absoluteString
+        case .eastmoneyFundAnnouncements(let code, let reportType):
+            var components = URLComponents(string: "https://api.fund.eastmoney.com/f10/JJGG")!
+            components.queryItems = [
+                URLQueryItem(name: "fundcode", value: code),
+                URLQueryItem(name: "pageIndex", value: "1"),
+                URLQueryItem(name: "pageSize", value: "100"),
+                URLQueryItem(name: "type", value: String(reportType))
+            ]
+            urlString = components.url!.absoluteString
         case .stooqHistory(let symbol):
             // Stooq 日线 CSV 下载端点（personal-use，FREE001 合规：免费、无 key）
             urlString = "https://stooq.com/q/d/l/?s=\(symbol)&i=d"
@@ -393,17 +420,30 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         var request = URLRequest(url: url, timeoutInterval: 15)
         // Referer 按端点来源设置（天天基金需要，Stooq/FRED 不需要但无害）
         switch endpoint {
-        case .pingzhongdata, .lsjz:
+        case .pingzhongdata, .lsjz, .eastmoneyHoldingArchive, .eastmoneyFundAnnouncements:
             request.setValue("https://fund.eastmoney.com/", forHTTPHeaderField: "Referer")
         case .stooqHistory, .fredObservations:
             break
         }
         do {
             let (data, response) = try await session.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                throw ProviderError.unavailable(providerID: providerID, underlying: "http error")
+            guard let http = response as? HTTPURLResponse else {
+                throw ProviderError.unavailable(providerID: providerID, underlying: "non-HTTP response")
             }
-            return String(data: data, encoding: .utf8) ?? ""
+            guard (200..<300).contains(http.statusCode) else {
+                throw ProviderError.unavailable(
+                    providerID: providerID,
+                    underlying: "http status \(http.statusCode) for \(url.absoluteString)"
+                )
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            if body.contains("This site requires JavaScript to verify your browser") {
+                throw ProviderError.unavailable(
+                    providerID: providerID,
+                    underlying: "upstream anti-bot JavaScript challenge"
+                )
+            }
+            return body
         } catch let e as ProviderError {
             throw e
         } catch {
@@ -414,7 +454,8 @@ struct URLSessionResponseFetcher: ResponseFetcher {
     /// 端点 → Provider 标识（错误上报用，不再硬编码 eastmoney）。
     private static func providerID(for endpoint: ProviderEndpoint) -> DataProviderID {
         switch endpoint {
-        case .pingzhongdata, .lsjz: return .eastmoney
+        case .pingzhongdata, .lsjz, .eastmoneyHoldingArchive, .eastmoneyFundAnnouncements:
+            return .eastmoney
         case .stooqHistory: return .stooq
         case .fredObservations: return .fred
         }

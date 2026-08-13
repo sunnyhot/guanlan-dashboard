@@ -6,7 +6,7 @@ import XCTest
 /// 这些测试用 fixture + TemporalNormalizer 预演 rollout §4.1 的 4 个场景的
 /// identity + PIT **形态**，验证语义正确。但**不是 M2 真正的 go/no-go 验收**——
 /// M2 要求真实 Provider 链路端到端跑通：
-/// - 真实 live network 集成测试留 Epic 4
+/// - 真实 live network gate 见 `M2LiveAcceptanceTests`
 /// 见 `RealProviderChainTests`（天天基金真实解析链）+ rollout §M2 状态记录。
 ///
 /// 4 个场景：
@@ -15,7 +15,7 @@ import XCTest
 /// 3. Provider 故障延迟到 8-01 抓到 → availableAt=7-22（客观）、ingestedAt=8-01
 /// 4. data revision（v1→v2）→ 历史 vintage 查询仍看到 v1
 ///
-/// 真 M2 gate 见 `testM2Gate_realProviderChain_blocked`（XCTSkip，待 Epic 4）。
+/// 真 M2 gate 见 `M2LiveAcceptanceTests`；该类不使用 fixture，也不把网络阻塞转成 skip。
 final class M2ShapeTests: XCTestCase {
 
     private struct WeekdayCalendar: TradingCalendar {
@@ -187,7 +187,7 @@ final class M2ShapeTests: XCTestCase {
 
     func testM2Shape_allScenariosShapePass() throws {
         // 这是 4 个场景的**形态预演**汇总（identity + PIT 语义正确）。
-        // 不是 M2 真 gate——真 gate 需要真实 Provider 链路，见下方 XCTSkip 测试。
+        // 不是 M2 真 gate——真 gate 需要真实 Provider 链路，见 M2LiveAcceptanceTests。
         // 审查 P1：CI 全绿 ≠ M2 通过，rollout 仍标 Blocked。
         // （原「基金跨 Provider」场景随 REPO-6 且慢 Provider 移除而删除）
         try testM2Scenario1_stockCrossProviderSameListing()
@@ -197,20 +197,6 @@ final class M2ShapeTests: XCTestCase {
         // 形态预演全过，但 M2 仍 Blocked（真实链路未完整）
     }
 
-    // MARK: - M2 真 gate（blocked，待 Epic 4）
-
-    func testM2Gate_realProviderChain_blocked() throws {
-        // 这是 M2 真 gate：真实 Provider 链路端到端（天天基金 NAV + 持仓）。
-        // 且慢 Provider（REPO-6）已移除——它不是市场数据原始源（净值转发天天基金），
-        // 独有的「主理人调仓动态」不属于 CanonicalObservation，AI 分析也不需要。
-        // 当前 blocked：live network 集成测试留 Epic 4。
-        // CI 看到这个 skip 就知道 M2 没真正通过，避免「CI 全绿」误导。
-        try XCTSkipIf(true, "M2 blocked: live network integration pending Epic 4")
-        // 真 gate 实现后：
-        // 1. 真实天天基金 client（URLSession）取 NAV + 持仓 → ProviderRecord
-        // 2. 4 个场景在真实数据上跑通
-        XCTFail("should be skipped")
-    }
 }
 
 // MARK: - REPO-7 Provider Adapter 测试（真实解析链）

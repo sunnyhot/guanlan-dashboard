@@ -274,10 +274,14 @@ macos-app/
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
-> - REPO-8 M2 验收测试（§4.1 四场景真实链路）未跑通
-> - live network 集成测试留 Epic 4（需网络）
+> - REPO-8 已补 `M2LiveAcceptanceTests` 四个真实链路 gate，但当前仍未通过：
+>   2026-08-13 实跑中，天天基金 110022 的 2024 Q2 公告 API 返回 `2024-07-18`
+>   （要求契约为 `2024-07-20`，因此 policy 推导为 7-19 而非 7-22），Stooq
+>   `600519.cn` 返回 anti-bot JavaScript challenge 而非 CSV。
+> - live network gate 已从 Epic 4 前置到 REPO-8；上述 Provider 契约/连通性阻塞
+>   解除前不得把 M2 标记为 Pass。
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
-> 待 Epic 4 补 live network 集成测试后，M2 可正式标记 Pass。
+> 待真实 Provider 契约与连通性满足 §4.1 后，M2 才可正式标记 Pass。
 
 ---
 
