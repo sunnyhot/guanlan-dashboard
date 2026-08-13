@@ -264,16 +264,16 @@ macos-app/
 >   5 kind 全覆盖，FundHolding position 逐个 identity 解析（持仓代码携带 providerID，
 >   支持跨 Provider——基金快照与持仓股票代码可来自不同 Provider），任意 position
 >   未解析即拒收整条 snapshot（覆盖缺口由 Epic 8 PortfolioLookthrough 处理）——完整
-> - REPO-7 天天基金 NAV 解析链：pingzhongdata + lsjz 真实 wire 格式（基于现有
+> - REPO-7 天天基金 NAV + 持仓链路：NAV 使用 pingzhongdata + lsjz 真实 wire 格式（基于现有
 >   QiemanPlatformFundQuoteFallbackTests inline mock 派生，**非 live network 录制**），
 >   日期归一化、字段级合并、真实累计净值（Data_ACWorthTrend/LJJZ）、分红 Optional 不伪造、
->   schema 漂移抛错、NaN/Infinity 防护、诊断覆盖度（complete/unsupported）——NAV 这一条
->   链路真实；**持仓未接**（FundLookThroughClient 是独立 actor，留 Epic 4）
+>   schema 漂移抛错、NaN/Infinity 防护、诊断覆盖度（complete/unsupported）；持仓通过注入
+>   的 FundLookThroughClient typed disclosure 转成 FundHoldingPayload，shares / marketValue
+>   缺口保留 nil。两条链路均产 ProviderRecord，可经 ProviderStaging JSONL 落地。
 > - 字段缺口：天天基金 pingzhongdata 不直接披露分红（cumulativeDividendPerShare 留 nil）；
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
-> - REPO-7 持仓链路未接（仅 NAV 链路真实）
 > - REPO-8 M2 验收测试（§4.1 四场景真实链路）未跑通
 > - live network 集成测试留 Epic 4（需网络）
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）

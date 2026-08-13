@@ -202,10 +202,18 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
 
     private let parser = EastmoneyResponseParser()
     private let fetcher: any ResponseFetcher
+    /// Existing fundf10 client, injected so the V2 adapter can consume its typed
+    /// disclosure output without changing that client or coupling callers to it.
+    private let holdingClient: (any FundLookThroughClientProtocol)?
     private let ingestedAt: @Sendable () -> Date
 
-    init(fetcher: any ResponseFetcher, ingestedAt: @escaping @Sendable () -> Date = { .now }) {
+    init(
+        fetcher: any ResponseFetcher,
+        holdingClient: (any FundLookThroughClientProtocol)? = nil,
+        ingestedAt: @escaping @Sendable () -> Date = { .now }
+    ) {
         self.fetcher = fetcher
+        self.holdingClient = holdingClient
         self.ingestedAt = ingestedAt
     }
 
@@ -267,11 +275,31 @@ struct EastmoneyProviderAdapter: ProviderAdapter {
             ingestedAt: ingestedAt()
         )
         let filtered = allRecords.filter { $0.effectiveAt >= from && $0.effectiveAt <= to }
+        let holdingRecords: [ProviderRecord]
+        if let holdingClient {
+            let batch = await holdingClient.fetchDisclosures(fundCodes: [code.value])
+            holdingRecords = batch.disclosures[code.value].flatMap { disclosure in
+                guard let record = EastmoneyHoldingRecordBuilder.makeRecord(
+                    from: disclosure,
+                    reliabilityClass: reliabilityClass,
+                    jurisdiction: .chinaMainland,
+                    ingestedAt: ingestedAt()
+                ) else {
+                    return nil
+                }
+                return record.effectiveAt >= from && record.effectiveAt <= to ? record : nil
+            }.map { [$0] } ?? []
+        } else {
+            holdingRecords = []
+        }
         let diagnostics = ProviderFetchDiagnostics(droppedMalformedBySource: [
             "pingzhongdata": pingzhongHistory.droppedMalformedCount,
             "lsjz": lsjzHistory.droppedMalformedCount
         ])
-        return ProviderFetchResult(records: filtered, diagnostics: diagnostics)
+        return ProviderFetchResult(
+            records: filtered + holdingRecords,
+            diagnostics: diagnostics
+        )
     }
 }
 

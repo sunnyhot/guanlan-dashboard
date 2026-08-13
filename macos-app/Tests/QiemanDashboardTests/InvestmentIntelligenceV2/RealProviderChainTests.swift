@@ -9,7 +9,7 @@ import XCTest
 /// CanonicalObservation → InMemoryRepository → PIT 查询。
 ///
 /// 这验证了天天基金这一条 Provider 链路的真实解析（不是 stub filter）。
-/// 但 **M2 仍未通过**：且慢 Provider 仍是 stub，live network 集成测试留 Epic 4。
+/// 但 **M2 仍未通过**：live network 集成测试留 Epic 4。
 /// 这些测试是 M2 的部分证据（天天基金链路），不是完整 M2 gate。
 final class RealProviderChainTests: XCTestCase {
 

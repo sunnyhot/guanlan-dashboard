@@ -6,7 +6,6 @@ import XCTest
 /// 这些测试用 fixture + TemporalNormalizer 预演 rollout §4.1 的 4 个场景的
 /// identity + PIT **形态**，验证语义正确。但**不是 M2 真正的 go/no-go 验收**——
 /// M2 要求真实 Provider 链路端到端跑通：
-/// - REPO-7 持仓链路未接（天天基金 fundf10 披露）
 /// - 真实 live network 集成测试留 Epic 4
 /// 见 `RealProviderChainTests`（天天基金真实解析链）+ rollout §M2 状态记录。
 ///
@@ -204,9 +203,9 @@ final class M2ShapeTests: XCTestCase {
         // 这是 M2 真 gate：真实 Provider 链路端到端（天天基金 NAV + 持仓）。
         // 且慢 Provider（REPO-6）已移除——它不是市场数据原始源（净值转发天天基金），
         // 独有的「主理人调仓动态」不属于 CanonicalObservation，AI 分析也不需要。
-        // 当前 blocked：REPO-7 持仓链路未接 + live network 集成测试留 Epic 4。
+        // 当前 blocked：live network 集成测试留 Epic 4。
         // CI 看到这个 skip 就知道 M2 没真正通过，避免「CI 全绿」误导。
-        try XCTSkipIf(true, "M2 blocked: REPO-7 holding chain + live network integration pending Epic 4")
+        try XCTSkipIf(true, "M2 blocked: live network integration pending Epic 4")
         // 真 gate 实现后：
         // 1. 真实天天基金 client（URLSession）取 NAV + 持仓 → ProviderRecord
         // 2. 4 个场景在真实数据上跑通
