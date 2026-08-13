@@ -252,6 +252,12 @@ macos-app/
 >   reliability → sourceProviderID → id 确定性 tie-break 择优；exactSnapshot 不去重——完整
 > - REPO-3 JSON Fixture loader——完整
 > - REPO-4 IdentityResolver lookup 层——完整（4 路径建立算法在 SYNC-8）
+> - REPO-4b 初始 Identity 映射数据——完整：seed `repo-4b-portfolio-v1` 覆盖当前 App
+>   「我的持仓」`user-portfolio.json` 中的 13 条未归档持仓（3 条 A 股、4 条场内基金、
+>   6 条场外基金），仅登记 `eastmoney` 的 `stock_symbol` / `fund_code` 精确键，全部
+>   `MANUAL_VERIFIED`；canonical 引用和实体类型由 `PortfolioIdentityCoverageTests` 校验，
+>   非持仓标的留待 SYNC-8。遵守 ADR-DATA001、ADR-DATA002、ADR-DATA009；原始 App
+>   数据文件不进入仓库。
 > - REPO-5a ObservationFactory（DailyBar + NAV 完整链，含 ProviderRecord 所有权 +
 >   identity 解析 + policy 选 + PIT 标注 + payload 解析 + 非有限数防护）——完整
 > - REPO-5b ObservationFactory（FundHolding + Macro + CorporateAction 三类）：

@@ -1,0 +1,538 @@
+{
+  "instruments": [
+    {
+      "id": "inst_stock_600019",
+      "issuerID": "ent_stock_600019",
+      "kind": "STOCK",
+      "displayName": "宝钢股份",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_stock_600585",
+      "issuerID": "ent_stock_600585",
+      "kind": "STOCK",
+      "displayName": "海螺水泥",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_stock_600048",
+      "issuerID": "ent_stock_600048",
+      "kind": "STOCK",
+      "displayName": "保利发展",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_etf_512000",
+      "issuerID": "ent_fund_huabao",
+      "kind": "ETF",
+      "displayName": "券商ETF华宝",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_etf_512690",
+      "issuerID": "ent_fund_penghua",
+      "kind": "ETF",
+      "displayName": "酒ETF鹏华",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_etf_512880",
+      "issuerID": "ent_fund_gtja",
+      "kind": "ETF",
+      "displayName": "证券ETF国泰",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_etf_159857",
+      "issuerID": "ent_fund_thfund",
+      "kind": "ETF",
+      "displayName": "光伏ETF天弘",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_163402_product",
+      "issuerID": "ent_fund_xingquan",
+      "kind": "FUND",
+      "displayName": "兴全趋势投资混合(LOF)",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_004746_product",
+      "issuerID": "ent_fund_efund",
+      "kind": "FUND",
+      "displayName": "易方达上证50增强",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_004746_share",
+      "issuerID": "ent_fund_efund",
+      "kind": "FUND",
+      "displayName": "易方达上证50增强C",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_012414_product",
+      "issuerID": "ent_fund_cmb",
+      "kind": "FUND",
+      "displayName": "招商中证白酒指数(LOF)",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_012414_share",
+      "issuerID": "ent_fund_cmb",
+      "kind": "FUND",
+      "displayName": "招商中证白酒指数(LOF)C",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_017437_product",
+      "issuerID": "ent_fund_huabao",
+      "kind": "FUND",
+      "displayName": "华宝纳斯达克精选股票发起式(QDII)",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_017437_share",
+      "issuerID": "ent_fund_huabao",
+      "kind": "FUND",
+      "displayName": "华宝纳斯达克精选股票发起式(QDII)C",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_001801_product",
+      "issuerID": "ent_fund_efunds",
+      "kind": "FUND",
+      "displayName": "汇添富达欣混合",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_001801_share",
+      "issuerID": "ent_fund_efunds",
+      "kind": "FUND",
+      "displayName": "汇添富达欣混合A",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_165516_product",
+      "issuerID": "ent_fund_citic_prudential",
+      "kind": "FUND",
+      "displayName": "中信保诚周期轮动混合(LOF)",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    },
+    {
+      "id": "inst_fund_165516_share",
+      "issuerID": "ent_fund_citic_prudential",
+      "kind": "FUND",
+      "displayName": "中信保诚周期轮动混合(LOF)A",
+      "baseCurrency": "CNY",
+      "assetClass": "EQUITY",
+      "isin": null
+    }
+  ],
+  "listings": [
+    {
+      "id": "list_sse_600019",
+      "instrumentID": "inst_stock_600019",
+      "exchange": "SSE",
+      "symbol": "600019",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_sse_600585",
+      "instrumentID": "inst_stock_600585",
+      "exchange": "SSE",
+      "symbol": "600585",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_sse_600048",
+      "instrumentID": "inst_stock_600048",
+      "exchange": "SSE",
+      "symbol": "600048",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_sse_512000",
+      "instrumentID": "inst_etf_512000",
+      "exchange": "SSE",
+      "symbol": "512000",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_sse_512690",
+      "instrumentID": "inst_etf_512690",
+      "exchange": "SSE",
+      "symbol": "512690",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_sse_512880",
+      "instrumentID": "inst_etf_512880",
+      "exchange": "SSE",
+      "symbol": "512880",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_szse_159857",
+      "instrumentID": "inst_etf_159857",
+      "exchange": "SZSE",
+      "symbol": "159857",
+      "tradingCurrency": "CNY",
+      "isActive": true
+    }
+  ],
+  "legalEntities": [
+    {
+      "id": "ent_stock_600019",
+      "displayName": "宝钢股份",
+      "jurisdiction": "CN",
+      "kind": "LISTED_COMPANY",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_stock_600585",
+      "displayName": "海螺水泥",
+      "jurisdiction": "CN",
+      "kind": "LISTED_COMPANY",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_stock_600048",
+      "displayName": "保利发展",
+      "jurisdiction": "CN",
+      "kind": "LISTED_COMPANY",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_huabao",
+      "displayName": "华宝基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_penghua",
+      "displayName": "鹏华基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_gtja",
+      "displayName": "国泰基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_thfund",
+      "displayName": "天弘基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_xingquan",
+      "displayName": "兴全基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_efund",
+      "displayName": "易方达基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_cmb",
+      "displayName": "招商基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_efunds",
+      "displayName": "汇添富基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "ent_fund_citic_prudential",
+      "displayName": "中信保诚基金",
+      "jurisdiction": "CN",
+      "kind": "FUND_MANAGER",
+      "regulatoryIDs": []
+    }
+  ],
+  "fundProducts": [
+    {
+      "id": "prod_163402",
+      "instrumentID": "inst_fund_163402_product",
+      "fundType": "LOF",
+      "displayName": "兴全趋势投资混合(LOF)",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "prod_004746",
+      "instrumentID": "inst_fund_004746_product",
+      "fundType": "OPEN_END",
+      "displayName": "易方达上证50增强",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "prod_012414",
+      "instrumentID": "inst_fund_012414_product",
+      "fundType": "LOF",
+      "displayName": "招商中证白酒指数(LOF)",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "prod_017437",
+      "instrumentID": "inst_fund_017437_product",
+      "fundType": "QDII",
+      "displayName": "华宝纳斯达克精选股票发起式(QDII)",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "prod_001801",
+      "instrumentID": "inst_fund_001801_product",
+      "fundType": "OPEN_END",
+      "displayName": "汇添富达欣混合",
+      "regulatoryIDs": []
+    },
+    {
+      "id": "prod_165516",
+      "instrumentID": "inst_fund_165516_product",
+      "fundType": "LOF",
+      "displayName": "中信保诚周期轮动混合(LOF)",
+      "regulatoryIDs": []
+    }
+  ],
+  "fundShareClasses": [
+    {
+      "id": "sc_004746_C",
+      "productID": "prod_004746",
+      "instrumentID": "inst_fund_004746_share",
+      "shareClassCode": "C",
+      "displayName": "易方达上证50增强C",
+      "feeStructure": {
+        "frontEndLoad": null,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": null,
+        "custodyFee": null
+      },
+      "regulatoryIDs": []
+    },
+    {
+      "id": "sc_012414_C",
+      "productID": "prod_012414",
+      "instrumentID": "inst_fund_012414_share",
+      "shareClassCode": "C",
+      "displayName": "招商中证白酒指数(LOF)C",
+      "feeStructure": {
+        "frontEndLoad": null,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": null,
+        "custodyFee": null
+      },
+      "regulatoryIDs": []
+    },
+    {
+      "id": "sc_017437_C",
+      "productID": "prod_017437",
+      "instrumentID": "inst_fund_017437_share",
+      "shareClassCode": "C",
+      "displayName": "华宝纳斯达克精选股票发起式(QDII)C",
+      "feeStructure": {
+        "frontEndLoad": null,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": null,
+        "custodyFee": null
+      },
+      "regulatoryIDs": []
+    },
+    {
+      "id": "sc_001801_A",
+      "productID": "prod_001801",
+      "instrumentID": "inst_fund_001801_share",
+      "shareClassCode": "A",
+      "displayName": "汇添富达欣混合A",
+      "feeStructure": {
+        "frontEndLoad": null,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": null,
+        "custodyFee": null
+      },
+      "regulatoryIDs": []
+    },
+    {
+      "id": "sc_165516_A",
+      "productID": "prod_165516",
+      "instrumentID": "inst_fund_165516_share",
+      "shareClassCode": "A",
+      "displayName": "中信保诚周期轮动混合(LOF)A",
+      "feeStructure": {
+        "frontEndLoad": null,
+        "backEndLoad": null,
+        "annualSalesFee": null,
+        "managementFee": null,
+        "custodyFee": null
+      },
+      "regulatoryIDs": []
+    }
+  ],
+  "providerIdentifiers": [
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600019",
+      "canonical": { "listing": "list_sse_600019" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600585",
+      "canonical": { "listing": "list_sse_600585" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "600048",
+      "canonical": { "listing": "list_sse_600048" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "512000",
+      "canonical": { "listing": "list_sse_512000" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "512690",
+      "canonical": { "listing": "list_sse_512690" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "512880",
+      "canonical": { "listing": "list_sse_512880" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "159857",
+      "canonical": { "listing": "list_szse_159857" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "163402",
+      "canonical": { "fundProduct": "prod_163402" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "004746",
+      "canonical": { "fundShareClass": "sc_004746_C" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "012414",
+      "canonical": { "fundShareClass": "sc_012414_C" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "017437",
+      "canonical": { "fundShareClass": "sc_017437_C" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "001801",
+      "canonical": { "fundShareClass": "sc_001801_A" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "fund_code",
+      "identifierValue": "165516",
+      "canonical": { "fundShareClass": "sc_165516_A" },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    }
+  ],
+  "relationships": null
+}

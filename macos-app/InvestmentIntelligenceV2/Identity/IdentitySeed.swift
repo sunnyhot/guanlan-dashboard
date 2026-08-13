@@ -2,17 +2,16 @@ import Foundation
 
 // MARK: - IdentitySeed（REPO-4b，初始 Identity 映射数据）
 //
-// rollout REPO-4b：从天天基金 provider hints 推导基金映射 +
-// 手工 verified 基础集（持仓内标的）+ 映射数据 fixture。
+// rollout REPO-4b：手工 verified 基础集（当前未归档持仓）+ 映射数据 fixture。
 //
 // 非持仓标的的 identity 增量建立由 SYNC-8（Identity Sync）处理，本文件只管
 // 「持仓内标的」的初始 verified 映射——这是 M2 验收场景 1/2 的物质基础。
 
 /// 持仓内标的的初始 Identity 映射 seed。
 ///
-/// 设计为「手动 verified」基础集（resolutionMethod = .manualVerified），
-//  覆盖典型持仓：晓磊「基金全磊打」组合内的基金 + 重仓股。
-//  真实生产数据由 IdentitySync（SYNC-8）从 Provider hints 增量扩展。
+/// 设计为「手动 verified」基础集（resolutionMethod = .manualVerified）。
+/// 当前 portfolio seed 版本与覆盖范围记录在 rollout 文档中；fixture 只包含
+/// 持仓内标的，真实生产数据由 IdentitySync（SYNC-8）从 Provider hints 增量扩展。
 struct IdentitySeed: Sendable {
     /// 所有 verified ProviderIdentifier（跨 Provider → 同一 Canonical）。
     let providerIdentifiers: [ProviderIdentifier]
