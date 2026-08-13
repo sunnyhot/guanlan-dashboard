@@ -56,7 +56,8 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `Core/AppModel/` | 6411 (28 文件) | AppModel 子功能拆分。最大几块：TrendAnalysis(880) / ManagerWatch(657) / PortfolioCRUD(581) / NextHourGuidanceController(534) / PersonalWatchlistActions(386) / AssetAggregation(340) / Validation(432) / Alfa(311) / InvestmentPlan(244) / PortfolioRefresh(225) / ComputedProperties(207) / Auth(200) / TrendTracking(172) / Automation(165) / PendingTrade(153) 等。完整清单见目录 |
 | `Core/CLI/` | 369 (2 文件) | Contract(74, snake_case encoder/decoder、NullDouble 包装) + DTOs(295, 命令输出 DTO) |
 | `Core/QiemanCommandLine.swift` | （在 Core/ 下） | 命令路由、JSON 契约与增量巡检（注：CLI 逻辑文件在 Core/ 顶层，非 Core/CLI/ 子目录） |
-| `Core/TrendResearch/` | 8398 (23 文件) | **AI 趋势研究子系统**：TrendResearchAgent(821) 多轮 Tool Calling Harness / OpenAICompatibleAgentClient(798) / TrendResearchToolRegistry(576) / TrendResearchSnapshot(460) / SubmitTrendReportTool / TrendAnalysisValidator / TrendEvidenceLedger（actor，在 TrendResearchTool.swift 内）/ TrendClaimEvidencePolicy(261) / TrendEvidenceMetadata / SEC+AlphaVantage+Tavily 研究工具 / TrendSourceFreshnessPolicy。详见下方「AI 研判子系统」 |
+| `Core/Clients/` | 1559 (4 文件) | 外部数据源 + LLM API 客户端（通用基础设施，从 TrendResearch/ 移出归位）：AlphaVantageClient(279，含 quota/cache/budget) / SECOfficialSourceClient(161，SEC EDGAR HTTP) / TavilySearchClient(349，web search) / OpenAICompatibleAgentClient(770，OpenAI 兼容 LLM)。被 TrendResearch 工具、NextHourGuidance、InvestmentIntelligence、V2 Provider 层跨子系统复用 |
+| `Core/TrendResearch/` | 8367 (22 文件) | **AI 趋势研究子系统**：TrendResearchAgent(821) 多轮 Tool Calling Harness / TrendResearchToolRegistry(576) / TrendResearchSnapshot(460) / SubmitTrendReportTool / TrendAnalysisValidator / TrendEvidenceLedger（actor，在 TrendResearchTool.swift 内）/ TrendClaimEvidencePolicy(261) / TrendEvidenceMetadata / SEC+AlphaVantage+Tavily \*ResearchTool（调用 `Core/Clients/` 的 client）/ TrendSourceFreshnessPolicy。数据源 client 已移至 `Core/Clients/`。详见下方「AI 研判子系统」 |
 | `Core/Trend/` | 3519 (11 文件) | 趋势数据层：TrendAnalysisStore / TrendTrackingModels / TrendTrackingStore / TrendAnalysisValidator / TrendReportModuleTools / TrendSourceStatus 等趋势报告与跟踪持久化和校验 |
 | `Core/NativeSnapshotStore.swift` | 246 | 数据快照持久化（注：是规范化 Snapshot DTO 的文件 Store，**不是数据库**，不涉及 SQLite） |
 | `Core/UserPortfolioStore.swift` | 351 | 用户持仓存储 |
@@ -80,18 +81,18 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 
 > 已删除文件（曾出现在旧版本文档，现已不存在，勿再引用）：`Core/AppModel/DataDirectory.swift`、`Core/QiemanCookieManager.swift`、`Core/DashboardInsight.swift`、`Views/QiemanLoginView.swift`、`Views/SettingsAccountPanel.swift`。Cookie/登录态管理已重构，搜索全仓库确认无 `QiemanCookieManager` 类型。
 
-#### AI 研判子系统（Core/TrendResearch/ + Core/Trend/，共约 11917 行）— 投资智能方案的核心复用基础
+#### AI 研判子系统（Core/TrendResearch/ + Core/Trend/，共约 12304 行；数据源 client 见 `Core/Clients/`）— 投资智能方案的核心复用基础
 | 文件 | 行数 | 职责 |
 |---|---|---|
 | `TrendResearch/TrendResearchAgent.swift` | 821 | 多轮 Tool Calling 主循环：预算/超时/取消/缓存/搜索熔断/上下文裁剪/校验修复/审计。**强耦合**，通用 Harness 抽取风险高，宜先复制受控子集再反向抽取 |
-| `TrendResearch/OpenAICompatibleAgentClient.swift` | 798 | OpenAI 兼容 API 客户端 |
+| `Clients/OpenAICompatibleAgentClient.swift` | 770 | OpenAI 兼容 API 客户端（从 TrendResearch/ 移至 `Core/Clients/`） |
 | `TrendResearch/TrendResearchToolRegistry.swift` | 576 | 工具注册表：get_portfolio_overview/assets、get_fund_lookthrough、get_market_snapshot、official_sec_research、alpha_vantage_research、web_search |
 | `TrendResearch/TrendResearchSnapshot.swift` | 460 | 运行前数据冻结 + 隐私过滤 + 稳定 Evidence ID + 只读研究 |
 | `TrendResearch/TrendResearchTool.swift` | 148 | 工具协议 + **`actor TrendEvidenceLedger`**（独立 actor：record/contains/canonical/allIDs/allEvidence，被 Agent/NextHour/SubmitTool/SEC/AlphaVantage/Lookthrough/Tavily 共用） |
 | `TrendResearch/TrendClaimEvidencePolicy.swift` | 261 | Evidence 关联校验、支持/反证/背景区分、不足降级 uncertain、资金动作高证据门槛 |
 | `TrendResearch/TrendEvidenceMetadata.swift` | 230 | sourceTier/sourceKind 等元数据 |
 | `TrendResearch/SubmitTrendReportTool.swift` | 720 | 报告提交工具 + TrendAnalysisValidator + TrendReportDisposition（数据不足自动清空行动，App 覆盖模型自报时间/来源/Evidence） |
-| `TrendResearch/{SEC,AlphaVantage,Tavily}*.swift` | — | 外部研究工具与对应 Client |
+| `TrendResearch/{SEC,AlphaVantage,Tavily}ResearchTool.swift` | — | 外部研究工具（对应 Client 已移至 `Core/Clients/`） |
 | `Trend/TrendAnalysisStore.swift` 等 11 文件 | 3519 | 趋势报告持久化、跟踪项模型/存储、报告模块工具、来源状态、新鲜度策略 |
 
 > 复用边界（投资智能改造必读）：可复用 = Harness 循环模式、Tool Registry、Evidence Ledger（登记/溯源/ID 稳定/并发安全）、Snapshot 冻结、Validator、研究工具。**需新建** = 来源独立性/同源去重/时效评分/Claim 级权重/证据冲突/跨运行持久化图谱（即 Evidence Intelligence Engine 的评分与冲突部分）。
