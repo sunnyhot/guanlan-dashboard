@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - ProviderRecord（REPO-5a 拥有；REPO-6/7 Adapter 产、ObservationFactory 消费，ADR-DATA003 raw + adjustment）
+// MARK: - ProviderRecord（REPO-5a 拥有；REPO-7 Adapter 产、ObservationFactory 消费，ADR-DATA003 raw + adjustment）
 //
 // Provider Adapter 只产 ProviderRecord，不写 Canonical。
 // ProviderRecord = raw 字段 + Provider 给的时间戳 + Provider 原始代码。
@@ -63,7 +63,7 @@ struct ProviderRecord: Sendable, Codable, Hashable {
 
 /// Provider 原始代码标识。
 struct ProviderCode: Sendable, Codable, Hashable {
-    /// 代码体系（如 "fund_code"、"stock_symbol"、"prodCode"）
+    /// 代码体系（如 "fund_code"、"stock_symbol"、"fred_series"）
     let scheme: String
     /// 实际值（如 "110022"、"600519"、"LONG_WIN"）
     let value: String
@@ -78,7 +78,7 @@ enum ProviderRecordKind: String, Sendable, Codable, Hashable {
     case corporateAction = "CORPORATE_ACTION"
 }
 
-// MARK: - Provider Adapter 协议（REPO-6/7）
+// MARK: - Provider Adapter 协议（REPO-7 起）
 //
 // Adapter 只负责「把 Provider 协议解析成 ProviderRecord」。
 // 不做业务转换（复权 / 单位换算 / 归一化）——那在 Canonical Pipeline。
@@ -87,9 +87,8 @@ enum ProviderRecordKind: String, Sendable, Codable, Hashable {
 /// Provider Adapter：从外部数据源抓取 → ProviderRecord 流。
 ///
 /// 实现类：
-/// - QiemanProviderAdapter（REPO-6）：调用现有 QiemanPlatformNativeClient
 /// - EastmoneyProviderAdapter（REPO-7）：调用现有天天基金抓取逻辑
-/// - StooqProviderAdapter / SECProviderAdapter / FREDProviderAdapter / ...（Epic 4）
+/// - StooqProviderAdapter / FREDProviderAdapter / ...（Epic 4）
 ///
 /// 真实 Adapter 调用现有 client 取数，**不修改现有 client**。
 /// 桩实现（StubXXXProviderAdapter）用于 M2 阶段离线测试。
@@ -182,37 +181,11 @@ enum ProviderError: Error, Equatable, Sendable {
     case notFound(code: ProviderCode)
 }
 
-// MARK: - REPO-6：且慢 Provider Adapter（桩实现）
+// MARK: - REPO-7：天天基金 Provider Adapter（真实解析链）
 //
-// 真实实现调用 QiemanPlatformNativeClient（不修改现有 client）。
-// 桩实现用于 M2 阶段离线验证 identity + PIT 语义。
-
-/// 且慢平台 Provider Adapter（REPO-6）。
-///
-/// 生产实现：调用 `QiemanPlatformNativeClient` 取基金 NAV / 持仓 → ProviderRecord。
-/// 此处提供桩实现（离线返回固定数据），真实 client 接入在 Epic 4 + 集成测试。
-struct QiemanProviderAdapter: ProviderAdapter {
-    let providerID: DataProviderID = .qieman
-    let reliabilityClass: ProviderReliabilityClass = .undocumentedPublicEndpoint
-
-    /// 桩数据（生产实现删除，改调真实 client）。
-    let stubRecords: [ProviderRecord]
-
-    init(stubRecords: [ProviderRecord] = []) {
-        self.stubRecords = stubRecords
-    }
-
-    func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
-        // 桩：返回符合时间段的 stub 数据
-        return stubRecords.filter { record in
-            record.providerCode == code
-                && record.effectiveAt >= from
-                && record.effectiveAt <= to
-        }
-    }
-}
-
-// MARK: - REPO-7：天天基金 Provider Adapter（桩实现）
+// 注：且慢平台（REPO-6）已从 V2 market data pipeline 移除——它的净值是转发天天基金
+// （REPO-7 已直接接源头），独有的「主理人调仓动态」不属于 CanonicalObservation（5 个
+// ProviderRecordKind 都不匹配），且 AI 分析不需要调仓动态。详见 rollout REPO-6 移除记录。
 
 /// 天天基金 Provider Adapter（REPO-7）。
 ///

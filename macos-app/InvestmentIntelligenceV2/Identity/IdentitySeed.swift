@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - IdentitySeed（REPO-4b，初始 Identity 映射数据）
 //
-// rollout REPO-4b：从 Qieman + 天天基金 provider hints 推导基金映射 +
+// rollout REPO-4b：从天天基金 provider hints 推导基金映射 +
 // 手工 verified 基础集（持仓内标的）+ 映射数据 fixture。
 //
 // 非持仓标的的 identity 增量建立由 SYNC-8（Identity Sync）处理，本文件只管

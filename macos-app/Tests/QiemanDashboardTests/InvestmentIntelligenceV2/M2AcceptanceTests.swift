@@ -3,19 +3,18 @@ import XCTest
 
 /// M2 场景**形态预演**测试（注意：不是 M2 gate，审查 P1 修复点）。
 ///
-/// 这些测试用 fixture + TemporalNormalizer 预演 rollout §4.1 的 5 个场景的
+/// 这些测试用 fixture + TemporalNormalizer 预演 rollout §4.1 的 4 个场景的
 /// identity + PIT **形态**，验证语义正确。但**不是 M2 真正的 go/no-go 验收**——
-/// M2 要求真实 Provider 链路（且慢 + 天天基金）端到端跑通：
-/// - 且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4）
+/// M2 要求真实 Provider 链路端到端跑通：
+/// - REPO-7 持仓链路未接（天天基金 fundf10 披露）
 /// - 真实 live network 集成测试留 Epic 4
 /// 见 `RealProviderChainTests`（天天基金真实解析链）+ rollout §M2 状态记录。
 ///
-/// 5 个场景：
-/// 1. 同一基金在 Qieman 和天天基金代码不同 → 解析到同一 InstrumentID（形态预演）
-/// 2. 同一股票在两个 Provider symbol 不同 → 解析到同一 ListingID（形态预演）
-/// 3. 基金 Q2 持仓 7-20 公告 → economicKnowledge(asOf: 7-10) 查不到（PIT 语义）
-/// 4. Provider 故障延迟到 8-01 抓到 → availableAt=7-22（客观）、ingestedAt=8-01
-/// 5. data revision（v1→v2）→ 历史 vintage 查询仍看到 v1
+/// 4 个场景：
+/// 1. 同一股票在两个 Provider symbol 不同 → 解析到同一 ListingID（形态预演）
+/// 2. 基金 Q2 持仓 7-20 公告 → economicKnowledge(asOf: 7-10) 查不到（PIT 语义）
+/// 3. Provider 故障延迟到 8-01 抓到 → availableAt=7-22（客观）、ingestedAt=8-01
+/// 4. data revision（v1→v2）→ 历史 vintage 查询仍看到 v1
 ///
 /// 真 M2 gate 见 `testM2Gate_realProviderChain_blocked`（XCTSkip，待 Epic 4）。
 final class M2ShapeTests: XCTestCase {
@@ -52,45 +51,14 @@ final class M2ShapeTests: XCTestCase {
         return cal.startOfDay(for: cal.date(from: DateComponents(year: y, month: m, day: d))!)
     }
 
-    // MARK: - M2 场景 1：基金跨 Provider 同一 InstrumentID
+    // MARK: - M2 场景 1：股票跨 Provider 同一 ListingID
+    //
+    // 原「基金跨 Provider」场景（且慢 prodCode + 天天基金 fund_code → 同一 ShareClass）
+    // 已随 REPO-6 且慢 Provider 移除而删除：基金 NAV 数据源唯一（天天基金），
+    // 不存在跨 Provider 的基金 identity 场景。跨 Provider identity 机制改由本场景
+    // （股票：天天基金 stock_symbol + Stooq stock_symbol → 同一 Listing）验证。
 
-    func testM2Scenario1_fundCrossProviderSameCanonical() throws {
-        // 加载 fixture（含 eastmoney + qieman → 同一 FundShareClass 的映射）
-        let repo = try InMemoryRepository.loadFromTestsBundle(
-            name: "v2-identity-cross-provider",
-            calendarBackend: calendar,
-            bundle: Bundle.module
-        )
-        let resolver = IdentityResolver.from(repo.allProviderIdentifiers())
-
-        // 天天基金用 "110022"（fund_code 体系）
-        let em = resolver.resolve(providerID: .eastmoney, scheme: "fund_code", value: "110022")
-        // 且慢用 "CONSUMER_STOCK"（prodCode 体系）
-        let qm = resolver.resolve(providerID: .qieman, scheme: "prodCode", value: "CONSUMER_STOCK")
-
-        guard case .resolved(let emRef, _) = em, case .resolved(let qmRef, _) = qm else {
-            XCTFail("两个 Provider 都应解析成功"); return
-        }
-        // 期望：解析到同一 Canonical（FundShareClass）
-        XCTAssertEqual(emRef, qmRef)
-        XCTAssertEqual(emRef, .fundShareClass(FundShareClassID(rawValue: "sc_110022_A")))
-        // 背后的 ShareClass / Product / Instrument 可查
-        let shareClass = repo.fundShareClass(FundShareClassID(rawValue: "sc_110022_A"))
-        XCTAssertEqual(shareClass?.shareClassCode, "A")
-        XCTAssertEqual(repo.fundProduct(FundProductID(rawValue: "prod_110022"))?.displayName, "易方达消费行业股票")
-        // 审查 P2：FundShareClass.instrumentID 指向的 Instrument 必须存在（不能断链）
-        XCTAssertNotNil(shareClass?.instrumentID)
-        let shareClassInstrumentID = shareClass!.instrumentID
-        XCTAssertNotNil(repo.instrument(shareClassInstrumentID),
-                        "FundShareClass.instrumentID 必须在 instruments 中存在，不能断链")
-        // 两个 Provider 跨代码最终能追溯到同一 ShareClass InstrumentID
-        // （M2 场景 1 文档要求验证同一 InstrumentID）
-        XCTAssertEqual(shareClassInstrumentID, InstrumentID(rawValue: "inst_110022_A"))
-    }
-
-    // MARK: - M2 场景 2：股票跨 Provider 同一 ListingID
-
-    func testM2Scenario2_stockCrossProviderSameListing() throws {
+    func testM2Scenario1_stockCrossProviderSameListing() throws {
         let repo = try InMemoryRepository.loadFromTestsBundle(
             name: "v2-identity-cross-provider",
             calendarBackend: calendar,
@@ -111,9 +79,9 @@ final class M2ShapeTests: XCTestCase {
         XCTAssertEqual(emRef, .listing(ListingID(rawValue: "list_sh600519")))
     }
 
-    // MARK: - M2 场景 3：基金 Q2 持仓 7-22 才可知，7-10 查不到
+    // MARK: - M2 场景 2：基金 Q2 持仓 7-22 才可知，7-10 查不到
 
-    func testM2Scenario3_fundQ2HoldingNotVisibleAt710() {
+    func testM2Scenario2_fundQ2HoldingNotVisibleAt710() {
         // TemporalNormalizer + DataQueryMode 联动验证 PIT
         let result = normalizer.normalizeFundDisclosure(
             effectiveAt: date(2024, 6, 30),     // Q2 报告期
@@ -132,9 +100,9 @@ final class M2ShapeTests: XCTestCase {
         XCTAssertTrue(DataQueryMode.economicKnowledge(asOf: date(2024, 7, 22)).includes(envelope: result.envelope))
     }
 
-    // MARK: - M2 场景 4：Provider 故障 ingestedAt ≠ availableAt
+    // MARK: - M2 场景 3：Provider 故障 ingestedAt ≠ availableAt
 
-    func testM2Scenario4_providerDelayObjectiveVsOperational() {
+    func testM2Scenario3_providerDelayObjectiveVsOperational() {
         let result = normalizer.normalizeFundDisclosure(
             effectiveAt: date(2024, 6, 30),
             publishedAt: date(2024, 7, 20),
@@ -154,9 +122,9 @@ final class M2ShapeTests: XCTestCase {
         XCTAssertTrue(DataQueryMode.operationalKnowledge(asOf: date(2024, 8, 1)).includes(envelope: result.envelope))
     }
 
-    // MARK: - M2 场景 5：data revision v1→v2，历史 vintage 仍可查
+    // MARK: - M2 场景 4：data revision v1→v2，历史 vintage 仍可查
 
-    func testM2Scenario5_dataRevisionHistoricalVintagePreserved() {
+    func testM2Scenario4_dataRevisionHistoricalVintagePreserved() {
         let repo = InMemoryRepository(calendarBackend: calendar)
         let productID = FundProductID(rawValue: "prod_110022")
         let eff = date(2024, 6, 30)
@@ -219,61 +187,36 @@ final class M2ShapeTests: XCTestCase {
     // MARK: - M2 形态预演汇总（不是真 gate）
 
     func testM2Shape_allScenariosShapePass() throws {
-        // 这是 5 个场景的**形态预演**汇总（identity + PIT 语义正确）。
+        // 这是 4 个场景的**形态预演**汇总（identity + PIT 语义正确）。
         // 不是 M2 真 gate——真 gate 需要真实 Provider 链路，见下方 XCTSkip 测试。
         // 审查 P1：CI 全绿 ≠ M2 通过，rollout 仍标 Blocked。
-        try testM2Scenario1_fundCrossProviderSameCanonical()
-        try testM2Scenario2_stockCrossProviderSameListing()
-        testM2Scenario3_fundQ2HoldingNotVisibleAt710()
-        testM2Scenario4_providerDelayObjectiveVsOperational()
-        testM2Scenario5_dataRevisionHistoricalVintagePreserved()
+        // （原「基金跨 Provider」场景随 REPO-6 且慢 Provider 移除而删除）
+        try testM2Scenario1_stockCrossProviderSameListing()
+        testM2Scenario2_fundQ2HoldingNotVisibleAt710()
+        testM2Scenario3_providerDelayObjectiveVsOperational()
+        testM2Scenario4_dataRevisionHistoricalVintagePreserved()
         // 形态预演全过，但 M2 仍 Blocked（真实链路未完整）
     }
 
     // MARK: - M2 真 gate（blocked，待 Epic 4）
 
     func testM2Gate_realProviderChain_blocked() throws {
-        // 这是 M2 真 gate：且慢 + 天天基金真实 Provider 链路端到端。
-        // 当前且慢 Adapter 仍是 stub（长赢调仓端点留 Epic 4），
-        // live network 集成测试也留 Epic 4。M2 Blocked。
+        // 这是 M2 真 gate：真实 Provider 链路端到端（天天基金 NAV + 持仓）。
+        // 且慢 Provider（REPO-6）已移除——它不是市场数据原始源（净值转发天天基金），
+        // 独有的「主理人调仓动态」不属于 CanonicalObservation，AI 分析也不需要。
+        // 当前 blocked：REPO-7 持仓链路未接 + live network 集成测试留 Epic 4。
         // CI 看到这个 skip 就知道 M2 没真正通过，避免「CI 全绿」误导。
-        try XCTSkipIf(true, "M2 blocked: QiemanProviderAdapter is stub; live network integration pending Epic 4")
+        try XCTSkipIf(true, "M2 blocked: REPO-7 holding chain + live network integration pending Epic 4")
         // 真 gate 实现后：
-        // 1. 真实且慢 client 取长赢组合持仓 → ProviderRecord
-        // 2. 真实天天基金 client（URLSession）取 NAV → ProviderRecord
-        // 3. 5 个场景在真实数据上跑通
+        // 1. 真实天天基金 client（URLSession）取 NAV + 持仓 → ProviderRecord
+        // 2. 4 个场景在真实数据上跑通
         XCTFail("should be skipped")
     }
 }
 
-// MARK: - REPO-6/7 Provider Adapter 测试（真实解析链）
+// MARK: - REPO-7 Provider Adapter 测试（真实解析链）
 
 final class ProviderAdapterTests: XCTestCase {
-
-    func testQiemanProviderAdapter_stubReturnsFilteredRecords() async throws {
-        // 且慢端点（长赢调仓）留 Epic 4，此处仍是 stub
-        let stub = ProviderRecord(
-            providerID: .qieman,
-            providerCode: ProviderCode(scheme: "prodCode", value: "SI000192"),
-            effectiveAt: Date(timeIntervalSince1970: 1_720_000_000),
-            publishedAt: Date(timeIntervalSince1970: 1_720_000_000),
-            ingestedAt: Date(timeIntervalSince1970: 1_720_100_000),
-            kind: .navObservation,
-            rawPayload: Data(),
-            reliabilityClass: .undocumentedPublicEndpoint,
-            jurisdiction: .chinaMainland
-        )
-        let adapter = QiemanProviderAdapter(stubRecords: [stub])
-
-        let records = try await adapter.fetch(
-            code: ProviderCode(scheme: "prodCode", value: "SI000192"),
-            from: Date(timeIntervalSince1970: 1_719_000_000),
-            to: Date(timeIntervalSince1970: 1_721_000_000)
-        )
-        XCTAssertEqual(records.count, 1)
-        XCTAssertEqual(records.first?.providerID, .qieman)
-        XCTAssertEqual(records.first?.kind, .navObservation)
-    }
 
     func testEastmoneyProviderAdapter_parsesRealResponseFixture() async throws {
         // 真实解析链：从预录真实响应（pingzhongdata JS + lsjz JSON）→ ProviderRecord。
@@ -368,8 +311,8 @@ final class ProviderAdapterTests: XCTestCase {
     func testProviderRecord_doesNotContainAvailableAt() {
         // ProviderRecord 不含 availableAt（由 TemporalNormalizer 推导，ADR-DATA005）
         let record = ProviderRecord(
-            providerID: .qieman,
-            providerCode: ProviderCode(scheme: "prodCode", value: "X"),
+            providerID: .eastmoney,
+            providerCode: ProviderCode(scheme: "fund_code", value: "X"),
             effectiveAt: Date(), publishedAt: Date(), ingestedAt: Date(),
             kind: .navObservation, rawPayload: Data(),
             reliabilityClass: .undocumentedPublicEndpoint, jurisdiction: .chinaMainland
@@ -384,9 +327,7 @@ final class ProviderAdapterTests: XCTestCase {
 
     func testProviderAdapterProtocol_reliabilityClass() {
         // 每个 Adapter 声明 reliabilityClass（ADR-DATA006）
-        let qieman = QiemanProviderAdapter()
         let eastmoney = EastmoneyProviderAdapter(fetcher: StaticResponseFetcher([:]))
-        XCTAssertEqual(qieman.reliabilityClass, .undocumentedPublicEndpoint)
         XCTAssertEqual(eastmoney.reliabilityClass, .communityAggregated)
     }
 }

@@ -94,14 +94,6 @@
       "resolvedAt": 1717200000
     },
     {
-      "providerID": "qieman",
-      "identifierScheme": "prodCode",
-      "identifierValue": "CONSUMER_STOCK",
-      "canonical": {"fundShareClass": "sc_110022_A"},
-      "resolutionMethod": "MANUAL_VERIFIED",
-      "resolvedAt": 1717200000
-    },
-    {
       "providerID": "eastmoney",
       "identifierScheme": "stock_symbol",
       "identifierValue": "600519",

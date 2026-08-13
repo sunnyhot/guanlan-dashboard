@@ -30,7 +30,7 @@ struct DomainID: Sendable, Codable, Hashable, RawRepresentable, CustomStringConv
 // `InstrumentID` 与 `ListingID` 在编译期不能互换，即使底层 rawValue 格式相同。
 // 所有类型走相同的 Codable / Hashable / Sendable 实现（桥接到 DomainID）。
 
-/// 数据 Provider 标识（且慢 / 天天基金 / SEC / FRED / Stooq / AlphaVantage / AKShare / Tavily）。
+/// 数据 Provider 标识（天天基金 / SEC / FRED / Stooq / AlphaVantage / AKShare / Tavily）。
 struct DataProviderID: Sendable, Codable, Hashable, RawRepresentable {
     let rawValue: String
     init(rawValue: String) { self.rawValue = rawValue }
@@ -124,7 +124,10 @@ struct InvestmentTargetID: Sendable, Codable, Hashable, RawRepresentable {
 //
 // 集中声明便于审查（FREE001 PR checklist：新增 Provider 必须在此登记）。
 extension DataProviderID {
-    /// 且慢平台（无文档公开端点，undocumentedPublicEndpoint）
+    /// 且慢平台标识（identity 命名空间保留，非 V2 数据 Provider）。REPO-6（且慢 Provider）
+    /// 已从 V2 market data pipeline 移除——且慢净值转发天天基金（REPO-7 直连源头）、
+    /// 独有的主理人调仓动态不属于 CanonicalObservation、AI 分析也不需要。此常量仅供
+    /// identity 层通用机制测试（IdentityResolver / 跨源去重 / ProviderHealth）使用。
     static let qieman = DataProviderID(rawValue: "qieman")
     /// 天天基金（社区聚合披露，communityAggregated）
     static let eastmoney = DataProviderID(rawValue: "eastmoney")

@@ -12,7 +12,7 @@ enum Exchange: String, Sendable, Codable, Hashable, CaseIterable {
     case amex = "AMEX"      // 美国证券交易所
     /// OTC / 场外（如部分基金、ADR）
     case otc = "OTC"
-    /// 平台内部挂牌（如且慢 prodCode 不是真交易所，是平台内部标识）
+    /// 平台内部挂牌（非真交易所，是平台内部标识）
     case platform = "PLATFORM"
 
     /// 该交易所所在法域，用于推断货币与节假日。
@@ -194,7 +194,7 @@ struct FundProduct: Sendable, Codable, Hashable {
     /// 显示名（产品级）
     let displayName: String
     /// 监管中立标识（证监会基金号等，跨 Provider 稳定）。
-    /// Provider 原始代码（如天天基金 6 位码、且慢 prodCode）**不放这里**，
+    /// Provider 原始代码（如天天基金 6 位码）**不放这里**，
     /// 统一走 `ProviderIdentifier` 映射（ADR-DATA001 防火墙 1）。
     let regulatoryIDs: [RegulatoryID]
 
@@ -239,7 +239,7 @@ struct FundShareClass: Sendable, Codable, Hashable {
     /// 费率结构
     let feeStructure: FeeStructure
     /// 监管中立标识（ISIN、证监会基金号等）。
-    /// Provider 原始代码（天天基金 6 位码、且慢 prodCode）**不放这里**，
+    /// Provider 原始代码（天天基金 6 位码）**不放这里**，
     /// 统一走 `ProviderIdentifier` 映射（ADR-DATA001 防火墙 1）。
     let regulatoryIDs: [RegulatoryID]
 

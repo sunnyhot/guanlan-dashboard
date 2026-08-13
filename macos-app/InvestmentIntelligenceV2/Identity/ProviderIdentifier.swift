@@ -13,7 +13,7 @@ import Foundation
 struct ProviderIdentifier: Sendable, Codable, Hashable {
     /// 哪个 Provider 给的标识
     let providerID: DataProviderID
-    /// Provider 内部的代码体系（如 eastmoney 的 "fund_code" / "stock_symbol"、qieman 的 "prodCode"）
+    /// Provider 内部的代码体系（如 eastmoney 的 "fund_code" / "stock_symbol"、stooq 的 "stock_symbol"）
     let identifierScheme: String
     /// Provider 内部的实际值（如 "110022"、"LONG_WIN"、"AAPL"）
     let identifierValue: String
@@ -44,8 +44,8 @@ struct ProviderIdentifier: Sendable, Codable, Hashable {
 /// ProviderIdentifier 指向的 Canonical 实体引用。
 ///
 /// 用 enum 关联值携带具体 ID 类型，保留「指向哪一层」的语义
-///（如天天基金代码指向 FundShareClass，且慢 prodCode 也指向 FundShareClass，
-//  股票 symbol 指向 Listing，监管 ID 指向 LegalEntity 或 Instrument）。
+///（如天天基金代码指向 FundShareClass，股票 symbol 指向 Listing，
+//  监管 ID 指向 LegalEntity 或 Instrument）。
 enum CanonicalRef: Sendable, Codable, Hashable {
     case legalEntity(LegalEntityID)
     case instrument(InstrumentID)

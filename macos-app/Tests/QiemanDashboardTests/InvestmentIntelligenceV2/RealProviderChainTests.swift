@@ -511,17 +511,26 @@ final class RealProviderChainTests: XCTestCase {
 
     func testDiagnostics_stubAdapter_reportsUnsupported() async throws {
         // 走默认 fetchWithDiagnostics 的桩 Adapter：completeness 必须是 .unsupported，
-        // totalDropped == 0 不代表「确认零丢弃」（审查 P2）
-        let stub = QiemanProviderAdapter(stubRecords: [
+        // totalDropped == 0 不代表「确认零丢弃」（审查 P2）。
+        // 用内联极简 stub（不覆盖 fetchWithDiagnostics），验证协议默认实现返回 .unsupported。
+        struct StubAdapter: ProviderAdapter {
+            let providerID: DataProviderID = .stooq
+            let reliabilityClass: ProviderReliabilityClass = .documentFreeAPI
+            let stubRecords: [ProviderRecord]
+            func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
+                stubRecords.filter { $0.providerCode == code && $0.effectiveAt >= from && $0.effectiveAt <= to }
+            }
+        }
+        let stub = StubAdapter(stubRecords: [
             ProviderRecord(
-                providerID: .qieman, providerCode: ProviderCode(scheme: "fund_code", value: "X"),
+                providerID: .stooq, providerCode: ProviderCode(scheme: "stock_symbol", value: "X"),
                 effectiveAt: date(2024, 7, 1), publishedAt: date(2024, 7, 1), ingestedAt: date(2024, 7, 1),
-                kind: .navObservation, rawPayload: Data(), reliabilityClass: .undocumentedPublicEndpoint,
-                jurisdiction: .chinaMainland
+                kind: .dailyBar, rawPayload: Data(), reliabilityClass: .documentFreeAPI,
+                jurisdiction: .unitedStates
             )
         ])
         let result = try await stub.fetchWithDiagnostics(
-            code: ProviderCode(scheme: "fund_code", value: "X"),
+            code: ProviderCode(scheme: "stock_symbol", value: "X"),
             from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
         )
         XCTAssertEqual(result.diagnostics.completeness, .unsupported,

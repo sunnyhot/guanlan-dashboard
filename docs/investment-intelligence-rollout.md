@@ -88,13 +88,13 @@ M2 Identity + PIT 真实验证通过  ★ go/no-go
 | 阶段 | 范围 | 估算点数 | 累计 |
 |---|---|---|---|
 | Phase 0 | Epic 1（ADR） | 5 | 5 |
-| Phase 0.5 | Epic 2-3（到 M2） | ~55 | ~60 |
-| Phase 1-3 | Epic 4-6（到 M5） | ~90 | ~150 |
-| Phase 4-5 | Epic 7-9（到 M6） | ~60 | ~210 |
-| Phase 6 | Epic 10（到 M7） | ~45 | ~255 |
-| Phase 6.5 | Epic 11（到 M8，LLM Research） | ~34 | ~289 |
-| Phase 7 | Epic 12（到 M9，Workflows + 下线） | ~33 | ~322 |
-| Phase 8 | Epic 13（到 M10，Agent 独立） | ~18 | ~340 |
+| Phase 0.5 | Epic 2-3（到 M2） | ~52 | ~57 |
+| Phase 1-3 | Epic 4-6（到 M5） | ~90 | ~147 |
+| Phase 4-5 | Epic 7-9（到 M6） | ~60 | ~207 |
+| Phase 6 | Epic 10（到 M7） | ~45 | ~252 |
+| Phase 6.5 | Epic 11（到 M8，LLM Research） | ~34 | ~286 |
+| Phase 7 | Epic 12（到 M9，Workflows + 下线） | ~33 | ~319 |
+| Phase 8 | Epic 13（到 M10，Agent 独立） | ~18 | ~337 |
 
 **注**：所有 Story 点数**含对应单元测试**（见 §2.2）；跨 Epic 的 golden test 套件单独列 Story。
 
@@ -227,13 +227,18 @@ macos-app/
 | REPO-4b | **初始 Identity 映射数据**：手工 verified 基础集（持仓内标的）+ 映射数据 fixture | REPO-4 | 2 | 持仓内基金/股票有 canonical 映射；非持仓标的留待 Identity Sync |
 | REPO-5a | `ObservationFactory` **DailyBar + NAV 完整链**：拥有 `ProviderRecord` 定义 + ProviderRecord → CanonicalObservation（identity 解析 + policy 选 + PIT 标注 + payload 解析）| DOM-4,7, REPO-2 | 2 | 不会把 ingestedAt 当 availableAt；2 kind 端到端 |
 | REPO-5b | `ObservationFactory` **FundHolding + Macro + CorporateAction 三类**：从 REPO-5 拆出（审查 2026-08-12），FundamentalObservation 与持仓 raw payload schema 就绪后实现 | REPO-5a | 2 | 5 kind 完整；持仓 schema 解析 |
-| REPO-6 | 接 Qieman Provider（调用现有 `QiemanPlatformNativeClient` 取数 → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
 | REPO-7 | 接 天天基金 Provider（调用现有抓取逻辑取持仓 + 历史 NAV → ProviderRecord，**不修改现有 client**）| REPO-5a,5b | 3 | 输出 staging |
-| REPO-8 | M2 验收测试（§4.1 的 5 个场景，真实 Provider 链路）| REPO-4,4b,5a,5b,6,7 | 3 | 五个场景全过（真 gate，非形态预演） |
+| REPO-8 | M2 验收测试（§4.1 的 4 个场景，真实 Provider 链路）| REPO-4,4b,5a,5b,7 | 3 | 四个场景全过（真 gate，非形态预演） |
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
 > **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
+>
+> **REPO-6（且慢 Provider）已移除**（2026-08-12）：调研确认且慢在 V2 market data pipeline
+> 无不可替代位置——净值转发天天基金（REPO-7 直连源头）、独有的主理人调仓动态不属于
+> CanonicalObservation（5 个 ProviderRecordKind 都不匹配）、AI 分析也不需要。
+> `QiemanProviderAdapter` stub、fixture 的 prodCode 映射、M2 场景 1（基金跨 Provider）均已
+> 删除，场景从 5 个收敛为 4 个。`DataProviderID.qieman` 仅作 identity 层命名常量保留（非数据 Provider）。
 >
 > **已签收 Story（17 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
 > REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）、REPO-2b（2）。
@@ -251,7 +256,7 @@ macos-app/
 >   identity 解析 + policy 选 + PIT 标注 + payload 解析 + 非有限数防护）——完整
 > - REPO-5b ObservationFactory（FundHolding + Macro + CorporateAction 三类）：
 >   5 kind 全覆盖，FundHolding position 逐个 identity 解析（持仓代码携带 providerID，
->   支持跨 Provider——基金快照来自且慢、持仓股票代码来自天天基金），任意 position
+>   支持跨 Provider——基金快照与持仓股票代码可来自不同 Provider），任意 position
 >   未解析即拒收整条 snapshot（覆盖缺口由 Epic 8 PortfolioLookthrough 处理）——完整
 > - REPO-7 天天基金 NAV 解析链：pingzhongdata + lsjz 真实 wire 格式（基于现有
 >   QiemanPlatformFundQuoteFallbackTests inline mock 派生，**非 live network 录制**），
@@ -262,10 +267,9 @@ macos-app/
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
-> - REPO-6 且慢 Provider 仍是 stub（长赢调仓端点留 Epic 4）
 > - REPO-7 持仓链路未接（仅 NAV 链路真实）
-> - REPO-8 M2 验收测试（§4.1 五场景真实链路）未跑通
-> - live network 集成测试留 Epic 4（需登录态/网络）
+> - REPO-8 M2 验收测试（§4.1 四场景真实链路）未跑通
+> - live network 集成测试留 Epic 4（需网络）
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
 > 待 Epic 4 补 live network 集成测试后，M2 可正式标记 Pass。
 
@@ -486,15 +490,18 @@ macos-app/
 
 ### 4.1 M2 — Identity + PIT 真实验证（★ go/no-go）
 
-M2 是整个项目最关键的验收。五个场景必须全过：
+M2 是整个项目最关键的验收。四个场景必须全过：
 
 | # | 场景 | 期望 |
 |---|---|---|
-| 1 | 同一基金在 Qieman 和天天基金代码不同 | 解析到同一 `InstrumentID` |
-| 2 | 同一股票在两个 Provider symbol 不同 | 解析到同一 `ListingID` |
-| 3 | 基金 Q2 持仓 7-20 公告（2024 年周六）| `availableAt = nextTradingDay(7-20) = 7-22`；`economicKnowledge(asOf: 7-10)` 查不到 |
-| 4 | Provider 故障延迟到 8-01 抓到 | `availableAt = 7-22`（客观，由 policy 推导），`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见 |
-| 5 | 模拟一次 data revision（v1→v2）| 历史 vintage 查询仍看到 v1 |
+| 1 | 同一股票在两个 Provider symbol 不同 | 解析到同一 `ListingID` |
+| 2 | 基金 Q2 持仓 7-20 公告（2024 年周六）| `availableAt = nextTradingDay(7-20) = 7-22`；`economicKnowledge(asOf: 7-10)` 查不到 |
+| 3 | Provider 故障延迟到 8-01 抓到 | `availableAt = 7-22`（客观，由 policy 推导），`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见 |
+| 4 | 模拟一次 data revision（v1→v2）| 历史 vintage 查询仍看到 v1 |
+
+> 原「同一基金在 Qieman 和天天基金代码不同」场景（基金跨 Provider identity）已随 REPO-6
+> 且慢 Provider 移除而删除：基金 NAV 数据源唯一为天天基金，不存在跨 Provider 场景。
+> 跨 Provider identity 机制改由场景 1（股票：天天基金 + Stooq）验证。
 
 M2 不过不进 Epic 5（GRDB schema 冻结）。
 

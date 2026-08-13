@@ -55,12 +55,11 @@ final class FixtureAndIdentityResolverTests: XCTestCase {
             calendarBackend: WeekdayCalendar(),
             bundle: Bundle.module
         )
-        // 跨 Provider 映射到同一 Canonical（M2 场景 1 预演）
+        // 基金映射到 FundShareClass（基金 NAV 数据源唯一为天天基金，无跨 Provider 场景；
+        // 原 qieman/prodCode 映射随 REPO-6 移除）
         let eastmoney = repo.resolve(providerID: .eastmoney, scheme: "fund_code", value: "110022")
-        let qieman = repo.resolve(providerID: .qieman, scheme: "prodCode", value: "CONSUMER_STOCK")
         XCTAssertEqual(eastmoney, .fundShareClass(FundShareClassID(rawValue: "sc_110022_A")))
-        XCTAssertEqual(qieman, .fundShareClass(FundShareClassID(rawValue: "sc_110022_A")))
-        // 跨 Provider 映射到同一 Listing（M2 场景 2 预演）
+        // 跨 Provider 映射到同一 Listing（股票：天天基金 + Stooq）
         let emStock = repo.resolve(providerID: .eastmoney, scheme: "stock_symbol", value: "600519")
         let stooq = repo.resolve(providerID: .stooq, scheme: "stock_symbol", value: "600519.SS")
         XCTAssertEqual(emStock, .listing(ListingID(rawValue: "list_sh600519")))
@@ -179,27 +178,7 @@ final class FixtureAndIdentityResolverTests: XCTestCase {
         XCTAssertNil(upgraded)   // inconclusive → 不写入
     }
 
-    // MARK: - 跨 Provider 同一 Canonical（M2 场景 1 完整预演）
-
-    func testM2Scenario1_twoProvidersSameCanonical() throws {
-        let repo = try InMemoryRepository.loadFromTestsBundle(
-            name: "v2-identity-cross-provider",
-            calendarBackend: WeekdayCalendar(),
-            bundle: Bundle.module
-        )
-        let resolver = IdentityResolver.from(repo.allProviderIdentifiers())
-
-        // 同一只基金在 eastmoney 和 qieman 代码不同
-        let em = resolver.resolve(providerID: .eastmoney, scheme: "fund_code", value: "110022")
-        let qm = resolver.resolve(providerID: .qieman, scheme: "prodCode", value: "CONSUMER_STOCK")
-
-        guard case .resolved(let emRef, _) = em, case .resolved(let qmRef, _) = qm else {
-            XCTFail("both should resolve"); return
-        }
-        // 解析到同一 Canonical
-        XCTAssertEqual(emRef, qmRef)
-        XCTAssertEqual(emRef, .fundShareClass(FundShareClassID(rawValue: "sc_110022_A")))
-    }
+    // MARK: - 跨 Provider 同一 Canonical（股票场景；基金跨 Provider 已随 REPO-6 移除）
 
     func testM2Scenario2_twoProvidersSameListing() throws {
         let repo = try InMemoryRepository.loadFromTestsBundle(
