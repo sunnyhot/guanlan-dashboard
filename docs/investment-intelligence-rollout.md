@@ -293,7 +293,7 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-12）**：M3 进行中（8/28 点，PROV-1/2/5 签收）。
+> **状态（2026-08-13）**：M3 进行中（10/28 点，PROV-1/2/5/6 签收）。
 > PROV-3 拆为 PROV-3a（本地 Python collector，DATA007，8pt，进阶可选）+
 > PROV-3b（远程 VPS collector + RemoteStagingProvider，DATA010，5pt，默认路径）。
 > DATA010 ADR 已 Proposed，定死凭证边界（公开数据 only）/ 反爬（聚合去重）/
@@ -315,9 +315,18 @@ macos-app/
 >   officialStable，产 MacroPayload ProviderRecord）。新增 `MacroRelease` availability policy
 >   （base=publishedAt、US 法域）——修正 macro 不再误用 MarketClose（GDP Q1 值 dated 1-01 但
 >   4-25 才发布，availableAt 应基于发布日）。端到端验证 FRED→MacroObservation→PIT。
+> - PROV-6（2）—— Alpha Vantage 美股日线 supplemental Adapter：`AlphaVantageResponseParser`
+>   （TIME_SERIES_DAILY JSON，OHLCV 全字段——现有 AlphaVantageResearchTool 只用 close+volume
+>   丢了 OHLC、本 parser 补全；非有限数防护、缺 volume→nil、dropped 计数）+
+>   `AlphaVantageProviderAdapter`（**复用 `Core/Clients/AlphaVantageClient`** 取 raw Data，
+>   URL/鉴权/上游信号检测不重复，只新写 OHLC 解析 + ProviderRecord 转换。documentFreeAPI、
+>   USD、unitedStates、adjustmentFactor=1.0 raw 不复权）。quota 感知：`AlphaVantageClientError`
+>   映射 `ProviderError`——dailyBudgetExceeded / serviceMessage（Information/Note rate limit）→
+>   `quotaExhausted`（**降级不阻塞**，核心验收）；Error Message → schemaMismatch。
+>   端到端验证 JSON→ProviderRecord→SchemaValidator→staging round-trip。
 >
-> **未达成（M3 blocked 原因）**：PROV-3a/3b/4/6/7 各 Adapter 需接外部数据源
-> （AKShare 本地/远程 Python / SEC XBRL / Alpha Vantage / Tavily），PROV-8
+> **未达成（M3 blocked 原因）**：PROV-3a/3b/4/7 各 Adapter 需接外部数据源
+> （AKShare 本地/远程 Python / SEC XBRL / Tavily），PROV-8
 > ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
 > （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
 > 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行。
