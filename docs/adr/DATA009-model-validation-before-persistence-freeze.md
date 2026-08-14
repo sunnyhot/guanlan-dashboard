@@ -35,12 +35,26 @@ Investment Intelligence V3.1 是一个 ~340 点数的大计划，SQLite schema�
    - REPO-6/7 接 Qieman + 天天基金两个真实 Provider（不修改现有 client），产出 ProviderRecord
    - REPO-4/4b/5 完成 IdentityResolver + 初始 identity 映射 + TemporalNormalizer
 
-2. **M2 五个验收场景**（rollout §4.1）必须全过：
-   - 场景 1：同一基金跨 Provider 代码不同 → 解析到同一 InstrumentID
-   - 场景 2：同一股票跨 Provider symbol 不同 → 解析到同一 ListingID
-   - 场景 3：基金 Q2 持仓 7-20 公告 → `economicKnowledge(asOf: 7-10)` 查不到
-   - 场景 4：Provider 故障 8-01 抓到 → `availableAt = nextTradingDay(7-20) = 7-22`（2024 中国日历，7-20 周六）、`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见
-   - 场景 5：模拟 v1→v2 revision → 历史 vintage 查询仍看到 v1
+2. **M2 验收场景**（rollout §4.1，当前为 4 个场景；原「基金跨 Provider」场景已随
+   REPO-6 且慢 Provider 移除而删除）必须全过：
+   - 场景 1：同一股票跨 Provider symbol 不同（真实 QDII 样本：天天基金 513100 持仓
+     `AAPL` + 行情 Provider `aapl.us`/`AAPL`，Stooq primary → Alpha Vantage secondary
+     候选链，DATA006）→ 解析到同一 `ListingID`
+   - 场景 2：基金 Q2 持仓 **2024-07-18** 公告（真实公告日，周四）→ `availableAt =
+     nextTradingDay(07-18) = 07-19`；`economicKnowledge(asOf: 7-10)` 查不到。
+     周末跨交易日语义由同基金真实 Q1 样本验证（公告 **2024-04-20 周六** →
+     `availableAt = 04-22`）
+   - 场景 3：Provider 故障 8-01 抓到 → `availableAt = 07-19`（客观，由 policy 从真实
+     公告日推导）、`ingestedAt = 8-01`；`economicKnowledge(asOf: 07-19)` 可见，
+     `operationalKnowledge(asOf: 07-19)` 不可见，`operationalKnowledge(asOf: 8-01)` 可见
+   - 场景 4：模拟 v1→v2 revision（v1 `announcementDate` 取 Provider 真实 `publishedAt`）
+     → 历史 vintage 查询仍看到 v1
+
+   > **2026-08-14 事实修订**：原表述基于「Q2 公告 07-20（周六）」的假设样本。天天基金
+   > 公告 API 实跑确认 110022 的 Q2 公告日是 07-18、Q1 公告日是 04-20（周六）。按本 ADR
+   > 「真实数据推翻假设后修订设计」路径修订为事实样本 + 事实推导断言
+   > （`availableAt = tradingDay(after: record.publishedAt)`），不篡改 Provider 日期、
+   > 不降低 PIT 验收强度。
 
 3. **M2 不过的应对**：
    - 不进 Epic 5（GRDB schema 冻结）
@@ -73,7 +87,7 @@ Investment Intelligence V3.1 是一个 ~340 点数的大计划，SQLite schema�
 
 ## Compliance Check
 
-- **M2 验收脚本**（rollout §4.1）：5 场景必须全过，有对应测试
+- **M2 验收脚本**（rollout §4.1）：4 场景必须全过，有对应测试（live gate 不接受 fixture 形态预演）
 - **Epic 5 起的 PR**：description 必须引用 M2 通过证据（commit / CI 状态）
 - **Epic 7 起的 PR**：Factor 实现必须依赖 schema 已冻结
 - **PR checklist**：

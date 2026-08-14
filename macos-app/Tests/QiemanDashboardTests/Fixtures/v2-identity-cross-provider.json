@@ -26,6 +26,15 @@
       "baseCurrency": "CNY",
       "assetClass": "EQUITY",
       "isin": "CNE0000009C6"
+    },
+    {
+      "id": "inst_aapl",
+      "issuerID": "ent_apple",
+      "kind": "STOCK",
+      "displayName": "Apple Inc.",
+      "baseCurrency": "USD",
+      "assetClass": "EQUITY",
+      "isin": "US0378331005"
     }
   ],
   "listings": [
@@ -35,6 +44,14 @@
       "exchange": "SSE",
       "symbol": "600519",
       "tradingCurrency": "CNY",
+      "isActive": true
+    },
+    {
+      "id": "list_nasdaq_aapl",
+      "instrumentID": "inst_aapl",
+      "exchange": "NASDAQ",
+      "symbol": "AAPL",
+      "tradingCurrency": "USD",
       "isActive": true
     }
   ],
@@ -52,6 +69,13 @@
       "jurisdiction": "CN",
       "kind": "LISTED_COMPANY",
       "regulatoryIDs": []
+    },
+    {
+      "id": "ent_apple",
+      "displayName": "Apple Inc.",
+      "jurisdiction": "US",
+      "kind": "LISTED_COMPANY",
+      "regulatoryIDs": []
     }
   ],
   "fundProducts": [
@@ -61,7 +85,10 @@
       "fundType": "OPEN_END",
       "displayName": "易方达消费行业股票",
       "regulatoryIDs": [
-        {"scheme": "CSRC_FUND_CODE", "value": "110022"}
+        {
+          "scheme": "CSRC_FUND_CODE",
+          "value": "110022"
+        }
       ]
     }
   ],
@@ -80,7 +107,10 @@
         "custodyFee": 0.0025
       },
       "regulatoryIDs": [
-        {"scheme": "ISIN", "value": "CN0000110022"}
+        {
+          "scheme": "ISIN",
+          "value": "CN0000110022"
+        }
       ]
     }
   ],
@@ -89,7 +119,9 @@
       "providerID": "eastmoney",
       "identifierScheme": "fund_code",
       "identifierValue": "110022",
-      "canonical": {"fundShareClass": "sc_110022_A"},
+      "canonical": {
+        "fundShareClass": "sc_110022_A"
+      },
       "resolutionMethod": "MANUAL_VERIFIED",
       "resolvedAt": 1717200000
     },
@@ -97,7 +129,9 @@
       "providerID": "eastmoney",
       "identifierScheme": "stock_symbol",
       "identifierValue": "600519",
-      "canonical": {"listing": "list_sh600519"},
+      "canonical": {
+        "listing": "list_sh600519"
+      },
       "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
       "resolvedAt": 1717200000
     },
@@ -105,7 +139,9 @@
       "providerID": "stooq",
       "identifierScheme": "stock_symbol",
       "identifierValue": "600519.SS",
-      "canonical": {"listing": "list_sh600519"},
+      "canonical": {
+        "listing": "list_sh600519"
+      },
       "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
       "resolvedAt": 1717200000
     },
@@ -113,7 +149,39 @@
       "providerID": "stooq",
       "identifierScheme": "stock_symbol",
       "identifierValue": "600519.cn",
-      "canonical": {"listing": "list_sh600519"},
+      "canonical": {
+        "listing": "list_sh600519"
+      },
+      "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "eastmoney",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "AAPL",
+      "canonical": {
+        "listing": "list_nasdaq_aapl"
+      },
+      "resolutionMethod": "MANUAL_VERIFIED",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "stooq",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "aapl.us",
+      "canonical": {
+        "listing": "list_nasdaq_aapl"
+      },
+      "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
+      "resolvedAt": 1717200000
+    },
+    {
+      "providerID": "alpha-vantage",
+      "identifierScheme": "stock_symbol",
+      "identifierValue": "AAPL",
+      "canonical": {
+        "listing": "list_nasdaq_aapl"
+      },
       "resolutionMethod": "EXCHANGE_SYMBOL_EXACT",
       "resolvedAt": 1717200000
     }

@@ -8,7 +8,7 @@
 
 回测与「今天该怎么做决策」是同一个问题的两面：**给定某个历史时刻 T，系统当时到底知道什么、不知道什么**。如果这个语义不清，会产生一系列「lookahead bias」幻觉：
 
-- 用 Q2 持仓（7-20 才公告）去算 7-10 的归因 → 假装 7-10 就知道持仓
+- 用 Q2 持仓（真实公告日 2024-07-18，availableAt 07-19）去算 7-10 的归因 → 假装 7-10 就知道持仓
 - 用今天才修过的 vintage 数据去重算历史决策 → 用未来信息污染过去
 - 把「现在能查到」当成「当时能查到」 → 因子回测全是幸存者偏差
 
@@ -26,7 +26,7 @@
 
 1. **TemporalEnvelope 四时间**（DOM-4）：
    - `effectiveAt`：观测值描述的经济事件发生时间（如 2024-06-30 基金持仓的实际日期）
-   - `publishedAt`：数据源对外公布的时间（如基金季报 2024-07-20 公告）
+   - `publishedAt`：数据源对外公布的时间（如基金季报公告日——110022 的 2024 Q2 真实公告日是 2024-07-18）
    - `availableAt`：**客观经济可知**时间——数据客观上进入公开世界的最早时间（由 AvailabilityPolicy 推导，可能晚于 publishedAt）
    - `ingestedAt`：**本机实际已知**时间——本系统实际抓到并入库的时间（受 Provider 故障 / 抓取调度影响）
    - **`availableAt` 与 `ingestedAt` 之间不存在固定顺序**（§Decision 4）：保守策略可能把 availableAt 推迟到下一交易日而本机当天就抓到（availableAt > ingestedAt），Provider 故障也可能让 ingestedAt 远晚于 availableAt（availableAt < ingestedAt）。两者是语义不同的时间戳，不建立全序。
@@ -41,7 +41,7 @@
 
 4. **availableAt 与 ingestedAt 解耦**：`TemporalEnvelope.validate()` 只校验客观事件链 `effectiveAt ≤ publishedAt ≤ availableAt`，**不校验 `availableAt ≤ ingestedAt`**。两个语义不同的时间戳由不同 query mode 分别消费：economicKnowledge 只看 availableAt，operationalKnowledge 同时看两者。
 
-5. **PIT 标注由 TemporalNormalizer 完成**（REPO-5a）：ProviderRecord → CanonicalObservation 时，基于 AvailabilityPolicy（DOM-7）自动计算 `availableAt`，不让 Provider 自己声明。例如基金 Q2 持仓 `effectiveAt = 2024-06-30`、`publishedAt = 2024-07-20`，AvailabilityPolicy 推导 `availableAt = nextTradingDay(2024-07-20) = 2024-07-22`（2024 中国日历，7-20 周六）。Provider 故障延迟到 `ingestedAt = 2024-08-01` 时，availableAt 仍记客观的 7-22。
+5. **PIT 标注由 TemporalNormalizer 完成**（REPO-5a）：ProviderRecord → CanonicalObservation 时，基于 AvailabilityPolicy（DOM-7）自动计算 `availableAt`，不让 Provider 自己声明。例如基金 Q2 持仓 `effectiveAt = 2024-06-30`、`publishedAt = 2024-07-18`（110022 真实公告日，周四），AvailabilityPolicy 推导 `availableAt = nextTradingDay(2024-07-18) = 2024-07-19`。周末公告的跨交易日语义由真实 Q1 样本覆盖：`publishedAt = 2024-04-20`（周六）→ `availableAt = 2024-04-22`（周一）。Provider 故障延迟到 `ingestedAt = 2024-08-01` 时，availableAt 仍记客观的 7-19。
 
 ## Consequences
 
@@ -68,7 +68,7 @@
 - **REPO-1 协议审查**：Repository 协议每个方法签名都有 `KnowledgeContext` 参数；编译期不可省略
 - **REPO-5a 测试**：`TemporalNormalizer` 把 ingestedAt 与 availableAt 分开标注；M2 验收场景 4 通过
 - **FAC-8 golden test**：固定历史序列 → 固定 factor 输出，跨 vintage 一致
-- **M2 验收场景 3**：基金 Q2 持仓 7-20 公告（→ availableAt = 7-22），`economicKnowledge(asOf: 7-10)` 查不到（rollout §4.1）
+- **M2 验收场景 3**：基金 Q2 持仓 07-18 公告（→ availableAt = 07-19），`economicKnowledge(asOf: 7-10)` 查不到（rollout §4.1）
 - **PR checklist**：任何业务层代码直接读「最新值」、绕过 KnowledgeContext，直接拒绝；任何代码假设 `availableAt ≤ ingestedAt` 恒成立，直接拒绝
 
 ## References

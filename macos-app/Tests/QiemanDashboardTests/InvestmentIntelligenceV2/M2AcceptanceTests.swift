@@ -10,10 +10,15 @@ import XCTest
 /// 见 `RealProviderChainTests`（天天基金真实解析链）+ rollout §M2 状态记录。
 ///
 /// 4 个场景：
-/// 1. 同一股票在两个 Provider symbol 不同 → 解析到同一 ListingID（形态预演）
-/// 2. 基金 Q2 持仓 7-20 公告 → economicKnowledge(asOf: 7-10) 查不到（PIT 语义）
+/// 1. 同一股票在两个 Provider symbol 不同 → 解析到同一 ListingID（形态预演；
+///    A 股 600519 形态样本保留，真实 QDII 样本见 M2LiveAcceptanceTests 场景 1）
+/// 2. 基金持仓周六公告（04-20 形态）→ economicKnowledge(asOf: 7-10) 查不到（PIT 语义）
 /// 3. Provider 故障延迟到 8-01 抓到 → availableAt=7-22（客观）、ingestedAt=8-01
 /// 4. data revision（v1→v2）→ 历史 vintage 查询仍看到 v1
+///
+/// 注：本类直灌 07-20 是**形态预演**的假设日期，验证 normalizer/policy 的周末跨
+/// 交易日推导；真实公告日（110022 Q2=07-18、Q1=04-20）由 M2LiveAcceptanceTests
+/// 用事实样本验证，二者不冲突。
 ///
 /// 真 M2 gate 见 `M2LiveAcceptanceTests`；该类不使用 fixture，也不把网络阻塞转成 skip。
 final class M2ShapeTests: XCTestCase {

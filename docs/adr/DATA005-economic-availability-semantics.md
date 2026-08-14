@@ -8,7 +8,7 @@
 
 DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早时间」，但「客观最早」是什么意思，不同数据类型差别很大：
 
-- 基金 Q2 持仓：`effectiveAt = 2024-06-30`，但公告日是 2024-07-20。7-20 当天几点可查？7-19 晚 23:59 公告的算 7-20 还是 7-19？
+- 基金 Q2 持仓：`effectiveAt = 2024-06-30`，但公告日是 2024-07-18（110022 真实公告日）。07-18 当天几点可查？07-17 晚 23:59 公告的算 07-18 还是 07-17？
 - 美股日线：7-20 收盘后哪个时刻算「available」？盘后清算？次日凌晨数据源更新？
 - 宏观数据：FRED GDP 三次修订，第一次（advance）、二次（second）、三次（third）各算不同 availableAt？
 - 公司行动：ex-date / record-date / pay-date 哪个是 availableAt？
@@ -36,8 +36,8 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 
 2. **TemporalNormalizer 用 Policy 算 availableAt**（REPO-5a）：
    - ProviderRecord 不带 availableAt，由 TemporalNormalizer 基于 AvailabilityPolicy 推导
-   - Provider 故障延迟到 8-01 抓到的 7-20 公告数据，`availableAt` 仍记为 `nextTradingDay(7-20)`。以 2024 中国日历为例，7-20 是周六，`availableAt = 2024-07-22`（客观）；`ingestedAt` 记为 8-01
-   - 7-22 的决策回放用 `economicKnowledge(asOf: 7-22)` 仍能看到这条数据（M2 场景 4）。注意：若用 `operationalKnowledge(asOf: 7-22)` 则看不到（本机 8-01 才抓到）——这正是两种 mode 的区别
+   - Provider 故障延迟到 8-01 抓到的 07-18 公告数据，`availableAt` 仍记为 `nextTradingDay(07-18)`。以 2024 中国日历为例，07-18 是周四，`availableAt = 2024-07-19`（客观）；`ingestedAt` 记为 8-01。周末公告的跨交易日语义由真实 Q1 样本覆盖：公告 2024-04-20（周六）→ `availableAt = 2024-04-22`（周一）
+   - 7-19 的决策回放用 `economicKnowledge(asOf: 7-19)` 仍能看到这条数据（M2 场景 3）。注意：若用 `operationalKnowledge(asOf: 7-19)` 则看不到（本机 8-01 才抓到）——这正是两种 mode 的区别
 
 3. **Conservative 优先**：当规则模糊时（如盘后数据确切发布时刻不清），用更保守的 availableAt（次交易日），宁可少算不可多算。回测 lookahead bias 是单向错误，宁可错过不可假装看到。
 
@@ -64,8 +64,8 @@ DATA002 定义了 `availableAt` 是「客观上数据进入公开世界的最早
 
 - **DOM-7 测试**：`AvailabilityPolicy` 结构含 id/version/rule/provenance；V1 三类规则各自有测试
 - **REPO-5a 测试**：`TemporalNormalizer` 基于 policy 算 availableAt；测试断言「ingestedAt ≠ availableAt」
-- **M2 验收场景 4**（rollout §4.1）：Provider 故障 8-01 抓到的 7-20 公告数据（7-20 为 2024 年周六），`availableAt = nextTradingDay(7-20) = 2024-07-22`、`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见
-- **M2 验收场景 3**：基金 Q2 持仓 7-20 公告，`availableAt = 7-22`，`economicKnowledge(asOf: 7-10)` 查不到
+- **M2 验收场景 3**（rollout §4.1）：Provider 故障 8-01 抓到的 07-18 公告数据（110022 真实公告日，周四），`availableAt = nextTradingDay(07-18) = 2024-07-19`、`ingestedAt = 8-01`；`economicKnowledge(asOf: 07-19)` 可见，`operationalKnowledge(asOf: 07-19)` 不可见
+- **M2 验收场景 2**：基金 Q2 持仓 07-18 公告，`availableAt = 07-19`，`economicKnowledge(asOf: 7-10)` 查不到；同基金真实 Q1 样本公告 04-20（周六）→ `availableAt = 04-22`（跨周末）
 - **PR checklist**：
   - 任何代码用 publishedAt 或 ingestedAt 当 availableAt → 拒绝
   - AvailabilityPolicy 修订未增 version → 拒绝

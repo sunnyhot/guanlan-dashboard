@@ -1,8 +1,23 @@
 import XCTest
 @testable import QiemanDashboard
 
-/// M2 真 gate：使用天天基金历史持仓/公告 API 与 Stooq CSV 端点，贯穿
+/// M2 真 gate：真实 Provider 链路（天天基金 + 行情 Provider 候选链）贯穿
 /// ProviderRecord → ObservationFactory → InMemoryRepository。
+///
+/// 2026-08-14 按 Architect 方案修订（真实数据推翻原 §4.1 假设后的设计修订，
+/// ADR-DATA009「真实数据推翻假设后修订设计」路径，非降低标准）：
+/// - 断言全部由事实推导（`expectedAvailableAt = tradingDay(after: publishedAt)`），
+///   不再硬编码 2024-07-20。
+/// - 天天基金 110022 的真实公告日：Q2 = 2024-07-18（周四）、Q1 = 2024-04-20（周六）。
+///   周末跨交易日语义改由同一基金的真实 Q1 样本验证（04-20 → 04-22）。
+/// - 跨 Provider identity 样本换成真实 QDII 持仓：天天基金 513100 Q2 持仓中的
+///   AAPL（stock_symbol "AAPL"）与行情 Provider symbol（Stooq "aapl.us" /
+///   Alpha Vantage "AAPL"）解析到同一 Nasdaq ListingID。A 股 600519 不再作为
+///   Stooq 主样本（Stooq 定位是美股源）。
+/// - 行情 Provider 走 Stooq primary → Alpha Vantage secondary 候选链（DATA006）；
+///   challenge/429 映射 .unavailable/.quotaExhausted，两者都失败即 M2 blocked。
+/// - 整套测试经 `M2MarketEvidenceSource` actor 串行抓取、四场景复用同一批
+///   live evidence，避免天天基金限流。
 ///
 /// 这些测试故意不注入 StaticResponseFetcher，也不把网络失败转成 XCTSkip。
 /// 免费 Provider 被风控或返回契约漂移时，测试必须失败并保留原因；在此之前
@@ -37,79 +52,105 @@ final class M2LiveAcceptanceTests: XCTestCase {
     }
 
     private let calendar = WeekdayCalendar()
-    private let fundCode = "110022"
 
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        return calendar.startOfDay(
-            for: calendar.date(from: DateComponents(year: year, month: month, day: day))!
-        )
+        M2Dates.date(year, month, day)
     }
 
     private func dateText(_ value: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: value)
+        M2Dates.dateText(value)
     }
 
-    private func liveHoldingRecord(ingestedAt: Date) async throws -> ProviderRecord {
-        let adapter = EastmoneyHistoricalHoldingProviderAdapter(
-            fetcher: URLSessionResponseFetcher(),
-            reportDate: date(2024, 6, 30),
-            ingestedAt: { ingestedAt }
+    // MARK: - 共享 live evidence（整套测试每个上游只抓一次）
+
+    private static let pitFundCode = "110022"
+    private static let qdiiFundCode = "513100"
+    /// 天天基金 110022 真实公告日（2026-08-13/14 实跑确认，事实样本非假设）：
+    /// Q2 = 2024-07-18（周四）、Q1 = 2024-04-20（周六）。
+    private static let q2ReportDate = M2Dates.date(2024, 6, 30)
+    private static let q1ReportDate = M2Dates.date(2024, 3, 31)
+
+    private func pitHoldingRecord(ingestedAt: Date) async throws -> ProviderRecord {
+        try await M2MarketEvidenceSource.shared.liveHoldingRecord(
+            fundCode: Self.pitFundCode,
+            reportDate: Self.q2ReportDate,
+            ingestedAt: ingestedAt
         )
-        let records = try await adapter.fetch(
-            code: ProviderCode(scheme: "fund_code", value: fundCode),
-            from: date(2024, 6, 30),
-            to: date(2024, 6, 30)
-        )
-        guard let record = records.first else {
-            throw M2LiveTestError.noHistoricalHoldingRecord
-        }
-        return record
     }
 
-    private func resolver(for payload: FundHoldingPayload) -> IdentityResolver {
+    private func q1HoldingRecord(ingestedAt: Date) async throws -> ProviderRecord {
+        try await M2MarketEvidenceSource.shared.liveHoldingRecord(
+            fundCode: Self.pitFundCode,
+            reportDate: Self.q1ReportDate,
+            ingestedAt: ingestedAt
+        )
+    }
+
+    private func qdiiHoldingRecord(ingestedAt: Date) async throws -> ProviderRecord {
+        try await M2MarketEvidenceSource.shared.liveHoldingRecord(
+            fundCode: Self.qdiiFundCode,
+            reportDate: Self.q2ReportDate,
+            ingestedAt: ingestedAt
+        )
+    }
+
+    // MARK: - Identity（事实推导，verified mapping）
+
+    /// PIT 主样本（110022）的 resolver：fund_code → FundProduct + 持仓股票 → Listing。
+    private func pitResolver(for payload: FundHoldingPayload) -> IdentityResolver {
         let resolvedAt = date(2024, 6, 30)
         var identifiers: [ProviderIdentifier] = [
             ProviderIdentifier(
                 providerID: .eastmoney,
                 identifierScheme: "fund_code",
-                identifierValue: fundCode,
+                identifierValue: Self.pitFundCode,
                 canonical: .fundProduct(FundProductID(rawValue: "prod_110022")),
                 resolutionMethod: .manualVerified,
                 resolvedAt: resolvedAt
-            ),
-            // Stooq's live symbol for the Shanghai listing is 600519.cn.
-            ProviderIdentifier(
-                providerID: .stooq,
-                identifierScheme: "stock_symbol",
-                identifierValue: "600519.cn",
-                canonical: .listing(ListingID(rawValue: "list_sh600519")),
-                resolutionMethod: .exchangeSymbolExact,
-                resolvedAt: resolvedAt
             )
         ]
-
         for position in payload.positions {
-            let value = position.providerCode.value
-            let listingID = value == "600519"
-                ? ListingID(rawValue: "list_sh600519")
-                : ListingID(rawValue: "live_\(position.providerCode.scheme)_\(value)")
             identifiers.append(ProviderIdentifier(
                 providerID: position.providerID,
                 identifierScheme: position.providerCode.scheme,
-                identifierValue: value,
-                canonical: .listing(listingID),
+                identifierValue: position.providerCode.value,
+                canonical: .listing(ListingID(
+                    rawValue: "live_\(position.providerCode.scheme)_\(position.providerCode.value)"
+                )),
                 resolutionMethod: .manualVerified,
                 resolvedAt: resolvedAt
             ))
         }
         return IdentityResolver.from(identifiers)
+    }
+
+    /// QDII identity：天天基金持仓股票代码与行情 Provider symbol 两端 verified，
+    /// 映射到同一 Nasdaq ListingID（REPO-4b 样式，两端 symbol 事实不同）。
+    private func qdiiResolver(
+        holdingSymbol: String,
+        marketProvider: DataProviderID,
+        marketSymbol: String,
+        listingID: ListingID
+    ) -> IdentityResolver {
+        let resolvedAt = date(2024, 6, 30)
+        return IdentityResolver.from([
+            ProviderIdentifier(
+                providerID: .eastmoney,
+                identifierScheme: "stock_symbol",
+                identifierValue: holdingSymbol,
+                canonical: .listing(listingID),
+                resolutionMethod: .manualVerified,
+                resolvedAt: resolvedAt
+            ),
+            ProviderIdentifier(
+                providerID: marketProvider,
+                identifierScheme: "stock_symbol",
+                identifierValue: marketSymbol,
+                canonical: .listing(listingID),
+                resolutionMethod: .exchangeSymbolExact,
+                resolvedAt: resolvedAt
+            )
+        ])
     }
 
     private func factory(for resolver: IdentityResolver) -> ObservationFactory {
@@ -136,74 +177,115 @@ final class M2LiveAcceptanceTests: XCTestCase {
         return snapshot
     }
 
-    // MARK: - 场景 1：天天基金持仓股票 + Stooq 日线 → 同一 ListingID
+    // MARK: - 场景 1：天天基金 QDII 持仓股票 + 行情 Provider → 同一 ListingID
 
-    func testM2LiveScenario1_eastmoneyAndStooqResolveSameListing() async throws {
+    func testM2LiveScenario1_qdiiHoldingAndMarketProviderResolveSameListing() async throws {
         do {
-            let holdingRecord = try await liveHoldingRecord(ingestedAt: date(2024, 7, 22))
+            // 真实天天基金 513100 Q2 持仓应包含 AAPL（美股代码，与天天基金 A 股
+            // 六位码形态不同——两端 symbol 事实不同的跨 Provider 样本）。
+            let holdingRecord = try await qdiiHoldingRecord(ingestedAt: date(2024, 7, 22))
             let payload = try JSONDecoder().decode(FundHoldingPayload.self, from: holdingRecord.rawPayload)
             XCTAssertTrue(
-                payload.positions.contains { $0.providerID == .eastmoney && $0.providerCode.value == "600519" },
-                "真实天天基金 Q2 持仓应包含 600519，实际代码：\(payload.positions.map { $0.providerCode.value })"
+                payload.positions.contains {
+                    $0.providerID == .eastmoney && $0.providerCode.value == "AAPL"
+                },
+                "真实天天基金 513100 Q2 持仓应包含 AAPL，实际前若干代码："
+                    + "\(payload.positions.prefix(10).map { $0.providerCode.value })"
             )
 
-            let resolver = resolver(for: payload)
+            // 行情 Provider 候选链（Stooq primary → Alpha Vantage secondary）。
+            // 全部失败时错误里带各候选分类，测试失败即 M2 blocked。
+            let market = try await M2MarketEvidenceSource.fetchVerifiedDaily(symbol: "AAPL")
+            XCTAssertFalse(
+                market.records.isEmpty,
+                "行情 Provider (\(market.providerID.rawValue)) 应返回 2024-07 真实日线"
+            )
+
+            // 两端 verified mapping → 同一 Nasdaq ListingID。
+            let listingID = ListingID(rawValue: "list_nasdaq_aapl")
+            let resolver = qdiiResolver(
+                holdingSymbol: "AAPL",
+                marketProvider: market.providerID,
+                marketSymbol: market.providerSymbol,
+                listingID: listingID
+            )
             guard case .resolved(let eastmoneyRef, _) = resolver.resolve(
                 providerID: .eastmoney,
                 scheme: "stock_symbol",
-                value: "600519"
+                value: "AAPL"
             ) else {
-                XCTFail("真实天天基金股票代码 600519 未能解析")
+                XCTFail("真实天天基金 QDII 持仓代码 AAPL 未能解析")
                 return
             }
-
-            let stooq = StooqProviderAdapter(fetcher: URLSessionResponseFetcher())
-            let records = try await stooq.fetch(
-                code: ProviderCode(scheme: "stock_symbol", value: "600519.cn"),
-                from: date(2024, 7, 1),
-                to: date(2024, 7, 31)
-            )
-            XCTAssertFalse(records.isEmpty, "Stooq 真实 CSV 应返回 600519.cn 日线")
-            guard case .resolved(let stooqRef, _) = resolver.resolve(
-                providerID: .stooq,
+            guard case .resolved(let marketRef, _) = resolver.resolve(
+                providerID: market.providerID,
                 scheme: "stock_symbol",
-                value: "600519.cn"
+                value: market.providerSymbol
             ) else {
-                XCTFail("真实 Stooq 代码 600519.cn 未能解析")
+                XCTFail("行情 Provider \(market.providerID.rawValue) 代码 \(market.providerSymbol) 未能解析")
                 return
             }
-            XCTAssertEqual(eastmoneyRef, stooqRef)
+            XCTAssertEqual(eastmoneyRef, marketRef)
 
-            // 至少把真实两端都送入 Canonical pipeline，防止只测 resolver lookup。
+            // 至少把两端真实记录都送入 Canonical pipeline，防止只测 resolver lookup。
             _ = try snapshot(
                 from: holdingRecord,
                 id: "m2_live_s1_holding",
                 vintage: Vintage(announcementDate: holdingRecord.publishedAt, publisherVersion: 1),
-                resolver: resolver
+                resolver: pitQDIISnapshotResolver(payload: payload)
             )
-            if let dailyRecord = records.first {
-                let dailyResult = try factory(for: resolver).makeObservation(
-                    from: dailyRecord,
-                    observationID: ObservationID(rawValue: "m2_live_s1_daily"),
-                    vintage: Vintage(announcementDate: dailyRecord.publishedAt, publisherVersion: 1)
+            let dailyResult = try factory(for: resolver).makeObservation(
+                from: market.records[0],
+                observationID: ObservationID(rawValue: "m2_live_s1_daily"),
+                vintage: Vintage(
+                    announcementDate: market.records[0].publishedAt, publisherVersion: 1
                 )
-                guard case .dailyBar = dailyResult else {
-                    XCTFail("Stooq ProviderRecord 未转换为 DailyBar")
-                    return
-                }
+            )
+            guard case .dailyBar = dailyResult else {
+                XCTFail("行情 ProviderRecord 未转换为 DailyBar")
+                return
             }
         } catch {
-            XCTFail("M2 场景 1 真实链路阻塞：\(error)")
+            XCTFail("M2 场景 1 真实链路阻塞 [\(M2MarketEvidenceSource.classify(error))]: \(error)")
         }
     }
 
-    // MARK: - 场景 2：2024-07-20 公告 → 07-22；07-10 不可见
+    /// 513100 整条持仓快照的 resolver：每只持仓股票登记 live Listing。
+    private func pitQDIISnapshotResolver(payload: FundHoldingPayload) -> IdentityResolver {
+        let resolvedAt = date(2024, 6, 30)
+        var identifiers: [ProviderIdentifier] = [
+            ProviderIdentifier(
+                providerID: .eastmoney,
+                identifierScheme: "fund_code",
+                identifierValue: Self.qdiiFundCode,
+                canonical: .fundProduct(FundProductID(rawValue: "prod_513100")),
+                resolutionMethod: .manualVerified,
+                resolvedAt: resolvedAt
+            )
+        ]
+        for position in payload.positions {
+            identifiers.append(ProviderIdentifier(
+                providerID: position.providerID,
+                identifierScheme: position.providerCode.scheme,
+                identifierValue: position.providerCode.value,
+                canonical: .listing(ListingID(
+                    rawValue: "live_\(position.providerCode.scheme)_\(position.providerCode.value)"
+                )),
+                resolutionMethod: .manualVerified,
+                resolvedAt: resolvedAt
+            ))
+        }
+        return IdentityResolver.from(identifiers)
+    }
+
+    // MARK: - 场景 2：真实 Q2 公告 PIT + 真实 Q1 周末公告跨交易日（双断言）
 
     func testM2LiveScenario2_q2DisclosurePIT() async throws {
         do {
-            let record = try await liveHoldingRecord(ingestedAt: date(2024, 7, 22))
+            // 主断言：真实 Q2（公告 2024-07-18 周四）→ availableAt 由 policy 推导。
+            let record = try await pitHoldingRecord(ingestedAt: date(2024, 7, 22))
             let payload = try JSONDecoder().decode(FundHoldingPayload.self, from: record.rawPayload)
-            let resolver = resolver(for: payload)
+            let resolver = pitResolver(for: payload)
             let observation = try snapshot(
                 from: record,
                 id: "m2_live_s2",
@@ -213,34 +295,64 @@ final class M2LiveAcceptanceTests: XCTestCase {
             let repo = InMemoryRepository(calendarBackend: calendar)
             repo.upsert(observation)
 
-            let expectedAnnouncement = date(2024, 7, 20)
-            let expectedAvailable = date(2024, 7, 22)
+            // 事实推导：expected = nextTradingDay(真实 publishedAt)。
+            // （fund_disclosure policy：base=publishedAt, offset=+1 交易日，CN 日历）
+            let expectedAvailableAt = calendar.tradingDay(
+                after: record.publishedAt,
+                offset: 1,
+                jurisdiction: record.jurisdiction
+            )
             XCTAssertEqual(
                 record.publishedAt,
-                expectedAnnouncement,
-                "天天基金公告 API 实际返回 \(dateText(record.publishedAt))，不是 M2 要求的 2024-07-20"
+                date(2024, 7, 18),
+                "天天基金公告 API 实际公告日应为 2024-07-18（事实样本），实际 "
+                    + dateText(record.publishedAt)
             )
-            XCTAssertEqual(observation.temporalEnvelope.availableAt, expectedAvailable)
+            XCTAssertEqual(observation.temporalEnvelope.availableAt, expectedAvailableAt)
             XCTAssertTrue(repo.holdingSnapshots(
                 productID: FundProductID(rawValue: "prod_110022"),
                 context: .economicKnowledge(asOf: date(2024, 7, 10))
             ).isEmpty)
             XCTAssertFalse(repo.holdingSnapshots(
                 productID: FundProductID(rawValue: "prod_110022"),
-                context: .economicKnowledge(asOf: expectedAvailable)
+                context: .economicKnowledge(asOf: expectedAvailableAt)
             ).isEmpty)
+
+            // 第二断言：同一基金真实 Q1（公告 2024-04-20 周六）→ 周末跨交易日，
+            // availableAt = nextTradingDay(04-20) = 04-22（周一）。不伪造日期。
+            let q1Record = try await q1HoldingRecord(ingestedAt: date(2024, 4, 22))
+            XCTAssertEqual(
+                q1Record.publishedAt,
+                date(2024, 4, 20),
+                "天天基金 Q1 公告日应为 2024-04-20（周六，事实样本），实际 "
+                    + dateText(q1Record.publishedAt)
+            )
+            let q1Payload = try JSONDecoder().decode(
+                FundHoldingPayload.self, from: q1Record.rawPayload
+            )
+            let q1Observation = try snapshot(
+                from: q1Record,
+                id: "m2_live_s2_q1",
+                vintage: Vintage(announcementDate: q1Record.publishedAt, publisherVersion: 1),
+                resolver: pitResolver(for: q1Payload)
+            )
+            XCTAssertEqual(
+                q1Observation.temporalEnvelope.availableAt,
+                date(2024, 4, 22),
+                "周六公告 04-20 的 nextTradingDay 应跨周末到 04-22（周一）"
+            )
         } catch {
-            XCTFail("M2 场景 2 真实链路阻塞：\(error)")
+            XCTFail("M2 场景 2 真实链路阻塞 [\(M2MarketEvidenceSource.classify(error))]: \(error)")
         }
     }
 
-    // MARK: - 场景 3：延迟抓取下 economic / operational 分流
+    // MARK: - 场景 3：延迟抓取下 economic / operational 分流（真实 Q2 样本）
 
     func testM2LiveScenario3_delayedIngestionSplitsKnowledgeModes() async throws {
         do {
-            let record = try await liveHoldingRecord(ingestedAt: date(2024, 8, 1))
+            let record = try await pitHoldingRecord(ingestedAt: date(2024, 8, 1))
             let payload = try JSONDecoder().decode(FundHoldingPayload.self, from: record.rawPayload)
-            let resolver = resolver(for: payload)
+            let resolver = pitResolver(for: payload)
             let observation = try snapshot(
                 from: record,
                 id: "m2_live_s3",
@@ -250,11 +362,20 @@ final class M2LiveAcceptanceTests: XCTestCase {
             let repo = InMemoryRepository(calendarBackend: calendar)
             repo.upsert(observation)
 
-            let expectedAnnouncement = date(2024, 7, 20)
-            let expectedAvailable = date(2024, 7, 22)
-            XCTAssertEqual(record.publishedAt, expectedAnnouncement)
+            // 事实推导（真实 Q2 公告 07-18）：availableAt = 07-19（客观），
+            // ingestedAt = 08-01（Provider 故障延迟）。二者无全序关系。
+            let expectedAvailable = calendar.tradingDay(
+                after: record.publishedAt,
+                offset: 1,
+                jurisdiction: record.jurisdiction
+            )
+            XCTAssertEqual(record.publishedAt, date(2024, 7, 18))
             XCTAssertEqual(observation.temporalEnvelope.availableAt, expectedAvailable)
             XCTAssertEqual(observation.temporalEnvelope.ingestedAt, date(2024, 8, 1))
+            XCTAssertNotEqual(
+                observation.temporalEnvelope.availableAt,
+                observation.temporalEnvelope.ingestedAt
+            )
             XCTAssertFalse(repo.holdingSnapshots(
                 productID: FundProductID(rawValue: "prod_110022"),
                 context: .economicKnowledge(asOf: expectedAvailable)
@@ -268,7 +389,7 @@ final class M2LiveAcceptanceTests: XCTestCase {
                 context: .operationalKnowledge(asOf: date(2024, 8, 1))
             ).isEmpty)
         } catch {
-            XCTFail("M2 场景 3 真实链路阻塞：\(error)")
+            XCTFail("M2 场景 3 真实链路阻塞 [\(M2MarketEvidenceSource.classify(error))]: \(error)")
         }
     }
 
@@ -276,10 +397,11 @@ final class M2LiveAcceptanceTests: XCTestCase {
 
     func testM2LiveScenario4_revisionPreservesHistoricalVintage() async throws {
         do {
-            let v1Record = try await liveHoldingRecord(ingestedAt: date(2024, 7, 22))
+            let v1Record = try await pitHoldingRecord(ingestedAt: date(2024, 7, 22))
             let v1Payload = try JSONDecoder().decode(FundHoldingPayload.self, from: v1Record.rawPayload)
-            let resolver = resolver(for: v1Payload)
-            let v1Vintage = Vintage(announcementDate: date(2024, 7, 20), publisherVersion: 1)
+            let resolver = pitResolver(for: v1Payload)
+            // v1 vintage 取 Provider 真实公告日（record.publishedAt），不硬编码。
+            let v1Vintage = Vintage(announcementDate: v1Record.publishedAt, publisherVersion: 1)
             let v2Vintage = Vintage(announcementDate: date(2024, 8, 15), publisherVersion: 2)
             let v1 = try snapshot(from: v1Record, id: "m2_live_s4_v1", vintage: v1Vintage, resolver: resolver)
 
@@ -324,6 +446,8 @@ final class M2LiveAcceptanceTests: XCTestCase {
             repo.upsert(v1)
             repo.upsert(v2)
             let productID = FundProductID(rawValue: "prod_110022")
+            // v2 availableAt = nextTradingDay(08-15 周四) = 08-16（周五）。
+            // asOf 08-01 只能看到 v1（真实公告 07-18 → availableAt 07-19）。
             let at801 = repo.holdingSnapshots(
                 productID: productID,
                 context: .economicKnowledge(asOf: date(2024, 8, 1))
@@ -343,8 +467,21 @@ final class M2LiveAcceptanceTests: XCTestCase {
                 context: .exactSnapshot(at: date(2024, 6, 30))
             ).count, 2)
         } catch {
-            XCTFail("M2 场景 4 真实链路阻塞：\(error)")
+            XCTFail("M2 场景 4 真实链路阻塞 [\(M2MarketEvidenceSource.classify(error))]: \(error)")
         }
+    }
+
+    // MARK: - Evidence manifest（M2 放行证据，随测试输出）
+
+    func testM2EvidenceManifest() async throws {
+        // 汇总测试：跑完四场景后输出 evidence manifest。放在同 suite 里按
+        // 字母序最后执行不保证，因此本测试自己确保上游已抓取（缓存命中则零成本），
+        // 再输出 manifest。
+        _ = try await pitHoldingRecord(ingestedAt: date(2024, 7, 22))
+        let manifest = await M2MarketEvidenceSource.shared.manifestText()
+        XCTAssertFalse(manifest.isEmpty, "至少应有一条天天基金 live evidence")
+        // manifest 进 failure message，绿色时也可在失败诊断里找到。
+        print("M2 evidence manifest:\n\(manifest)")
     }
 }
 
