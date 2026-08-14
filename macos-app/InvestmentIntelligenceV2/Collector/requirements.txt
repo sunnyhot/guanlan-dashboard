@@ -1,0 +1,4 @@
+# AKShare 本地 Collector 依赖（PROV-3a，可选安装 —— DATA007）
+# 进阶用户自行安装：pip3 install -r requirements.txt
+# 默认 App 与 iOS 不打包这些依赖；缺失时 collector 报环境错误（exit 2），不影响 App。
+akshare>=1.14.0

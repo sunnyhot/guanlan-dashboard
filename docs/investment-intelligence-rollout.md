@@ -274,12 +274,17 @@ macos-app/
 >   持仓只有 weightPct（无 shares/marketValue）
 >
 > **未达成项（M2 blocked 原因）**：
-> - REPO-8 已补 `M2LiveAcceptanceTests` 四个真实链路 gate，但当前仍未通过：
->   2026-08-13 实跑中，天天基金 110022 的 2024 Q2 公告 API 返回 `2024-07-18`
->   （要求契约为 `2024-07-20`，因此 policy 推导为 7-19 而非 7-22），Stooq
->   `600519.cn` 返回 anti-bot JavaScript challenge 而非 CSV。
-> - live network gate 已从 Epic 4 前置到 REPO-8；上述 Provider 契约/连通性阻塞
->   解除前不得把 M2 标记为 Pass。
+> - REPO-8 已补 `M2LiveAcceptanceTests` 四个真实链路 gate；2026-08-14 按 Architect
+>   方案完成事实修订：断言全部由真实公告日推导（Q2=07-18、Q1=04-20 周六），identity
+>   样本换真实 QDII（513100 AAPL），整套测试经 `M2MarketEvidenceSource` actor 串行
+>   共享抓取（每上游一次）+ Stooq → Alpha Vantage 候选链（DATA006），并输出 evidence
+>   manifest（Provider/endpoint/抓取时间/raw SHA-256/published-available-ingested/
+>   两端 symbol 与 ListingID）。
+> - 当前剩余阻塞：Stooq 端点持续返回 anti-bot JavaScript challenge（记
+>   `.unavailable`，降级路径已实现）；Alpha Vantage secondary 需要真实 apikey
+>   （demo key 仅覆盖 IBM/MSFT 近 100 行，不含 2024-07 窗口），本机 Keychain/环境
+>   变量均未配置 → 场景 1 行情端两个候选都不可用。天天基金侧（场景 2/3/4 的事实
+>   样本）已验证可用。上述行情 Provider 连通性/配置解除前不得把 M2 标记为 Pass。
 > - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
 > 待真实 Provider 契约与连通性满足 §4.1 后，M2 才可正式标记 Pass。
 
@@ -303,7 +308,7 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-13）**：M3 进行中（10/28 点，PROV-1/2/5/6 签收）。
+> **状态（2026-08-14）**：M3 进行中（18/28 点，PROV-1/2/3a/5/6 签收）。
 > PROV-3 拆为 PROV-3a（本地 Python collector，DATA007，8pt，进阶可选）+
 > PROV-3b（远程 VPS collector + RemoteStagingProvider，DATA010，5pt，默认路径）。
 > DATA010 ADR 已 Proposed，定死凭证边界（公开数据 only）/ 反爬（聚合去重）/
@@ -334,12 +339,28 @@ macos-app/
 >   映射 `ProviderError`——dailyBudgetExceeded / serviceMessage（Information/Note rate limit）→
 >   `quotaExhausted`（**降级不阻塞**，核心验收）；Error Message → schemaMismatch。
 >   端到端验证 JSON→ProviderRecord→SchemaValidator→staging round-trip。
+> - PROV-3a（8）—— AKShare 本地 Collector（DATA007 进程外隔离，进阶可选）：
+>   `InvestmentIntelligenceV2/Collector/akshare_collector.py`（独立 Python 进程，
+>   SPM exclude 不进 App/iOS target；5 个 dataset——个股/指数日线、基金净值、
+>   基金季度持仓、中国宏观，每 dataset 独立 JSONL + manifest.json（status/recordCount/
+>   droppedMalformed/errorCategory/errorMessage/sha256），异常分类 environment/network/
+>   not_found/schema/internal，单 dataset 失败隔离 exit 1，环境错误 exit 2，行数上限
+>   防失控回填）+ Swift 侧 `AKShareLocalCollector.swift`（manifest 模型 + 失败隔离的
+>   staging 摄取（sha256 校验 + SchemaValidator 分桶 + append 到 App spool，不写
+>   Canonical）+ 仅 macOS `#if os(macOS)` launcher（python 候选链、watchdog 超时杀进程））。
+>   **跨语言 schema 字节对齐**：camelCase / ISO8601 UTC（无小数秒）/ enum rawValue /
+>   rawPayload base64 / Decimal 定点输出；A 股日期归一化上海日界 UTC 瞬时（与
+>   EastmoneyResponseParser.normalizeToTradingDay 一致）。契约测试
+>   （`--selftest` 离线输出 → Reader → SchemaValidator → ObservationFactory 全链路）
+>   9 项 + 摄取/launcher 错误路径单测 15 项全绿。**真实联调待本机安装 akshare**
+>   （pip install -r Collector/requirements.txt）——联调阻塞项见 ASH-12。
 >
-> **未达成（M3 blocked 原因）**：PROV-3a/3b/4/7 各 Adapter 需接外部数据源
-> （AKShare 本地/远程 Python / SEC XBRL / Tavily），PROV-8
-> ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
+> **未达成（M3 blocked 原因）**：PROV-3a 真实联调（本机装 akshare 后跑一轮真实抓取）
+> 与 PROV-3b/4/7 各 Adapter 接外部数据源（远程 VPS Python / SEC XBRL / Tavily），
+> PROV-8 ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
 > （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
-> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行。
+> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行
+> （PROV-3a 的 `--selftest` 契约测试模式可直接复用）。
 
 ---
 
@@ -513,14 +534,23 @@ M2 是整个项目最关键的验收。四个场景必须全过：
 
 | # | 场景 | 期望 |
 |---|---|---|
-| 1 | 同一股票在两个 Provider symbol 不同 | 解析到同一 `ListingID` |
-| 2 | 基金 Q2 持仓 7-20 公告（2024 年周六）| `availableAt = nextTradingDay(7-20) = 7-22`；`economicKnowledge(asOf: 7-10)` 查不到 |
-| 3 | Provider 故障延迟到 8-01 抓到 | `availableAt = 7-22`（客观，由 policy 推导），`ingestedAt = 8-01`；`economicKnowledge(asOf: 7-22)` 可见，`operationalKnowledge(asOf: 7-22)` 不可见 |
-| 4 | 模拟一次 data revision（v1→v2）| 历史 vintage 查询仍看到 v1 |
+| 1 | 同一股票在两个 Provider symbol 不同（真实 QDII 样本：天天基金 513100 Q2 持仓 `AAPL` + 行情 Provider `aapl.us`/`AAPL`）| 解析到同一 Nasdaq `ListingID`；行情 Provider 走 Stooq primary → Alpha Vantage secondary 候选链（DATA006） |
+| 2 | 基金 Q2 持仓 2024-07-18 公告（真实公告日，周四）+ 同基金 Q1 2024-04-20 公告（真实周六样本）| `availableAt = nextTradingDay(publishedAt)`（Q2 → 07-19；Q1 → 04-22 跨周末）；`economicKnowledge(asOf: 7-10)` 查不到 |
+| 3 | Provider 故障延迟到 8-01 抓到 | `availableAt = 07-19`（客观，由 policy 从真实公告日 07-18 推导），`ingestedAt = 8-01`；`economicKnowledge(asOf: 07-19)` 可见，`operationalKnowledge(asOf: 07-19)` 不可见，`operationalKnowledge(asOf: 8-01)` 可见 |
+| 4 | 模拟一次 data revision（v1→v2），v1 `announcementDate` 取 Provider 真实 `publishedAt` | 历史 vintage 查询仍看到 v1 |
 
 > 原「同一基金在 Qieman 和天天基金代码不同」场景（基金跨 Provider identity）已随 REPO-6
 > 且慢 Provider 移除而删除：基金 NAV 数据源唯一为天天基金，不存在跨 Provider 场景。
-> 跨 Provider identity 机制改由场景 1（股票：天天基金 + Stooq）验证。
+> 跨 Provider identity 机制改由场景 1（股票：天天基金 + 行情 Provider）验证。
+>
+> **2026-08-14 事实修订**（ADR-DATA009「真实数据推翻假设后修订设计」路径）：
+> 原表述「Q2 持仓 7-20 公告（周六）→ availableAt 7-22」基于错误样本假设。天天基金
+> 公告 API 实跑确认 110022 的 Q2 公告日是 **2024-07-18（周四）**，不是 07-20；周末
+> 跨交易日语义改由同一基金真实 Q1 样本（公告日 **2024-04-20，周六** → availableAt
+> 04-22）验证，不伪造日期。跨 Provider identity 样本从 A 股 600519.cn 换成真实 QDII
+> 持仓（513100 的 AAPL），与 Stooq 美股源定位一致；Stooq 反爬 challenge 按 DATA006
+> 记 `.unavailable` 并降级 Alpha Vantage secondary，不在客户端实现绕过。断言全部由
+> 事实推导（`expectedAvailableAt = tradingDay(after: record.publishedAt)`），不硬编码。
 
 M2 不过不进 Epic 5（GRDB schema 冻结）。
 

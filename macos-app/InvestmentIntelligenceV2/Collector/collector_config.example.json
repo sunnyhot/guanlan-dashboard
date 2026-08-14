@@ -1,0 +1,7 @@
+{
+  "stock_daily": { "symbols": ["600519", "000858"] },
+  "index_daily": { "symbols": ["000300", "000905"] },
+  "fund_nav": { "funds": ["110022"] },
+  "fund_holdings": { "funds": ["110022"], "years": ["2024"] },
+  "macro_china": { "series": ["gdp_yearly"] }
+}
