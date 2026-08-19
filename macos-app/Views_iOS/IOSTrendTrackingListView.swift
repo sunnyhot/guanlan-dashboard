@@ -89,16 +89,16 @@ struct IOSTrendTrackingListView: View {
         )
     }
 
-    // MARK: 置信度条
+    // MARK: 把握条（档位与 macOS 同源 ConfidenceGrade）
 
     private func confidenceBar(_ confidence: TrendConfidence) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: IOSDesign.spaceS) {
-                Text("置信度")
+                Text("把握")
                     .font(IOSDesign.sansBody(11))
                     .foregroundStyle(IOSDesign.muted)
                 Spacer()
-                Text("\(confidence.score) · \(confidence.label)")
+                Text("\(confidence.score) · \(ConfidenceGrade(score: confidence.normalizedScore).gradeText)")
                     .font(IOSDesign.monoNumber(11, weight: .medium))
                     .foregroundStyle(IOSDesign.ink)
             }
