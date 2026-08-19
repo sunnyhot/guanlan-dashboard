@@ -756,23 +756,3 @@ private extension TrendDirection {
     }
 }
 
-extension TrendActionKind {
-    var displayText: String {
-        switch self {
-        case .watch:
-            return "观察"
-        case .waitForConfirmation:
-            return "等待确认"
-        case .observeInBatches:
-            return "分批观察"
-        case .pausePlan:
-            return "暂停计划"
-        case .considerIncrease:
-            return "考虑增加"
-        case .considerReduce:
-            return "考虑降低"
-        case .rebalanceReview:
-            return "调仓复核"
-        }
-    }
-}
