@@ -265,6 +265,7 @@ struct OverviewSectionView: View {
             model.selectedPlatformActivityTab = .forum
             model.selectedSection = .platform
         case .settings: model.selectedSection = .settings
+        case .aiResearch: model.selectedSection = .enhancement
         }
     }
 

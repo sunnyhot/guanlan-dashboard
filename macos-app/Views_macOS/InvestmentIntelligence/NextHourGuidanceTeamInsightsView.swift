@@ -5,9 +5,15 @@ struct NextHourGuidanceTeamInsightsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            Label("三方判断约束", systemImage: "person.3.sequence.fill")
-                .font(AppPalette.appFont(.headline, weight: .bold))
-                .foregroundStyle(AppPalette.ink)
+            HStack(spacing: AppPalette.spaceS) {
+                Label("三方判断约束", systemImage: "person.3.sequence.fill")
+                    .font(AppPalette.appFont(.headline, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                TermHelpView(term: .teamConstraints)
+            }
+            Text("行情、新闻、持仓三个独立角度给出的限制，防止单一视角把话说满")
+                .font(AppPalette.appFont(.caption))
+                .foregroundStyle(AppPalette.muted)
 
             NextHourGuidanceTeamInsightView(
                 title: "行情信号",

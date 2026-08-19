@@ -42,4 +42,35 @@ final class TodayBriefBuilderTests: XCTestCase {
         XCTAssertEqual(items.map(\.kind), [.importPortfolio])
         XCTAssertEqual(items.first?.destination, .portfolio)
     }
+
+    func testMakeItemsSurfacesMissedCloseReviewAsActionableWarning() {
+        let context = TodayBriefContext(
+            hasPersonalPortfolio: true,
+            pendingActionCount: 1,
+            closeReviewAutoMissed: true
+        )
+
+        let items = TodayBriefBuilder.makeItems(context: context, maxCount: 4)
+
+        XCTAssertTrue(items.contains { $0.kind == .closeReviewMissed })
+        let missed = items.first { $0.kind == .closeReviewMissed }
+        XCTAssertEqual(missed?.destination, .aiResearch)
+        XCTAssertEqual(missed?.tone, .warning)
+        // 排在待确认交易之后、计划之前：需要处理但不是资金动作。
+        XCTAssertEqual(
+            items.map(\.kind),
+            [.pendingTrades, .closeReviewMissed]
+        )
+    }
+
+    func testMakeItemsOmitsCloseReviewEntryWhenTonightRanOrIsPending() {
+        let context = TodayBriefContext(
+            hasPersonalPortfolio: true,
+            closeReviewAutoMissed: false
+        )
+
+        let items = TodayBriefBuilder.makeItems(context: context, maxCount: 4)
+
+        XCTAssertFalse(items.contains { $0.kind == .closeReviewMissed })
+    }
 }
