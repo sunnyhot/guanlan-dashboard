@@ -35,6 +35,20 @@ struct IOSTrendSettingsView: View {
 
     private var providerSection: some View {
         Section {
+            Picker("快速选择", selection: providerPresetBinding) {
+                Text("自定义").tag("")
+                ForEach(TrendProviderPreset.allPresets) { preset in
+                    Text(preset.name).tag(preset.name)
+                }
+            }
+            if let preset = TrendProviderPreset.matching(model.trendSettings.provider) {
+                Link(
+                    "获取 \(preset.name) API Key →",
+                    destination: URL(string: preset.consoleURL)
+                        ?? URL(string: "https://example.com")!
+                )
+                .font(.footnote)
+            }
             LabeledContent {
                 TextField("OpenAI / 兼容服务", text: providerNameBinding)
                     .multilineTextAlignment(.trailing)
@@ -117,6 +131,20 @@ struct IOSTrendSettingsView: View {
     }
 
     // MARK: - Bindings
+
+    /// 预设选中态:按 Base URL 反查;选预设即填入供应商/地址/模型(Key 不动)。
+    private var providerPresetBinding: Binding<String> {
+        Binding(
+            get: {
+                TrendProviderPreset.matching(model.trendSettings.provider)?.name ?? ""
+            },
+            set: { name in
+                guard let preset = TrendProviderPreset.allPresets.first(where: { $0.name == name })
+                else { return }
+                preset.apply(to: &model.trendSettings.provider)
+            }
+        )
+    }
 
     private var providerNameBinding: Binding<String> {
         Binding(get: { model.trendSettings.provider.providerName },
