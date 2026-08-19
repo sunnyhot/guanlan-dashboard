@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.0/QiemanDashboard-4.1.0.zip",
-    "name" : "QiemanDashboard-4.1.0.zip",
-    "sha256" : "fb5f41f08115207b9a1f46f8681cad246d06f70906e1fb5ba2e6afbd041410bc",
-    "size" : 7892382
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.1/QiemanDashboard-4.1.1.zip",
+    "name" : "QiemanDashboard-4.1.1.zip",
+    "sha256" : "40bd481fb3892bbbd5ad43b5e258235747f05a1c9b9dffe3ef932db7e71021f2",
+    "size" : 7894789
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.0/QiemanDashboard-4.1.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.1/QiemanDashboard-4.1.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.1.0.zip",
-      "size" : 7892382
+      "name" : "QiemanDashboard-4.1.1.zip",
+      "size" : 7894789
     }
   ],
-  "body" : "Xcode 工程同步 v4.0 后新增源码并修复 iOS 目标构建\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\n旧趋势跟踪清单退场,行动候选直接入决策案例\nAI 研判体验优化总计划(含批次实施记录)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.1.0",
-  "name" : "QiemanDashboard v4.1.0",
-  "notes" : "Xcode 工程同步 v4.0 后新增源码并修复 iOS 目标构建\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\n旧趋势跟踪清单退场,行动候选直接入决策案例\nAI 研判体验优化总计划(含批次实施记录)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化",
+  "body" : "Xcode 工程同步 v4.1.1(规整器新文件与版本号)\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.1.1",
+  "name" : "QiemanDashboard v4.1.1",
+  "notes" : "Xcode 工程同步 v4.1.1(规整器新文件与版本号)\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告",
   "published_at" : "",
-  "sha256" : "fb5f41f08115207b9a1f46f8681cad246d06f70906e1fb5ba2e6afbd041410bc",
-  "tag" : "v4.1.0",
-  "tag_name" : "v4.1.0",
-  "version" : "4.1.0"
+  "sha256" : "40bd481fb3892bbbd5ad43b5e258235747f05a1c9b9dffe3ef932db7e71021f2",
+  "tag" : "v4.1.1",
+  "tag_name" : "v4.1.1",
+  "version" : "4.1.1"
 }
