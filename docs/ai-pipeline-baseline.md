@@ -47,6 +47,7 @@
 - 链路 A 与链路 B **双向互斥**:任一运行中,另一不启动(见第 8 节)。
 - 链路 B 的结果**不会**创建 TrendTrackingItem(模型不兼容:NextHourGuidanceAction vs TrendActionCandidate)。
 - 链路 C 的唯一创建入口是 `addTrackingItem(from:report:)`,无自动条件求值。
+  > **2026-08-19 sunset 注记(方案 A,总计划 #12)**:链路 C 进入退场。UI 写入入口已切换——行动候选「加入关注」按钮改为 `addDecisionCase(from:report:)` 直接创建 DecisionCase(kind=.trendAction,caseKey `trend:` 前缀,与迁移键 `legacy:` 互为去重);旧清单 UI 移出页面,通知深链改路由到案例详情(迁移保持 ID 稳定)。`addTrackingItem` 模型函数与落盘格式保留(N+2 移除),本条不变量在模型层仍然成立。
 
 ---
 

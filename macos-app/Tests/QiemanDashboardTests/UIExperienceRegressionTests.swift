@@ -722,6 +722,25 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(panel.contains(".aiPosture"))
     }
 
+    func testLegacyTrackingListIsRetiredFromAIDashboard() throws {
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
+        let center = try source(at: "Views_macOS/EnhancementCenterView.swift")
+
+        // 写入入口已切:按钮走 addDecisionCase,不再调旧 addTrackingItem
+        XCTAssertTrue(today.contains("model.addDecisionCase(from: action, report: report)"))
+        XCTAssertFalse(today.contains("model.addTrackingItem("))
+        XCTAssertTrue(today.contains("model.hasDecisionCase(for: action, report: report)"))
+
+        // 旧清单 UI 退场:区段与展开状态都不存在
+        XCTAssertFalse(today.contains("legacyTrackingDisclosure"))
+        XCTAssertFalse(today.contains("trackingContent"))
+        XCTAssertFalse(center.contains("isLegacyTrackingExpanded"))
+
+        // 通知深链改路由到决策案例详情(迁移保持 ID 稳定)
+        XCTAssertTrue(center.contains("deepLinkedCase"))
+        XCTAssertTrue(center.contains("DecisionCaseDetailSheet(caseID: caseItem.id)"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

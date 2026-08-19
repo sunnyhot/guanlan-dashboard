@@ -26,6 +26,9 @@ struct DecisionMetricResolver {
             return resolveDrawdown(cs: cs, rows: rows)
         case .targetDeviation:
             return resolveTargetDeviation(cs: cs, rows: rows, profile: profile)
+        case .trendAction:
+            // 趋势行动的指标在建案时快照(metricValue/把握档位),无需运行时解析。
+            return DecisionMetricResolution(value: cs.metricValue, coverage: nil, reason: nil)
         }
     }
 

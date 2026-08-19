@@ -3,6 +3,7 @@ import SwiftUI
 extension EnhancementCenterView {
     /// AI 投资指引单页：围绕用户决策链路按紧迫度排列。
     /// 盘中实时 → 全市场机会 → 我的组合长期研判 → 判断与复盘。
+    /// (旧趋势跟踪清单已 sunset:行动候选直接入决策案例,历史项由启动迁移承接。)
     var investmentDashboardContent: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             InvestmentIntelligenceDashboardView {
@@ -14,7 +15,6 @@ extension EnhancementCenterView {
                 portfolioLongTermSection
                     .investmentSectionAnchor(.longTerm)
             }
-            legacyTrackingDisclosure
         }
     }
 
@@ -200,34 +200,6 @@ extension EnhancementCenterView {
         return scope == .marketRadar || scope == .full
     }
 
-    private var legacyTrackingDisclosure: some View {
-        SectionCard(
-            title: "旧趋势跟踪清单",
-            subtitle: "历史跟踪项，可手动管理状态",
-            icon: "archivebox",
-            trailing: {
-                Spacer()
-                Button {
-                    withAnimation(AppPalette.motionStandard) {
-                        isLegacyTrackingExpanded.toggle()
-                    }
-                } label: {
-                    Label(
-                        isLegacyTrackingExpanded ? "收起" : "展开",
-                        systemImage: isLegacyTrackingExpanded ? "chevron.up" : "chevron.down"
-                    )
-                }
-                .buttonStyle(.appSecondary)
-                .controlSize(.small)
-            }
-        ) {
-            if isLegacyTrackingExpanded {
-                trackingContent
-                    .transition(.opacity)
-            }
-        }
-    }
-
     func portfolioLongTermReportView(_ report: TrendAnalysisReport) -> some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             trendPortfolioHeader(report)
@@ -270,7 +242,7 @@ extension EnhancementCenterView {
     }
 
     func todayActionCard(_ action: TrendActionCandidate, report: TrendAnalysisReport) -> some View {
-        let tracked = model.hasActiveTrackingItem(for: action)
+        let tracked = model.hasDecisionCase(for: action, report: report)
         let tint = todayActionTint(action.kind)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -288,9 +260,9 @@ extension EnhancementCenterView {
                 trendConfidenceMeter(action.confidence)
                 Spacer(minLength: 6)
                 Button {
-                    model.addTrackingItem(from: action, report: report)
+                    model.addDecisionCase(from: action, report: report)
                 } label: {
-                    Label(tracked ? "已跟踪" : "加入跟踪", systemImage: tracked ? "checkmark.circle.fill" : "bell.badge")
+                    Label(tracked ? "已关注" : "加入关注", systemImage: tracked ? "checkmark.circle.fill" : "bell.badge")
                         .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 .buttonStyle(.appSecondary)

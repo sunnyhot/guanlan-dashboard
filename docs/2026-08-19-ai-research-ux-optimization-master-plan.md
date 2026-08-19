@@ -1,6 +1,6 @@
 # AI 研判页体验优化 · 总修改计划(含已完成批次)
 
-> 日期:2026-08-19 · 基线:v4.0.0 后 main(a95ac41+),测试基线 **646 全绿**(595 → 646;A +12、B +7、P1 +12、P2 +5、P3 +1、P4 +12)
+> 日期:2026-08-19 · 基线:v4.0.0 后 main(a95ac41+),测试基线 **651 全绿**(595 → 651;A +12、B +7、P1 +12、P2 +5、P3 +1、P4 +12、#12 +5)
 > 范围:AI 研判子系统(macOS `InvestmentIntelligenceDashboardView` 及注入链路、设置、菜单栏、iOS 对应页)、收盘复盘契约呈现、今日简报
 > 总原则:**工程契约(调度/落盘/校验/行为基线)零改动,只做呈现层与纯派生逻辑**;Phase 5 例外(单独评审)
 
@@ -104,7 +104,7 @@
 | 9 | MarketOpportunityEngine memo | P1 | 并入 P1 | `EnhancementTodayPanel.swift`、AppModel 缓存 | 低(技术) |
 | 10 | 实时日志收纳为状态条 | P4 | **已完成·工作区未提交**(运行结束自动收起为单行;失败态显示分诊人话) | `TrendLiveLogPanel.swift` | 中 |
 | 11 | 摘要行锚点滚动 | P1 | 并入 P1(随摘要卡交付) | dashboard + `EnhancementCenterView`(ScrollViewReader) | 低 |
-| 12 | 旧趋势跟踪清单 sunset | P4 | 待做(需决策) | `EnhancementTodayPanel.legacyTrackingDisclosure` | 低 |
+| 12 | 旧趋势跟踪清单 sunset | P4 | **已完成·方案 A(2026-08-19)** | `DecisionCase.swift`(kind+case)、`InvestmentIntelligenceActions.swift`(新入口)、删 `EnhancementTrackingPanel.swift`、`EnhancementTodayPanel/CenterView` | 低 |
 | 13 | 跨时段连贯性(盘中回指昨晚三件事) | P5 | 远期备忘 | NextHourGuidance prompt/models(**动行为契约,须过 characterization 基线**) | 远期 |
 | 14 | 复盘完成/失败本地通知(唯一建议默认开) | P4 | 候选 | `LocalNotificationManager`、AppModel 接线 | 中 |
 | 15 | 盘中姿态突变通知(默认关) | P4 | 候选 | `NextHourGuidanceController`、通知 | 低 |
@@ -244,6 +244,8 @@ AppModel 计算属性 `investmentTodayResearchSummary` 接线(输入:`marketClos
 > #7 实施补充(第二批):`MenuBarTickerKind.aiPosture` 条目三态如实呈现——无报告「AI·暂无盘中研判」、有效「AI·均衡·至14:50」、过期「AI·均衡·已过期」(过期判定复用 P1 的 isIntradayExpired,兼容固定槽/手动槽双格式);设置面板新增「AI 研判姿态」分组,默认关(default.selections 不含,有测试锁定);条目构建测试用过去/未来完整日期规避真实时钟边界。第二批 +5,全量 646 绿。
 >
 > P4 剩余:#12 旧跟踪清单 sunset,阻塞在数据保留方式决策(归档进决策案例 or 只读隐藏)。
+>
+> **#12 实施记录(方案 A,2026-08-19 完成)**:①存量迁移早已自动跑(Slice 6 的 `migrateLegacyTrackingIfNeeded`,启动时按 caseKey 增量去重),无需额外动作;②写入切换:行动候选「加入跟踪」→「加入关注」,新入口 `addDecisionCase` 直接建 DecisionCase(新 kind `.trendAction`,caseKey `trend:` 前缀,与旧迁移键 `legacy:` **互为去重**——同一动作无论迁移还是新加只保留一案);自然语言条件进 detail 标注人工复核,复查时间不预设;③旧清单 UI 整体退场(删 `EnhancementTrackingPanel.swift` + 底部区段 + 展开状态);④通知深链改路由到案例详情(迁移保持 ID 稳定所以旧通知仍可达);⑤`DecisionMetricResolver` 补 trendAction 分支(建案时快照指标,不运行时解析);⑥`addTrackingItem` 模型函数与落盘保留(N+2 再移除),characterization 测试全部仍绿;基线文档链路 C 加 sunset 注记。+5 测试,全量 651 绿。**Phase 4 至此全部完成。**
 
 ### 4.1 错误分诊人话化(#6)
 
