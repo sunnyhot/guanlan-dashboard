@@ -600,6 +600,128 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(marketEngine.contains("portfolioExposureText"))
     }
 
+    func testInvestmentSummaryCardAndReadingGuideAreWiredIntoDashboard() throws {
+        let dashboard = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentIntelligenceDashboardView.swift"
+        )
+        let card = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentTodaySummaryCard.swift"
+        )
+        let guide = try source(
+            at: "Views_macOS/InvestmentIntelligence/ResearchReadingGuideSheet.swift"
+        )
+        let center = try source(at: "Views_macOS/EnhancementCenterView.swift")
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
+
+        // 摘要卡置顶 + 复盘区段锚点
+        XCTAssertTrue(dashboard.contains("InvestmentTodaySummaryCard()"))
+        XCTAssertTrue(dashboard.contains("investmentSectionAnchor(.closeReview)"))
+
+        // 摘要卡:指南入口、未生成引导态、锚点点击、首弹一次
+        XCTAssertTrue(card.contains("怎么读"))
+        XCTAssertTrue(card.contains("ResearchReadingGuideSheet"))
+        XCTAssertTrue(card.contains("去设置配置模型"))
+        XCTAssertTrue(card.contains("anchors?.scrollTo = row.kind"))
+        XCTAssertTrue(card.contains("hasSeenReadingGuide"))
+
+        // 指南 sheet:立场声明 + 术语速查全部来自词表
+        XCTAssertTrue(guide.contains("不替你做买卖决定"))
+        XCTAssertTrue(guide.contains("ResearchTerm.allCases"))
+        XCTAssertTrue(guide.contains("term.plainExplanation"))
+
+        // 锚点滚动贯通:协调器注入 + 三个区段锚点
+        XCTAssertTrue(center.contains("ScrollViewReader"))
+        XCTAssertTrue(center.contains("investmentSectionAnchors"))
+        XCTAssertTrue(today.contains("investmentSectionAnchor(.intraday)"))
+        XCTAssertTrue(today.contains("investmentSectionAnchor(.marketRadar)"))
+        XCTAssertTrue(today.contains("investmentSectionAnchor(.longTerm)"))
+
+        // 空态引流与 memo 化:面板不再直接调 analyze
+        XCTAssertTrue(today.contains("IntradayEmptyHintView"))
+        XCTAssertTrue(today.contains("model.marketOpportunities"))
+        XCTAssertFalse(today.contains("MarketOpportunityEngine.analyze"))
+    }
+
+    func testTrendSettingsPanelGuidesConfigurationWithPresetsAndLayers() throws {
+        let panel = try source(at: "Views_macOS/SettingsTrendPanel.swift")
+        let iosPanel = try source(at: "Views_iOS/IOSTrendSettingsView.swift")
+
+        // 预设 chips + 取 Key 引导(命中预设时可见)
+        XCTAssertTrue(panel.contains("TrendProviderPreset.allPresets"))
+        XCTAssertTrue(panel.contains("applyProviderPreset"))
+        XCTAssertTrue(panel.contains("consoleURL"))
+
+        // 隐私说明:按模式如实描述,脱敏必须点明「不发送任何金额」
+        XCTAssertTrue(panel.contains("不发送任何金额"))
+        XCTAssertTrue(panel.contains("隐私说明"))
+
+        // 分层:超时与三个可选数据源收进 DisclosureGroup
+        XCTAssertTrue(panel.contains("DisclosureGroup(\"高级:服务超时\")"))
+        XCTAssertTrue(panel.contains("高级数据源"))
+        XCTAssertTrue(panel.contains("trendWebSearchCard"))
+
+        // iOS 同步:快速选择预设 + 取 Key 链接
+        XCTAssertTrue(iosPanel.contains("TrendProviderPreset"))
+        XCTAssertTrue(iosPanel.contains("providerPresetBinding"))
+    }
+
+    func testDecisionProfileEditorExistsOnMacOSAndTerminologyIsUnifiedOnIOS() throws {
+        let dashboard = try source(
+            at: "Views_macOS/InvestmentIntelligence/InvestmentIntelligenceDashboardView.swift"
+        )
+        let profilePanel = try source(
+            at: "Views_macOS/InvestmentIntelligence/UserDecisionProfilePanel.swift"
+        )
+        let iosEnhancement = try source(at: "Views_iOS/EnhancementSectionView.swift")
+        let iosTracking = try source(at: "Views_iOS/IOSTrendTrackingListView.swift")
+        let iosGlossary = try source(at: "Views_iOS/IOSResearchTermGlossaryView.swift")
+
+        // macOS 画像入口:研判基础卡按钮 + sheet + 与 iOS 一致的字段
+        XCTAssertTrue(dashboard.contains("UserDecisionProfilePanel()"))
+        XCTAssertTrue(dashboard.contains("isShowingProfile"))
+        XCTAssertTrue(profilePanel.contains("model.updateUserDecisionProfile"))
+        XCTAssertTrue(profilePanel.contains("InvestmentHorizon.allCases"))
+        XCTAssertTrue(profilePanel.contains("RiskTolerance.allCases"))
+        XCTAssertTrue(profilePanel.contains("allowsActiveRebalancing"))
+        XCTAssertTrue(profilePanel.contains("恢复默认"))
+
+        // iOS 术语统一:不再出现「置信度」,档位来自 ConfidenceGrade
+        XCTAssertFalse(iosEnhancement.contains("置信度"))
+        XCTAssertFalse(iosTracking.contains("置信度"))
+        XCTAssertTrue(iosEnhancement.contains("ConfidenceGrade(score:"))
+        XCTAssertTrue(iosTracking.contains("ConfidenceGrade(score:"))
+
+        // iOS 词表:同源 ResearchTerm,带「怎么读」入口
+        XCTAssertTrue(iosEnhancement.contains("IOSResearchTermGlossaryView"))
+        XCTAssertTrue(iosGlossary.contains("ResearchTerm.allCases"))
+        XCTAssertTrue(iosGlossary.contains("不替你做买卖决定"))
+    }
+
+    func testTrendErrorsAreTriagedAndLiveLogCollapsesWhenIdle() throws {
+        let liveLog = try source(at: "Views_macOS/TrendLiveLogPanel.swift")
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
+        let settings = try source(at: "Views_macOS/SettingsTrendPanel.swift")
+
+        // 失败态:日志面板头部显示分诊人话 + 建议动作 + 去设置按钮
+        XCTAssertTrue(liveLog.contains("TrendErrorTriage.explain"))
+        XCTAssertTrue(liveLog.contains("failureExplanation"))
+        XCTAssertTrue(liveLog.contains("去设置"))
+
+        // 盘中错误行走分诊;设置页 ToastBar 用分诊文案
+        XCTAssertTrue(today.contains("TrendErrorTriage.explain"))
+        XCTAssertTrue(settings.contains("TrendErrorTriage.explain"))
+
+        // 空闲收纳:运行结束自动收起为单行状态条,空闲标题为「上次…运行」
+        XCTAssertTrue(liveLog.contains("isExpanded = false"))
+        XCTAssertTrue(liveLog.contains("上次"))
+    }
+
+    func testMenuBarOffersAIPostureKindInSettings() throws {
+        let panel = try source(at: "Views_macOS/SettingsMenuBarPanel.swift")
+        XCTAssertTrue(panel.contains("AI 研判姿态"))
+        XCTAssertTrue(panel.contains(".aiPosture"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct TrendSettingsPanel: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         SettingsPanel(
@@ -16,9 +17,7 @@ struct TrendSettingsPanel: View {
                     HStack(alignment: .top, spacing: AppPalette.spaceXL) {
                         VStack(spacing: AppPalette.spaceXL) {
                             trendAutoAnalysisCard
-                            trendOfficialSourcesCard
-                            trendAlphaVantageCard
-                            trendWebSearchCard
+                            advancedSourcesGroup
                         }
                         .frame(minWidth: 360, maxWidth: .infinity)
 
@@ -31,9 +30,7 @@ struct TrendSettingsPanel: View {
                     VStack(spacing: AppPalette.spaceXL) {
                         trendAutoAnalysisCard
                         trendModelConnectionCard
-                        trendOfficialSourcesCard
-                        trendAlphaVantageCard
-                        trendWebSearchCard
+                        advancedSourcesGroup
                     }
                 }
 
@@ -43,6 +40,22 @@ struct TrendSettingsPanel: View {
     }
 
     // MARK: - Cards
+
+    /// 可选数据源默认收起:普通用户只需模型连接;不配 Tavily 则全市场雷达
+    /// 不可用(该说明保留在 Tavily 卡内,展开可见)。
+    private var advancedSourcesGroup: some View {
+        DisclosureGroup("高级数据源(可选):SEC / Alpha Vantage / Tavily") {
+            VStack(spacing: AppPalette.spaceXL) {
+                trendOfficialSourcesCard
+                trendAlphaVantageCard
+                trendWebSearchCard
+            }
+            .padding(.top, AppPalette.spaceS)
+        }
+        .disclosureGroupStyle(FullRowDisclosureGroupStyle())
+        .font(AppPalette.appFont(.footnote, weight: .medium))
+        .foregroundStyle(AppPalette.muted)
+    }
 
     private var trendAutoAnalysisCard: some View {
         SettingsCardGroup(
@@ -148,6 +161,39 @@ struct TrendSettingsPanel: View {
             tint: AppPalette.brand
         ) {
             VStack(alignment: .leading, spacing: 12) {
+                // 隐私说明按当前模式如实描述:脱敏不发送金额,完整明细包含金额。
+                Text(
+                    model.trendPrivacyMode == .sanitized
+                        ? "隐私说明:研判会把持仓结构(基金、占比、涨跌、计划状态)发送给你配置的模型服务商;当前「脱敏摘要」模式不发送任何金额。"
+                        : "隐私说明:当前「完整明细」模式会把持仓结构与金额一起发送给你配置的模型服务商。"
+                )
+                .font(AppPalette.appFont(.caption))
+                .foregroundStyle(AppPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("供应商预设")
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                    HStack(spacing: 8) {
+                        ForEach(TrendProviderPreset.allPresets) { preset in
+                            providerPresetChip(preset)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    if let preset = TrendProviderPreset.matching(model.trendSettings.provider) {
+                        Button {
+                            if let url = URL(string: preset.consoleURL) {
+                                openURL(url)
+                            }
+                        } label: {
+                            Label("获取 \(preset.name) API Key", systemImage: "arrow.up.right.square")
+                        }
+                        .buttonStyle(.appSecondary)
+                        .controlSize(.small)
+                    }
+                }
+
                 Picker("隐私模式", selection: trendPrivacyModeBinding) {
                     ForEach(TrendPrivacyMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -159,14 +205,54 @@ struct TrendSettingsPanel: View {
                 trendField("Base URL", text: trendProviderBaseURLBinding, placeholder: "https://open.bigmodel.cn/api/coding/paas/v4")
                 trendField("模型", text: trendProviderModelBinding, placeholder: "glm-5.2")
                 trendSecureField("API Key", text: trendProviderAPIKeyBinding, placeholder: "sk-...")
-                trendField("服务超时秒数", text: trendProviderTimeoutBinding, placeholder: "300")
-                Text("趋势 Agent 单轮生成最多 180 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行使用扩展研究预算。此处可设置更短的服务超时。")
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                DisclosureGroup("高级:服务超时") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        trendField("服务超时秒数", text: trendProviderTimeoutBinding, placeholder: "300")
+                        Text("趋势 Agent 单轮生成最多 180 秒（流式输出也受此硬上限约束），超时会收敛任务并自动重试一次；整次运行使用扩展研究预算。此处可设置更短的服务超时。")
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 4)
+                }
+                .disclosureGroupStyle(FullRowDisclosureGroupStyle())
+                .font(AppPalette.appFont(.footnote, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
             }
             .padding(.vertical, 12)
         }
+    }
+
+    private func providerPresetChip(_ preset: TrendProviderPreset) -> some View {
+        let isSelected = TrendProviderPreset.matching(model.trendSettings.provider)?.id == preset.id
+        return Button {
+            applyProviderPreset(preset)
+        } label: {
+            Text(preset.name)
+                .font(AppPalette.appFont(.footnote, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? AppPalette.brand : AppPalette.muted)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(
+                    isSelected ? AppPalette.brand.opacity(0.10) : AppPalette.cardStrong,
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule().stroke(
+                        isSelected ? AppPalette.brand.opacity(0.35) : AppPalette.hairline.opacity(0.32),
+                        lineWidth: 1
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .help("填入 \(preset.name) 的接口地址与默认模型")
+    }
+
+    /// 应用预设并立即保存;只预填供应商/地址/模型,Key 与超时不动。
+    private func applyProviderPreset(_ preset: TrendProviderPreset) {
+        preset.apply(to: &model.trendSettings.provider)
+        saveTrendSettingsFromDraft()
     }
 
     private var trendOfficialSourcesCard: some View {
@@ -282,7 +368,7 @@ struct TrendSettingsPanel: View {
 
             if !model.lastTrendError.isEmpty && model.lastTrendError != model.lastTrendConnectionMessage {
                 ToastBar(
-                    text: model.lastTrendError,
+                    text: TrendErrorTriage.explain(model.lastTrendError).reasonText,
                     tint: AppPalette.warning,
                     onDismiss: { model.lastTrendError = "" }
                 )
