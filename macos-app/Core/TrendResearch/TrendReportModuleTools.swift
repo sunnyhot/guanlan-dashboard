@@ -58,7 +58,11 @@ enum TrendReportDraftError: LocalizedError {
 }
 
 actor TrendReportDraftStore {
-    static let assetBatchSize = 5
+    /// 单批基金数。线上耗时分析(2026-08-19):29 只 ÷ 5 只/批 = 6 轮生成、每轮
+    /// 50-322s,提交阶段占全程 ~97%。提到 8 只/批把轮次减 1/4;单只归因生成
+    /// 约 16-20s,8 只 ≈ 130-160s,依赖服务超时 ≥240s(推理模型首批更慢,首
+    /// 批可能仍接近上限,超时由上层重试兜底)。
+    static let assetBatchSize = 8
 
     static func effectiveScope(
         requestedScope: TrendResearchRunScope,
@@ -457,7 +461,7 @@ struct SubmitTrendMarketModuleTool: TrendResearchTool {
 
 struct SubmitTrendAssetBatchTool: TrendResearchTool {
     let name = TrendReportModuleToolName.assetBatch
-    let description = "分批提交已持有基金趋势。每次最多 5 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。"
+    let description = "分批提交已持有基金趋势。每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [
@@ -465,7 +469,7 @@ struct SubmitTrendAssetBatchTool: TrendResearchTool {
                 "type": "array",
                 "items": ["type": "object"],
                 "minItems": 1,
-                "maxItems": 5
+                "maxItems": .number(Double(TrendReportDraftStore.assetBatchSize))
             ]
         ],
         "required": ["assetTrends"],
@@ -556,7 +560,8 @@ private func executeTrendModule(
     )
 }
 
-private func finalizeAssembledReport(
+/// internal:fan-out 路径与交互路径共用同一终检链。
+func finalizeAssembledReport(
     _ report: TrendAnalysisReport,
     context: TrendResearchToolContext
 ) async -> TrendResearchToolResult {
