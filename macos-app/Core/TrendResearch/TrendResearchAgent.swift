@@ -298,6 +298,8 @@ struct TrendResearchAgent: Sendable {
         var consecutiveRequestTimeoutRecoveries = 0
         var didWarnPreferredWebSearches = false
         var didWarnWebSearchExhausted = false
+        // 拒批教训去重:同一条校验错误只前移注入一次,避免修复循环里重复刷屏。
+        var injectedRejectionLessons: Set<String> = []
         let started = Date()
         let runLimits = policy.effectiveLimits(
             assetCount: snapshot.assets.count,
@@ -347,6 +349,31 @@ struct TrendResearchAgent: Sendable {
                 nextToolName: initialDraftProgress.nextToolName
             )
         )
+
+        // closeReview 批次并行 fan-out(2026-08-19 耗时优化):逐只归因相互独立,
+        // 交互式串行生成占全程 ~97%(线上 15 分钟里 14.8 分钟)。此处 harness 预取
+        // 只读数据后并行生成各批,提交/校验/组装终检与交互路径完全同链;任何环节
+        // 不顺利返回 nil,落回下方交互循环(带着已暂存批次按 remaining 继续),行为契约不变。
+        if scope == .closeReview,
+           snapshot.expectedFundCodes.count >= Self.fanOutMinimumFundCount {
+            if let report = try await closeReviewFanOut(
+                snapshot: snapshot,
+                settings: settings,
+                scope: scope,
+                draftStore: reportDraftStore,
+                ledger: ledger,
+                policy: policy,
+                webSearchGovernor: webSearchGovernor,
+                started: started,
+                eventHandler: eventHandler
+            ) {
+                return report
+            }
+            await AIAgentDiagnosticLog.record(
+                "fanout_fallback_to_interactive",
+                payload: AgentJSONValue.object([:])
+            )
+        }
 
         do {
             while turnCount < runLimits.maxTurns {
@@ -731,9 +758,25 @@ struct TrendResearchAgent: Sendable {
                         let errors = Self.parseErrors(from: toolResult.contentJSON)
                         let remaining = max(0, policy.maxInvalidSubmissions - invalidSubmissions)
                         await eventHandler(.reportValidationFailed(errors: errors, remainingAttempts: remaining))
+                        // 拒批教训前移:立即以醒目 correction 注入(去重),让后续批次
+                        // 不再犯同类证据/格式错误——线上修复循环的放大器正是重复拒批。
+                        messages.append(
+                            contentsOf: Self.rejectionLessonMessages(
+                                errors: errors,
+                                seen: &injectedRejectionLessons
+                            )
+                        )
                         if invalidSubmissions > policy.maxInvalidSubmissions {
                             throw TrendResearchAgentError.invalidSubmissionLimitExceeded(errors: errors)
                         }
+                    }
+
+                    // 成功暂存的分批提交:把对应 tool_call 的完整参数替换为短桩
+                    // (保留 id/名称,tool 结果的 callID 链不断)。内容已进 DraftStore,
+                    // 后续轮次无需在上下文里拖着几十 KB 的已提交 JSON(线上输入雪球主因)。
+                    if isSubmit, !toolResult.isError,
+                       call.function.name == TrendReportModuleToolName.assetBatch {
+                        stubAcceptedBatchArguments(&messages, callID: call.id)
                     }
 
                     if webStatus.networkSearchesUsed >= runLimits.preferredWebSearches,
@@ -833,6 +876,285 @@ struct TrendResearchAgent: Sendable {
 
     private func correctionMessage(_ text: String) -> AgentChatMessage {
         AgentChatMessage(role: .user, content: text)
+    }
+
+    /// 拒批教训 → 注入消息(每条错误只注入一次;单次失败最多取前两条)。
+    static func rejectionLessonMessages(
+        errors: [String],
+        seen: inout Set<String>
+    ) -> [AgentChatMessage] {
+        var messages: [AgentChatMessage] = []
+        for lesson in errors.prefix(2) {
+            let trimmed = lesson.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            messages.append(
+                AgentChatMessage(
+                    role: .user,
+                    content: "【拒批教训——后续所有批次与提交同样适用,不要重复同类错误】\(trimmed)"
+                )
+            )
+        }
+        return messages
+    }
+
+    // MARK: - closeReview 批次并行 fan-out(2026-08-19 耗时优化 #5)
+
+    /// 低于该基金数不值得并行(交互循环通常一两轮搞定)。
+    private static let fanOutMinimumFundCount = 12
+
+    private func closeReviewFanOut(
+        snapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        scope: TrendResearchRunScope,
+        draftStore: TrendReportDraftStore,
+        ledger: TrendEvidenceLedger,
+        policy: TrendResearchRunPolicy,
+        webSearchGovernor: TrendWebSearchGovernor,
+        started: Date,
+        eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
+    ) async throws -> TrendAnalysisReport? {
+        let codes = snapshot.expectedFundCodes
+        let batches = stride(
+            from: 0,
+            to: codes.count,
+            by: TrendReportDraftStore.assetBatchSize
+        ).map {
+            Array(codes[$0..<min($0 + TrendReportDraftStore.assetBatchSize, codes.count)])
+        }
+        await AIAgentDiagnosticLog.record(
+            "fanout_started",
+            payload: AgentJSONValue.object([
+                "fund_count": .number(Double(codes.count)),
+                "batch_count": .number(Double(batches.count)),
+            ])
+        )
+
+        func makeContext(invalidUsed: Int) -> TrendResearchToolContext {
+            var context = TrendResearchToolContext(
+                snapshot: snapshot,
+                scope: scope,
+                evidenceLedger: ledger,
+                webSearchGovernor: webSearchGovernor,
+                reportDraftStore: draftStore
+            )
+            context.invalidSubmissionBudget = policy.maxInvalidSubmissions
+            context.invalidSubmissionsUsed = invalidUsed
+            return context
+        }
+
+        // 1) 预取只读数据(串行、无 LLM;工具内部照常登记证据)。
+        var dataBlocks: [String] = []
+        let prefetchTools: [(String, String)] = [
+            ("get_portfolio_overview", "{}"),
+            ("get_fund_lookthrough", "{}"),
+            ("get_market_snapshot", "{}"),
+        ]
+        for (name, arguments) in prefetchTools {
+            let call = AgentToolCall(
+                id: "fanout-\(name)",
+                function: AgentToolFunctionCall(name: name, arguments: arguments)
+            )
+            let result = await registry.execute(call, context: makeContext(invalidUsed: 0))
+            if !result.isError {
+                dataBlocks.append("【\(name)】\n\(Self.truncate(result.contentJSON, limit: policy.maxToolResultBytes))")
+            }
+        }
+        // 持仓分页:读满全部持有基金为止。
+        var cursor = 0
+        let pageSize = 20
+        var fetchedAssets = 0
+        while fetchedAssets < codes.count {
+            let arguments = #"{"cursor":\#(cursor),"limit":\#(pageSize)}"#
+            let call = AgentToolCall(
+                id: "fanout-assets-\(cursor)",
+                function: AgentToolFunctionCall(name: "get_portfolio_assets", arguments: arguments)
+            )
+            let result = await registry.execute(call, context: makeContext(invalidUsed: 0))
+            if result.isError { break }
+            dataBlocks.append("【get_portfolio_assets @\(cursor)】\n\(Self.truncate(result.contentJSON, limit: policy.maxToolResultBytes))")
+            let returned = Self.jsonInt(result.contentJSON, dataKey: "count") ?? pageSize
+            fetchedAssets += returned
+            cursor += returned
+            if returned < pageSize { break }
+        }
+        guard fetchedAssets >= codes.count else { return nil }  // 数据没读全 → 交互循环兜底
+        let dataPayload = dataBlocks.joined(separator: "\n\n")
+
+        // 2) 并行生成各批(单轮:系统规范 + 预取数据 + 本批基金清单)。
+        let systemPrompt = promptBuilder.initialMessages(
+            snapshot: snapshot,
+            scope: scope,
+            officialSourceConfigured: false,
+            alphaVantageConfigured: false
+        ).first?.content ?? ""
+        let assetBatchTool = SubmitTrendAssetBatchTool()
+        let submitDefinition = AgentToolDefinition.function(
+            name: TrendReportModuleToolName.assetBatch,
+            description: assetBatchTool.description,
+            parameters: assetBatchTool.parameters
+        )
+
+        func generateBatch(_ batch: [String], repairFeedback: String?) async throws -> AgentToolCall? {
+            let repair = repairFeedback.map { "\n\n上一轮校验未通过,务必先修正再提交:\($0)" } ?? ""
+            let userPrompt = """
+            数据已全部预取(不要调用任何只读工具,数据就在下方):
+            \(dataPayload)
+
+            本批必须且只提交这些基金:\(batch.joined(separator: ","))\(repair)
+
+            立即调用一次 \(TrendReportModuleToolName.assetBatch) 提交本批全部基金;证据只能引用上方数据中已登记的 evidence_id。
+            """
+            let result = try await client.complete(
+                messages: [
+                    AgentChatMessage(role: .system, content: systemPrompt),
+                    AgentChatMessage(role: .user, content: userPrompt),
+                ],
+                tools: [submitDefinition],
+                toolChoice: .auto,
+                temperature: policy.temperature,
+                settings: settings,
+                timeout: nil,
+                streamProgress: nil
+            )
+            return result.toolCalls.first { $0.function.name == TrendReportModuleToolName.assetBatch }
+        }
+
+        var invalidUsed = 0
+        var failedBatches: [(codes: [String], errors: [String])] = []
+        try await withThrowingTaskGroup(of: (Int, AgentToolCall?).self) { group in
+            for (index, batch) in batches.enumerated() {
+                group.addTask { (index, try await generateBatch(batch, repairFeedback: nil)) }
+            }
+            for try await (index, call) in group {
+                guard let call else {
+                    failedBatches.append((batches[index], ["未返回提交工具调用"]))
+                    continue
+                }
+                let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
+                await AIAgentDiagnosticLog.recordToolResult(
+                    turn: 0,
+                    call: call,
+                    contentJSON: result.contentJSON,
+                    modelContentJSON: result.contentJSON,
+                    isError: result.isError
+                )
+                await eventHandler(
+                    .toolFinished(
+                        name: TrendReportModuleToolName.assetBatch,
+                        summary: "fanout 批次 \(index + 1)/\(batches.count):\(Self.summary(of: result))"
+                    )
+                )
+                if result.isError {
+                    invalidUsed += 1
+                    failedBatches.append((batches[index], Self.parseErrors(from: result.contentJSON)))
+                }
+            }
+        }
+
+        // 3) 失败批次各修复一次(串行、带拒批教训);再失败 → 整体回退交互循环。
+        for (batchCodes, errors) in failedBatches {
+            guard invalidUsed <= policy.maxInvalidSubmissions,
+                  let call = try await generateBatch(
+                      batchCodes,
+                      repairFeedback: errors.prefix(2).joined(separator: ";")
+                  ) else {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_repair_gave_up",
+                    payload: AgentJSONValue.object([:])
+                )
+                return nil
+            }
+            let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
+            await AIAgentDiagnosticLog.recordToolResult(
+                turn: 0,
+                call: call,
+                contentJSON: result.contentJSON,
+                modelContentJSON: result.contentJSON,
+                isError: result.isError
+            )
+            if result.isError {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_repair_failed",
+                    payload: AgentJSONValue.object([:])
+                )
+                return nil
+            }
+        }
+
+        // 4) 组装 + 终检(与交互路径同一条链)。
+        guard let assembled = await draftStore.assembledReport(snapshot: snapshot) else {
+            return nil
+        }
+        let finalizeResult = await finalizeAssembledReport(assembled, context: makeContext(invalidUsed: invalidUsed))
+        guard case .report(let report)? = finalizeResult.completion else {
+            await eventHandler(
+                .reportValidationFailed(
+                    errors: Self.parseErrors(from: finalizeResult.contentJSON),
+                    remainingAttempts: 0
+                )
+            )
+            await AIAgentDiagnosticLog.record(
+                "fanout_finalize_failed",
+                payload: AgentJSONValue.object([:])
+            )
+            return nil
+        }
+
+        // 5) 成功收尾:镜像主循环(审计产物 + 完成 events)。
+        let artifact = TrendAgentRunArtifact.make(
+            snapshot: snapshot,
+            settings: settings,
+            report: report,
+            completedAt: ISO8601DateFormatter().string(from: Date()),
+            toolCalls: [],
+            canonicalEvidence: await ledger.allEvidence()
+        )
+        await eventHandler(.auditArtifactReady(artifact))
+        await eventHandler(.completed(duration: Date().timeIntervalSince(started)))
+        await AIAgentDiagnosticLog.record("run_completed", payload: report)
+        await AIAgentDiagnosticLog.record(
+            "fanout_completed",
+            payload: AgentJSONValue.object([
+                "batches": .number(Double(batches.count)),
+                "repaired": .number(Double(failedBatches.count)),
+            ])
+        )
+        return report
+    }
+
+    private static func jsonInt(_ contentJSON: String, dataKey key: String) -> Int? {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(contentJSON.utf8)) as? [String: Any],
+              let data = object["data"] as? [String: Any] else { return nil }
+        return (data[key] as? Int) ?? (data[key] as? NSNumber)?.intValue
+    }
+
+    /// 已接受批次的上下文瘦身:把该 tool_call 的 arguments 替换为短桩。
+    /// 诊断日志在替换前已留全量(recordToolResult 先于本调用),审计不丢。
+    /// internal:上下文瘦身逻辑有单测锁定。
+    func stubAcceptedBatchArguments(
+        _ messages: inout [AgentChatMessage],
+        callID: String
+    ) {
+        for index in messages.indices.reversed() {
+            guard let calls = messages[index].toolCalls,
+                  calls.contains(where: { $0.id == callID }) else { continue }
+            messages[index] = AgentChatMessage(
+                role: messages[index].role,
+                content: messages[index].content,
+                toolCalls: calls.map { call in
+                    guard call.id == callID else { return call }
+                    return AgentToolCall(
+                        id: call.id,
+                        function: AgentToolFunctionCall(
+                            name: call.function.name,
+                            arguments: #"{"accepted":true,"note":"本批已暂存,完整内容在 DraftStore"}"#
+                        )
+                    )
+                },
+                toolCallID: messages[index].toolCallID
+            )
+            return
+        }
     }
 
     private func toolMessage(callID: String, content: String) -> AgentChatMessage {

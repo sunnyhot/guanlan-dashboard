@@ -193,8 +193,9 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(small.maxWebSearches, 10)
 
         let oneHundred = policy.effectiveLimits(assetCount: 100, sectorCount: 9)
-        XCTAssertEqual(oneHundred.maxTurns, 39)
-        XCTAssertEqual(oneHundred.maxToolCalls, 61)
+        // 批量 5→8 后,100 基金的分批轮次预算相应下降(2026-08-19 耗时优化)。
+        XCTAssertEqual(oneHundred.maxTurns, 32)
+        XCTAssertEqual(oneHundred.maxToolCalls, 54)
         XCTAssertEqual(oneHundred.preferredWebSearches, 8)
         XCTAssertEqual(oneHundred.maxWebSearches, 12)
 
