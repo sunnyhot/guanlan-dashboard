@@ -722,6 +722,26 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(panel.contains(".aiPosture"))
     }
 
+    func testNextHourFollowupReviewIsWiredThroughPipeline() throws {
+        let core = try source(at: "Core/NextHourGuidance.swift")
+        let controller = try source(at: "Core/AppModel/NextHourGuidanceController.swift")
+        let console = try source(
+            at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceDecisionConsole.swift"
+        )
+
+        // V1 system prompt 与 V2 决策 user message 都带回指指令
+        XCTAssertTrue(core.contains("followup_reviews 中逐条回指"))
+        XCTAssertTrue(core.contains("逐条回指到 followup_reviews"))
+        // 净化 + 报告字段
+        XCTAssertTrue(core.contains("sanitizeFollowupReviews"))
+        XCTAssertTrue(core.contains("followupReviews: followup.reviews"))
+        // 注入:context 组装调用 + 窗口规则
+        XCTAssertTrue(controller.contains("makeLastCloseReviewContext(generatedAt: generatedAt)"))
+        XCTAssertTrue(controller.contains("calendarDayDistance"))
+        // UI:决策台底部回顾块(评审定:靠下)
+        XCTAssertTrue(console.contains("NextHourGuidanceFollowupReviewsView"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

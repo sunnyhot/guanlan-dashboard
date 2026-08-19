@@ -46,6 +46,7 @@
 **关键不变量(改造时不得破坏)**:
 - 链路 A 与链路 B **双向互斥**:任一运行中,另一不启动(见第 8 节)。
 - 链路 B 的结果**不会**创建 TrendTrackingItem(模型不兼容:NextHourGuidanceAction vs TrendActionCandidate)。
+- **P5 回指契约(2026-08-19 增补)**:盘中 context 可含 `lastCloseReview`(仅昨天/上一交易日的复盘「明日关注」,周末跨度 ≤3 天);提交工具新增**可选** `followup_reviews`(item_index/status/note/evidence_ids);净化规则——confirmed 必须挂**当日**有效证据(昨日发布的外部证据不算),否则强制降级 inconclusive;越界/重复丢弃;回指与 actions 校验解耦,回指问题不 fail 提交;无 lastCloseReview 时行为与旧版逐字节一致。输出 `NextHourGuidanceReport.followupReviews`,旧存档解码为空。详见 docs/2026-08-19-p5-followup-review-contract-change.md。
 - 链路 C 的唯一创建入口是 `addTrackingItem(from:report:)`,无自动条件求值。
 
 ---

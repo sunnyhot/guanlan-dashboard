@@ -77,6 +77,10 @@ struct NextHourGuidanceDecisionConsole: View {
                 Spacer(minLength: AppPalette.spaceS)
             }
 
+            if !report.followupReviews.isEmpty {
+                NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
+            }
+
             Text(report.disclaimer)
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
