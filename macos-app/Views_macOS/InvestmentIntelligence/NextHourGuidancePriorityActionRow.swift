@@ -27,13 +27,14 @@ struct NextHourGuidancePriorityActionRow: View {
                     Spacer(minLength: AppPalette.spaceS)
 
                     TintedCapsuleBadge(
-                        text: "把握 \(confidenceText) \(action.confidence)",
-                        tint: confidenceTint,
+                        text: ConfidenceGrade.badgeText(score: action.confidence),
+                        tint: InvestmentIntelligenceStyle.tint(for: ConfidenceGrade(score: action.confidence)),
                         font: AppPalette.appFont(.footnote, weight: .semibold),
                         horizontalPadding: 7,
                         verticalPadding: 3,
                         softStrokeOpacity: nil
                     )
+                    .help(ResearchTerm.confidence.plainExplanation)
                 }
 
                 Text(action.instruction)
@@ -47,11 +48,13 @@ struct NextHourGuidancePriorityActionRow: View {
                         conditionText("触发", value: action.trigger, systemImage: "scope", tint: AppPalette.info)
                         conditionText("失效", value: action.invalidation, systemImage: "xmark.circle", tint: AppPalette.warning)
                     }
+                    .help(ResearchTerm.triggerInvalidation.plainExplanation)
 
                     VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                         conditionText("触发", value: action.trigger, systemImage: "scope", tint: AppPalette.info)
                         conditionText("失效", value: action.invalidation, systemImage: "xmark.circle", tint: AppPalette.warning)
                     }
+                    .help(ResearchTerm.triggerInvalidation.plainExplanation)
                 }
             }
             .padding(AppPalette.spaceM)
@@ -100,30 +103,6 @@ struct NextHourGuidancePriorityActionRow: View {
             AppPalette.marketLoss
         case .hold, .watch, .wait, .avoidChasing:
             AppPalette.info
-        }
-    }
-
-    private var confidenceText: String {
-        switch action.confidence {
-        case 85...:
-            "很高"
-        case 70...:
-            "较高"
-        case 55...:
-            "中等"
-        default:
-            "偏低"
-        }
-    }
-
-    private var confidenceTint: Color {
-        switch action.confidence {
-        case 70...:
-            AppPalette.positive
-        case 55...:
-            AppPalette.info
-        default:
-            AppPalette.warning
         }
     }
 }

@@ -220,6 +220,8 @@ struct OverviewSectionView: View {
                 model.selectedSection = .platform
             case .settings:
                 model.selectedSection = .settings
+            case .aiResearch:
+                model.selectedSection = .enhancement
             }
         }
     }

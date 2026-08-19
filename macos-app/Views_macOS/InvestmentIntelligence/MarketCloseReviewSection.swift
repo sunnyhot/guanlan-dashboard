@@ -7,18 +7,25 @@ struct MarketCloseReviewSection: View {
 
     var body: some View {
         let review = model.marketCloseReview
+        let freshness = model.marketCloseReviewFreshness
 
         SectionCard(
             title: model.marketCloseReviewTitle,
-            subtitle: review.subtitle,
+            subtitle: isGeneratingCloseReview ? review.subtitle : freshness.subtitleText,
             icon: "sunset.fill",
             trailing: {
                 Spacer()
+                if !isGeneratingCloseReview {
+                    InvestmentStateBadge(
+                        text: freshness.badgeText,
+                        tint: freshnessTint(freshness)
+                    )
+                }
                 Button {
                     model.startTrendAnalysis(userInitiated: true, scope: .closeReview)
                 } label: {
                     Label(
-                        isGeneratingCloseReview ? "复盘中…" : "更新复盘",
+                        isGeneratingCloseReview ? "复盘中…" : freshness.actionTitle,
                         systemImage: "arrow.clockwise"
                     )
                 }
@@ -26,11 +33,20 @@ struct MarketCloseReviewSection: View {
                 .controlSize(.small)
                 .disabled(
                     !model.trendSettings.provider.isConfigured
-                        || model.trendGenerationState == .generating
+                    || model.trendGenerationState == .generating
                 )
             }
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+                if !model.trendSettings.provider.isConfigured {
+                    Label(
+                        "未配置 AI 模型：收盘复盘的自动更新与手动生成都需要先在设置中配置。",
+                        systemImage: "exclamationmark.circle"
+                    )
+                    .font(AppPalette.appFont(.caption, weight: .medium))
+                    .foregroundStyle(AppPalette.warning)
+                }
+
                 MarketCloseReviewHeaderView(review: review)
 
                 if isGeneratingCloseReview {
@@ -96,6 +112,20 @@ struct MarketCloseReviewSection: View {
     private var isGeneratingCloseReview: Bool {
         guard model.trendGenerationState == .generating else { return false }
         return model.trendResearchRequestedScope == .closeReview
+    }
+
+    /// 今日已复盘 = 正向；等待晚间/即将自动 = 中性信息；自动尝试未成功或未开启 = 弱化/警示。
+    private func freshnessTint(_ freshness: MarketCloseReviewFreshness) -> Color {
+        switch freshness.phase {
+        case .generatedToday:
+            return AppPalette.positive
+        case .waitingForTonight:
+            return AppPalette.info
+        case .tonightUnfinished(autoAttempted: true):
+            return AppPalette.warning
+        case .tonightUnfinished(autoAttempted: false):
+            return freshness.autoAnalysisEnabled ? AppPalette.info : AppPalette.muted
+        }
     }
 
     private func detailSummary(for review: MarketCloseReviewSnapshot) -> String {

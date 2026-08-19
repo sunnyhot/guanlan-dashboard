@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 统一置信度胶囊进度条：数字写在胶囊里，按高/中/低用同色系浅深渐变。
-/// 供总览 AI 趋势摘要、今日研判、跟踪清单等所有展示置信度的地方共用。
+/// 统一把握度胶囊进度条：数字写在胶囊里，按档位用同色系浅深渐变。
+/// 供总览 AI 趋势摘要、今日研判、跟踪清单等所有展示确定性评分的地方共用。
 struct TrendConfidenceMeter: View {
     let confidence: TrendConfidence
 
@@ -18,12 +18,13 @@ struct TrendConfidenceMeter: View {
             Capsule()
                 .fill(LinearGradient(colors: [base.opacity(0.7), base], startPoint: .leading, endPoint: .trailing))
                 .frame(width: fill, height: height)
-            Text("置信度\(score)")
+            Text("把握\(score)")
                 .font(AppPalette.appFont(.caption2, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: width, height: height)
         }
         .frame(width: width, height: height)
+        .help(ResearchTerm.confidence.plainExplanation)
     }
 }
 
