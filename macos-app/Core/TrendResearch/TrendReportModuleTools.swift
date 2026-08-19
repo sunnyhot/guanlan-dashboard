@@ -525,7 +525,8 @@ private func executeTrendModule(
         )
     }
     do {
-        try await store(draftStore, Data(argumentsJSON.utf8))
+        // 模型输出规整:字符串数组字段的元素类型收敛,单字段毛刺不再否决整个模块。
+        try await store(draftStore, ModelOutputCoercion.normalizedJSON(Data(argumentsJSON.utf8)))
     } catch {
         return moduleValidationFailure(
             messages: ["\(moduleName)模块提交失败：\(describeModuleError(error))"],
