@@ -13,6 +13,7 @@ struct EnhancementSectionView: View {
     @State private var selectedCase: DecisionCase?
     @State private var reviewCase: DecisionCase?
     @State private var isShowingProfile = false
+    @State private var isShowingGlossary = false
 
     // 旧分段(投资智能未启用时)
     private enum ResearchSegment: String, CaseIterable, Identifiable {
@@ -35,12 +36,22 @@ struct EnhancementSectionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if InvestmentIntelligence.enabled {
-                    Picker("", selection: $intelligenceSegment) {
-                        ForEach(IntelligenceSegment.allCases) { seg in
-                            Text(seg.rawValue).tag(seg)
+                    HStack(spacing: IOSDesign.spaceS) {
+                        Picker("", selection: $intelligenceSegment) {
+                            ForEach(IntelligenceSegment.allCases) { seg in
+                                Text(seg.rawValue).tag(seg)
+                            }
                         }
+                        .pickerStyle(.segmented)
+
+                        Button {
+                            isShowingGlossary = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(IOSDesign.accent)
+                        }
+                        .accessibilityLabel("怎么读这份研判")
                     }
-                    .pickerStyle(.segmented)
                     .padding(.bottom, 2)
 
                     switch intelligenceSegment {
@@ -90,6 +101,11 @@ struct EnhancementSectionView: View {
             }
             .environmentObject(model)
         }
+        .sheet(isPresented: $isShowingGlossary) {
+            NavigationStack {
+                IOSResearchTermGlossaryView()
+            }
+        }
     }
 
     // MARK: 投资智能 - 观点
@@ -98,7 +114,7 @@ struct EnhancementSectionView: View {
     private var intelligenceViewpointContent: some View {
         let review = model.marketCloseReview
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
-            Text("今日收盘复盘")
+            Text(model.marketCloseReviewTitle)
                 .font(.caption.weight(.bold))
                 .tracking(0.8)
                 .foregroundStyle(IOSDesign.accent)
@@ -578,7 +594,7 @@ struct EnhancementSectionView: View {
         }
     }
 
-    /// 周期/板块研判行：色条 + 标题 + 方向 + 暴露占比 + 置信度 + 理由。
+    /// 周期/板块研判行：色条 + 标题 + 方向 + 暴露占比 + 把握 + 理由。
     private func trendRow(
         title: String,
         direction: String,
@@ -618,10 +634,10 @@ struct EnhancementSectionView: View {
         .padding(.vertical, 4)
     }
 
-    /// 置信度细条：左标题右分数 + 进度胶囊。
+    /// 把握度细条：左标题右分数 + 进度胶囊（档位与 macOS 同源 ConfidenceGrade）。
     private func confidenceMeter(_ confidence: TrendConfidence) -> some View {
         HStack(spacing: IOSDesign.spaceS) {
-            Text("置信度 \(confidence.label)")
+            Text("把握 \(ConfidenceGrade(score: confidence.normalizedScore).gradeText)")
                 .font(IOSDesign.sansBody(10))
                 .foregroundStyle(AppPalette.muted)
             GeometryReader { geo in

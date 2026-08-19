@@ -11,6 +11,7 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
 
     @State private var selectedCase: DecisionCase?
     @State private var reviewCase: DecisionCase?
+    @State private var isShowingProfile = false
     /// 插入收盘复盘之后的实时指引与投资方向，以及长期趋势内容。
     let intradayContent: Intraday
     let trendContent: Trend
@@ -25,8 +26,10 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+            InvestmentTodaySummaryCard()
             TrendLiveLogPanel()
             MarketCloseReviewSection()
+                .investmentSectionAnchor(.closeReview)
             intradayContent
             trendContent
             recordsSection
@@ -38,6 +41,10 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
         }
         .sheet(item: $reviewCase) { decisionCase in
             DecisionReviewSheet(caseID: decisionCase.id)
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $isShowingProfile) {
+            UserDecisionProfilePanel()
                 .environmentObject(model)
         }
     }
@@ -96,7 +103,20 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
         SectionCard(
             title: "研判基础",
             subtitle: "穿透覆盖与数据时效",
-            icon: "shield.checkered"
+            icon: "shield.checkered",
+            trailing: {
+                Spacer()
+                Button {
+                    isShowingProfile = true
+                } label: {
+                    Label(
+                        model.userDecisionProfile.isCustomized ? "决策偏好" : "设置决策偏好",
+                        systemImage: "person.crop.circle"
+                    )
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+            }
         ) {
             HStack(spacing: AppPalette.spaceS) {
                 Image(systemName: credibilityIsLow ? "exclamationmark.triangle.fill" : "shield.checkered")
@@ -104,6 +124,7 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
                 Text(credibilityText)
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(credibilityTint)
+                TermHelpView(term: .lookThroughCoverage)
                 Spacer()
             }
         }
