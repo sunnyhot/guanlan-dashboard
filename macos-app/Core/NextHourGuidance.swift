@@ -852,7 +852,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 买入或卖出必须同时引用该标的本地行情证据和至少两个最新外部事件证据，至少一个来源为官方或权威来源且来源彼此独立；基金还必须引用该基金的穿透证据。缺少任一项时只能 hold。
                 买入或卖出时，instruction 必须说明小仓/分批方式或大致仓位比例，并给出触发和失效条件。没有清晰优势时明确 hold，不能为了凑交易强行买卖。
                 从工具返回的持仓中选择最需要决策的 1 到 5 个标的。场外基金不可描述为盘中实时成交。
-                若上下文含 lastCloseReview(昨晚复盘的明日关注):必须在 followup_reviews 中逐条回指,item_index 对应其数组下标。status=confirmed 必须引用今日证据(实时行情/当日检索),仅凭记忆或推断一律用 inconclusive;明确查过但未出现用 not_seen。没有 lastCloseReview 时不要提交 followup_reviews。
+                若上下文含 lastCloseReview(昨晚复盘的明日关注):这些是昨晚承诺今天要核实的事项,必须先取证再回答,不许不查就答。对每条关注——先核对相关标的/指数在实时行情中的表现,并复用当日已完成的外部检索结论;仍无法判断且搜索预算允许时,针对该关注本身补一次检索(如「红利板块 今日成交量」)。然后必须在 followup_reviews 中逐条回指,item_index 对应其数组下标:confirmed 必须引用上述今日证据(行情/检索/本日结论),仅凭记忆或推断一律不允许;确实查证不到才用 inconclusive,明确查过但未出现用 not_seen。没有 lastCloseReview 时不要提交 followup_reviews。
                 必须调用 submit_next_hour_guidance 工具提交结果，不要输出普通文本。
                 """
             ),
@@ -1353,7 +1353,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)。
         候选标的 \(context.assets.count) 个，选择最需要决策的 1-5 个。
         \(context.lastCloseReview.map { review in
-            "昨晚复盘的明日关注(逐条回指到 followup_reviews,item_index 为下标;confirmed 必须引用今日证据,查证不到用 inconclusive):" +
+            "昨晚复盘的明日关注(逐条回指到 followup_reviews,item_index 为下标;confirmed 必须引用今日证据——三个分析团队已替你核实的结论就是合格证据,查证不到才用 inconclusive):" +
             review.tomorrowWatch.enumerated()
                 .map { "\($0.offset): \($0.element)" }
                 .joined(separator: "；")

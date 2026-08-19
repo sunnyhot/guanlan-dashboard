@@ -747,16 +747,23 @@ final class UIExperienceRegressionTests: XCTestCase {
         let console = try source(
             at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceDecisionConsole.swift"
         )
+        let subAgents = try source(at: "Core/NextHourGuidance/NextHourGuidanceSubAgents.swift")
 
         // V1 system prompt 与 V2 决策 user message 都带回指指令
         XCTAssertTrue(core.contains("followup_reviews 中逐条回指"))
         XCTAssertTrue(core.contains("逐条回指到 followup_reviews"))
+        // 取证积极性:先查再答,不许不查就 inconclusive(2026-08-19 强化)
+        XCTAssertTrue(core.contains("必须先取证再回答"))
+        XCTAssertTrue(core.contains("针对该关注本身补一次检索"))
         // 净化 + 报告字段
         XCTAssertTrue(core.contains("sanitizeFollowupReviews"))
         XCTAssertTrue(core.contains("followupReviews: followup.reviews"))
         // 注入:context 组装调用 + 窗口规则
         XCTAssertTrue(controller.contains("makeLastCloseReviewContext(generatedAt: generatedAt)"))
         XCTAssertTrue(controller.contains("calendarDayDistance"))
+        // V2 子 Agent 主动核对:行情看量能,新闻做针对性检索
+        XCTAssertTrue(subAgents.contains("逐条核对其中与行情、量能、指数表现相关的事项"))
+        XCTAssertTrue(subAgents.contains("至少为每条做一次针对性搜索"))
         // UI:决策台底部回顾块(评审定:靠下)
         XCTAssertTrue(console.contains("NextHourGuidanceFollowupReviewsView"))
     }

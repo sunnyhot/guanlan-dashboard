@@ -152,9 +152,16 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         先读取行情数据，然后提交分析结论。
         聚焦价格走势、涨跌幅、大盘联动，不要分析新闻或基本面。
         对每个标的给出明确的方向判断（强势上行/弱势下行/横盘震荡）和置信度。
+        若上下文含 lastCloseReview(昨日关注)：逐条核对其中与行情、量能、指数表现相关的事项，并在对应标的的 rationale 里明确说明该事项今天是否出现。
         """
 
-        let userMessage = "请分析以下标的的实时行情走势并提交结论。标的数量：\(context.assets.count)"
+        let userMessage = """
+        请分析以下标的的实时行情走势并提交结论。标的数量：\(context.assets.count)
+        \(context.lastCloseReview.map { review in
+            "昨日关注(需在行情维度逐条核对并在结论中回应):" +
+            review.tomorrowWatch.joined(separator: "；")
+        } ?? "")
+        """
 
         return try await runSingleTurnAgent(
             systemMessage: systemMessage,
@@ -222,8 +229,15 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         每个标的至少搜索一次相关新闻。搜索词用标的名称+行业关键词。
         不要搜索用户金额或组合隐私信息。
         对每个标的给出事件影响判断（利好/利空/中性）和置信度。没有找到相关新闻时标中性、置信度低。
+        若本次提供了「昨日关注」：把其中新闻/事件/政策相关的事项纳入检索范围,至少为每条做一次针对性搜索(关注原文+今日日期),并在 keyEvents 或判断里明确回应该事项今天是否出现。
         """
-        let userMessage = "请搜索并分析以下标的的最近新闻事件：\(targetList)"
+        let userMessage = """
+        请搜索并分析以下标的的最近新闻事件：\(targetList)
+        \(context.lastCloseReview.map { review in
+            "昨日关注(需针对性检索并逐条回应):" +
+            review.tomorrowWatch.joined(separator: "；")
+        } ?? "")
+        """
 
         return try await runSingleTurnAgent(
             systemMessage: systemMessage,
