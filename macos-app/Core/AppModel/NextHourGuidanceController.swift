@@ -379,8 +379,40 @@ extension AppModel {
             latestTrendHeadline: trendReport?.portfolio.headline,
             latestTrendActions: latestActions,
             latestAssetConclusions: latestAssetConclusions,
-            dataRules: rules
+            dataRules: rules,
+            lastCloseReview: makeLastCloseReviewContext(generatedAt: generatedAt)
         )
+    }
+
+    /// P5 回指注入:取冻结复盘快照的「明日关注」。
+    /// 只接受昨天或上一交易日(跳过周末)的复盘——今天 21:00 生成的复盘关注的是明天,
+    /// 不能当作"昨日关注";更陈旧(节假日跨多天)的也不注入。
+    /// (internal:注入窗口规则有单测锁定)
+    func makeLastCloseReviewContext(generatedAt: String) -> LastCloseReviewContext? {
+        guard let archive = marketCloseReviewArchive else { return nil }
+        let watch = archive.snapshot.tomorrowWatch
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !watch.isEmpty else { return nil }
+
+        let reviewDay = String(archive.generatedAt.prefix(10))
+        let today = String(generatedAt.prefix(10))
+        let diff = Self.calendarDayDistance(from: reviewDay, to: today)
+        // 1=昨天;2/3=跨周末的上一交易日(周六/周日跑手动 slot 用周五复盘)。
+        guard diff == 1 || diff == 2 || diff == 3 else { return nil }
+        return LastCloseReviewContext(
+            generatedAt: archive.generatedAt,
+            tomorrowWatch: Array(watch.prefix(3))
+        )
+    }
+
+    static func calendarDayDistance(from fromDay: String, to toDay: String) -> Int {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let from = formatter.date(from: fromDay),
+              let to = formatter.date(from: toDay) else { return .max }
+        return Calendar.current.dateComponents([.day], from: from, to: to).day ?? .max
     }
 
     private func makeNextHourLookThrough(
