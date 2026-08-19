@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
-    "name" : "QiemanDashboard-4.0.0.zip",
-    "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
-    "size" : 7733719
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.0/QiemanDashboard-4.1.0.zip",
+    "name" : "QiemanDashboard-4.1.0.zip",
+    "sha256" : "fb5f41f08115207b9a1f46f8681cad246d06f70906e1fb5ba2e6afbd041410bc",
+    "size" : 7892382
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.1.0/QiemanDashboard-4.1.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.0.0.zip",
-      "size" : 7733719
+      "name" : "QiemanDashboard-4.1.0.zip",
+      "size" : 7892382
     }
   ],
-  "body" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.0.0",
-  "name" : "QiemanDashboard v4.0.0",
-  "notes" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
+  "body" : "Xcode 工程同步 v4.0 后新增源码并修复 iOS 目标构建\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\n旧趋势跟踪清单退场,行动候选直接入决策案例\nAI 研判体验优化总计划(含批次实施记录)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.1.0",
+  "name" : "QiemanDashboard v4.1.0",
+  "notes" : "Xcode 工程同步 v4.0 后新增源码并修复 iOS 目标构建\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\n旧趋势跟踪清单退场,行动候选直接入决策案例\nAI 研判体验优化总计划(含批次实施记录)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化",
   "published_at" : "",
-  "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
-  "tag" : "v4.0.0",
-  "tag_name" : "v4.0.0",
-  "version" : "4.0.0"
+  "sha256" : "fb5f41f08115207b9a1f46f8681cad246d06f70906e1fb5ba2e6afbd041410bc",
+  "tag" : "v4.1.0",
+  "tag_name" : "v4.1.0",
+  "version" : "4.1.0"
 }
