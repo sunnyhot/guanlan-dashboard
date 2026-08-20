@@ -80,6 +80,10 @@ extension SettingsSectionView {
 
                 SettingsDivider(isInset: true)
 
+                menuBarOptionGroup(title: "AI 研判姿态", subtitle: "盘中研判的总体倾向;无报告或已过期会如实标注", kinds: [.aiPosture])
+
+                SettingsDivider(isInset: true)
+
                 menuBarMarketIndexOptions
 
                 SettingsDivider(isInset: true)

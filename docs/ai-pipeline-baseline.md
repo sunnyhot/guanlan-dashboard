@@ -46,7 +46,9 @@
 **关键不变量(改造时不得破坏)**:
 - 链路 A 与链路 B **双向互斥**:任一运行中,另一不启动(见第 8 节)。
 - 链路 B 的结果**不会**创建 TrendTrackingItem(模型不兼容:NextHourGuidanceAction vs TrendActionCandidate)。
+- **P5 回指契约(2026-08-19 增补)**:盘中 context 可含 `lastCloseReview`(仅昨天/上一交易日的复盘「明日关注」,周末跨度 ≤3 天);提交工具新增**可选** `followup_reviews`(item_index/status/note/evidence_ids);净化规则——confirmed 必须挂**当日**有效证据(昨日发布的外部证据不算),否则强制降级 inconclusive;越界/重复丢弃;回指与 actions 校验解耦,回指问题不 fail 提交;无 lastCloseReview 时行为与旧版逐字节一致。输出 `NextHourGuidanceReport.followupReviews`,旧存档解码为空。详见 docs/2026-08-19-p5-followup-review-contract-change.md。
 - 链路 C 的唯一创建入口是 `addTrackingItem(from:report:)`,无自动条件求值。
+  > **2026-08-19 sunset 注记(方案 A,总计划 #12)**:链路 C 进入退场。UI 写入入口已切换——行动候选「加入关注」按钮改为 `addDecisionCase(from:report:)` 直接创建 DecisionCase(kind=.trendAction,caseKey `trend:` 前缀,与迁移键 `legacy:` 互为去重);旧清单 UI 移出页面,通知深链改路由到案例详情(迁移保持 ID 稳定)。`addTrackingItem` 模型函数与落盘格式保留(N+2 移除),本条不变量在模型层仍然成立。
 
 ---
 
@@ -68,6 +70,8 @@
 各模块的新鲜度时间独立保存在 `TrendAnalysisSettings.lastModuleGeneratedAt`。增量更新只推进当前模块时间；`full` 同时推进三项。旧配置首次加载时用旧报告 `generatedAt` 初始化三项，避免早晨市场雷达更新后把昨晚的收盘复盘误标为“今天已复盘”。
 
 收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受次日市场雷达覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
+
+**2026-08-19 复盘生成提速注记(#1/#2/#3/#5)**:①分批批量 5→8(`TrendReportDraftStore.assetBatchSize`,schema/描述/prompt 均随常量);②submit 拒批后,校验错误以「拒批教训」correction 前移注入(每条去重一次、单次最多两条),避免后续批次重复同类拒批;③已接受的 asset batch 提交,其 assistant tool_call 参数在后续上下文中替换为短桩(id/名称保留,callID 链不断;诊断日志仍存全量);④closeReview 且持有基金 ≥12 时,Agent 先走**批次并行 fan-out**:harness 预取只读数据 → 每批一次并行单轮生成 → 复用同一提交校验与组装终检链;任何环节失败返回 nil 回退原交互循环(草稿已暂存的批次保留,按 remaining 继续)——行为契约不变,仅生成方式并行化。fan-out 的 E2E 测试缺口暂以契约源码断言 + 生产运行验证覆盖。
 
 中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily，`marketRadar` 不读取个人持仓工具。
 

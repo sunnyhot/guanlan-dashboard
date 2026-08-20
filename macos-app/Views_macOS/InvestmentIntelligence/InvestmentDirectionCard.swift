@@ -26,7 +26,17 @@ struct InvestmentDirectionCard: View {
 
                 HStack(spacing: AppPalette.spaceS) {
                     Text(signal.dimension.displayName)
-                    Text("置信度 \(signal.confidence.normalizedScore)%")
+                    TintedCapsuleBadge(
+                        text: ConfidenceGrade.badgeText(score: signal.confidence.normalizedScore),
+                        tint: InvestmentIntelligenceStyle.tint(
+                            for: ConfidenceGrade(score: signal.confidence.normalizedScore)
+                        ),
+                        font: AppPalette.appFont(.caption, weight: .semibold),
+                        horizontalPadding: 6,
+                        verticalPadding: 2,
+                        softStrokeOpacity: nil
+                    )
+                    .help(ResearchTerm.confidence.plainExplanation)
                 }
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
@@ -41,9 +51,10 @@ struct InvestmentDirectionCard: View {
                     Label("\(signal.evidenceCount) 条依据", systemImage: "doc.text.magnifyingglass")
                     if signal.independentExternalSourceCount > 0 {
                         Label(
-                            "\(signal.independentExternalSourceCount) 个独立来源",
+                            "来自 \(signal.independentExternalSourceCount) 个不同渠道",
                             systemImage: "point.3.connected.trianglepath.dotted"
                         )
+                        .help(ResearchTerm.independentSources.plainExplanation)
                     }
                     Spacer(minLength: AppPalette.spaceXS)
                     Label("查看详情", systemImage: "arrow.up.right.square")

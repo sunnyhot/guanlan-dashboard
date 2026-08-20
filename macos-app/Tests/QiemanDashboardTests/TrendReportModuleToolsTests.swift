@@ -42,8 +42,8 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertEqual(String(decoding: encoded, as: UTF8.self), "\"neutralPositive\"")
     }
 
-    func testDraftAdvancesInOrderAndBatchesFundAssetsByFive() async throws {
-        let codes = (1...6).map { String(format: "%06d", $0) }
+    func testDraftAdvancesInOrderAndBatchesFundAssets() async throws {
+        let codes = (1...10).map { String(format: "%06d", $0) }
         let store = TrendReportDraftStore(expectedFundCodes: codes)
         let base = TrendAnalysisReport.fixture(
             generatedAt: "2026-07-26 10:00:00",
@@ -72,20 +72,20 @@ final class TrendReportModuleToolsTests: XCTestCase {
         )
         progress = await store.progress()
         XCTAssertEqual(progress.nextToolName, TrendReportModuleToolName.assetBatch)
-        XCTAssertEqual(progress.remainingFundCodes.count, 6)
+        XCTAssertEqual(progress.remainingFundCodes.count, 10)
 
         try await store.storeAssetBatch(
             TrendReportAssetBatchModule(
-                assetTrends: codes.prefix(5).map { makeAsset(code: $0) }
+                assetTrends: codes.prefix(TrendReportDraftStore.assetBatchSize).map { makeAsset(code: $0) }
             )
         )
         progress = await store.progress()
         XCTAssertEqual(progress.nextToolName, TrendReportModuleToolName.assetBatch)
-        XCTAssertEqual(progress.remainingFundCodes, [codes[5]])
+        XCTAssertEqual(progress.remainingFundCodes, [codes[8], codes[9]])
 
         try await store.storeAssetBatch(
             TrendReportAssetBatchModule(
-                assetTrends: [makeAsset(code: codes[5])]
+                assetTrends: codes.suffix(2).map { makeAsset(code: $0) }
             )
         )
         progress = await store.progress()
@@ -125,7 +125,7 @@ final class TrendReportModuleToolsTests: XCTestCase {
     }
 
     func testDraftRejectsOversizedAssetBatch() async throws {
-        let codes = (1...6).map { String(format: "%06d", $0) }
+        let codes = (1...9).map { String(format: "%06d", $0) }
         let store = TrendReportDraftStore(expectedFundCodes: codes)
 
         do {

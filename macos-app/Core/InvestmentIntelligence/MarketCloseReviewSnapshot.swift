@@ -661,6 +661,18 @@ extension AppModel {
         )
     }
 
+    var marketCloseReviewFreshness: MarketCloseReviewFreshness {
+        MarketCloseReviewFreshness.evaluate(
+            generatedAt: marketCloseReviewArchive?.generatedAt
+                ?? trendSettings.moduleGeneratedAt(.closeReview),
+            currentTimestamp: Self.timestampString(),
+            autoAttemptedKey: trendSettings.lastModuleAutoAnalysisKeys[
+                TrendResearchRunScope.closeReview.rawValue
+            ],
+            autoAnalysisEnabled: trendSettings.dailyAutoAnalysisEnabled
+        )
+    }
+
     var marketCloseReview: MarketCloseReviewSnapshot {
         let isUpdatingCloseReview = trendGenerationState == .generating
             && trendResearchRequestedScope == .closeReview

@@ -18,6 +18,7 @@ struct NextHourGuidanceDecisionConsole: View {
                         verticalPadding: 3,
                         softStrokeOpacity: nil
                     )
+                    TermHelpView(term: .posture)
 
                     Text("有效至 \(String(report.validUntil.suffix(5)))")
                         .font(AppPalette.appFont(.footnote, weight: .semibold))
@@ -74,6 +75,10 @@ struct NextHourGuidanceDecisionConsole: View {
                     .foregroundStyle(AppPalette.muted)
 
                 Spacer(minLength: AppPalette.spaceS)
+            }
+
+            if !report.followupReviews.isEmpty {
+                NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
             }
 
             Text(report.disclaimer)

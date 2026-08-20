@@ -5,4 +5,5 @@ enum AppStorageKey {
     static let customDataDirectory = "qieman.dashboard.customDataDirectory"
     static let showsInDock = "qieman.dashboard.showsInDock"
     static let autoCheckUpdateOnLaunch = "qieman.dashboard.update.autoCheckOnLaunch"
+    static let researchReadingGuideShown = "qieman.dashboard.research.readingGuideShown"
 }

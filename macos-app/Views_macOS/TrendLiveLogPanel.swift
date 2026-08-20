@@ -36,9 +36,15 @@ struct TrendLiveLogPanel: View {
             }
         }
         .onChange(of: model.trendGenerationState) { _, state in
-            guard state == .generating else { return }
-            isDismissed = false
-            isExpanded = true
+            if state == .generating {
+                isDismissed = false
+                isExpanded = true
+            } else {
+                // 运行结束自动收起为单行状态条;想回看再点展开。
+                withAnimation(AppPalette.motionStandard) {
+                    isExpanded = false
+                }
+            }
         }
     }
 
@@ -49,6 +55,12 @@ struct TrendLiveLogPanel: View {
 
     private var latestLog: TrendProgressLog? {
         model.trendProgressLogs.last
+    }
+
+    private var failureExplanation: TrendErrorTriage.Explanation? {
+        guard model.trendGenerationState == .failed,
+              !model.lastTrendError.isEmpty else { return nil }
+        return TrendErrorTriage.explain(model.lastTrendError)
     }
 
     private var header: some View {
@@ -71,7 +83,11 @@ struct TrendLiveLogPanel: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 7) {
-                    Text("\(model.trendResearchScope.displayName)进度")
+                    Text(
+                        model.trendGenerationState == .generating
+                            ? "\(model.trendResearchScope.displayName)进度"
+                            : "上次\(model.trendResearchScope.displayName)运行"
+                    )
                         .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                     TintedCapsuleBadge(
@@ -82,11 +98,24 @@ struct TrendLiveLogPanel: View {
                         verticalPadding: 2,
                         softStrokeOpacity: nil
                     )
+                    if let failureExplanation {
+                        Text(failureExplanation.actionText ?? "")
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                            .lineLimit(1)
+                    }
                 }
-                Text(latestLog?.message ?? "正在准备分析")
-                    .font(AppPalette.appFont(.footnote, weight: .medium))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
+                if let failureExplanation {
+                    Text(failureExplanation.reasonText)
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
+                        .foregroundStyle(AppPalette.danger)
+                        .lineLimit(2)
+                } else {
+                    Text(latestLog?.message ?? "正在准备分析")
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
+                }
                 if model.trendGenerationState == .generating {
                     HStack(spacing: 7) {
                         ProgressView(value: model.trendResearchProgress.fraction)
@@ -112,6 +141,17 @@ struct TrendLiveLogPanel: View {
                     model.cancelTrendAnalysis()
                 } label: {
                     Label("取消", systemImage: "xmark.circle")
+                        .font(AppPalette.appFont(.footnote, weight: .semibold))
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+            }
+
+            if let failureExplanation, failureExplanation.shouldOpenSettings {
+                Button {
+                    model.selectedSection = .settings
+                } label: {
+                    Label("去设置", systemImage: "gearshape")
                         .font(AppPalette.appFont(.footnote, weight: .semibold))
                 }
                 .buttonStyle(.appSecondary)

@@ -109,6 +109,12 @@ final class EnhancementState: ObservableObject {
     @Published var portfolioInsightSnapshots: [PortfolioInsightSnapshot] = []
     @Published var trendReport: TrendAnalysisReport?
     @Published var trendSettings: TrendAnalysisSettings = .default
+
+    // 「全市场机会」分析 memo(P1 #9 并入):输入未变时复用,
+    // 避免面板与摘要卡同帧各自 analyze。非发布状态,纯缓存。
+    var marketOpportunityMemoKey: String?
+    var marketOpportunityMemoValue: MarketOpportunityAnalysis?
+    var marketOpportunityMemoHitCount = 0
     @Published var trendGenerationState: TrendGenerationState = .idle
     @Published var trendResearchScope: TrendResearchRunScope = .full
     @Published var trendResearchRequestedScope: TrendResearchRunScope = .full

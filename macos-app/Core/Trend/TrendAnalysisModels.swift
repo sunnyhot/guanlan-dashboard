@@ -126,6 +126,29 @@ enum TrendHorizon: String, Codable, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 }
 
+
+/// 面向用户的动作文案(原定义在视图层,Core 的决策案例写入也依赖,下沉至此)。
+extension TrendActionKind {
+    var displayText: String {
+        switch self {
+        case .watch:
+            return "观察"
+        case .waitForConfirmation:
+            return "等待确认"
+        case .observeInBatches:
+            return "分批观察"
+        case .pausePlan:
+            return "暂停计划"
+        case .considerIncrease:
+            return "考虑增加"
+        case .considerReduce:
+            return "考虑降低"
+        case .rebalanceReview:
+            return "调仓复核"
+        }
+    }
+}
+
 enum TrendActionKind: String, Codable, Hashable {
     case watch
     case waitForConfirmation

@@ -28,7 +28,17 @@ struct InvestmentDirectionDetailSheet: View {
                             tint: signal.recommendation.tint
                         )
                         Text(signal.dimension.displayName)
-                        Text("置信度 \(signal.confidence.normalizedScore)%")
+                        TintedCapsuleBadge(
+                            text: ConfidenceGrade.badgeText(score: signal.confidence.normalizedScore),
+                            tint: InvestmentIntelligenceStyle.tint(
+                                for: ConfidenceGrade(score: signal.confidence.normalizedScore)
+                            ),
+                            font: AppPalette.appFont(.caption, weight: .semibold),
+                            horizontalPadding: 7,
+                            verticalPadding: 3,
+                            softStrokeOpacity: nil
+                        )
+                        .help(ResearchTerm.confidence.plainExplanation)
                     }
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)

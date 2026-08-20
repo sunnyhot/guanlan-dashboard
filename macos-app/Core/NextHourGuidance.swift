@@ -277,6 +277,8 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
     let auditToolCalls: [TrendAgentToolCallAudit]
     let auditEvidence: [TrendEvidence]
     let warnings: [String]
+    /// 昨晚「明日关注」的逐条回指(P5);旧存档解码为空数组。
+    let followupReviews: [NextHourFollowupReview]
     let disclaimer: String
 
     /// 完整运行证据账本。`evidence` 只保存最终动作直接引用的证据，
@@ -382,6 +384,7 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         auditToolCalls: [TrendAgentToolCallAudit] = [],
         auditEvidence: [TrendEvidence] = [],
         warnings: [String] = [],
+        followupReviews: [NextHourFollowupReview] = [],
         disclaimer: String = "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
     ) {
         self.id = id
@@ -402,6 +405,7 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         self.auditToolCalls = auditToolCalls
         self.auditEvidence = auditEvidence
         self.warnings = warnings
+        self.followupReviews = followupReviews
         self.disclaimer = disclaimer
     }
 
@@ -437,6 +441,10 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
             forKey: .auditEvidence
         ) ?? evidence
         warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        followupReviews = try container.decodeIfPresent(
+            [NextHourFollowupReview].self,
+            forKey: .followupReviews
+        ) ?? []
         disclaimer = try container.decodeIfPresent(String.self, forKey: .disclaimer)
             ?? "仅供条件式决策参考，不构成收益承诺或个性化投资建议。"
     }
@@ -460,6 +468,7 @@ struct NextHourGuidanceReport: Codable, Identifiable, Hashable, Sendable {
         case auditToolCalls
         case auditEvidence
         case warnings
+        case followupReviews
         case disclaimer
     }
 }
@@ -546,6 +555,8 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     let latestTrendActions: [String]
     let latestAssetConclusions: [String]
     let dataRules: [String]
+    /// 昨晚复盘的「明日关注」(P5 回指注入)。nil 时行为与旧版完全一致。
+    var lastCloseReview: LastCloseReviewContext? = nil
 
     func jsonString() -> String {
         let encoder = JSONEncoder()
@@ -553,6 +564,39 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
         guard let data = try? encoder.encode(self) else { return "{}" }
         return String(data: data, encoding: .utf8) ?? "{}"
     }
+}
+
+/// 昨晚收盘复盘注入盘中研判的「明日关注」上下文(P5 回指)。
+/// 来源是冻结快照 MarketCloseReviewArchive,不新增存储。
+struct LastCloseReviewContext: Codable, Hashable, Sendable {
+    let generatedAt: String
+    let tomorrowWatch: [String]
+}
+
+/// 模型对单条「昨日关注」的回指结论。
+struct NextHourFollowupReview: Codable, Hashable, Sendable, Identifiable {
+    enum Status: String, Codable, Hashable, Sendable {
+        case confirmed
+        case notSeen
+        case inconclusive
+
+        var displayName: String {
+            switch self {
+            case .confirmed: return "已出现"
+            case .notSeen: return "未出现"
+            case .inconclusive: return "无法确认"
+            }
+        }
+    }
+
+    let itemIndex: Int
+    /// 昨晚关注原文(净化时从 context 快照,报告自包含,UI 不依赖 context)。
+    let itemText: String
+    let status: Status
+    let note: String
+    let evidenceIDs: [String]
+
+    var id: String { "followup-\(itemIndex)" }
 }
 
 // MARK: - Focused AI agent
@@ -610,6 +654,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let summary: String
         let actions: [ActionSubmission]
         let riskChecks: [String]
+        let followupReviews: [FollowupReviewSubmission]?
 
         private enum CodingKeys: String, CodingKey {
             case headline
@@ -617,16 +662,48 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             case summary
             case actions
             case riskChecks = "risk_checks"
+            case followupReviews = "followup_reviews"
         }
 
         /// 编程构造（供 enforceEvidenceFloor 用）。
         init(headline: String, posture: NextHourGuidancePosture, summary: String,
-             actions: [ActionSubmission], riskChecks: [String]) {
+             actions: [ActionSubmission], riskChecks: [String],
+             followupReviews: [FollowupReviewSubmission]? = nil) {
             self.headline = headline
             self.posture = posture
             self.summary = summary
             self.actions = actions
             self.riskChecks = riskChecks
+            self.followupReviews = followupReviews
+        }
+    }
+
+    /// 模型对「昨日关注」的单条回指提交(snake_case,容错解码;测试经 JSON 构造)。
+    struct FollowupReviewSubmission: Decodable {
+        let itemIndex: Int?
+        let status: NextHourFollowupReview.Status?
+        let note: String?
+        let evidenceIDs: [String]?
+
+        private enum CodingKeys: String, CodingKey {
+            case itemIndex = "item_index"
+            case status
+            case note
+            case evidenceIDs = "evidence_ids"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            itemIndex = try c.decodeIfPresent(Int.self, forKey: .itemIndex)
+            // 未知状态容错为 inconclusive:回指宁保守,不猜。
+            if let raw = try c.decodeIfPresent(String.self, forKey: .status),
+               let parsed = NextHourFollowupReview.Status(rawValue: raw) {
+                status = parsed
+            } else {
+                status = .inconclusive
+            }
+            note = try c.decodeIfPresent(String.self, forKey: .note) ?? ""
+            evidenceIDs = try c.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         }
     }
 
@@ -775,6 +852,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 买入或卖出必须同时引用该标的本地行情证据和至少两个最新外部事件证据，至少一个来源为官方或权威来源且来源彼此独立；基金还必须引用该基金的穿透证据。缺少任一项时只能 hold。
                 买入或卖出时，instruction 必须说明小仓/分批方式或大致仓位比例，并给出触发和失效条件。没有清晰优势时明确 hold，不能为了凑交易强行买卖。
                 从工具返回的持仓中选择最需要决策的 1 到 5 个标的。场外基金不可描述为盘中实时成交。
+                若上下文含 lastCloseReview(昨晚复盘的明日关注):这些是昨晚承诺今天要核实的事项,必须先取证再回答,不许不查就答。对每条关注——先核对相关标的/指数在实时行情中的表现,并复用当日已完成的外部检索结论;仍无法判断且搜索预算允许时,针对该关注本身补一次检索(如「红利板块 今日成交量」)。然后必须在 followup_reviews 中逐条回指,item_index 对应其数组下标:confirmed 必须引用上述今日证据(行情/检索/本日结论),仅凭记忆或推断一律不允许;确实查证不到才用 inconclusive,明确查过但未出现用 not_seen。没有 lastCloseReview 时不要提交 followup_reviews。
                 必须调用 submit_next_hour_guidance 工具提交结果，不要输出普通文本。
                 """
             ),
@@ -1274,6 +1352,12 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let userMessage = """
         研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)。
         候选标的 \(context.assets.count) 个，选择最需要决策的 1-5 个。
+        \(context.lastCloseReview.map { review in
+            "昨晚复盘的明日关注(逐条回指到 followup_reviews,item_index 为下标;confirmed 必须引用今日证据——三个分析团队已替你核实的结论就是合格证据,查证不到才用 inconclusive):" +
+            review.tomorrowWatch.enumerated()
+                .map { "\($0.offset): \($0.element)" }
+                .joined(separator: "；")
+        } ?? "本次没有昨晚复盘的明日关注,不要提交 followup_reviews。")
         请综合三方分析结论，提交买卖持有建议。
         """
 
@@ -1395,6 +1479,63 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         return normalized.isEmpty ? nil : normalized
     }
 
+    /// 回指净化(P5):序号越界/重复丢弃;confirmed 必须挂**当日**有效证据,
+    /// 否则强制降级 inconclusive。回指是增强不是门槛——任何问题都不影响 actions。
+    /// (internal:测试需要直接构造提交验证规则)
+    static func sanitizeFollowupReviews(
+        _ submissions: [FollowupReviewSubmission],
+        context: NextHourGuidanceContext,
+        evidence: [TrendEvidence],
+        currentTimestamp: String
+    ) -> (reviews: [NextHourFollowupReview], warnings: [String]) {
+        guard let watch = context.lastCloseReview?.tomorrowWatch, !watch.isEmpty else {
+            return ([], [])
+        }
+        var warnings: [String] = []
+        var reviews: [NextHourFollowupReview] = []
+        var seenIndexes = Set<Int>()
+        let evidenceByID = Dictionary(
+            evidence.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let today = String(currentTimestamp.prefix(10))
+
+        for submission in submissions {
+            guard let index = submission.itemIndex, (0..<watch.count).contains(index) else {
+                warnings.append("回指条目序号越界,已丢弃")
+                continue
+            }
+            guard seenIndexes.insert(index).inserted else {
+                warnings.append("回指条目序号重复(\(index + 1)),已丢弃后一条")
+                continue
+            }
+            var status = submission.status ?? .inconclusive
+            if status == .confirmed {
+                let cited = (submission.evidenceIDs ?? []).compactMap { evidenceByID[$0] }
+                // 本地行情/三方结论无 publishedAt,采集即当日;外部证据看发布日。
+                let hasTodayEvidence = cited.contains { item in
+                    guard let publishedAt = item.publishedAt, !publishedAt.isEmpty else { return true }
+                    return String(publishedAt.prefix(10)) >= today
+                }
+                if !hasTodayEvidence {
+                    status = .inconclusive
+                    warnings.append("「\(watch[index])」回指为已出现但缺少当日有效证据,已降级为无法确认")
+                }
+            }
+            reviews.append(
+                NextHourFollowupReview(
+                    itemIndex: index,
+                    itemText: watch[index],
+                    status: status,
+                    note: submission.note ?? "",
+                    evidenceIDs: (submission.evidenceIDs ?? []).filter { evidenceByID[$0] != nil }
+                )
+            )
+        }
+        reviews.sort { $0.itemIndex < $1.itemIndex }
+        return (reviews, warnings)
+    }
+
     private static func makeReport(
         submission: Submission,
         context: NextHourGuidanceContext,
@@ -1415,8 +1556,15 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             }
         }
         let auditEvidence = await ledger.allEvidence()
+        let followup = sanitizeFollowupReviews(
+            submission.followupReviews ?? [],
+            context: context,
+            evidence: auditEvidence,
+            currentTimestamp: context.generatedAt
+        )
         var warnings = context.marketDataWarnings + researchSnapshot.sourceWarnings
         warnings.append(contentsOf: researchSnapshot.lookThrough?.warnings ?? [])
+        warnings.append(contentsOf: followup.warnings)
         let sourceStatuses = await normalizedSourceStatuses(
             snapshot: researchSnapshot,
             officialSourceConfigured: officialSourceConfigured,
@@ -1467,7 +1615,8 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             evidence: evidence,
             auditToolCalls: toolCalls,
             auditEvidence: auditEvidence,
-            warnings: warnings
+            warnings: warnings,
+            followupReviews: followup.reviews
         )
     }
 

@@ -24,12 +24,14 @@ struct SubmitTrendReportTool: TrendResearchTool {
 
         // 1. 取出 report 对象。
         guard let argumentsObject = try? JSONSerialization.jsonObject(with: Data(argumentsJSON.utf8)) as? [String: Any],
-              let reportValue = argumentsObject["report"] else {
+              let reportValue = argumentsObject["report"] as? [String: Any] else {
             return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "缺少 report 字段或参数不是合法 JSON"), isError: true)
         }
         let reportData: Data
         do {
-            reportData = try JSONSerialization.data(withJSONObject: reportValue)
+            reportData = try JSONSerialization.data(
+                withJSONObject: ModelOutputCoercion.normalized(reportValue)
+            )
         } catch {
             return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "report 对象无法序列化：\(error.localizedDescription)"), isError: true)
         }
