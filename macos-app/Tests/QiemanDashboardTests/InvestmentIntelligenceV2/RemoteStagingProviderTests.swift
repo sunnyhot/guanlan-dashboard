@@ -289,6 +289,64 @@ final class RemoteStagingProviderTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("spool.jsonl").path))
     }
 
+    func testSync_farFutureGeneratedAt_rejectedByIndependentClientClock() async throws {
+        // 服务端未来上界对「collector 与 publisher 共用 VPS 时钟一起漂移」失效
+        //（同机差值≈0）——客户端必须用独立 now() 复核，下载任何文件前 fail-closed
+        let dir = tempDir
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let records = [makeRecord()]
+        let fileData = jsonl(records)
+        var fetchedFiles = 0
+        let fetcher = FakeRemoteFetcher(
+            // generatedAt = 客户端本地 now + 1h（超过 10min 容忍度）
+            manifestData: manifest(
+                files: [fileEntry(name: "stock_daily.jsonl", data: fileData)],
+                generatedAt: now.addingTimeInterval(3_600)
+            )
+        )
+        fetcher.files["stock_daily.jsonl"] = fileData
+        fetcher.onFetchFile = { _ in fetchedFiles += 1 }
+
+        let provider = makeProvider(fetcher: fetcher)
+        let outcome = await provider.sync(
+            to: dir.appendingPathComponent("spool.jsonl"),
+            state: dir.appendingPathComponent("state.json")
+        )
+        guard case .failed(.malformedManifest(let detail)) = outcome else {
+            return XCTFail("expected .failed(.malformedManifest), got \(outcome)")
+        }
+        XCTAssertTrue(detail.contains("far future"), "detail: \(detail)")
+        XCTAssertEqual(fetchedFiles, 0, "闸门必须在下载任何文件之前")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("spool.jsonl").path))
+    }
+
+    func testSync_nearFutureGeneratedAt_withinTolerancePasses() async throws {
+        // 时钟小幅超前（容忍度内）正常放行
+        let dir = tempDir
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let records = [makeRecord()]
+        let fileData = jsonl(records)
+        let fetcher = FakeRemoteFetcher(
+            manifestData: manifest(
+                files: [fileEntry(name: "stock_daily.jsonl", data: fileData)],
+                generatedAt: now.addingTimeInterval(5 * 60)   // +5min < 10min
+            )
+        )
+        fetcher.files["stock_daily.jsonl"] = fileData
+
+        let provider = makeProvider(fetcher: fetcher)
+        let outcome = await provider.sync(
+            to: dir.appendingPathComponent("spool.jsonl"),
+            state: dir.appendingPathComponent("state.json")
+        )
+        guard case .synced(let summary) = outcome else {
+            return XCTFail("容忍度内应正常 sync: \(outcome)")
+        }
+        XCTAssertEqual(summary.recordsAppended, 1)
+    }
+
     func testURLSessionFetcher_bypassesURLCache_andSendsCollectorKey() async throws {
         // nginx 静态文件带 Last-Modified 无 Cache-Control 时，URLCache 启发式缓存
         // 会让 manifest 变陈旧——生产 fetcher 必须显式绕过本地缓存

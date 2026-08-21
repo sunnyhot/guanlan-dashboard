@@ -240,6 +240,12 @@ actor RemoteStagingProvider {
     /// PUBLISH_MANIFEST_VERSION 对齐；bump 需两侧同步 + 契约测试更新）
     static let supportedManifestVersion = 1
 
+    /// manifest.generatedAt 的未来上界容忍度（客户端独立时钟复核）。
+    /// 服务端同机校验对「collector 与 publisher 共用 VPS 时钟一起漂移」失效
+    /// （两者差值≈0），客户端必须用本机 now() 再查一次——远未来锚点会让
+    /// 新鲜度监控永不 degraded。10min 与服务端容忍度对齐（跨机 NTP 偏差余量）
+    static let generatedAtFutureTolerance: TimeInterval = 10 * 60
+
     /// 断路器配置（DATA010 §3：连续失败指数退避）。
     struct CircuitBreakerConfig: Sendable, Hashable {
         /// 基础退避（首次失败后）
@@ -360,6 +366,19 @@ actor RemoteStagingProvider {
                 throw RemoteStagingError.malformedManifest(
                     detail: "unsupported manifest version \(manifest.version) " +
                             "(supported: \(Self.supportedManifestVersion))"
+                )
+            }
+            // 未来上界（客户端独立时钟）：服务端校验对同机时钟漂移失效
+            //（collector 与 publisher 共用 VPS 时钟，一起漂到远未来则服务端
+            // 差值≈0）——本机 now() 复核，下载任何文件之前 fail-closed，
+            // 防远未来锚点让新鲜度监控永不 degraded
+            let clock = now()
+            let futureDrift = manifest.generatedAt.timeIntervalSince(clock)
+            if futureDrift > Self.generatedAtFutureTolerance {
+                throw RemoteStagingError.malformedManifest(
+                    detail: "manifest generatedAt in far future: \(manifest.generatedAt) " +
+                            "(local now \(clock), drift \(Int(futureDrift))s > tolerance " +
+                            "\(Int(Self.generatedAtFutureTolerance))s)"
                 )
             }
 

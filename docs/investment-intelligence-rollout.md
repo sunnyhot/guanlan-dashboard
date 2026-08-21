@@ -414,7 +414,17 @@ macos-app/
 >   25:61:61）fail-closed）。nginx/Cloudflare 部署
 >   指引（托管整个发布根）见 remote-collector/README。
 >
-> **审查修复记录（2026-08-21，五轮，PROV-3b）**：
+> **审查修复记录（2026-08-21，六轮，PROV-3b）**：
+> - 第六轮（1×P1 + 2×P2）：DATA010 §5 **顶部旧摘要条目**同步改为收窄后的
+>   保证范围（此前仅改了分档小节，摘要仍写「即使 VPS 被攻陷无私钥」，与
+>   整机失陷说明自相矛盾）；**客户端独立时钟未来上界**——服务端校验对
+>   「collector 与 publisher 共用 VPS 时钟一起漂移」失效（同机差值≈0），
+>   RemoteStagingProvider 在下载任何文件前用本机 now() 复核
+>   generatedAt（+10min 容忍度，超限 malformedManifest fail-closed；单测
+>   断言 0 文件下载 + spool 无字节，近未来容忍放行）；独立 signer 反
+>   **签名 Oracle** 条件写入未来方案（独立授权或验证待签内容，不能对
+>   被攻陷数据链主机提交的任意字节签名）。
+> - 第五轮（1×P1 + 1×P2）：
 > - 第五轮（1×P1 + 1×P2）：**signed 保证范围收窄**——私钥（未加密 PEM）
 >   与 collector/publisher 同机，完整主机失陷时「攻击者无私钥」不成立
 >   （可读私钥或在签名前替换 staging，产出合法签名的伪造数据）；DATA010 §5
