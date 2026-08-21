@@ -308,11 +308,104 @@ macos-app/
 
 **里程碑 M3：Provider 层完整**。
 
-> **状态（2026-08-14）**：M3 进行中（18/28 点，PROV-1/2/3a/5/6 签收）。
+> **状态（2026-08-20）**：M3 进行中（23/28 点，PROV-1/2/3a/4/5/6/7/8 签收；
+> PROV-3b 客户端侧离线完成，剩服务端部署 + 端到端）。
 > PROV-3 拆为 PROV-3a（本地 Python collector，DATA007，8pt，进阶可选）+
 > PROV-3b（远程 VPS collector + RemoteStagingProvider，DATA010，5pt，默认路径）。
 > DATA010 ADR 已 Proposed，定死凭证边界（公开数据 only）/ 反爬（聚合去重）/
 > 三档降级 / 鉴权反白嫖 / 验签完整性。
+>
+> **2026-08-20 增量签收**（全部离线先行，StaticResponseFetcher / FakeClient 注入模式；
+> 含同日五轮审查修复，见下方「审查修复记录」）：
+> - **PROV-8（2）**—— `ProviderHealthMonitor`（actor，`Providers/ProviderHealthMonitor.swift`）：
+>   版本化 `HealthDegradationPolicy`（DOM-7 同款 id/version 可审计形态，七条规则
+>   按优先级：quota 耗尽→unavailable / 连续失败≥5→unavailable / rateLimited 冷却期→
+>   degraded（过期自动恢复）/ quota 剩余<20%→degraded / 连续失败≥2→degraded /
+>   窗口成功率<0.5（样本≥5）→degraded / 其余 healthy）。
+>   上报 API：recordSuccess / recordFailure(error:)（quotaExhausted→rateLimited+quota 推满
+>   （先滚动周期再推满）、rateLimited→独立冷却不累计连续失败、schemaMismatch→记 drift、
+>   notFound→不计入统计）/ recordQuota / incrementQuota（先滚动周期再写入）；查询 API：
+>   health(for:) / isCallable / snapshot（SYNC-7 降级入口）。quota 周期自动滚动
+>   （hourly/daily/monthly UTC 确定性重置点）。未注册 Provider 上报一律忽略并返回
+>   nil（DATA006「未声明 reliabilityClass → 拒绝」）。成功率只按非限流调用计算
+>   （限流冷却/额度重置后不残留 degraded）。30 个测试。
+> - **PROV-4（2）**—— SEC Adapter（`Providers/SECResponseParser.swift`）：复用现有
+>   `SECOfficialSourceClient` + `SECOfficialSourceCache`（公平访问限流 / User-Agent /
+>   缓存不重复实现），新写 V2 独立解析器。**新增 `ProviderRecordKind.fundamentalFact` +
+>   `FundamentalFactPayload`**（Validator/Factory 同步接 case；ObservationFactory 对该
+>   kind 显式拒收 `canonicalConversionDeferred`——FundamentalObservation 在 REPO-1b
+>   定义前不产 Canonical，staging + schema 校验可用）。PIT 语义：一条记录 = 一个
+>   (concept, unit, start/end, filed) 事实行，同 concept 同 period 多次申报（10-Q 初报 /
+>   10-K 修订）保留为不同 publishedAt 的多条记录（ADR-DATA008 multi-vintage）；
+>   effectiveAt=期间结束、publishedAt=filed、providerCode=`sec_cik`（统一 10 位补零）。
+>   **验收项：payload 携带 `extractionMethod = .xbrlFact`**（与 LLM extracted fact
+>   类型层区分，DOM-9）。concept 候选按 (unit, start/end, filed) **逐事实**选优先概念
+>   ——同期间多标签披露只留最高优先级不重复，公司换标签年份的两段历史都保留。
+>   错误映射：403→unavailable、429→rateLimited（公平访问限流，独立冷却自动恢复）、
+>   invalidResponse/缺 us-gaap→schemaMismatch、目录外 ticker→notFound。17 个测试。
+> - **PROV-7（1）**—— Tavily 月额度感知（`Providers/TavilyQuotaPolicy.swift`）：
+>   `TavilyQuotaPolicy`（免费层 1000 credits/月，版本化可持久化）三档决策
+>   available / lowQuota(剩<100 保守) / exhausted（→Research 降级「无 web 搜索」模式，
+>   DATA006 §5）；`TavilyProviderErrorMapper` 把 `TavilySearchClientError` 映射
+>   ProviderError（**432/433→quotaExhausted（月额度耗尽）、429→rateLimited（瞬时频控
+>   独立冷却，不污染月额度）、401→unavailable、invalidResponse→schemaMismatch**）；
+>   `quotaConfig` 直通 ProviderHealthMonitor 的 monthly QuotaConfig。Tavily 不产
+>   ProviderRecord（搜索结果是 Evidence，RES-3 封装为 Research Tool 时消费本层）。
+>   14 个测试。
+> - **PROV-3b 客户端侧（离线部分）**—— `RemoteStagingProvider`（actor，
+>   `Persistence/RemoteStagingProvider.swift`，ADR-DATA010 接收面）：manifest 拉取 →
+>   （可选）Ed25519 验签（CryptoKit，非法公钥**初始化即抛**、伪造签名拒收整批）→
+>   本地 state 增量比对（同 sha256 跳过）→ 逐文件 sha256 完整性校验（不符拒收该
+>   文件、其余继续）→ 复用 PROV-1 Reader + SchemaValidator 分桶 → 合法记录 append
+>   本地 spool → state 持久化。**journal/offset 两阶段提交**：append 前先原子写
+>   journal（记录 spool 偏移），append → checkpoint 成功才清 journal；下次 sync 启动
+>   先恢复未提交 journal（截断 spool 回偏移），checkpoint 失败/崩溃后重试 spool 仍
+>   只有一份。**恢复先于断路器**（checkpoint 失败立即打开断路器，退避期内的
+>   sync 虽 .skipped 不触网络，本地 journal 恢复仍必须执行）。**断路器**：
+>   连续失败指数退避（60s 起、15min 封顶），退避期 sync 直接 .skipped 不触网络。
+>   spool 大小读不出**抛错**（不静默 0），恢复偏移大于当前 spool 大小**拒绝截断**
+>   （spool 被外部改动的不一致现场上报而非破坏）。`URLSessionRemoteStagingFetcher`
+>   带 X-Collector-Key + 路径穿越防护；403/429 映射 rejectedByServer（明确降级
+>   语义）。manifest wire 契约（camelCase + ISO8601 + 小写 hex sha256）已测。
+>   **读取容错（fail-closed）**：state/journal/spoolSize 不用 fileExists 前置
+>   （它无法区分「不存在」与「权限/IO 查不了」），直接读取、只把明确的
+>   no-such-file 错误当「无」；其它读取/解码失败终止本轮并保留现场（不把坏
+>   state 当空 state 误截断已提交 spool、不静默跳过未恢复的 journal）。
+>   journal 偏移**负数拒绝**（合法 JSON 可解出负值，静默 clamp 0 会清空 spool）、
+>   越界拒绝（大于当前 spool 大小）、缺失 spool 只允许 offset==0。25 个测试。
+>   **剩余（PROV-3b 未整点签收）**：VPS 侧 Python collector 产出（复用 PROV-3a 的
+>   dataset 抓取 + manifest/签名生成）、nginx/Cloudflare 部署、真实端到端连通与
+>   跨语言契约测试（Python manifest/staging 真实产物 vs Swift 接收面）。
+>
+> **审查修复记录（2026-08-20，五轮）**：
+> - 第一轮（3×P1 + 4×P2）：非法 Ed25519 公钥 init 抛错不静默降级；state 写失败
+>   上抛不虚报 .synced + quota 记账先滚动周期再写入；SEC concept 去重、notFound
+>   不计健康统计、Tavily 429 语义分离、sec_cik 统一 10 位补零。
+> - 第二轮（2×P1 + 1×P2）：remote staging 改 journal/offset 两阶段提交（checkpoint
+>   失败后重试 spool 不重复，不再依赖 Pipeline upsert 兜底）；SEC concept 去重改
+>   逐事实粒度（换标签年份的历史不消失）；`ProviderError` 新增 `rateLimited(
+>   retryAfter:)`（429 类瞬时限流独立冷却自动恢复，不累计连续失败、不推满 quota），
+>   Tavily/SEC 429 映射同步更新。
+> - 第三轮（2×P1 + 1×P2）：journal 恢复移到断路器判断之前（退避期内 .skipped
+>   仍完成本地恢复）；spool 大小读不出抛错 + 恢复偏移越界拒绝截断（保护已提交
+>   数据）；限流调用不进成功率分母（连续 429 冷却过期后自动恢复 healthy，
+>   不被 0% 窗口锁死）。
+> - 第四轮（2×P1）：state 读取/解码失败不再视为空 state（避免「checkpoint 已
+>   成功 + journal 未清 + state 瞬时读不出」时误判未提交而截断已提交 spool 的
+>   静默数据丢失）；journal 存在但读取失败时终止本轮（不再静默跳过恢复导致
+>   未提交追加被后续轮次重复下载）。两者均「只有明确的 no-such-file 才算不存在」。
+> - 第五轮（2×P1）：去掉三处 fileExists 前置（它无法区分「不存在」与「权限/
+>   IO 查不了」，会绕开 fail-closed），改为直接读取、仅 no-such-file 错误码当
+>   「无」；journal 负偏移拒绝（可解码的负值经 max(0,·) clamp 会清空整个
+>   spool，缺失 spool 时也不得当 offset==0 恢复成功）。
+>
+> **未达成（M3 blocked 原因）**：PROV-3a 真实联调（本机装 akshare 后跑一轮真实抓取）
+> 与 PROV-3b 服务端部署 + 端到端。这些 Adapter 的解析逻辑可离线先行
+> （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
+> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行
+> （PROV-3a 的 `--selftest` 契约测试模式可直接复用）。
+>
+> **状态（2026-08-14，历史）**：M3 进行中（18/28 点，PROV-1/2/3a/5/6 签收）。
 >
 > **已签收**：
 > - PROV-1（2）—— `ProviderStaging`（JSONL spool 读写，append-only，
