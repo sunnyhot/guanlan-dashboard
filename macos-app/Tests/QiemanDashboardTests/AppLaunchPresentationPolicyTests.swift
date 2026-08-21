@@ -287,6 +287,10 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         delegate.finishLaunchingDate = Date(timeIntervalSinceNow: -10)
         delegate.showMainWindow()
         let manual = try XCTUnwrap(delegate.mainWindow)
+        // createMainWindow leaves isReleasedWhenClosed at the default true;
+        // opt out so the discard-close below cannot free the instance that the
+        // defer block still touches (use-after-free crashed CI with SIGSEGV).
+        manual.isReleasedWhenClosed = false
 
         let scene = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
