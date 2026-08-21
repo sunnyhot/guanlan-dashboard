@@ -48,6 +48,27 @@ FREE001 审查。
 - **staging 条目校验**：dataset 名在白名单内、文件名严格等于
   `{dataset}.jsonl`、resolve 后仍在 staging 目录内（挡绝对路径 / `../` 穿越）
 
+## 威胁模型：snapshot.txt 本身未签名（显式声明）
+
+指针文件不签名是**已知且接受的残余风险**，边界如下：
+
+- **最坏效果是 rollback，不是数据伪造**：能改写 snapshot.txt 的一方（VPS/
+  nginx 被攻陷、明文 HTTP 中间人）只能把客户端指向 `snapshots/` 里**已存在的
+  旧快照**——旧 manifest + 旧签名对仍然验签通过。数据真实性由 Ed25519 签名
+  保证（无私钥造不出能过验签的 manifest），指针影响的是新鲜度/可用性，
+  不是数据完整性
+- **新鲜度兜底**：客户端按 `manifest.generatedAt` 做新鲜度监控（超 N 小时
+  未更新 → ProviderHealth `.degraded`，DATA006 缺口语义）——陈旧数据被
+  标记为陈旧，不冒充新鲜；generatedAt 服务端 fail-closed（staging 缺失/非法
+  拒发），无法经发布链伪造
+- **无法逃逸快照目录**：客户端对指针内容做白名单校验（`[0-9A-Za-z_-]{1,64}`，
+  无 `/` 无 `..`），指向不存在的快照 → 404 → `unavailable` 降级，不是注入
+- **建议 HTTPS**（Cloudflare 免费层即含）：明文 HTTP 下 rollback 风险扩大到
+  路径上的中间人，而不只是服务端攻陷
+- **慢客户端 vs prune**：保留最近 5 个快照；若一次 sync 期间发生超过 5 轮
+  发布导致固定快照被清理，`fetchFile` 404 → 本轮失败 + 断路器退避，下轮
+  重新取指针自愈——不产生半批数据
+
 `akshare_collector.py` 的单一实现在 `macos-app/InvestmentIntelligenceV2/Collector/`
 （App 侧可选组件，本地与远程两条链共用，字节级一致是跨语言契约的一部分）。
 本脚本按以下顺序定位它（仅发布 / `--selftest` 路径需要；`--generate-key` 单文件
