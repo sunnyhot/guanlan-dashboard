@@ -48,26 +48,36 @@ FREE001 审查。
 - **staging 条目校验**：dataset 名在白名单内、文件名严格等于
   `{dataset}.jsonl`、resolve 后仍在 staging 目录内（挡绝对路径 / `../` 穿越）
 
-## 威胁模型：snapshot.txt 本身未签名（显式声明）
+## 威胁模型与验签分档
 
-指针文件不签名是**已知且接受的残余风险**，边界如下：
+**验签强度分两档，生产必须 signed（发布器对 unsigned 发布打 stderr 告警）**：
 
-- **最坏效果是 rollback，不是数据伪造**：能改写 snapshot.txt 的一方（VPS/
-  nginx 被攻陷、明文 HTTP 中间人）只能把客户端指向 `snapshots/` 里**已存在的
-  旧快照**——旧 manifest + 旧签名对仍然验签通过。数据真实性由 Ed25519 签名
-  保证（无私钥造不出能过验签的 manifest），指针影响的是新鲜度/可用性，
-  不是数据完整性
-- **新鲜度兜底**：客户端按 `manifest.generatedAt` 做新鲜度监控（超 N 小时
-  未更新 → ProviderHealth `.degraded`，DATA006 缺口语义）——陈旧数据被
-  标记为陈旧，不冒充新鲜；generatedAt 服务端 fail-closed（staging 缺失/非法
-  拒发），无法经发布链伪造
-- **无法逃逸快照目录**：客户端对指针内容做白名单校验（`[0-9A-Za-z_-]{1,64}`，
-  无 `/` 无 `..`），指向不存在的快照 → 404 → `unavailable` 降级，不是注入
+- **signed（生产强制：`--signing-key` + App 端验签公钥都配齐）**：
+  - VPS/nginx 被攻陷的最坏效果是 **rollback，不是数据伪造**：无私钥造不出
+    能过验签的 manifest，只能把客户端指向 `snapshots/` 里已存在的旧快照
+    （旧 manifest + 旧签名对仍验签通过）。数据真实性由 Ed25519 保证，
+    攻陷影响的是新鲜度/可用性
+  - **指针 `snapshot.txt` 本身不签名（signed 模式下的已知残余风险）**：
+    能改写指针的一方（服务端攻陷、明文 HTTP 中间人）可指回旧快照。兜底：
+    `manifest.generatedAt` 新鲜度监控（超 N 小时 → ProviderHealth
+    `.degraded`，陈旧不冒充新鲜）；generatedAt 服务端严格解析（真实日历
+    时间 + round-trip）+ fail-closed，无法经发布链伪造
+- **unsigned（仅测试 / 受信网络）**：不签名时 sha256 只对**同源 manifest**
+  负责——攻陷方可同时改数据与 manifest 里的 sha256，客户端将**接受伪造
+  数据**。此模式不提供对抗服务端攻陷的任何真实性保证（只防传输损坏/
+  截断），不得用于生产
+- **指针无法逃逸快照目录**：客户端对指针内容做白名单校验
+  （`[0-9A-Za-z_-]{1,64}`，无 `/` 无 `..`），指向不存在的快照 → 404 →
+  `unavailable` 降级，不是注入
 - **建议 HTTPS**（Cloudflare 免费层即含）：明文 HTTP 下 rollback 风险扩大到
   路径上的中间人，而不只是服务端攻陷
-- **慢客户端 vs prune**：保留最近 5 个快照；若一次 sync 期间发生超过 5 轮
-  发布导致固定快照被清理，`fetchFile` 404 → 本轮失败 + 断路器退避，下轮
-  重新取指针自愈——不产生半批数据
+- **慢客户端 vs prune（半批语义，如实声明）**：RemoteStagingProvider 按
+  **单文件**粒度追加（文件 → sha 验证 → append → state checkpoint → 清
+  journal）——若 sync 中途失败（如快照被清理后 fetchFile 404），**已完成的
+  文件保留**，不会回滚（幂等：下轮经新 manifest 只补缺失文件，PIT 历史可信）。
+  快照清理因此带**时间宽限期**（默认 24h 内不清理，另保最新 5 个 + 指针指向
+  的）：日级 cron 下慢客户端正读的快照不可能被删，该场景实际不可达；
+  宽限期需 ≥ 最长 sync 周期，`--grace-seconds` 可调
 
 `akshare_collector.py` 的单一实现在 `macos-app/InvestmentIntelligenceV2/Collector/`
 （App 侧可选组件，本地与远程两条链共用，字节级一致是跨语言契约的一部分）。

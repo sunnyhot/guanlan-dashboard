@@ -66,6 +66,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -81,6 +82,11 @@ REPO_COLLECTOR = (
 
 PUBLISH_MANIFEST_VERSION = 1
 SNAPSHOT_KEEP_DEFAULT = 5
+# 快照清理宽限期：宽限期内（按快照目录 mtime）的快照一律保留——客户端固定
+# 快照 ID 后整批读取，纯数量保留（最近 N 个）会在「慢客户端 sync 期间又发布
+# N 轮」时删掉它在读的快照，后续 fetchFile 404、留下已完成文件的半批追加
+# （审查 P2）。宽限期需覆盖最长 sync 周期；日级 cron 下 24h 足够。
+SNAPSHOT_GRACE_SECONDS_DEFAULT = 24 * 3600
 
 # argparse 解析后回填（collector_module 定位 collector 时读取）；None = 默认搜索
 _collector_script_override: Optional[str] = None
@@ -200,6 +206,24 @@ SNAPSHOT_NAME_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
 ISO_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
+def parse_iso_z(value: str) -> Optional[datetime]:
+    """严格解析 ISO8601 UTC（无小数秒）。
+
+    三层校验：正则外形 → strptime 真实日历（2026-02-30 / 25:61:61 拒收）→
+    round-trip 逐字节相等（防任何归一化路径——Swift JSONDecoder 会把
+    25:61:61 之类滚算成次日，新鲜度锚点不能失真）。不合法返回 None。
+    """
+    if not ISO_Z_RE.match(value):
+        return None
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+    if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") != value:
+        return None
+    return parsed
+
+
 def new_snapshot_dir(publish_root: Path) -> Path:
     """创建本轮快照目录（publish_root/snapshots/<UTC 时间戳>，重名加序号）。"""
     snapshots = publish_root / "snapshots"
@@ -239,8 +263,17 @@ def current_pointer_value(publish_root: Path) -> Optional[str]:
     return value if SNAPSHOT_NAME_RE.match(value) else None
 
 
-def prune_snapshots(publish_root: Path, keep: int) -> None:
-    """保留最近 keep 个快照 + 指针指向的那个，其余清理（回滚窗口之外的数据）。"""
+def prune_snapshots(
+    publish_root: Path,
+    keep: int,
+    grace_seconds: int = SNAPSHOT_GRACE_SECONDS_DEFAULT,
+) -> None:
+    """清理旧快照：保留指针指向的 + 最新 keep 个 + **宽限期内全部**。
+
+    宽限期按快照目录 mtime（快照 write-once，mtime ≈ 创建时间）判断——
+    纯数量保留会在慢客户端 sync 期间删掉它正读的快照（fetchFile 404 →
+    半批追加），时间宽限期保证「正在被读的快照」不可能被清（审查 P2）。
+    """
     snapshots = publish_root / "snapshots"
     if not snapshots.is_dir():
         return
@@ -248,9 +281,16 @@ def prune_snapshots(publish_root: Path, keep: int) -> None:
     keep_names = {d.name for d in dirs[: max(keep, 1)]}
     if (pinned := current_pointer_value(publish_root)) is not None:
         keep_names.add(pinned)
+    cutoff = time.time() - max(grace_seconds, 0)
     for d in dirs:
-        if d.name not in keep_names:
-            shutil.rmtree(d, ignore_errors=True)
+        if d.name in keep_names:
+            continue
+        try:
+            if d.stat().st_mtime >= cutoff:
+                continue   # 宽限期内：可能正被慢客户端读取
+        except OSError:
+            continue   # stat 不了（并发删除等）——保守保留
+        shutil.rmtree(d, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +326,7 @@ def finalize_snapshot(
     collector_version: str,
     generated_at: str,
     signing_key: Optional[Path],
+    grace_seconds: int = SNAPSHOT_GRACE_SECONDS_DEFAULT,
 ) -> bool:
     """快照内完成 manifest（+签名）→ 原子切换 current → 清理旧快照。
 
@@ -308,13 +349,26 @@ def finalize_snapshot(
             shutil.rmtree(snapshot, ignore_errors=True)
             print(f"[remote-publish] 签名失败（快照已废弃，指针未切换）: {exc}", file=sys.stderr)
             return False
+    else:
+        # unsigned 分档告警（审查 P1）：sha256 只对同源 manifest 负责，攻陷方可
+        # 同时改数据与 sha256——该模式不提供对抗服务端攻陷的真实性保证
+        print(
+            "[remote-publish] 警告：未启用签名（unsigned 仅限测试/受信网络；"
+            "生产部署必须 --signing-key + 客户端配置验签公钥）",
+            file=sys.stderr,
+        )
     switch_current_pointer(publish_root, snapshot)
-    prune_snapshots(publish_root, keep=SNAPSHOT_KEEP_DEFAULT)
+    prune_snapshots(publish_root, keep=SNAPSHOT_KEEP_DEFAULT, grace_seconds=grace_seconds)
     print(f"[remote-publish] snapshot.txt → {snapshot.name}（{len(file_entries)} 文件）")
     return True
 
 
-def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Optional[Path]) -> int:
+def publish_from_staging(
+    staging_dir: Path,
+    publish_root: Path,
+    signing_key: Optional[Path],
+    grace_seconds: int = SNAPSHOT_GRACE_SECONDS_DEFAULT,
+) -> int:
     """常规模式：读 staging manifest.json，校验后把 ok dataset 装进新快照。"""
     try:
         staging_manifest = json.loads((staging_dir / "manifest.json").read_text(encoding="utf-8"))
@@ -322,13 +376,14 @@ def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Opt
         print(f"[remote-publish] staging manifest 不可读: {exc}", file=sys.stderr)
         return 2
 
-    # 新鲜度锚点 fail-closed（审查 P1）：generatedAt 缺失/非法时拒绝发布——
-    # 伪造为当前时间会让陈旧数据（schema 漂移的受害者）看起来刚刚产出
+    # 新鲜度锚点 fail-closed（审查 P1）：generatedAt 缺失/外形/日历非法时拒绝
+    # 发布——伪造为当前时间会让陈旧数据（schema 漂移的受害者）看起来刚刚产出；
+    # Swift 侧会把 25:61:61 之类滚算成次日，严格解析防锚点失真（审查 P2）
     generated_at = staging_manifest.get("generatedAt")
-    if not isinstance(generated_at, str) or not ISO_Z_RE.match(generated_at):
+    if not isinstance(generated_at, str) or parse_iso_z(generated_at) is None:
         print(
-            "[remote-publish] staging manifest 缺少合法 generatedAt（ISO8601 UTC），"
-            "新鲜度锚点不可伪造，拒绝发布",
+            "[remote-publish] staging manifest 缺少合法 generatedAt"
+            "（ISO8601 UTC，真实日历时间，无小数秒），新鲜度锚点不可伪造，拒绝发布",
             file=sys.stderr,
         )
         return 2
@@ -369,11 +424,16 @@ def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Opt
         return 1
 
     return 0 if finalize_snapshot(
-        publish_root, snapshot, file_entries, collector_version, generated_at, signing_key
+        publish_root, snapshot, file_entries, collector_version, generated_at, signing_key,
+        grace_seconds=grace_seconds,
     ) else 2
 
 
-def publish_selftest(publish_root: Path, signing_key: Optional[Path]) -> int:
+def publish_selftest(
+    publish_root: Path,
+    signing_key: Optional[Path],
+    grace_seconds: int = SNAPSHOT_GRACE_SECONDS_DEFAULT,
+) -> int:
     """离线自检：固定样本（selftest_build）走与生产相同的序列化 + 发布路径。"""
     ak = collector_module()
     generated_at = ak.iso_z(datetime.now(timezone.utc))
@@ -384,7 +444,8 @@ def publish_selftest(publish_root: Path, signing_key: Optional[Path]) -> int:
         digest = ak.write_jsonl_atomic(dst, records)
         file_entries.append({"name": dst.name, "sha256": digest, "byteSize": dst.stat().st_size})
     return 0 if finalize_snapshot(
-        publish_root, snapshot, file_entries, ak.COLLECTOR_VERSION, generated_at, signing_key
+        publish_root, snapshot, file_entries, ak.COLLECTOR_VERSION, generated_at, signing_key,
+        grace_seconds=grace_seconds,
     ) else 2
 
 
@@ -400,6 +461,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--collector-script",
         help="akshare_collector.py 路径（默认搜索：脚本同目录 → 仓库源码树位置）",
+    )
+    parser.add_argument(
+        "--grace-seconds", type=int, default=SNAPSHOT_GRACE_SECONDS_DEFAULT,
+        help="快照清理宽限期（秒，默认 86400；需 ≥ 客户端最长 sync 周期）",
     )
     parser.add_argument(
         "--selftest", action="store_true",
@@ -422,8 +487,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     signing_key = Path(args.signing_key) if args.signing_key else None
 
     if args.selftest:
-        return publish_selftest(publish_root, signing_key)
-    return publish_from_staging(Path(args.staging_dir), publish_root, signing_key)
+        return publish_selftest(publish_root, signing_key, grace_seconds=args.grace_seconds)
+    return publish_from_staging(
+        Path(args.staging_dir), publish_root, signing_key, grace_seconds=args.grace_seconds
+    )
 
 
 if __name__ == "__main__":

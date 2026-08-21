@@ -404,16 +404,29 @@ macos-app/
 >   **客户端快照固定读取**：一次 sync 只读一次 snapshot.txt 固定快照 ID，
 >   manifest / 签名 / 文件整批从 snapshots/<id>/ 不可变路径读取——中途发布
 >   不破坏批次内部一致性（防「旧 manifest + 新签名」误判篡改）。
->   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，10 项）：Python
+>   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，11 项）：Python
 >   `--selftest` / staging 真实产物 → Swift RemoteStagingProvider 端到端
 >   （manifest wire 契约 + 指针 / sha256 完整性 / 增量轮 / 篡改拒收 / Ed25519——
 >   Python cryptography 签 → CryptoKit 验，篡改 manifest 拒收整批 / 部分
 >   dataset 重发不登记旧文件且 generatedAt 与 staging 逐字节相等 / 签名失败
 >   指针不动且线上仍可验签消费 / generatedAt 缺失 fail-closed / staging 路径
->   穿越拒收 / keygen 无 collector 依赖）。nginx/Cloudflare 部署
+>   穿越拒收 / keygen 无 collector 依赖 / 非法日历 generatedAt（2026-02-30、
+>   25:61:61）fail-closed）。nginx/Cloudflare 部署
 >   指引（托管整个发布根）见 remote-collector/README。
 >
-> **审查修复记录（2026-08-21，三轮，PROV-3b）**：
+> **审查修复记录（2026-08-21，四轮，PROV-3b）**：
+> - 第四轮（1×P1 + 2×P2）：**威胁模型分档**——「最坏 rollback」结论只适用
+>   signed 模式；unsigned（不传 --signing-key / 客户端不配公钥）下攻陷方可
+>   同时改数据与 manifest sha256，客户端接受伪造数据。DATA010 §5 + README
+>   显式分档（signed = 生产强制；unsigned = 仅测试/受信网络，发布器对
+>   unsigned 发布打 stderr 告警）。**generatedAt 严格日历校验**——正则后
+>   加 strptime 真实日历 + round-trip 逐字节（2026-02-30 / 25:61:61 拒收
+>   exit 2，防 Swift JSONDecoder 滚算致锚点失真）；契约测试改原始字符串
+>   比较（不经 Date 归一化）+ 非法日历用例。**快照清理时间宽限期**——
+>   纯数量保留会在慢客户端 sync 期间删掉正读的快照（fetchFile 404 +
+>   半批追加）；prune 改「最新 5 + 指针 + 宽限期内（默认 24h，mtime，
+>   --grace-seconds 可调）」，README 半批语义如实修正（已完成文件不回滚，
+>   幂等下轮补缺）。
 > - 第一轮（2×P1 + 2×P2）：manifest 改显式登记本轮通过校验的文件（不再扫
 >   目录，旧 dataset 不带新 generatedAt 重新上架），generatedAt 取 staging
 >   声明的数据产出时间；发布改 snapshots/<ts>/ 快照 + current symlink 原子

@@ -111,13 +111,24 @@ per-key 限流 + 总带宽 cap
 - 可选：manifest 用 Ed25519 私钥签名，App 内置公钥验签——即使 VPS 被攻陷、
   nginx 被替换，攻击者无私钥也无法伪造能过验签的 staging
 - SchemaValidator（PROV-1）是完整性兜底：即使签名层失效，结构非法的 staging 仍被拒
-- **残余风险（显式接受）**：快照指针 `snapshot.txt` 本身不签名——最坏效果是
-  被指回旧快照（rollback），旧 manifest + 签名对仍验签通过；数据真实性不受
-  影响，新鲜度由 `generatedAt` 监控兜底（客户端超时 → degraded，陈旧不冒充
-  新鲜）。实施细节与完整威胁模型见 `remote-collector/README.md`
+- **验签强度分档（生产必须 signed）**：
+  - **signed（生产强制）**：服务端 `--signing-key` + 客户端验签公钥都配置。
+    VPS/nginx 被攻陷的最坏效果是 **rollback**——攻击者无私钥伪造不了能过验签
+    的 manifest，只能把客户端指向旧快照（旧 manifest + 旧签名对仍验签通过），
+    数据真实性不受影响
+  - **unsigned（仅测试 / 受信网络）**：不配置签名时，sha256 只对「同源
+    manifest」负责——攻陷方可同时改数据与 manifest 里的 sha256，客户端将
+    **接受伪造数据**。「最坏 rollback」的结论**只适用于 signed 模式**；
+    unsigned 模式不提供对抗服务端攻陷的任何真实性保证（只防传输损坏/截断），
+    生产部署缺任一侧签名配置视为配置错误（发布器对 unsigned 发布打stderr告警）
+- **残余风险（signed 模式下显式接受）**：快照指针 `snapshot.txt` 本身不签名
+  ——最坏效果是被指回旧快照（rollback）；新鲜度由 `generatedAt` 监控兜底
+  （客户端超时 → degraded，陈旧不冒充新鲜；服务端严格解析 + fail-closed，
+  无法经发布链伪造）。实施细节与完整威胁模型见 `remote-collector/README.md`
 - **批次一致性**：客户端只读一次指针固定快照 ID，manifest / 签名 / 文件整批
   从 `snapshots/<id>/` 不可变路径读取——并发发布不会让一次 sync 混入两个
-  快照（防「旧 manifest + 新签名」误判篡改）
+  快照（防「旧 manifest + 新签名」误判篡改）；快照清理带时间宽限期，
+  慢客户端正读的快照不会被删
 
 ## Consequences
 

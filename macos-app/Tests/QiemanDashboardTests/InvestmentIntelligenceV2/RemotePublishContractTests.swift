@@ -293,13 +293,19 @@ final class RemotePublishContractTests: XCTestCase {
             try JSONSerialization.jsonObject(with: stagingManifestData) as? [String: Any]
         )
         let stagingGeneratedAt = try XCTUnwrap(stagingJSON["generatedAt"] as? String)
-        let formatter = ISO8601DateFormatter()
-        XCTAssertEqual(manifest.generatedAt, formatter.date(from: stagingGeneratedAt),
-                       "published generatedAt 应等于 staging 声明值: \(stagingGeneratedAt)")
+        // 逐字节（原始字符串）比较，不经 Date 归一化——Swift JSONDecoder 会把
+        // 非法日历值滚算成合法时间，Date 级比较测不出失真（审查 P2）
+        let publishedJSON = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: Data(contentsOf: serveDir.appendingPathComponent("manifest.json"))
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(publishedJSON["generatedAt"] as? String, stagingGeneratedAt,
+                       "published generatedAt 应与 staging 声明值逐字节相等")
         XCTAssertEqual(manifest.collectorVersion, "0.1.0")
     }
 
-    // MARK: - P1 回归：generatedAt 缺失/非法 fail-closed（新鲜度锚点不可伪造）
+    // MARK: - P1/P2 回归：generatedAt 缺失/非法日历 fail-closed（新鲜度锚点不可伪造）
 
     func testPublish_missingGeneratedAt_failsClosedPointerUntouched() throws {
         try publishSelftest()
@@ -319,6 +325,30 @@ final class RemotePublishContractTests: XCTestCase {
         XCTAssertEqual(publish.status, 2, "缺 generatedAt 应 fail-closed exit 2（stderr: \(publish.stderr)）")
         let pointerAfter = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
         XCTAssertEqual(pointerAfter, pointerBefore, "指针不得被缺锚点的发布切换")
+    }
+
+    func testPublish_invalidCalendarGeneratedAt_failsClosed() throws {
+        // 正则外形合法但日历非法的值：2026-02-30（不存在的日期）、25:61:61
+        // （越界时分秒——Swift JSONDecoder 会滚算成 2026-03-03T02:02:01Z，
+        // 新鲜度锚点失真）——服务端必须严格解析拒收
+        try publishSelftest()
+        let pointerBefore = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+
+        let staging = workDir.appendingPathComponent("bad-calendar-staging", isDirectory: true)
+        let collector = try runCollector(["--out-dir", staging.path, "--selftest"])
+        XCTAssertEqual(collector.status, 0)
+
+        for bad in ["2026-02-30T00:00:00Z", "2026-08-21T25:61:61Z"] {
+            let manifestURL = staging.appendingPathComponent("manifest.json")
+            var json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+            json["generatedAt"] = bad
+            try JSONSerialization.data(withJSONObject: json).write(to: manifestURL)
+
+            let publish = try runPublisher(["--staging-dir", staging.path, "--publish-dir", publishRoot.path])
+            XCTAssertEqual(publish.status, 2, "非法日历 \(bad) 应 fail-closed exit 2（stderr: \(publish.stderr)）")
+            let pointer = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+            XCTAssertEqual(pointer, pointerBefore, "\(bad) 不得切换指针")
+        }
     }
 
     // MARK: - P1 回归：manifest 与签名事务提交（签名失败 current 不动）
