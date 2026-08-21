@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.0/QiemanDashboard-4.2.0.zip",
-    "name" : "QiemanDashboard-4.2.0.zip",
-    "sha256" : "79e9d3ff8baaadbf298f1254c3ce77a83e3377cf70afefdeb084c57c444b07c1",
-    "size" : 7913844
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.1/QiemanDashboard-4.2.1.zip",
+    "name" : "QiemanDashboard-4.2.1.zip",
+    "sha256" : "a73347a46f4b3e5f4254e978f7cf52b361e59d2faaaab5add9e32a792b4b8f56",
+    "size" : 7922789
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.0/QiemanDashboard-4.2.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.1/QiemanDashboard-4.2.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.2.0.zip",
-      "size" : 7913844
+      "name" : "QiemanDashboard-4.2.1.zip",
+      "size" : 7922789
     }
   ],
-  "body" : "Xcode 工程同步 v4.2.0\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.2.0",
-  "name" : "QiemanDashboard v4.2.0",
-  "notes" : "Xcode 工程同步 v4.2.0\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩",
+  "body" : "Xcode 工程同步 v4.2.1(版本号)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.2.1",
+  "name" : "QiemanDashboard v4.2.1",
+  "notes" : "Xcode 工程同步 v4.2.1(版本号)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试",
   "published_at" : "",
-  "sha256" : "79e9d3ff8baaadbf298f1254c3ce77a83e3377cf70afefdeb084c57c444b07c1",
-  "tag" : "v4.2.0",
-  "tag_name" : "v4.2.0",
-  "version" : "4.2.0"
+  "sha256" : "a73347a46f4b3e5f4254e978f7cf52b361e59d2faaaab5add9e32a792b4b8f56",
+  "tag" : "v4.2.1",
+  "tag_name" : "v4.2.1",
+  "version" : "4.2.1"
 }
