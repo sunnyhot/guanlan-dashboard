@@ -96,13 +96,28 @@ protocol FundHoldingRepository: Sendable {
     ) -> FundHoldingSnapshot?
 }
 
-// MARK: - 基本面域（推迟到 REPO-1b，审查 P2 2026-08-12）
+// MARK: - 基本面域（REPO-1b，2026-08-21 落地）
 //
-// FundamentalObservation 类型在 DOM-5 未定义（Epic 7+ 引入 factor 时补），
-// 此前不强行定义空 FundamentalRepository 占位（空协议会让 REPO-1 的「八域协议」
-// 名不副实）。该域拆到 REPO-1b（rollout），类型就绪后再加入 Repository 聚合。
-// 当前 Repository 聚合覆盖七域（Instrument/Market/NAV/FundHolding/Macro/
-// CorporateAction/Calendar），不含 Fundamental。
+// FundamentalObservation 类型已定义（PROV-4 的 FundamentalFactPayload 提供了
+// 真实 payload schema，SEC Adapter 已产 .fundamentalFact ProviderRecord），
+// 第八域加入 Repository 聚合。维度是 LegalEntity（SEC CIK），查询强制
+// KnowledgeContext（economicKnowledge 取可知最新修订，exactSnapshot 取全部
+// vintage；分组键是 (metricKey, unit, periodStart, periodEnd)，见 InMemoryRepository）。
+
+/// 基本面事实查询（LegalEntity 维度，对齐 SEC XBRL multi-vintage）。
+protocol FundamentalRepository: Sendable {
+    /// 法人的基本面事实序列。
+    ///
+    /// - `metricKey` 非 nil 时只返回该指标（如 "revenue"）；
+    /// - `economicKnowledge(asOf:)`：每个 (metricKey, unit, periodStart,
+    ///   periodEnd) 期间只返回 availableAt ≤ asOf 的最新 vintage（修订自动生效）
+    /// - `exactSnapshot(at:)`：返回 effectiveAt = at 的全部 vintage
+    func fundamentalObservations(
+        entityID: LegalEntityID,
+        metricKey: String?,
+        context: KnowledgeContext
+    ) -> [FundamentalObservation]
+}
 
 // MARK: - 宏观域
 
@@ -139,19 +154,19 @@ protocol CalendarRepository: Sendable {
 
 // MARK: - 聚合 Repository
 
-/// 所有 Repository 子协议的聚合（七域，Fundamental 域推迟到 REPO-1b）。
+/// 所有 Repository 子协议的聚合（八域，REPO-1b 起含 Fundamental）。
 ///
 /// InMemoryRepository / GRDBRepository 实现此聚合协议，业务层只依赖此接口
 /// （或具体子协议，按需）。这样测试可以 mock 单个域，生产用全量实现。
 ///
-/// 当前覆盖七域：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding /
-/// Macro / CorporateAction / Calendar。Fundamental 域待 FundamentalObservation
-/// 类型定义后加入（REPO-1b，Epic 7+）。
+/// 覆盖八域：Instrument / MarketTimeSeries / NAVTimeSeries / FundHolding /
+/// Fundamental / Macro / CorporateAction / Calendar。
 protocol Repository: Sendable,
     InstrumentRepository,
     MarketTimeSeriesRepository,
     NAVTimeSeriesRepository,
     FundHoldingRepository,
+    FundamentalRepository,
     MacroRepository,
     CorporateActionRepository,
     CalendarRepository {

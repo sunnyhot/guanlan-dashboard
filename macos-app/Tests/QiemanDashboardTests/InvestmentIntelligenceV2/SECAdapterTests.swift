@@ -7,7 +7,8 @@ import XCTest
 /// 真实缓存行为）。覆盖：多 vintage 事实行、PIT 时间语义（end→effectiveAt /
 /// filed→publishedAt）、extractionMethod=.xbrlFact（验收项）、schema 校验、
 /// staging round-trip、错误映射（403/429→unavailable、目录 notFound、缺 us-gaap
-/// →schemaMismatch）、ObservationFactory 显式拒收（REPO-1b 前）。
+/// →schemaMismatch）。fundamentalFact → FundamentalObservation 的 Canonical
+/// 转换链自 REPO-1b 起在 FundamentalRepositoryTests 覆盖。
 final class SECAdapterTests: XCTestCase {
 
     private let ingested = Date(timeIntervalSince1970: 1_724_000_000)
@@ -264,31 +265,7 @@ final class SECAdapterTests: XCTestCase {
         XCTAssertEqual(reread, partition.valid)
     }
 
-    // MARK: - ObservationFactory 显式拒收（REPO-1b 前）
-
-    func testObservationFactory_rejectsFundamentalFactUntilRepo1b() async throws {
-        let adapter = makeAdapter(responses: defaultResponses)
-        let result = try await adapter.fetchWithDiagnostics(
-            code: code, from: .distantPast, to: .distantFuture
-        )
-        let factory = ObservationFactory(
-            normalizer: TemporalNormalizer(calendar: SECAdapterTests.WeekdayCalendar()),
-            resolver: IdentityResolver(identifiers: [])
-        )
-        for record in result.records {
-            XCTAssertThrowsError(
-                try factory.makeObservation(
-                    from: record,
-                    observationID: ObservationID(rawValue: "obs-test"),
-                    vintage: Vintage(announcementDate: record.publishedAt, publisherVersion: 1)
-                )
-            ) { error in
-                guard case ObservationFactoryError.canonicalConversionDeferred = error else {
-                    return XCTFail("expected canonicalConversionDeferred, got \(error)")
-                }
-            }
-        }
-    }
+    // MARK: - ObservationFactory 转换（REPO-1b 后的完整链路在 FundamentalRepositoryTests）
 
     // MARK: - 错误映射
 

@@ -35,6 +35,7 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     private var holdingSnapshots: [FundProductID: [FundHoldingSnapshot]] = [:]
     private var macroObservations: [InstrumentID: [MacroObservation]] = [:]
     private var corporateActions: [ListingID: [CorporateAction]] = [:]
+    private var fundamentals: [LegalEntityID: [FundamentalObservation]] = [:]
 
     // Calendar
     private let calendarBackend: TradingCalendar
@@ -153,6 +154,15 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
         lock.lock(); defer { lock.unlock() }
         corporateActions[action.listingID, default: []] = Self.upsertObservation(
             corporateActions[action.listingID, default: []], action
+        )
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ fundamental: FundamentalObservation) -> Self {
+        lock.lock(); defer { lock.unlock() }
+        fundamentals[fundamental.entityID, default: []] = Self.upsertObservation(
+            fundamentals[fundamental.entityID, default: []], fundamental
         )
         return self
     }
@@ -282,9 +292,38 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
         }
     }
 
-    // MARK: - FundamentalRepository
-    // Fundamental 域推迟到 REPO-1b（FundamentalObservation 类型未定义），
-    // 不在 Repository 聚合协议内，本类无需实现。
+    // MARK: - FundamentalRepository（REPO-1b）
+
+    func fundamentalObservations(
+        entityID: LegalEntityID,
+        metricKey: String?,
+        context: KnowledgeContext
+    ) -> [FundamentalObservation] {
+        lock.lock(); defer { lock.unlock() }
+        var all = fundamentals[entityID] ?? []
+        if let metricKey {
+            all = all.filter { $0.metricKey == metricKey }
+        }
+        // 分组键含 (metricKey, unit, periodStart, periodEnd)：revenue 与 assets
+        // 同 periodEnd、Q2 与 H1 区间同 periodEnd 都不互相覆盖——它们是不同事实；
+        // 同期间的多次申报（修订）在同一组内按 vintage 择新（ADR-DATA008）。
+        return Self.filterByContext(all, context: context) { obs in
+            FundamentalPeriodKey(
+                metricKey: obs.metricKey,
+                unit: obs.unit,
+                periodStart: obs.periodStart,
+                periodEnd: obs.periodEnd
+            )
+        }
+    }
+
+    /// 基本面事实的期间身份（economic 查询的分组键，REPO-1b）。
+    private struct FundamentalPeriodKey: Hashable {
+        let metricKey: String
+        let unit: String
+        let periodStart: Date?
+        let periodEnd: Date
+    }
 
     // MARK: - MacroRepository
 
@@ -327,14 +366,19 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     ///
     /// 行为（ADR-DATA002 §Decision 2 + ADR-DATA008）：
     /// - `economicKnowledge` / `operationalKnowledge`：先按 mode 过滤可见性，
-    ///   再按 `effectiveAt` 分组、每组只保留可见的最新 vintage（防修订版与原版
+    ///   再按 `grouping` 键分组、每组只保留可见的最新 vintage（防修订版与原版
     ///   同时进入时间序列导致因子重复计算，审查 P1 修复点）。
-    ///   同 (effectiveAt, vintage) 跨 Provider 时按确定性 tie-breaker 择优（REPO-2b）。
+    ///   同 (分组键, vintage) 跨 Provider 时按确定性 tie-breaker 择优（REPO-2b）。
     ///   若 `context.vintageFilter` 非空且精确匹配某 vintage，则只返回那一条。
     /// - `exactSnapshot`：返回 `effectiveAt == at` 的全部 vintage（不分组、不去重）。
+    ///
+    /// `grouping` 默认按 effectiveAt 分组（时间序列域：一天一条）。基本面域
+    /// 传期间键 (metricKey, unit, periodStart, periodEnd)——多个事实可共享
+    /// effectiveAt（REPO-1b）。
     static func filterByContext<T: CanonicalObservation>(
         _ observations: [T],
-        context: KnowledgeContext
+        context: KnowledgeContext,
+        grouping: (T) -> AnyHashable = { $0.temporalEnvelope.effectiveAt }
     ) -> [T] {
         // 精确 vintage 过滤优先：若指定且匹配，只返回那一条
         if let wanted = context.vintageFilter {
@@ -351,22 +395,25 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
                 .sorted { $0.vintage < $1.vintage }
         case .economicKnowledge, .operationalKnowledge:
             // 先按可见性过滤
-            // swiftlint:disable:next identifier_name
             let visible = observations.filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
-            // 按 effectiveAt 分组，每组只保留择优后的单条（REPO-2b：含跨源去重）
-            var bestPerDay: [Date: T] = [:]
+            // 按 grouping 键分组，每组只保留择优后的单条（REPO-2b：含跨源去重）
+            var bestPerGroup: [AnyHashable: T] = [:]
             for obs in visible {
-                let day = obs.temporalEnvelope.effectiveAt
-                if let existing = bestPerDay[day] {
+                let key = grouping(obs)
+                if let existing = bestPerGroup[key] {
                     if isPreferred(candidate: obs, over: existing) {
-                        bestPerDay[day] = obs
+                        bestPerGroup[key] = obs
                     }
                 } else {
-                    bestPerDay[day] = obs
+                    bestPerGroup[key] = obs
                 }
             }
-            return bestPerDay.values.sorted {
-                $0.temporalEnvelope.effectiveAt < $1.temporalEnvelope.effectiveAt
+            // 多组可共享 effectiveAt（如基本面多指标同期），id 兜底保证跨运行稳定
+            return bestPerGroup.values.sorted {
+                if $0.temporalEnvelope.effectiveAt != $1.temporalEnvelope.effectiveAt {
+                    return $0.temporalEnvelope.effectiveAt < $1.temporalEnvelope.effectiveAt
+                }
+                return $0.id.rawValue < $1.id.rawValue
             }
         }
     }

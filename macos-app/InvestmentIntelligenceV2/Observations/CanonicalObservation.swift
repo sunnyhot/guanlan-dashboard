@@ -348,6 +348,95 @@ struct MacroObservation: CanonicalObservation {
     }
 }
 
+// MARK: - FundamentalObservation（基本面事实，REPO-1b）
+
+/// 基本面事实观测（收入 / 净利润 / 资产 / 负债 / 现金流等，REPO-1b）。
+///
+/// **维度是 LegalEntity**（不是 Instrument/Listing）：SEC XBRL 事实挂在 CIK 上，
+/// CIK 在 Canonical Identity 五层中指向发行人（ADR-DATA001 §13 ISIN/CIK 路径）。
+/// 业务层从 Instrument 出发时经 `Instrument.issuerID` / `issuedBy` 关系找到实体。
+///
+/// **期间语义**：`periodStart == nil` 表示时点项（Assets 等存量），非 nil 表示
+/// 流量项（Revenue 等区间值）。同一 metricKey 下「Q2 区间」与「H1 区间」可能
+/// 共享 periodEnd——它们是不同事实，Repository 的 economic 查询按
+/// (metricKey, unit, periodStart, periodEnd) 分组取最新 vintage，不会互相覆盖。
+///
+/// **multi-vintage**（ADR-DATA008）：同一期间被多次申报（10-Q 初报 → 10-K 修订）
+/// 是不同 publishedAt 的多条观测，exactSnapshot 可见全部，economicKnowledge
+/// 只取可知最新（修订后值）。
+struct FundamentalObservation: CanonicalObservation {
+    let id: ObservationID
+    /// 事实归属的发行公司（SEC CIK 的 Canonical 目标）
+    let entityID: LegalEntityID
+    let temporalEnvelope: TemporalEnvelope
+    let availabilityProvenance: AvailabilityProvenance
+    let dataQuality: DataQuality
+    let vintage: Vintage
+
+    /// 标准化指标 key（"revenue" / "netIncome" / ...，由 MetricSpec 配置驱动）
+    let metricKey: String
+    /// 申报原始 XBRL 概念名（保留概念切换历史，供审计；同期间修订换标签时
+    /// economic 查询按 vintage 择新，不因 concept 不同而双计）
+    let concept: String
+    /// 事实值（量纲在 unit 声明）
+    let value: Decimal
+    /// XBRL unit 原始名（如 "USD"、"shares"）。XBRL unit 是跨申报人标准化标识，
+    /// 非单一 Provider 私有代码，保留原文
+    let unit: String
+    /// 期间开始（流量项非 nil；时点项为 nil）
+    let periodStart: Date?
+    /// 期间结束 / 时点日
+    let periodEnd: Date
+    /// 申报表单类型
+    let form: FilingForm
+    /// XBRL frame（如 "CY2023Q2"，可选）
+    let frame: String?
+    /// 提取方式（XBRL fact 恒 .xbrlFact，与 LLM extracted fact 类型层区分，DOM-9）
+    let extractionMethod: EvidenceExtractionMethod
+
+    /// 定期报告表单（与 SECResponseParser 接受范围一致）。
+    enum FilingForm: String, Sendable, Codable, Hashable, CaseIterable {
+        case form10Q = "10-Q"
+        case form10K = "10-K"
+        case form20F = "20-F"
+        case form40F = "40-F"
+    }
+
+    init(
+        id: ObservationID,
+        entityID: LegalEntityID,
+        temporalEnvelope: TemporalEnvelope,
+        availabilityProvenance: AvailabilityProvenance,
+        dataQuality: DataQuality,
+        vintage: Vintage,
+        metricKey: String,
+        concept: String,
+        value: Decimal,
+        unit: String,
+        periodStart: Date?,
+        periodEnd: Date,
+        form: FilingForm,
+        frame: String?,
+        extractionMethod: EvidenceExtractionMethod
+    ) {
+        self.id = id
+        self.entityID = entityID
+        self.temporalEnvelope = temporalEnvelope
+        self.availabilityProvenance = availabilityProvenance
+        self.dataQuality = dataQuality
+        self.vintage = vintage
+        self.metricKey = metricKey
+        self.concept = concept
+        self.value = value
+        self.unit = unit
+        self.periodStart = periodStart
+        self.periodEnd = periodEnd
+        self.form = form
+        self.frame = frame
+        self.extractionMethod = extractionMethod
+    }
+}
+
 // MARK: - CorporateAction（公司行动）
 
 /// 公司行动（分红 / 送股 / 拆股 / 合并）。

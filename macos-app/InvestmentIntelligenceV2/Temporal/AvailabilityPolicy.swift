@@ -4,7 +4,8 @@ import Foundation
 //
 // availableAt 是经济可知语义，由版本化 AvailabilityPolicy 计算，
 // 不等于 publishedAt 也不等于 ingestedAt（ADR-DATA005 §Decision）。
-// V1 保守规则集覆盖三类数据（rollout DOM-7）。
+// V1 保守规则集覆盖五类数据（fund NAV / market close / fund disclosure /
+// macro release / filing release，rollout DOM-7 + PROV-5 + REPO-1b 渐进补齐）。
 //
 // 审查 P1 修复点：
 // 1. rule 数据化为 AvailabilityRule 结构（base + offset + jurisdictionSource），
@@ -48,6 +49,8 @@ enum AvailabilityPolicyKind: String, Sendable, Codable, Hashable, CaseIterable {
     case fundDisclosure = "FUND_DISCLOSURE"
     /// 宏观指标发布（如 FRED GDP/CPI）：availableAt 基于发布日 realtime_start（PROV-5）
     case macroRelease = "MACRO_RELEASE"
+    /// 监管申报发布（如 SEC XBRL 事实随 10-Q/10-K filed 日进入公开领域）（REPO-1b）
+    case filingRelease = "FILING_RELEASE"
 }
 
 /// Policy 来源。
@@ -151,13 +154,15 @@ extension AvailabilityPolicy {
 
 // MARK: - V1 保守规则集（ADR-DATA005 §Decision 1）
 
-/// V1 保守规则集：三类数据各自的 policy。
+/// V1 保守规则集：每类观测数据各自的 policy。
 ///
 /// 所有 V1 policy 的 offset 都是 +1 交易日（保守：宁可少算不可多算，
 /// ADR-DATA005 §Decision 3）。差异在 base 字段：
 /// - FundNAV：base = effectiveAt（navDate）
 /// - MarketClose：base = effectiveAt（tradingDay）
 /// - FundDisclosure：base = publishedAt（announcementDate）
+/// - MacroRelease：base = publishedAt（realtime_start 发布日，PROV-5）
+/// - FilingRelease：base = publishedAt（filed 申报日，REPO-1b）
 enum AvailabilityPolicyV1 {
     /// 基金 NAV：T 日净值 T+1 日才可知。
     struct FundNAV: AvailabilityPolicy {
@@ -364,12 +369,67 @@ enum AvailabilityPolicyV1 {
         }
     }
 
-    /// V1 三类 policy 集合。
+    /// 监管申报发布：申报提交日（filed）+1 交易日才可知（REPO-1b）。
+    ///
+    /// SEC XBRL 事实（PROV-4）的 availableAt 基准。与 MacroRelease 的区别只在
+    /// 审计语义（监管申报 vs 宏观机构发布），规则同为 base=publishedAt、US 法域
+    /// （SEC 按美国日历收申报）。EDGAR 在 filed 当日即公开申报，但保守 V1 统一
+    /// +1 交易日（宁可少算不可多算，ADR-DATA005 §Decision 3），修订走新 version。
+    struct FilingRelease: AvailabilityPolicy {
+        let policyID = "filing_release"
+        let version = "v1"
+        let applicableKind: AvailabilityPolicyKind = .filingRelease
+        let provenance: AvailabilityPolicyProvenance = .manual
+        let rule: AvailabilityRule
+        init() {
+            rule = AvailabilityRule(
+                base: .publishedAt,
+                offset: .init(tradingDays: 1),
+                jurisdictionSource: .fixed(.unitedStates)
+            )
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case policyID, version, applicableKind, provenance, rule
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let decodedID = try c.decode(String.self, forKey: .policyID)
+            let decodedVersion = try c.decode(String.self, forKey: .version)
+            let decodedKind = try c.decode(AvailabilityPolicyKind.self, forKey: .applicableKind)
+            let decodedProvenance = try c.decode(AvailabilityPolicyProvenance.self, forKey: .provenance)
+            let decodedRule = try c.decode(AvailabilityRule.self, forKey: .rule)
+            guard decodedID == "filing_release", decodedVersion == "v1",
+                  decodedKind == .filingRelease,
+                  decodedProvenance == .manual,
+                  decodedRule == AvailabilityRule(
+                      base: .publishedAt, offset: .init(tradingDays: 1),
+                      jurisdictionSource: .fixed(.unitedStates)
+                  )
+            else {
+                throw AvailabilityPolicyDecodeError.identityMismatch(
+                    policyID: decodedID, version: decodedVersion
+                )
+            }
+            rule = decodedRule
+        }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(policyID, forKey: .policyID)
+            try c.encode(version, forKey: .version)
+            try c.encode(applicableKind, forKey: .applicableKind)
+            try c.encode(provenance, forKey: .provenance)
+            try c.encode(rule, forKey: .rule)
+        }
+    }
+
+    /// V1 保守规则集。
     static let all: [any AvailabilityPolicy] = [
         FundNAV(),
         MarketClose(),
         FundDisclosure(),
         MacroRelease(),
+        FilingRelease(),
     ]
 
     /// 按 kind 取 policy。
@@ -379,6 +439,7 @@ enum AvailabilityPolicyV1 {
         case .marketClose: return MarketClose()
         case .fundDisclosure: return FundDisclosure()
         case .macroRelease: return MacroRelease()
+        case .filingRelease: return FilingRelease()
         }
     }
 }

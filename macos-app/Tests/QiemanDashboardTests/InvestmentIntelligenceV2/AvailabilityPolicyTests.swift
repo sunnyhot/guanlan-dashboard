@@ -88,9 +88,20 @@ final class AvailabilityPolicyTests: XCTestCase {
         XCTAssertEqual(p.rule.jurisdictionSource, .fixed(.unitedStates))
     }
 
-    func testV1All_fourPolicies() {
-        // V1 四类 policy：FundNAV / MarketClose / FundDisclosure / MacroRelease（PROV-5）
-        XCTAssertEqual(AvailabilityPolicyV1.all.count, 4)
+    func testFilingReleasePolicy_structure() {
+        // REPO-1b：SEC 申报发布日（filed）为基准，法域固定 US
+        let p = AvailabilityPolicyV1.FilingRelease()
+        XCTAssertEqual(p.policyID, "filing_release")
+        XCTAssertEqual(p.version, "v1")
+        XCTAssertEqual(p.applicableKind, .filingRelease)
+        XCTAssertEqual(p.rule.base, .publishedAt)   // 申报提交日（filed）为基准
+        XCTAssertEqual(p.rule.offset.tradingDays, 1)
+        XCTAssertEqual(p.rule.jurisdictionSource, .fixed(.unitedStates))
+    }
+
+    func testV1All_fivePolicies() {
+        // V1 五类 policy：FundNAV / MarketClose / FundDisclosure / MacroRelease / FilingRelease
+        XCTAssertEqual(AvailabilityPolicyV1.all.count, 5)
         let kinds = AvailabilityPolicyV1.all.map(\.applicableKind)
         XCTAssertEqual(Set(kinds), Set(AvailabilityPolicyKind.allCases))
     }

@@ -240,8 +240,9 @@ macos-app/
 > `QiemanProviderAdapter` stub、fixture 的 prodCode 映射、M2 场景 1（基金跨 Provider）均已
 > 删除，场景从 5 个收敛为 4 个。`DataProviderID.qieman` 仅作 identity 层命名常量保留（非数据 Provider）。
 >
-> **已签收 Story（17 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
-> REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）、REPO-2b（2）。
+> **已签收 Story（19 点 / 30，审查确认）**：REPO-1（3）、REPO-2（3）、REPO-3（2）、
+> REPO-4（3，按新 lookup 定义）、REPO-5a（2）、REPO-5b（2）、REPO-2b（2）、
+> REPO-1b（2，2026-08-21）。
 >
 > **当前实现状态**（避免与下方 Story 表述冲突）：
 > - REPO-1 Repository 协议（七域，Fundamental 拆到 REPO-1b）——完整
@@ -270,6 +271,19 @@ macos-app/
 >   schema 漂移抛错、NaN/Infinity 防护、诊断覆盖度（complete/unsupported）；持仓通过注入
 >   的 FundLookThroughClient typed disclosure 转成 FundHoldingPayload，shares / marketValue
 >   缺口保留 nil。两条链路均产 ProviderRecord，可经 ProviderStaging JSONL 落地。
+> - REPO-1b FundamentalRepository——完整（2026-08-21）：`FundamentalObservation`
+>   （**LegalEntity 维度**，SEC CIK 的 Canonical 目标；periodStart nil = 时点项；
+>   封闭 `FilingForm` enum 10-Q/10-K/20-F/40-F，范围外表单拒收）+ `FundamentalRepository`
+>   第八域加入 Repository 聚合（KnowledgeContext 强制）+ InMemoryRepository 实现。
+>   **期间分组语义**：economic 查询按 (metricKey, unit, periodStart, periodEnd) 分组取
+>   最新 vintage——revenue/assets 同 periodEnd、Q2/H1 同 periodEnd 不互相塌缩（此前
+>   filterByContext 按 effectiveAt 分组会吞掉同日多事实）。ObservationFactory 解除
+>   `.fundamentalFact` 拒收（`canonicalConversionDeferred` case 删除），SEC 记录
+>   → FundamentalObservation 端到端打通；identity 要求 `sec_cik → LegalEntity`，
+>   其他维度拒收（真实映射由 SYNC-8 建立）。新增版本化
+>   `AvailabilityPolicyV1.FilingRelease`（filing_release v1：base=publishedAt、
+>   US 法域、+1 交易日，与 MacroRelease 审计分离）。10 个测试
+>   （FundamentalRepositoryTests）+ RepositoryContractTests/AvailabilityPolicyTests 同步。
 > - 字段缺口：天天基金 pingzhongdata 不直接披露分红（cumulativeDividendPerShare 留 nil）；
 >   持仓只有 weightPct（无 shares/marketValue）
 >
@@ -285,7 +299,6 @@ macos-app/
 >   （demo key 仅覆盖 IBM/MSFT 近 100 行，不含 2024-07 窗口），本机 Keychain/环境
 >   变量均未配置 → 场景 1 行情端两个候选都不可用。天天基金侧（场景 2/3/4 的事实
 >   样本）已验证可用。上述行情 Provider 连通性/配置解除前不得把 M2 标记为 Pass。
-> - REPO-1b FundamentalRepository 未实现（FundamentalObservation 类型未定义，Epic 7+）
 > 待真实 Provider 契约与连通性满足 §4.1 后，M2 才可正式标记 Pass。
 
 ---

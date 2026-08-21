@@ -12,19 +12,20 @@ final class RepositoryContractTests: XCTestCase {
     // MARK: - 子协议存在性（编译期检查：这些协议类型可被引用）
 
     func testRepositorySubProtocols_exist() {
-        // 七个子协议都存在（Fundamental 域推迟到 REPO-1b，审查 P2 2026-08-12）。
+        // 八个子协议（Fundamental 域自 REPO-1b 起加入，2026-08-21）。
         // 用元类型断言验证协议可被引用。
         let protos: [Any] = [
             InstrumentRepository.self,
             MarketTimeSeriesRepository.self,
             NAVTimeSeriesRepository.self,
             FundHoldingRepository.self,
+            FundamentalRepository.self,
             MacroRepository.self,
             CorporateActionRepository.self,
             CalendarRepository.self,
-            Repository.self,   // 聚合协议（七域）
+            Repository.self,   // 聚合协议（八域）
         ]
-        XCTAssertEqual(protos.count, 8)
+        XCTAssertEqual(protos.count, 9)
         // 每个元素都是非空（协议类型引用成功）
         protos.forEach { XCTAssertNotNil($0) }
     }
@@ -57,6 +58,36 @@ final class RepositoryContractTests: XCTestCase {
             context: .economicKnowledge(asOf: Date())
         )
         XCTAssertEqual(result.count, 0)
+    }
+
+    /// REPO-1b：Fundamental 域同样强制 KnowledgeContext（metricKey 可选过滤，
+    /// context 不可省略）。
+    private struct FundamentalContextEnforcingMock: FundamentalRepository {
+        func fundamentalObservations(
+            entityID: LegalEntityID,
+            metricKey: String?,
+            context: KnowledgeContext
+        ) -> [FundamentalObservation] {
+            _ = entityID; _ = metricKey; _ = context
+            return []
+        }
+    }
+
+    func testFundamentalRepo_requiresKnowledgeContext() {
+        let mock = FundamentalContextEnforcingMock()
+        let result = mock.fundamentalObservations(
+            entityID: LegalEntityID(rawValue: "ent_x"),
+            metricKey: nil,
+            context: .economicKnowledge(asOf: Date())
+        )
+        XCTAssertEqual(result.count, 0)
+        // metricKey 过滤是可选便捷参数，不改变 context 强制性
+        let filtered = mock.fundamentalObservations(
+            entityID: LegalEntityID(rawValue: "ent_x"),
+            metricKey: "revenue",
+            context: .exactSnapshot(at: Date())
+        )
+        XCTAssertEqual(filtered.count, 0)
     }
 
     // MARK: - 出参类型是 Canonical（无 Provider 原始代码）

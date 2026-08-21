@@ -25,8 +25,8 @@ import Foundation
 // **PIT 语义**（ADR-DATA005 + DATA008）：一条记录 = 一个 (concept, unit, start/end,
 // filed) 事实行。同一 concept 同一 period 的多次申报（10-Q 初报 → 10-K 修订）是
 // publishedAt 不同的多条记录，保留完整 vintage 历史；effectiveAt = 期间结束/时点日，
-// publishedAt = filed。Canonical 化（FundamentalObservation）在 REPO-1b 接入，
-// 此前记录只进 staging（ObservationFactory 显式拒收该 kind）。
+// publishedAt = filed。Canonical 化经 ObservationFactory 产 FundamentalObservation
+//（REPO-1b，providerCode `sec_cik` 需先登记 LegalEntity 映射）。
 //
 // **提取方式**（PROV-4 验收）：XBRL fact 是申报的机器可读字段，payload 携带
 // `extractionMethod = .xbrlFact`，与 LLM extracted fact（Epic 11）在类型层区分。
@@ -243,7 +243,7 @@ struct SECResponseParser: Sendable {
     /// 事实流 → ProviderRecord（kind = .fundamentalFact）。
     ///
     /// effectiveAt = 期间结束/时点日；publishedAt = filed（申报提交日）；
-    /// availableAt 由 policy 基于 publishedAt 推导（暂定 MacroRelease，US 交易日）。
+    /// availableAt 由 policy 基于 publishedAt 推导（FilingRelease v1，US 交易日，REPO-1b）。
     /// providerCode 用 `sec_cik`（SEC 权威键，**统一 10 位补零**，与 SEC 官方
     /// padded CIK URL 及目录口径一致——避免补零/未补零两套键混用，审查 P2），
     /// canonical 解析待 Identity Sync（SYNC-8）建立映射。

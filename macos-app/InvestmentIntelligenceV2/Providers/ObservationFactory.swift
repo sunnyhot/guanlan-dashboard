@@ -1,10 +1,11 @@
 import Foundation
 
-// MARK: - ObservationFactory（REPO-5a + REPO-5b：ProviderRecord → CanonicalObservation）
+// MARK: - ObservationFactory（REPO-5a + REPO-5b + REPO-1b：ProviderRecord → CanonicalObservation）
 //
 // 审查 P1 修复：TemporalNormalizer 只算时间包裹，ObservationFactory 才是完整的
 // ProviderRecord → CanonicalObservation 转换器。REPO-5a 覆盖 DailyBar + NAV，
-// REPO-5b 补 FundHolding + Macro + CorporateAction 三类（5 kind 完整）。
+// REPO-5b 补 FundHolding + Macro + CorporateAction 三类，REPO-1b 接入
+// fundamentalFact（FundamentalObservation，SEC XBRL）。六 kind 全部可转 Canonical。
 //
 // 流程：
 // 1. 按 record.kind 选 AvailabilityPolicy
@@ -23,9 +24,6 @@ enum ObservationFactoryError: Error, Equatable, Sendable {
     case identityUnresolved(providerCode: ProviderCode)
     /// 时间规范化失败（AvailabilityPolicy 推导失败或不变量违反）
     case temporalNormalizeFailed
-    /// 该 kind 的 Canonical 类型尚未定义（REPO-1b 前的 fundamentalFact），
-    /// Pipeline 显式拒收而非静默跳过
-    case canonicalConversionDeferred(kind: ProviderRecordKind)
 }
 
 /// ProviderRecord → CanonicalObservation 转换器。
@@ -49,13 +47,6 @@ struct ObservationFactory: Sendable {
         observationID: ObservationID,
         vintage: Vintage
     ) throws -> CanonicalObservationKind {
-        // fundamentalFact 的 Canonical 类型（FundamentalObservation）在 REPO-1b
-        // （Epic 7+）定义；此前 Pipeline 对该 kind 显式拒收（staging + schema 校验
-        // 仍可用），不静默转成其他观测类型。
-        if record.kind == .fundamentalFact {
-            throw ObservationFactoryError.canonicalConversionDeferred(kind: record.kind)
-        }
-
         // 1. 解析 identity
         let resolution = resolver.resolve(
             providerID: record.providerID,
@@ -191,8 +182,38 @@ struct ObservationFactory: Sendable {
                 currency: payload.currency
             ))
         case .fundamentalFact:
-            // 入口 guard 已拦截（防御性重复，保持 switch 完备）
-            throw ObservationFactoryError.canonicalConversionDeferred(kind: .fundamentalFact)
+            // FundamentalObservation 已定义（REPO-1b）：SEC XBRL 事实 → Canonical。
+            // providerCode scheme = sec_cik → CanonicalRef 必须是 LegalEntity
+            //（CIK 是发行人的监管标识，ADR-DATA001 §13），其他维度拒收。
+            let payload = try Self.decode(FundamentalFactPayload.self, from: record, kind: .fundamentalFact)
+            guard case .legalEntity(let entityID) = canonical else {
+                throw ObservationFactoryError.identityUnresolved(providerCode: record.providerCode)
+            }
+            // payload.form 是开放字符串（staging 可含任意来源记录），Canonical 侧
+            // 是封闭 enum——范围外表单在此拒收，不静默丢弃字段
+            guard let form = FundamentalObservation.FilingForm(rawValue: payload.form) else {
+                throw ObservationFactoryError.payloadDecodeFailed(
+                    kind: .fundamentalFact,
+                    detail: "unsupported filing form: \(payload.form)"
+                )
+            }
+            return .fundamentalObservation(FundamentalObservation(
+                id: observationID,
+                entityID: entityID,
+                temporalEnvelope: normalized.envelope,
+                availabilityProvenance: normalized.provenance,
+                dataQuality: dataQuality,
+                vintage: vintage,
+                metricKey: payload.metricKey,
+                concept: payload.concept,
+                value: payload.value,
+                unit: payload.unit,
+                periodStart: payload.start,
+                periodEnd: payload.end,
+                form: form,
+                frame: payload.frame,
+                extractionMethod: payload.extractionMethod
+            ))
         }
     }
 
@@ -206,9 +227,9 @@ struct ObservationFactory: Sendable {
         case .fundHoldingSnapshot: return AvailabilityPolicyV1.FundDisclosure()
         case .macroObservation: return AvailabilityPolicyV1.MacroRelease()   // 基于发布日 realtime_start（PROV-5）
         case .corporateAction: return AvailabilityPolicyV1.FundDisclosure()
-        // 暂定：XBRL 事实随申报发布可知（filed 日次交易日，US）。REPO-1b 定义
-        // FundamentalObservation 时若需独立 policy（如 FilingRelease）再版本化拆出。
-        case .fundamentalFact: return AvailabilityPolicyV1.MacroRelease()
+        // SEC XBRL 事实随申报发布可知（filed 日次 US 交易日）。REPO-1b 起独立
+        // 版本化（filing_release v1），与宏观发布审计分离。
+        case .fundamentalFact: return AvailabilityPolicyV1.FilingRelease()
         }
     }
 
@@ -230,6 +251,7 @@ enum CanonicalObservationKind: Sendable, Hashable {
     case fundHoldingSnapshot(FundHoldingSnapshot)
     case macroObservation(MacroObservation)
     case corporateAction(CorporateAction)
+    case fundamentalObservation(FundamentalObservation)
 }
 
 // MARK: - rawPayload schema（每种 ProviderRecordKind 对应一个 Codable struct）
