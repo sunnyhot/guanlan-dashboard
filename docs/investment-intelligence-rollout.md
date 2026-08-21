@@ -339,7 +339,8 @@ macos-app/
 **里程碑 M3：Provider 层完整**。
 
 > **状态（2026-08-20）**：M3 进行中（23/28 点，PROV-1/2/3a/4/5/6/7/8 签收；
-> PROV-3b 客户端侧离线完成，剩服务端部署 + 端到端）。
+> PROV-3b 客户端侧离线完成 + **App 生产接线已落地（2026-08-21，见下）**，
+> 剩服务端 VPS 部署 + 端到端）。
 > PROV-3 拆为 PROV-3a（本地 Python collector，DATA007，8pt，进阶可选）+
 > PROV-3b（远程 VPS collector + RemoteStagingProvider，DATA010，5pt，默认路径）。
 > DATA010 ADR 已 Proposed，定死凭证边界（公开数据 only）/ 反爬（聚合去重）/
@@ -403,10 +404,19 @@ macos-app/
 >   state 当空 state 误截断已提交 spool、不静默跳过未恢复的 journal）。
 >   journal 偏移**负数拒绝**（合法 JSON 可解出负值，静默 clamp 0 会清空 spool）、
 >   越界拒绝（大于当前 spool 大小）、缺失 spool 只允许 offset==0。25 个测试。
->   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通；App 侧
->   生产接线（RemoteStagingProvider 目前零生产调用点——需 AppModel 接线 +
->   URLSessionRemoteStagingFetcher 的 baseURL / X-Collector-Key / 验签公钥
->   配置面，属 SYNC-2 Market Daily Sync 的入口工作）。
+>   **App 生产接线已落地（2026-08-21）**：`InvestmentIntelligenceV2/Sync/RemoteStagingSync.swift`
+>   （配置面 `RemoteStagingSyncConfig` + Store + 路径布局 `RemoteStagingSyncPaths` +
+>   装配 `RemoteStagingSyncSetup`）+ `Core/AppModel/RemoteStagingSyncLoop.swift`
+>   （App 侧唯一调用点：启动读 `remote-staging-sync.json`——不存在 = 默认关闭
+>   零后台任务；配置齐备启动 sync 循环：立即一轮 + 每 6h；失败只记诊断
+>   `remoteStagingSyncStatus`，不弹错不重试不阻塞原生路径）。**配错显式上报
+>   不静默降级**：enabled 但公钥/baseURL 非法 → misconfigured 状态，绝不带错
+>   偷跑或静默转未验签。xcodegen 重生成 + macOS/iOS 双端构建通过；12 个
+>   wiring 测试（配置 round-trip/前向兼容、路径布局、装配分档、端到端
+>   config→provider→生产路径 sync + 增量轮不重复追加）。客户端配置文档见
+>   remote-collector/README「客户端配置」。**这是 App 层首次引用 V2 代码**
+>   （B.3 例外，PROV-3b 剩余项明示的接线工作；无 UI，纯配置文件 gate）。
+>   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通验收。
 >   服务端产出物已完成（2026-08-21，仓库根 `remote-collector/remote_publish.py`，
 >   **服务端组件与 macos-app 包分离**，不进 App/SPM/Xcode 工程；定位
 >   akshare_collector.py 单一实现的搜索顺序：--collector-script → 同目录（VPS

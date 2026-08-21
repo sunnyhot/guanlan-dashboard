@@ -103,6 +103,8 @@ final class AppModel: ObservableObject {
     @Published var menuBarTickerSettings = MenuBarTickerSettings.load()
     @Published var portfolioValuationAlertProfiles: [String: PortfolioValuationAlertProfile] = [:]
     @Published var portfolioValuationAlertSettings = PortfolioValuationAlertSettings()
+    /// 远程增强通道（PROV-3b / ADR-DATA010）诊断状态；默认未配置 = 不启动后台任务
+    @Published var remoteStagingSyncStatus: RemoteStagingSyncStatus = .notConfigured("尚未启动")
 
     /// 调仓筛选状态
     let filterState = PlatformFilterState()
@@ -161,6 +163,7 @@ final class AppModel: ObservableObject {
     var trendGenerationTask: Task<Void, Never>?
     var nextHourGuidanceSchedulerTask: Task<Void, Never>?
     var nextHourGuidanceGenerationTask: Task<Void, Never>?
+    var remoteStagingSyncTask: Task<Void, Never>?
     var activeCommentsRequestKey = ""
     var isApplyingPersonalAssetAutomation = false
     var portfolioLookThroughLoadedRequestKey: String?
@@ -606,6 +609,7 @@ final class AppModel: ObservableObject {
         portfolioAutoRefreshTask?.cancel()
         nextHourGuidanceSchedulerTask?.cancel()
         nextHourGuidanceGenerationTask?.cancel()
+        remoteStagingSyncTask?.cancel()
     }
 
     func start() async {
@@ -680,6 +684,7 @@ final class AppModel: ObservableObject {
         restartPersonalAssetAutomationLoop()
         restartPortfolioAutoRefreshLoop()
         restartNextHourGuidanceSchedulerLoop(immediate: true)
+        startRemoteStagingSyncLoopIfNeeded()
         scheduleAutomaticUpdateCheckIfNeeded()
     }
 

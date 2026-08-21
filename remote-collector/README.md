@@ -144,3 +144,36 @@ Ed25519（Python `cryptography` 签 → Swift CryptoKit 验）。
 
 退出码：`0` 发布成功；`1` 没有任何 dataset 通过校验（不切指针）；
 `2` 配置/环境错误（含找不到 akshare_collector.py、密钥不可读）。
+
+## 客户端配置（App 端启用远程增强）
+
+App 侧接收面已生产接线（`InvestmentIntelligenceV2/Sync/RemoteStagingSync.swift`
++ `Core/AppModel/RemoteStagingSyncLoop.swift`）：启动时读数据目录下的
+`remote-staging-sync.json`，配置齐备才启动 sync 循环（立即一轮 + 每 6 小时；
+增量比对，未变化轮次只拉一次 manifest）。**文件不存在 = 默认关闭**，零后台
+任务、零网络行为。
+
+配置文件路径：App 数据目录（默认
+`~/Library/Application Support/QiemanDashboard/`，若 App 内设置了自定义数据
+目录则以设置为准）下的 `remote-staging-sync.json`：
+
+```json
+{
+  "enabled": true,
+  "baseURL": "https://your-vps.example.com/staging",
+  "collectorKey": "与 nginx 侧约定的一致",
+  "signaturePublicKeyBase64": "`remote_publish.py --generate-key` stdout 打印的 base64"
+}
+```
+
+- `baseURL`：nginx 托管的**发布根**（`snapshot.txt` + `snapshots/` 所在目录）
+- `collectorKey` 可空（服务端未开鉴权时省略）
+- `signaturePublicKeyBase64` 可空 = 该部署不验签（仅 sha256 完整性，仅限
+  测试/受信网络——生产必须启用签名，见上方「威胁模型与验签分档」）
+- **配错不静默**：`enabled=true` 但公钥非法时 App 不会带着错误配置偷偷降级
+  运行，而是把配置错误写进诊断状态（`AppModel.remoteStagingSyncStatus`），
+  修好配置重启 App 即可
+
+同步产物落 `数据目录/investment-intelligence-v2/remote-staging/`（spool.jsonl
++ state.json），供后续 Data Pipeline（GRDB-8）消费；spool 只追加合法记录，
+失败轮次不影响已有数据。
