@@ -386,9 +386,16 @@ macos-app/
 >   state 当空 state 误截断已提交 spool、不静默跳过未恢复的 journal）。
 >   journal 偏移**负数拒绝**（合法 JSON 可解出负值，静默 clamp 0 会清空 spool）、
 >   越界拒绝（大于当前 spool 大小）、缺失 spool 只允许 offset==0。25 个测试。
->   **剩余（PROV-3b 未整点签收）**：VPS 侧 Python collector 产出（复用 PROV-3a 的
->   dataset 抓取 + manifest/签名生成）、nginx/Cloudflare 部署、真实端到端连通与
->   跨语言契约测试（Python manifest/staging 真实产物 vs Swift 接收面）。
+>   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通。
+>   服务端产出物已完成（2026-08-21，`Collector/remote_publish.py`）：消费
+>   PROV-3a staging（ok dataset 过滤 + staging sha256 复验 + 空 staging 不覆盖
+>   旧 manifest）→ 产 nginx 可托管目录（{dataset}.jsonl + manifest.json 对齐
+>   RemoteStagingManifest wire 契约 + 可选 manifest.sig Ed25519 签名，
+>   `--generate-key` 密钥管理）。**离线跨语言契约测试已落地**
+>   （`RemotePublishContractTests`，5 项）：Python `--selftest` 真实产物 →
+>   Swift RemoteStagingProvider 端到端（manifest wire 契约 / sha256 完整性 /
+>   增量轮 / 篡改拒收 / Ed25519——Python cryptography 签 → CryptoKit 验，
+>   篡改 manifest 拒收整批）。nginx/Cloudflare 部署指引见 Collector README。
 >
 > **审查修复记录（2026-08-20，五轮）**：
 > - 第一轮（3×P1 + 4×P2）：非法 Ed25519 公钥 init 抛错不静默降级；state 写失败
