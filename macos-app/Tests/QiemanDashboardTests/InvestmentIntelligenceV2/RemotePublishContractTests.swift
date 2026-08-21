@@ -34,12 +34,15 @@ final class RemotePublishContractTests: XCTestCase {
     }
 
     private static var publishScript: URL? {
+        // remote_publish.py 是服务端组件，与 App 包分离，位于仓库根 remote-collector/
+        //（#filePath 上溯 4 级到 macos-app，第 5 级到仓库根）
         let thisFile = URL(fileURLWithPath: #filePath)
         let script = thisFile.deletingLastPathComponent()      // .../InvestmentIntelligenceV2
             .deletingLastPathComponent()                        // .../QiemanDashboardTests
             .deletingLastPathComponent()                        // .../Tests
             .deletingLastPathComponent()                        // .../macos-app
-            .appendingPathComponent("InvestmentIntelligenceV2/Collector/remote_publish.py")
+            .deletingLastPathComponent()                        // .../仓库根
+            .appendingPathComponent("remote-collector/remote_publish.py")
         return FileManager.default.fileExists(atPath: script.path) ? script : nil
     }
 

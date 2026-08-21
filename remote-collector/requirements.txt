@@ -1,0 +1,6 @@
+# Remote Collector 服务端依赖（PROV-3b，ADR-DATA010）
+# VPS 部署：pip3 install -r requirements.txt
+# akshare：抓取（akshare_collector.py，与 App 侧本地 Collector 共用同一实现）
+# cryptography：manifest Ed25519 签名（remote_publish.py --signing-key）
+akshare>=1.14.0
+cryptography>=42.0.0

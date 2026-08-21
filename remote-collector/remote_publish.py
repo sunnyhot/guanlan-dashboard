@@ -48,10 +48,51 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# 复用 PROV-3a collector 的序列化 / 落盘路径（字节级一致性是契约的一部分，
-# 不在本脚本重写第二份实现）
-COLLECTOR_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(COLLECTOR_DIR))
+# 本目录是**服务端组件**（PROV-3b），与 macOS App 包（macos-app/）分离；
+# 抓取与序列化的单一实现在 PROV-3a 的 akshare_collector.py（App 侧可选组件），
+# 按搜索顺序定位，不在本脚本重写第二份（字节级一致性是跨语言契约的一部分）。
+REPO_COLLECTOR = (
+    Path(__file__).resolve().parent.parent
+    / "macos-app" / "InvestmentIntelligenceV2" / "Collector" / "akshare_collector.py"
+)
+
+
+def locate_collector_module(explicit: Optional[str]) -> Path:
+    """定位 akshare_collector.py。
+
+    搜索顺序：--collector-script 显式路径 → 本脚本同目录（VPS 部署两脚本同放）
+    → 仓库源码树默认位置（开发 / 跨语言契约测试从 checkout 直接跑）。
+    """
+    candidates = []
+    if explicit:
+        candidates.append(Path(explicit))
+    here = Path(__file__).resolve().parent
+    candidates.append(here / "akshare_collector.py")
+    candidates.append(REPO_COLLECTOR)
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    print(
+        "[remote-publish] 找不到 akshare_collector.py（搜索: "
+        + ", ".join(str(c) for c in candidates)
+        + "）；用 --collector-script 指定，或把两脚本放在同一目录",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+
+def _explicit_collector_from_argv() -> Optional[str]:
+    """在 argparse 之前从 argv 取 --collector-script（import 需要它定位模块）。"""
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
+        if arg == "--collector-script" and i + 1 < len(args):
+            return args[i + 1]
+        if arg.startswith("--collector-script="):
+            return arg.split("=", 1)[1]
+    return None
+
+
+sys.path.insert(0, str(locate_collector_module(_explicit_collector_from_argv()).parent))
 from akshare_collector import (  # noqa: E402
     ALL_DATASETS,
     COLLECTOR_VERSION,
@@ -202,6 +243,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--publish-dir", help="nginx 托管的发布目录（--generate-key 模式无需）")
     parser.add_argument("--signing-key", help="Ed25519 私钥 PEM 路径（可选验签）")
     parser.add_argument("--generate-key", help="生成 Ed25519 私钥到该路径并打印公钥 base64")
+    parser.add_argument(
+        "--collector-script",
+        help="akshare_collector.py 路径（默认搜索：脚本同目录 → 仓库源码树位置）",
+    )
     parser.add_argument(
         "--selftest", action="store_true",
         help="离线自检：不联网不依赖 staging，产固定样本走完整发布路径",
