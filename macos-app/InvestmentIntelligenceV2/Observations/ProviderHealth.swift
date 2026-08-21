@@ -64,14 +64,18 @@ enum ProviderStatus: String, Sendable, Codable, Hashable {
 
 /// 最近 N 次调用统计（用于判断 degraded 阈值）。
 struct RecentStatistics: Sendable, Codable, Hashable {
+    /// 窗口内全部调用次数（含限流调用）
     let totalCalls: Int
     let successCount: Int
+    /// 非限流的服务失败次数（限流/429/quota 拒绝计入 rateLimitedCount，不算服务失败）
     let failureCount: Int
     let rateLimitedCount: Int   // 429 / 风控次数
-    /// 成功率（0-1），total=0 时返回 nil
+    /// 成功率（0-1），**只按非限流调用**计算（success / (success + failure)）；
+    /// 无非限流调用时返回 nil——限流冷却/额度重置后不残留 0% 成功率
     var successRate: Double? {
-        guard totalCalls > 0 else { return nil }
-        return Double(successCount) / Double(totalCalls)
+        let effective = successCount + failureCount
+        guard effective > 0 else { return nil }
+        return Double(successCount) / Double(effective)
     }
 
     init(totalCalls: Int, successCount: Int, failureCount: Int, rateLimitedCount: Int) {
