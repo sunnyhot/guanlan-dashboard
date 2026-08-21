@@ -98,6 +98,15 @@ final class RemoteStagingProviderTests: XCTestCase {
         /// fetchCurrentSnapshotID 返回前触发（模拟读取期间发生发布）
         var onFetchSnapshotID: (@Sendable () -> Void)?
 
+        /// fetchFile 调用计数（锁保护——@Sendable 钩子里不能改捕获变量，
+        /// Swift 6 严格并发下报 mutation of captured var；断言用本计数器）
+        private let countLock = NSLock()
+        private var _fileFetchCount = 0
+        var fileFetchCount: Int {
+            countLock.lock(); defer { countLock.unlock() }
+            return _fileFetchCount
+        }
+
         init(manifestData: Data, currentSnapshotID: String = "snap-1") {
             self.currentSnapshotID = currentSnapshotID
             self.snapshots = [currentSnapshotID: Snapshot(manifestData: manifestData)]
@@ -141,6 +150,9 @@ final class RemoteStagingProviderTests: XCTestCase {
         }
 
         func fetchFile(_ name: String, snapshotID: String) async throws -> Data {
+            countLock.lock()
+            _fileFetchCount += 1
+            countLock.unlock()
             onFetchFile?(name)
             if let error = fileErrors[name] { throw error }
             guard let data = snapshots[snapshotID]?.files[name] else {
@@ -297,7 +309,6 @@ final class RemoteStagingProviderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let records = [makeRecord()]
         let fileData = jsonl(records)
-        var fetchedFiles = 0
         let fetcher = FakeRemoteFetcher(
             // generatedAt = 客户端本地 now + 1h（超过 10min 容忍度）
             manifestData: manifest(
@@ -306,7 +317,6 @@ final class RemoteStagingProviderTests: XCTestCase {
             )
         )
         fetcher.files["stock_daily.jsonl"] = fileData
-        fetcher.onFetchFile = { _ in fetchedFiles += 1 }
 
         let provider = makeProvider(fetcher: fetcher)
         let outcome = await provider.sync(
@@ -317,7 +327,7 @@ final class RemoteStagingProviderTests: XCTestCase {
             return XCTFail("expected .failed(.malformedManifest), got \(outcome)")
         }
         XCTAssertTrue(detail.contains("far future"), "detail: \(detail)")
-        XCTAssertEqual(fetchedFiles, 0, "闸门必须在下载任何文件之前")
+        XCTAssertEqual(fetcher.fileFetchCount, 0, "闸门必须在下载任何文件之前")
         XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("spool.jsonl").path))
     }
 

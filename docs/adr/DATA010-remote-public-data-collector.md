@@ -108,10 +108,11 @@ per-key 限流 + 总带宽 cap
 
 - manifest.json 含每个 staging 文件的 sha256 + 产出时间 + collectorVersion
 - App 先拉 manifest，比对本地已有 hash，只下载变化的文件（增量）
-- 可选：manifest 用 Ed25519 私钥签名，App 内置公钥验签——在「静态托管目录 /
-  nginx / 传输链被攻陷，且签名进程与私钥仍可信」的范围内（见下方分档），
-  攻击者无私钥无法伪造能过验签的 staging；**完整 collector 主机失陷不在
-  该保证内**（私钥与 publisher 同机）
+- manifest 支持 Ed25519 签名，App 内置公钥验签；**生产必须启用**（unsigned
+  仅限测试/受信网络，见下方分档）——在「静态托管目录 / nginx / 传输链被
+  攻陷，且签名进程与私钥仍可信」的范围内，攻击者无私钥无法伪造能过验签
+  的 staging；**完整 collector 主机失陷不在该保证内**（私钥与 publisher
+  同机）
 - SchemaValidator（PROV-1）是完整性兜底：即使签名层失效，结构非法的 staging 仍被拒
 - **验签强度分档（生产必须 signed）**：
   - **signed（生产强制）**：服务端 `--signing-key` + 客户端验签公钥都配置。
@@ -122,9 +123,11 @@ per-key 限流 + 总带宽 cap
     0600）与 collector/publisher 同机，主机失陷时攻击者可读取私钥、或在
     publisher 签名前替换 staging——可产出合法签名的伪造数据。若需覆盖
     「VPS 整机失陷」，签名必须移到独立信任域——且独立 signer 必须
-    **独立授权或验证待签内容**（如从自取的 staging 独立重导 manifest、或
-    人工在环审批），不能对被攻陷数据链主机提交的任意字节签名，否则只是
-    把签名机退化成签名 Oracle——当前范围外，留作未来选项
+    **独立授权并核验待签内容**：从**独立可信数据源重采集/核验**（注意：
+    仅从被监护主机自取 staging 重算 manifest **不充分**——hash 一致性
+    ≠ 数据真实性，伪造 JSONL 会被照单签名），或基于可信证据的人工在环
+    审批；不能对被攻陷数据链主机提交的任意字节签名——当前范围外，留作
+    未来选项
   - **unsigned（仅测试 / 受信网络）**：不配置签名时，sha256 只对「同源
     manifest」负责——攻陷方可同时改数据与 manifest 里的 sha256，客户端将
     **接受伪造数据**。「最坏 rollback」的结论**只适用于 signed 模式且私钥
