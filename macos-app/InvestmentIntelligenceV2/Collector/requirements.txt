@@ -1,4 +1,7 @@
 # AKShare 本地 Collector 依赖（PROV-3a，可选安装 —— DATA007）
 # 进阶用户自行安装：pip3 install -r requirements.txt
 # 默认 App 与 iOS 不打包这些依赖；缺失时 collector 报环境错误（exit 2），不影响 App。
+# 建议 Python ≥ 3.11（3.9 部分依赖需源码编译）；国内网络 PyPI 直连易超时，
+# 可走镜像：pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+# （2026-08-21 真实联调实测：Python 3.11 + 清华镜像装 akshare 1.18.92 顺利）
 akshare>=1.14.0

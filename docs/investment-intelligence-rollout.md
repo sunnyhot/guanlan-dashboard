@@ -530,11 +530,10 @@ macos-app/
 >   「无」；journal 负偏移拒绝（可解码的负值经 max(0,·) clamp 会清空整个
 >   spool，缺失 spool 时也不得当 offset==0 恢复成功）。
 >
-> **未达成（M3 blocked 原因）**：PROV-3a 真实联调（本机装 akshare 后跑一轮真实抓取）
-> 与 PROV-3b 服务端部署 + 端到端。这些 Adapter 的解析逻辑可离线先行
-> （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
-> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行
-> （PROV-3a 的 `--selftest` 契约测试模式可直接复用）。
+> **未达成（M3 blocked 原因；2026-08-21 更新）**：仅剩 PROV-3b 真实 VPS 部署 +
+> 端到端。PROV-3a 真实联调已完成（akshare 1.18.92 本机 venv，fund_nav 3869 条 /
+> fund_holdings 4 条真实数据；stock/index 行情端点上游拒连、macro 上游接口漂移，
+> 分类与隔离行为符合设计——详见 PROV-3a 签收段）。
 >
 > **状态（2026-08-14，历史）**：M3 进行中（18/28 点，PROV-1/2/3a/5/6 签收）。
 >
@@ -576,15 +575,31 @@ macos-app/
 >   rawPayload base64 / Decimal 定点输出；A 股日期归一化上海日界 UTC 瞬时（与
 >   EastmoneyResponseParser.normalizeToTradingDay 一致）。契约测试
 >   （`--selftest` 离线输出 → Reader → SchemaValidator → ObservationFactory 全链路）
->   9 项 + 摄取/launcher 错误路径单测 15 项全绿。**真实联调待本机安装 akshare**
->   （pip install -r Collector/requirements.txt）——联调阻塞项见 ASH-12。
+>   9 项 + 摄取/launcher 错误路径单测 15 项全绿。
 >
-> **未达成（M3 blocked 原因）**：PROV-3a 真实联调（本机装 akshare 后跑一轮真实抓取）
-> 与 PROV-3b/4/7 各 Adapter 接外部数据源（远程 VPS Python / SEC XBRL / Tavily），
-> PROV-8 ProviderHealth 依赖各 Adapter 落地后聚合。这些 Adapter 的解析逻辑可离线先行
-> （参考 Stooq/FRED 的 StaticResponseFetcher 注入模式），但完整验收
-> 需对应外部服务/VPS 的真实连通。PROV-3b 的跨语言契约测试可离线先行
-> （PROV-3a 的 `--selftest` 契约测试模式可直接复用）。
+>   **✅ 真实联调完成（2026-08-21，ASH-12 解除）**：本机 venv 安装 akshare
+>   1.18.92（Python 3.11；PyPI 直连超时需走国内镜像，`pip install -i
+>   pypi.tuna.tsinghua.edu.cn/simple`），`--selftest` 6 dataset 全绿 + 真实抓取
+>   一轮（默认标的、2026-01-01..08-21 窗口）：
+>   - **fund_nav ok 3869 条**（110022 全史净值，wire 格式与契约逐字段吻合：
+>     camelCase/ISO8601 UTC/base64 payload/enum rawValue/沪日界归一化）；
+>   - **fund_holdings ok 4 条**（2024 四季度快照；72 个权重空/0 的 position 被
+>     数据质量闸门丢弃并计数——既有签名语义）；
+>   - **stock_daily / index_daily 持续 `network` ConnectionError**：东财行情
+>     端点（push2 quote 系）对本机选择性拒连（同站 fund 端点正常），直接调
+>     `ak.stock_zh_a_hist` 复现——上游反爬非 collector 缺陷；分类/隔离/manifest
+>     行为全部符合设计（单 dataset 失败不影响他者，exit 1，manifest 仍落盘）；
+>   - **macro_china `schema` KeyError 'data'**：金十数据中心 datacenter.jin10.com
+>     已改吐 HTML 壳，akshare 1.18.92 的 `macro_china_gdp_yearly` 解析失效（上游
+>     接口漂移；直接 probe 复现）。中国宏观该 dataset 需换源（东财宏观系 akshare
+>     函数或后续 ADR），另行立 story 处理。
+>   联调结论：collector 机制（分类/隔离/manifest/跨语言格式）经真实数据验证；
+>   两个 dataset 的上游限制如实记录，不阻塞 PROV-3a 签收语义（失败分类正是
+>   DATA006/DATA007 要求的行为）。
+>
+> **未达成（M3 blocked 原因，2026-08-21 更新）**：仅剩 **PROV-3b 真实 VPS 部署 +
+> HTTP 端到端连通**（App 生产接线与跨语言契约测试已就绪，见 PROV-3b 段）。
+> PROV-3a 真实联调已完成（见上）；其余 Adapter（PROV-2/4/5/6/7/8）已签收。
 
 ---
 
