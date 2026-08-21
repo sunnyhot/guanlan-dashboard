@@ -180,15 +180,18 @@ struct AlphaVantageProviderAdapter: ProviderAdapter {
     private let client: AlphaVantageClientProtocol
     private let settings: AlphaVantageSettings
     private let ingestedAt: @Sendable () -> Date
+    private let now: @Sendable () -> Date
 
     init(
         client: AlphaVantageClientProtocol,
         settings: AlphaVantageSettings,
+        now: @escaping @Sendable () -> Date = { .now },
         ingestedAt: @escaping @Sendable () -> Date = { .now }
     ) {
         self.client = client
         self.settings = settings
         self.ingestedAt = ingestedAt
+        self.now = now
     }
 
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
@@ -205,7 +208,10 @@ struct AlphaVantageProviderAdapter: ProviderAdapter {
         let descriptor = AlphaVantageRequestDescriptor(
             function: .timeSeriesDaily,
             symbol: code.value,
-            parameters: ["outputsize": "compact", "datatype": "json"],
+            parameters: [
+                "outputsize": Self.outputSize(forWindowStartingAt: from, now: now()),
+                "datatype": "json"
+            ],
             cacheTTL: 6 * 60 * 60   // 与现有 AlphaVantageResearchTool 一致
         )
         do {
@@ -234,6 +240,18 @@ struct AlphaVantageProviderAdapter: ProviderAdapter {
     /// - serviceMessage：上游 Information/Note（"...25 requests per day..."、"API call frequency"）
     ///   → quotaExhausted；Error Message（invalid symbol 等）→ schemaMismatch
     /// - invalidURL / invalidHTTPStatus / invalidResponse：网络/服务端 → unavailable
+    /// 按查询窗口选择 TIME_SERIES_DAILY 的 outputsize。
+    ///
+    /// 免费层 `compact` 只返回最近 100 个交易日（≈140 个日历日）；窗口起点早于
+    /// compact 覆盖范围时改用 `full`。2026-08-21 实测：免费 key 请求 full 会收
+    /// 到 premium 提示（Information）→ 按 DATA006 映射 quotaExhausted 降级不阻塞；
+    /// 配了 premium key 的部署则直接解锁历史窗口（含 SYNC-6 ≥252 交易日回填）。
+    /// 阈值取 120 日历日（≈85 个交易日），留出保守余量：宁可早切 full 暴露
+    /// 配置缺口，不冒 compact 截断成 0 条被误判 schema 漂移的风险。
+    static func outputSize(forWindowStartingAt from: Date, now: Date) -> String {
+        from < now.addingTimeInterval(-120 * 24 * 60 * 60) ? "full" : "compact"
+    }
+
     static func mapClientError(_ error: AlphaVantageClientError) -> ProviderError {
         switch error {
         case .dailyBudgetExceeded:

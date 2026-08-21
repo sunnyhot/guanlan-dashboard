@@ -19,6 +19,14 @@ import XCTest
 /// - 整套测试经 `M2MarketEvidenceSource` actor 串行抓取、四场景复用同一批
 ///   live evidence，避免天天基金限流。
 ///
+/// 2026-08-21 二次修订（行情窗口）：配置真实 Alpha Vantage key 后实测免费层
+/// `outputsize=full` / date-range / DAILY_ADJUSTED 均为 premium（date-range 参数
+/// 被静默忽略，仍返回最新 100 条），Stooq 持续反爬——免费候选链实际只覆盖最近
+/// 100 个交易日。行情窗口由固定 2024-07 改为随 now 滑动的近 20 天（见
+/// `M2MarketEvidenceSource.marketWindow`）。场景 1 验证跨 Provider identity
+///（同一标的经两个 Provider symbol 解析到同一 ListingID），与行情期无关；
+/// 持仓样本仍锚定真实 2024 Q2 归档。PIT 断言（场景 2-4）不受影响。
+///
 /// 这些测试故意不注入 StaticResponseFetcher，也不把网络失败转成 XCTSkip。
 /// 免费 Provider 被风控或返回契约漂移时，测试必须失败并保留原因；在此之前
 /// 不得把 M2 标记为通过（ADR-DATA009 / ADR-DATA006）。

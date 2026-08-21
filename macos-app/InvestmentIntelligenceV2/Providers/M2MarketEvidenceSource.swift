@@ -18,9 +18,12 @@ import Foundation
 // 5. 每次抓取输出 evidence manifest（Provider、endpoint、抓取时间、raw SHA-256、
 //    published/available/ingested、两端 symbol 与 ListingID），作为 M2 放行证据。
 //
-// 注：Alpha Vantage 需要真实 apikey（demo key 只覆盖 IBM/MSFT 近 100 行，
-// 不含 2024-07 窗口）。无 key 时 secondary 不可用是「配置缺口」而非 fixture 替身，
-// 由 M2MarketEvidenceError.keyMissing 显式报告。
+// 注：Alpha Vantage 需要真实 apikey（Keychain `trend.alphaVantage.apiKey` 或
+// ALPHAVANTAGE_API_KEY 环境变量，不进仓库）。无 key 时 secondary 不可用是
+//「配置缺口」而非 fixture 替身，由 M2MarketEvidenceError.keyMissing 显式报告。
+// 2026-08-21 实测：免费层只覆盖最近 100 个交易日（full / date-range / 
+// DAILY_ADJUSTED 均 premium，date-range 参数被静默忽略），历史窗口需 Stooq
+// 恢复或引入第三候选源（见 marketWindow 注释与 rollout §4.1 修订记录）。
 
 /// M2 live gate 的失败分类（不 XCTSkip，失败必须保留原因）。
 enum M2MarketEvidenceError: Error, Equatable, Sendable {
@@ -59,7 +62,7 @@ struct M2MarketDailyEvidence: Sendable, Hashable {
     let providerID: DataProviderID
     /// 该 Provider 眼中的 symbol（如 "aapl.us" / "AAPL"）
     let providerSymbol: String
-    /// 解析出的 ProviderRecord（kind = .dailyBar，已过滤 2024-07 窗口）
+    /// 解析出的 ProviderRecord（kind = .dailyBar，已过滤近期窗口）
     let records: [ProviderRecord]
     /// 各候选的尝试记录（成功 + 失败都要留痕）
     let attempts: [String]
@@ -85,10 +88,23 @@ actor M2MarketEvidenceSource {
     static let qdiiFundCode = "513100"
     // PIT 主样本仍是 110022（Q2 07-18 公告 + Q1 04-20 周六公告）。
     static let pitFundCode = "110022"
-    // 2024-07 行情窗口（美股，覆盖 Q2 公告周期）。
-    static let marketWindow = (
-        from: M2Dates.date(2024, 7, 1), to: M2Dates.date(2024, 7, 31)
-    )
+
+    /// 行情窗口（2026-08-21 二次修订）：随 now 滑动的近期窗口。
+    ///
+    /// 原固定 2024-07 窗口隐含依赖 Alpha Vantage `outputsize=full` 取历史——
+    /// 2026-08-21 实测免费层 full 与 DAILY_ADJUSTED 均为 premium，date-range
+    /// 参数被**静默忽略**（仍返回最新 100 条）；Stooq 持续反爬。免费候选链
+    /// 实际只能覆盖最近 100 个交易日（≈140 日历日），窗口取 now-20d..now 稳落
+    /// compact 覆盖内。场景 1 验证的是跨 Provider identity（同一标的经两个
+    /// Provider 的 symbol 解析到同一 Listing），与行情期无关；持仓样本仍锚定
+    /// 真实 2024 Q2 归档（见 M2LiveAcceptanceTests 头注释）。
+    static func marketWindow(now: Date = .now) -> (from: Date, to: Date) {
+        (from: now.addingTimeInterval(-20 * 24 * 60 * 60), to: now)
+    }
+
+    private var marketWindowDates: (from: Date, to: Date) {
+        Self.marketWindow()
+    }
 
     private var fundHoldings: [String: Result<ProviderRecord, Error>] = [:]
     private var marketDaily: Result<M2MarketDailyEvidence, Error>?
@@ -158,7 +174,7 @@ actor M2MarketEvidenceSource {
 
     // MARK: - 行情 Provider 候选链：Stooq primary → Alpha Vantage secondary
 
-    /// 抓一份真实美股日线（AAPL，2024-07 窗口）。
+    /// 抓一份真实美股日线（AAPL，随 now 滑动的近期窗口，见 `marketWindow`）。
     /// Stooq challenge → .unavailable → 尝试 Alpha Vantage；两个都失败才抛
     /// allProvidersExhausted。绝不退回 fixture。
     static func fetchVerifiedDaily() async throws -> M2MarketDailyEvidence {
@@ -210,8 +226,8 @@ actor M2MarketEvidenceSource {
             body = try await URLSessionResponseFetcher().fetch(.stooqHistory(symbol: stooqSymbol))
             records = try await adapter.fetch(
                 code: ProviderCode(scheme: "stock_symbol", value: stooqSymbol),
-                from: Self.marketWindow.from,
-                to: Self.marketWindow.to
+                from: marketWindowDates.from,
+                to: marketWindowDates.to
             )
         } catch let error as ProviderError {
             // challenge / 429 已被 URLSessionResponseFetcher 折叠为 .unavailable
@@ -219,7 +235,7 @@ actor M2MarketEvidenceSource {
         }
         guard !records.isEmpty else {
             throw M2MarketEvidenceError.semanticMismatch(
-                detail: "Stooq \(stooqSymbol) 返回 0 条 2024-07 日线"
+                detail: "Stooq \(stooqSymbol) 返回 0 条近期日线"
             )
         }
         attempts.append("stooq: success (\(records.count) bars)")
@@ -227,7 +243,7 @@ actor M2MarketEvidenceSource {
             providerID: "stooq",
             endpoint: "stooq.com/q/d/l/?s=\(stooqSymbol)&i=d",
             body: body,
-            summary: "bars=\(records.count) window=2024-07"
+            summary: "bars=\(records.count) window=recent-20d"
         )
         return M2MarketDailyEvidence(
             providerID: .stooq,
@@ -243,7 +259,7 @@ actor M2MarketEvidenceSource {
     ) async throws -> M2MarketDailyEvidence {
         guard let apiKey = Self.alphaVantageAPIKey(), !apiKey.isEmpty else {
             throw M2MarketEvidenceError.keyMissing(
-                detail: "Alpha Vantage apikey 未配置（demo key 不覆盖 \(symbol) 2024-07 窗口）"
+                detail: "Alpha Vantage apikey 未配置（真实 key 见 Keychain/环境变量，不进仓库）"
             )
         }
         let settings = AlphaVantageSettings(enabled: true, apiKey: apiKey)
@@ -252,8 +268,8 @@ actor M2MarketEvidenceSource {
         do {
             records = try await adapter.fetch(
                 code: ProviderCode(scheme: "stock_symbol", value: symbol),
-                from: Self.marketWindow.from,
-                to: Self.marketWindow.to
+                from: marketWindowDates.from,
+                to: marketWindowDates.to
             )
         } catch let error as ProviderError {
             // AlphaVantageProviderAdapter 已把 serviceMessage/额度映射为
@@ -262,7 +278,8 @@ actor M2MarketEvidenceSource {
         }
         guard !records.isEmpty else {
             throw M2MarketEvidenceError.semanticMismatch(
-                detail: "Alpha Vantage \(symbol) 返回 0 条 2024-07 日线（free tier TIME_SERIES_DAILY compact 只含近 100 行，需 outputsize=full 或换符号）"
+                detail: "Alpha Vantage \(symbol) 返回 0 条近期日线（免费层只覆盖最近 100 个交易日；"
+                    + "full/date-range 均 premium，历史窗口需 Stooq 恢复或引入第三候选源）"
             )
         }
         attempts.append("alpha-vantage: success (\(records.count) bars)")
@@ -270,7 +287,7 @@ actor M2MarketEvidenceSource {
             providerID: "alpha-vantage",
             endpoint: "alphavantage.co TIME_SERIES_DAILY symbol=\(symbol)",
             body: records.map { "\($0.effectiveAt)" }.joined(separator: ","),
-            summary: "bars=\(records.count) window=2024-07"
+            summary: "bars=\(records.count) window=recent-20d"
         )
         return M2MarketDailyEvidence(
             providerID: .alphaVantage,

@@ -31,8 +31,9 @@ final class AlphaVantageAdapterTests: XCTestCase {
     private func makeAdapter(_ outcome: FakeAlphaVantageClient.Outcome, ingested: Date) -> AlphaVantageProviderAdapter {
         AlphaVantageProviderAdapter(
             client: FakeAlphaVantageClient(outcome),
-            settings: AlphaVantageSettings(enabled: true, apiKey: "test-key")
-        ) { ingested }
+            settings: AlphaVantageSettings(enabled: true, apiKey: "test-key"),
+            ingestedAt: { ingested }
+        )
     }
 
     // MARK: - JSON 解析
@@ -253,6 +254,78 @@ final class AlphaVantageAdapterTests: XCTestCase {
         )
     }
 
+    // MARK: - outputsize 窗口选择（compact 只含近 100 交易日，历史窗口须 full）
+
+    func testOutputSize_oldWindow_usesFull() {
+        // 2024-07 窗口对 2026-08 显然超出 compact 覆盖 → full
+        XCTAssertEqual(
+            AlphaVantageProviderAdapter.outputSize(
+                forWindowStartingAt: date(2024, 7, 1), now: date(2026, 8, 21)
+            ),
+            "full"
+        )
+    }
+
+    func testOutputSize_recentWindow_usesCompact() {
+        // 近 30 天窗口在 compact 覆盖内 → compact（响应小）
+        XCTAssertEqual(
+            AlphaVantageProviderAdapter.outputSize(
+                forWindowStartingAt: date(2026, 7, 25), now: date(2026, 8, 21)
+            ),
+            "compact"
+        )
+    }
+
+    func testOutputSize_boundaryAroundCompactCoverage() {
+        // 阈值 120 日历日：边界外 full、边界内 compact（宁可早切 full 的保守侧）
+        let now = date(2026, 8, 21)
+        XCTAssertEqual(
+            AlphaVantageProviderAdapter.outputSize(
+                forWindowStartingAt: now.addingTimeInterval(-121 * 24 * 60 * 60), now: now
+            ),
+            "full"
+        )
+        XCTAssertEqual(
+            AlphaVantageProviderAdapter.outputSize(
+                forWindowStartingAt: now.addingTimeInterval(-119 * 24 * 60 * 60), now: now
+            ),
+            "compact"
+        )
+    }
+
+    func testAdapter_historicalWindow_requestsFullOutputSize() async throws {
+        // M2 场景 1 的真实缺口：2024-07 窗口曾被 compact 截成 0 条。注入 now 使
+        // 窗口落在 compact 覆盖外，断言实际发出的 descriptor 带 outputsize=full。
+        let fake = RecordingAlphaVantageClient(sampleData())
+        let adapter = AlphaVantageProviderAdapter(
+            client: fake,
+            settings: AlphaVantageSettings(enabled: true, apiKey: "test-key"),
+            now: { self.date(2026, 8, 21) },
+            ingestedAt: { self.date(2024, 7, 22) }
+        )
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "stock_symbol", value: "AAPL"),
+            from: date(2024, 7, 1), to: date(2024, 7, 31)
+        )
+        XCTAssertEqual(records.count, 3)
+        XCTAssertEqual(fake.lastDescriptor?.parameters["outputsize"], "full")
+    }
+
+    func testAdapter_recentWindow_requestsCompactOutputSize() async throws {
+        let fake = RecordingAlphaVantageClient(sampleData())
+        let adapter = AlphaVantageProviderAdapter(
+            client: fake,
+            settings: AlphaVantageSettings(enabled: true, apiKey: "test-key"),
+            now: { self.date(2026, 8, 21) },
+            ingestedAt: { self.date(2026, 8, 20) }
+        )
+        _ = try await adapter.fetch(
+            code: ProviderCode(scheme: "stock_symbol", value: "AAPL"),
+            from: date(2026, 8, 1), to: date(2026, 8, 21)
+        )
+        XCTAssertEqual(fake.lastDescriptor?.parameters["outputsize"], "compact")
+    }
+
     // MARK: - PROV-1 集成：staging + schema 校验
 
     func testIntegration_recordsPassSchemaValidatorAndStagingRoundTrip() async throws {
@@ -295,5 +368,24 @@ private final class FakeAlphaVantageClient: AlphaVantageClientProtocol, @uncheck
         case .data(let d): return d
         case .error(let e): throw e
         }
+    }
+}
+
+/// 记录型 fake：透传预录 Data，同时捕获最后收到的 descriptor（outputsize 断言用）。
+private final class RecordingAlphaVantageClient: AlphaVantageClientProtocol, @unchecked Sendable {
+    private let data: Data
+    private let lock = NSLock()
+    private(set) var lastDescriptor: AlphaVantageRequestDescriptor?
+
+    init(_ data: Data) { self.data = data }
+
+    func fetch(
+        _ descriptor: AlphaVantageRequestDescriptor,
+        settings: AlphaVantageSettings
+    ) async throws -> Data {
+        lock.withLock {
+            lastDescriptor = descriptor
+        }
+        return data
     }
 }

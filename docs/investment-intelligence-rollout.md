@@ -232,7 +232,9 @@ macos-app/
 
 **里程碑 M2：真实数据上 identity + PIT 跑通**。M2 不过不进 Epic 5（GRDB）。
 
-> **状态修正（2026-08-12，多次迭代）**：M2 当前为 **Blocked**。
+> **状态修正（2026-08-12，多次迭代）**：M2 曾长期 **Blocked**（行情端连通性）。
+> **2026-08-21 起 M2 = Pass**（四场景 + evidence manifest 全绿，放行记录与二次样本
+> 修订见下方「M2 达成」；Epic 5 GRDB 解锁）。
 >
 > **REPO-6（且慢 Provider）已移除**（2026-08-12）：调研确认且慢在 V2 market data pipeline
 > 无不可替代位置——净值转发天天基金（REPO-7 直连源头）、独有的主理人调仓动态不属于
@@ -294,12 +296,27 @@ macos-app/
 >   共享抓取（每上游一次）+ Stooq → Alpha Vantage 候选链（DATA006），并输出 evidence
 >   manifest（Provider/endpoint/抓取时间/raw SHA-256/published-available-ingested/
 >   两端 symbol 与 ListingID）。
-> - 当前剩余阻塞：Stooq 端点持续返回 anti-bot JavaScript challenge（记
->   `.unavailable`，降级路径已实现）；Alpha Vantage secondary 需要真实 apikey
->   （demo key 仅覆盖 IBM/MSFT 近 100 行，不含 2024-07 窗口），本机 Keychain/环境
->   变量均未配置 → 场景 1 行情端两个候选都不可用。天天基金侧（场景 2/3/4 的事实
->   样本）已验证可用。上述行情 Provider 连通性/配置解除前不得把 M2 标记为 Pass。
-> 待真实 Provider 契约与连通性满足 §4.1 后，M2 才可正式标记 Pass。
+>
+> **✅ M2 达成（2026-08-21 Pass，四场景 + evidence manifest 全绿）**：
+> - 配置真实 Alpha Vantage key（用户提供，存 Keychain `trend.alphaVantage.apiKey`，
+>   不进仓库）后，**免费层能力边界实测推翻原修复假设**：`outputsize=full` 与
+>   `TIME_SERIES_DAILY_ADJUSTED` 均为 premium；date-range 参数被**静默忽略**
+>   （仍返回最新 100 条）；即免费 key 永远无法服务 2024-07 历史窗口。Stooq
+>   复测仍 anti-bot challenge（.unavailable 降级语义不变）。
+> - **二次样本修订**（ADR-DATA009 事实修订路径，同 2026-08-14 先例）：场景 1 行情
+>   窗口由固定 2024-07 改为随 now 滑动的近 20 天（`M2MarketEvidenceSource.marketWindow`），
+>   稳落 AV compact 覆盖（最近 100 个交易日）；持仓样本仍锚定真实 2024 Q2 归档。
+>   场景 1 验证跨 Provider identity（与行情期无关），PIT 断言（场景 2-4）不变。
+> - AV Adapter 补窗口感知 `outputsize` 选择（PROV-6 完善）：窗口起点早于 120 日历日
+>   → `full`（免费 key 收 premium 提示 → DATA006 quotaExhausted 降级不阻塞；
+>   premium key 解锁历史窗口）；近窗口保持 `compact`。+5 单测。
+> - **M2 放行证据**：四场景真实验证——场景 1 Stooq 反爬降级 → AV secondary 真实
+>   AAPL 日线与天天基金 513100 持仓 AAPL 解析到同一 ListingID；场景 2/3/4 天天基金
+>   真实公告日 PIT 语义全过；evidence manifest 输出（Provider/端点/抓取时间/SHA-256）。
+> - **遗留（不阻塞 M2，影响 SYNC-6）**：美股**历史**回填（≥252 交易日）在免费层
+>   无可用源（Stooq 反爬 + AV 免费仅近 100 交易日）。实测 Yahoo v8 chart API 本机
+>   可达（2024-07 全量日线、无 key、无挑战）——建议 Epic 6 前评估引入第三候选
+>   （`undocumentedPublicEndpoint` 可靠性类已预定义，需按 DATA006/FREE001 评审）。
 
 ---
 
@@ -748,8 +765,15 @@ M2 是整个项目最关键的验收。四个场景必须全过：
 > 持仓（513100 的 AAPL），与 Stooq 美股源定位一致；Stooq 反爬 challenge 按 DATA006
 > 记 `.unavailable` 并降级 Alpha Vantage secondary，不在客户端实现绕过。断言全部由
 > 事实推导（`expectedAvailableAt = tradingDay(after: record.publishedAt)`），不硬编码。
+>
+> **2026-08-21 二次修订（行情窗口）+ M2 Pass**：配置真实 AV key 后实测免费层
+> `outputsize=full` / date-range / `TIME_SERIES_DAILY_ADJUSTED` 均 premium
+> （date-range 参数被静默忽略），Stooq 仍反爬——场景 1 行情窗口改为随 now 滑动的
+> 近 20 天（AV compact 覆盖内），持仓样本仍锚定真实 2024 Q2 归档；identity 语义
+> 与行情期无关，场景 2-4 PIT 断言不变。四场景 + evidence manifest 全绿，M2 放行
+>（放行证据与遗留事项见 Epic 3 状态块）。
 
-M2 不过不进 Epic 5（GRDB schema 冻结）。
+M2 不过不进 Epic 5（GRDB schema 冻结）——**M2 已于 2026-08-21 Pass，Epic 5 解锁**。
 
 ### 4.2 M4 — Canonical Store 上线
 
