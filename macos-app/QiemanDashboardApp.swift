@@ -36,6 +36,37 @@ enum AppMainWindowTrackingPolicy {
     }
 }
 
+enum AppMainWindowRevealPolicy {
+    /// Grace period after launch during which an early reveal request (login
+    /// reopen, notification-tap launch) waits for the SwiftUI Window scene
+    /// instead of creating a manual fallback window that would duplicate it.
+    static let launchGraceSeconds: TimeInterval = 2.0
+
+    static func shouldWaitForSceneWindow(hasSceneOpener: Bool, launchGraceElapsed: Bool) -> Bool {
+        !hasSceneOpener && !launchGraceElapsed
+    }
+}
+
+enum AppMainWindowDuplicatePolicy {
+    /// Picks the window to keep when more than one main window exists. The
+    /// SwiftUI scene window wins (it is the long-lived, reopen-capable window);
+    /// otherwise the tracked window; otherwise the first candidate.
+    static func windowToKeep(
+        candidates: [NSWindow],
+        trackedWindow: NSWindow?,
+        isSceneWindow: (NSWindow) -> Bool
+    ) -> NSWindow? {
+        guard !candidates.isEmpty else { return nil }
+        if candidates.count > 1, let sceneWindow = candidates.first(where: isSceneWindow) {
+            return sceneWindow
+        }
+        if let trackedWindow, candidates.contains(trackedWindow) {
+            return trackedWindow
+        }
+        return candidates.first
+    }
+}
+
 @MainActor
 final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("QiemanDashboard.mainWindow")
@@ -59,6 +90,13 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
     private var lastMenuBarRenderState: MenuBarRenderState?
     private var didFinishLaunching = false
     private var openMainWindowScene: (() -> Void)?
+    /// Reveal requests that arrived before the SwiftUI Window scene attached;
+    /// flushed once the scene opener registers or the scene window is tracked.
+    private var pendingMainWindowReveal = false
+    private var pendingRevealDeadlineScheduled = false
+    /// Set when applicationDidFinishLaunching runs; gates the manual-window
+    /// fallback so early reveal requests wait out the launch grace period.
+    var finishLaunchingDate: Date?
     /// Retains a reference to the main window so it can be re-shown after closing.
     /// Set by both the SwiftUI WindowGroup (onAppear) and createMainWindow().
     fileprivate(set) var mainWindow: NSWindow?
@@ -108,6 +146,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         }
 
         didFinishLaunching = true
+        finishLaunchingDate = Date()
         configure(model: QiemanAppModelHolder.shared)
         if AppLaunchWindowPolicy.shouldCreateImmediateManualWindowOnLaunch {
             showMainWindow()
@@ -417,8 +456,12 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         }
     }
 
-    @MainActor func trackSwiftUISceneMainWindow(_ window: NSWindow) {
-        guard isReusableMainWindow(window) else { return }
+    /// Tracks the SwiftUI scene window as the main window. Returns false when
+    /// the window is not (yet) reusable, e.g. while SwiftUI is still
+    /// materializing it; callers may retry shortly instead of losing it.
+    @discardableResult
+    @MainActor func trackSwiftUISceneMainWindow(_ window: NSWindow) -> Bool {
+        guard isReusableMainWindow(window) else { return false }
         configureMainWindowIdentity(window)
 
         if let previous = mainWindow,
@@ -432,10 +475,14 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         }
 
         mainWindow = window
+        reconcileDuplicateMainWindows(keeping: window)
+        flushPendingMainWindowReveal()
+        return true
     }
 
     @MainActor func registerMainWindowSceneOpener(_ action: @escaping () -> Void) {
         openMainWindowScene = action
+        flushPendingMainWindowReveal()
     }
 
     @MainActor func createMainWindow() {
@@ -513,6 +560,11 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
     }
 
     @MainActor func showMainWindow() {
+        // 0. Collapse duplicate main windows first (e.g., a manual fallback
+        //    window left over from an early-launch race next to the scene
+        //    window), so the reveal targets the single surviving window.
+        reconcileDuplicateMainWindows()
+
         // 1. Re-show the tracked main window if it still exists.
         if let window = mainWindow {
             if NSApplication.shared.windows.contains(where: { $0 === window }) {
@@ -539,9 +591,90 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
             NSApplication.shared.activate(ignoringOtherApps: true)
             return
         }
-        // 4. Compatibility fallback used only before SwiftUI has registered its
-        //    scene opener; normal launch and menu-bar reopen never reach this path.
+        // 4. The SwiftUI scene has not attached yet. Early-launch reveal requests
+        //    (login-item reopen, notification-tap launch) land here before the
+        //    scene window exists; creating a manual window at this point used to
+        //    duplicate the main window once the scene appeared. Queue the reveal
+        //    until the scene attaches, with a deadline fallback for states where
+        //    the scene never comes up.
+        let launchGraceElapsed = finishLaunchingDate.map {
+            Date().timeIntervalSince($0) >= AppMainWindowRevealPolicy.launchGraceSeconds
+        } ?? false
+        if AppMainWindowRevealPolicy.shouldWaitForSceneWindow(
+            hasSceneOpener: false,
+            launchGraceElapsed: launchGraceElapsed
+        ) {
+            queuePendingMainWindowReveal()
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            return
+        }
         createMainWindow()
+    }
+
+    /// Remembers a reveal request that could not be served yet and schedules a
+    /// deadline pass so the app never becomes unreachable if the scene opener
+    /// never registers.
+    @MainActor private func queuePendingMainWindowReveal() {
+        pendingMainWindowReveal = true
+        guard !pendingRevealDeadlineScheduled else { return }
+        pendingRevealDeadlineScheduled = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(AppMainWindowRevealPolicy.launchGraceSeconds + 0.5))
+            guard let self else { return }
+            self.pendingRevealDeadlineScheduled = false
+            if self.pendingMainWindowReveal, self.mainWindow == nil, self.openMainWindowScene == nil {
+                self.pendingMainWindowReveal = false
+                self.createMainWindow()
+            }
+        }
+    }
+
+    /// Serves a queued reveal request once the SwiftUI scene has attached.
+    @MainActor private func flushPendingMainWindowReveal() {
+        guard pendingMainWindowReveal else { return }
+        pendingMainWindowReveal = false
+        if let window = mainWindow, NSApplication.shared.windows.contains(where: { $0 === window }) {
+            window.makeKeyAndOrderFront(nil)
+        } else if let openMainWindowScene {
+            openMainWindowScene()
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    /// Collapses stray duplicate main windows down to a single window. Runs on
+    /// every reveal and after scene tracking; normally a no-op.
+    @MainActor private func reconcileDuplicateMainWindows(keeping preferred: NSWindow? = nil) {
+        let candidates = NSApplication.shared.windows.filter { isMainWindowCandidate($0) }
+        guard candidates.count > 1 else { return }
+
+        let keep: NSWindow?
+        if let preferred, candidates.contains(preferred) {
+            keep = preferred
+        } else {
+            keep = AppMainWindowDuplicatePolicy.windowToKeep(
+                candidates: candidates,
+                trackedWindow: mainWindow,
+                isSceneWindow: { NSStringFromClass(type(of: $0)).hasPrefix("SwiftUI.") }
+            )
+        }
+        guard let keep else { return }
+
+        configureMainWindowIdentity(keep)
+        for candidate in candidates where candidate !== keep {
+            discardDuplicateMainWindow(candidate)
+        }
+        mainWindow = keep
+    }
+
+    /// Distinguishes main windows from the Settings scene window or foreign
+    /// windows: by identity, by main-window identifier, by the raw SwiftUI
+    /// scene identifier, or by the main window title.
+    @MainActor private func isMainWindowCandidate(_ window: NSWindow) -> Bool {
+        guard isReusableMainWindow(window) else { return false }
+        if window === mainWindow { return true }
+        return window.identifier == Self.mainWindowIdentifier
+            || window.identifier == NSUserInterfaceItemIdentifier(AppSceneIdentifier.mainWindow)
+            || window.title == "且慢主理人"
     }
 
     /// Exposes the stored main window reference for zoom toggling.
@@ -698,12 +831,31 @@ extension QiemanApplicationDelegate: NSWindowDelegate {
 
 @MainActor
 private final class MainWindowTrackingNSView: NSView {
+    private static let maxTrackingAttempts = 4
+    private static let retryInterval: Duration = .milliseconds(300)
+
     weak var appDelegate: QiemanApplicationDelegate?
+    private var trackingAttempts = 0
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         guard let window else { return }
-        appDelegate?.trackSwiftUISceneMainWindow(window)
+        attemptTracking(window)
+    }
+
+    /// SwiftUI scene windows can transiently fail the reusability guard while
+    /// being materialized. Losing the tracking call would leave the scene
+    /// window untracked forever (never deduplicated against a stray manual
+    /// window), so retry shortly instead of giving up on the first refusal.
+    private func attemptTracking(_ window: NSWindow) {
+        if appDelegate?.trackSwiftUISceneMainWindow(window) == true { return }
+        guard trackingAttempts < Self.maxTrackingAttempts else { return }
+        trackingAttempts += 1
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.retryInterval)
+            guard let self, let window = self.window else { return }
+            self.attemptTracking(window)
+        }
     }
 }
 
