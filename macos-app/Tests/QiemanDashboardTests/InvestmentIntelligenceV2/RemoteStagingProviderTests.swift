@@ -99,12 +99,13 @@ final class RemoteStagingProviderTests: XCTestCase {
         var onFetchSnapshotID: (@Sendable () -> Void)?
 
         /// fetchFile 调用计数（锁保护——@Sendable 钩子里不能改捕获变量，
-        /// Swift 6 严格并发下报 mutation of captured var；断言用本计数器）
+        /// Swift 6 严格并发下报 mutation of captured var；断言用本计数器。
+        /// async 方法内 NSLock.lock/unlock 不可用（Swift 6 报 unavailable from
+        /// asynchronous contexts），统一走 withLock）
         private let countLock = NSLock()
         private var _fileFetchCount = 0
         var fileFetchCount: Int {
-            countLock.lock(); defer { countLock.unlock() }
-            return _fileFetchCount
+            countLock.withLock { _fileFetchCount }
         }
 
         init(manifestData: Data, currentSnapshotID: String = "snap-1") {
@@ -150,9 +151,7 @@ final class RemoteStagingProviderTests: XCTestCase {
         }
 
         func fetchFile(_ name: String, snapshotID: String) async throws -> Data {
-            countLock.lock()
-            _fileFetchCount += 1
-            countLock.unlock()
+            countLock.withLock { _fileFetchCount += 1 }
             onFetchFile?(name)
             if let error = fileErrors[name] { throw error }
             guard let data = snapshots[snapshotID]?.files[name] else {
