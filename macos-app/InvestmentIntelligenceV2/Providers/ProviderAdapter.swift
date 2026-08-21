@@ -76,6 +76,9 @@ enum ProviderRecordKind: String, Sendable, Codable, Hashable {
     case fundHoldingSnapshot = "FUND_HOLDING_SNAPSHOT"
     case macroObservation = "MACRO_OBSERVATION"
     case corporateAction = "CORPORATE_ACTION"
+    /// SEC XBRL 财务事实（PROV-4）。Canonical 化（FundamentalObservation）在
+    /// REPO-1b（Epic 7+）定义类型后接入；此前只走 staging + schema 校验。
+    case fundamentalFact = "FUNDAMENTAL_FACT"
 }
 
 // MARK: - Provider Adapter 协议（REPO-7 起）
@@ -197,8 +200,11 @@ struct ProviderFetchDiagnostics: Sendable, Equatable {
 enum ProviderError: Error, Equatable, Sendable {
     /// Provider 不可用（网络 / 服务端）
     case unavailable(providerID: DataProviderID, underlying: String)
-    /// 配额耗尽（如 Alpha Vantage 25/天）
+    /// 配额耗尽（如 Alpha Vantage 25/天、Tavily 月 credits——**持久**，周期重置才恢复）
     case quotaExhausted(providerID: DataProviderID)
+    /// 瞬时限流（429 风控/频控——**transient**，冷却后自动恢复，不是额度消耗；
+    /// retryAfter 秒数来自上游 Retry-Header，未知为 nil，由调用方按默认冷却处理）
+    case rateLimited(providerID: DataProviderID, retryAfter: TimeInterval?)
     /// Provider 返回的数据无法解析（schema 漂移）
     case schemaMismatch(providerID: DataProviderID, detail: String)
     /// 标的不在 Provider 覆盖范围

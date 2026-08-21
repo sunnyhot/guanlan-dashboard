@@ -23,6 +23,9 @@ enum ObservationFactoryError: Error, Equatable, Sendable {
     case identityUnresolved(providerCode: ProviderCode)
     /// 时间规范化失败（AvailabilityPolicy 推导失败或不变量违反）
     case temporalNormalizeFailed
+    /// 该 kind 的 Canonical 类型尚未定义（REPO-1b 前的 fundamentalFact），
+    /// Pipeline 显式拒收而非静默跳过
+    case canonicalConversionDeferred(kind: ProviderRecordKind)
 }
 
 /// ProviderRecord → CanonicalObservation 转换器。
@@ -46,6 +49,13 @@ struct ObservationFactory: Sendable {
         observationID: ObservationID,
         vintage: Vintage
     ) throws -> CanonicalObservationKind {
+        // fundamentalFact 的 Canonical 类型（FundamentalObservation）在 REPO-1b
+        // （Epic 7+）定义；此前 Pipeline 对该 kind 显式拒收（staging + schema 校验
+        // 仍可用），不静默转成其他观测类型。
+        if record.kind == .fundamentalFact {
+            throw ObservationFactoryError.canonicalConversionDeferred(kind: record.kind)
+        }
+
         // 1. 解析 identity
         let resolution = resolver.resolve(
             providerID: record.providerID,
@@ -180,6 +190,9 @@ struct ObservationFactory: Sendable {
                 ratio: payload.ratio,
                 currency: payload.currency
             ))
+        case .fundamentalFact:
+            // 入口 guard 已拦截（防御性重复，保持 switch 完备）
+            throw ObservationFactoryError.canonicalConversionDeferred(kind: .fundamentalFact)
         }
     }
 
@@ -193,6 +206,9 @@ struct ObservationFactory: Sendable {
         case .fundHoldingSnapshot: return AvailabilityPolicyV1.FundDisclosure()
         case .macroObservation: return AvailabilityPolicyV1.MacroRelease()   // 基于发布日 realtime_start（PROV-5）
         case .corporateAction: return AvailabilityPolicyV1.FundDisclosure()
+        // 暂定：XBRL 事实随申报发布可知（filed 日次交易日，US）。REPO-1b 定义
+        // FundamentalObservation 时若需独立 policy（如 FilingRelease）再版本化拆出。
+        case .fundamentalFact: return AvailabilityPolicyV1.MacroRelease()
         }
     }
 
@@ -278,4 +294,31 @@ struct CorporateActionPayload: Codable, Hashable, Sendable {
     /// 行动比例（每股分红金额 / 送股比例 / 拆股比例）
     let ratio: Decimal
     let currency: Currency?
+}
+
+/// FundamentalFact 的 rawPayload schema（PROV-4，SEC XBRL companyfacts）。
+///
+/// 一条记录 = 一个 (concept, unit, start/end, filed) 事实行——同一 concept 同一
+/// period 被多次申报（10-Q 初报、10-K 修订）是不同 publishedAt 的多条记录，
+/// 保留完整 PIT 历史（ADR-DATA008 multi-vintage）。
+/// `extractionMethod` 恒 `.xbrlFact`（机器可读字段，PROV-4 验收项），
+/// 与 LLM extracted fact（Epic 11 RES-4）在类型层区分（DOM-9）。
+struct FundamentalFactPayload: Codable, Hashable, Sendable {
+    /// 标准 XBRL 概念名（如 "Revenues"、"NetIncomeLoss"）
+    let concept: String
+    /// 标准化指标 key（如 "revenue"，由 MetricSpec 配置驱动）
+    let metricKey: String
+    let value: Decimal
+    /// XBRL unit 原始名（如 "USD"、"shares"）
+    let unit: String
+    /// 期间开始（流量项有；时点项如 Assets 为 nil）
+    let start: Date?
+    /// 期间结束 / 时点日（→ effectiveAt）
+    let end: Date
+    /// 申报表单（10-Q / 10-K / 20-F / 40-F）
+    let form: String
+    /// XBRL frame（如 "CY2023Q2"，可选）
+    let frame: String?
+    /// 提取方式（PROV-4 验收：XBRL facts 带 extractionMethod）
+    let extractionMethod: EvidenceExtractionMethod
 }

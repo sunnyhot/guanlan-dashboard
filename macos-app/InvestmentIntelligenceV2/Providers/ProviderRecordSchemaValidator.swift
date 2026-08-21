@@ -84,6 +84,8 @@ struct ProviderRecordSchemaValidator: Sendable {
             _ = try decoder.decode(MacroPayload.self, from: payload)
         case .corporateAction:
             _ = try decoder.decode(CorporateActionPayload.self, from: payload)
+        case .fundamentalFact:
+            _ = try decoder.decode(FundamentalFactPayload.self, from: payload)
         }
     }
 
