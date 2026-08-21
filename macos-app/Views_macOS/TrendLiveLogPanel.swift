@@ -308,7 +308,9 @@ struct TrendLiveLogPanel: View {
     }
 
     private func copyLogs() {
-        let text = model.trendProgressLogs.map { entry in
+        // 显式 String：GRDB 的 SQL(ExpressibleByStringInterpolation) 扩展会
+        // 把无标注的字面量闭包推断成 SQL（joined(separator:) 亦有 SQL 版扩展）
+        let text: String = model.trendProgressLogs.map { entry in
             let detail = entry.detail.map { "\n\($0)" } ?? ""
             return "[\(entry.timestamp)] [\(entry.level.rawValue)] \(entry.message)\(detail)"
         }

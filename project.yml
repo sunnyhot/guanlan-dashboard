@@ -15,6 +15,13 @@ settings:
     GENERATE_INFOPLIST_FILE: NO
     SWIFT_STRICT_CONCURRENCY: minimal
 
+# Epic 5（GRDB-1）引入的 SPM 依赖：Canonical Store 的 SQLite 层（MIT，
+# FREE001 合规）。与 macos-app/Package.swift 的依赖声明保持同版本区间。
+packages:
+  GRDB.swift:
+    url: https://github.com/groue/GRDB.swift
+    from: 6.29.0
+
 # Shared source globs compiled into BOTH app targets. xcodegen expands globs
 # per-target, so each target lists the same shared roots explicitly (anchors
 # are not reliably expanded inside `sources`). Excludes the CLI subsystem
@@ -26,6 +33,9 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
+    dependencies:
+      - package: GRDB.swift
+        product: GRDB
     sources:
       - path: macos-app/Core
         excludes:
@@ -62,6 +72,9 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "17.0"
+    dependencies:
+      - package: GRDB.swift
+        product: GRDB
     sources:
       - path: macos-app/Core
         excludes:
@@ -101,10 +114,12 @@ targets:
     type: bundle.unit-test
     platform: macOS
     deploymentTarget: "14.0"
-    sources:
-      - path: macos-app/Tests/QiemanDashboardTests
     dependencies:
       - target: QiemanDashboard
+      - package: GRDB.swift
+        product: GRDB
+    sources:
+      - path: macos-app/Tests/QiemanDashboardTests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.sunnyhot.qieman.dashboard.tests

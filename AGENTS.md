@@ -204,7 +204,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 3. **纯 Swift 运行时** — App、爬取能力、CLI 和 Agent 技能不依赖 Python 或 localhost HTTP 服务
 4. **Cookie 认证** — 且慢登录态保存在本地受权限保护的 `qieman.cookie` 文件；`Support/KeychainHelper.swift` 提供 Keychain 封装（注：旧文档提及的 `QiemanCookieManager.swift` 已不存在，登录态管理已重构，改动前先搜全仓库确认现状）
 5. **自动更新** — GitHub Release + latest.json，AppSelfUpdater 处理下载安装
-6. **数据持久化** — 纯 JSON 文件 + 各独立 Store 类管理（**无 SQLite**：全仓库无 sqlite3/GRDB/FMDB/CREATE TABLE，Package.swift 无数据库依赖）。高频追加对象用「一对象一文件 + index 摘要」而非单大 JSON 数组。`NativeSnapshotStore` 是 Snapshot DTO 的文件 Store，不是数据库。引入 SQLite 属于新增基础设施，需专门评估
+6. **数据持久化** — 现有 App 数据仍为纯 JSON 文件 + 各独立 Store 类管理（高频追加对象用「一对象一文件 + index 摘要」而非单大 JSON 数组；`NativeSnapshotStore` 是 Snapshot DTO 的文件 Store）。**Investment Intelligence V2 的 Canonical Store 引入 GRDB/SQLite（Epic 5，2026-08-21 GRDB-1 起，M2 已 Pass 后按 ADR-DATA009 解锁）**：依赖声明在 `macos-app/Package.swift` 与 `project.yml`（GRDB ≥ 6.29，`Package.resolved` 锁版本）；DB lifecycle/迁移框架在 `InvestmentIntelligenceV2/Persistence/CanonicalDatabase.swift`（迁移只追加不改写），库文件落 App 数据目录 `investment-intelligence-v2/canonical.sqlite3`。V2 以外的存储仍是 JSON Store，**不要**在 V2 之外新引 SQLite。注意：GRDB 的 `SQL` 类型是 ExpressibleByStringInterpolation，会污染同模块内无类型标注的字符串闭包推断（见坑点 21）
 7. **AppModel 拆分** — 核心状态在 AppModel.swift，子功能拆到 AppModel/ 子目录
 8. **分析模块纯派生** — 今日简报、组合诊断、收益归因、策略雷达优先基于本地已聚合数据计算，不在 View 内写业务计算
 9. **AI 行动跟踪单一路径** — 今日研判行动候选由用户主动加入跟踪清单；旧 TradeSignal 设置/通知链已删除
@@ -232,6 +232,9 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
     - **Harness 抽取风险高**：`TrendResearchAgent` 与 Prompt/状态/提交模块强耦合，新建 Agent 时宜先复制受控子集（参考 `NextHourGuidance` 做法），等三条工作流稳定再反向抽取，**勿提前抽象**
     - **`FundLookThrough.swift`(944) 已较成熟**：能算 industries/assetClasses/coverage/unknown weight/陈旧披露，返回 `PortfolioLookThroughSnapshot`，组合暴露类改造可直接复用，不必从 `PortfolioDiagnostics` 退化起步
     - **改造宜垂直切片**：单一 Case 类型（如 concentrationRisk）走通完整链路（Models→Store→Policy→UI）再扩展，避免横向 Phase 产生长期无人消费的半成品
+16. **build_macos_app.sh 走 SPM 构建** — Epic 5 引入 GRDB 后脚本已从裸 swiftc 改为 `swift build -c release` + 拷贝产物进 .app（源文件排除规则/最低系统版本以 `macos-app/Package.swift` 为单一事实源）。**新增 App 源文件不再需要动脚本**（SPM 自动发现）；但新增 SPM 外部依赖必须同步 `Package.swift` + `project.yml`（packages + 各 target dependencies，product 名为 GRDB 非 GRDB.swift）并 `xcodegen generate` 重生成工程
+17. **GRDB `SQL` 类型污染类型推断** — GRDB 的 `SQL` 遵循 ExpressibleByStringInterpolation，同模块内无显式类型的字符串字面量闭包链（`map { "\(x)" }.joined(separator:)`）可能被推断成 `SQL`（GRDB 给 Sequence 加了 `joined(separator:)` 的 SQL 版扩展）。遇到莫名的 "cannot convert 'SQL' to 'String'" 时给变量显式标注 `: String`（先例：TrendLiveLogPanel.copyLogs）
+18. **GRDB 迁移只追加不改写** — `CanonicalDatabase.makeMigrations()` 已发布的 migration id 永不改名/删除/重排（老库按 id 记账，改写 = 全量重跑破坏数据）；新增表只追加新 migration 并同步 `schemaVersion`（有测试守护两侧一致）
 
 ## Agent 工作指南
 

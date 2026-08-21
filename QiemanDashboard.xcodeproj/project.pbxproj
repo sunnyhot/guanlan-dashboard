@@ -180,6 +180,7 @@
 		3EF1EC6264327F9E75A596EC /* TrendWebSearchGovernor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A03E1E8D5635F0192BA9507D /* TrendWebSearchGovernor.swift */; };
 		3FED9ED69B675498395B8EA6 /* AlphaVantageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2482C8ECAEC183AC4AD5A55D /* AlphaVantageClient.swift */; };
 		4009DD8745E8FAC9F8F1451E /* IOSDecisionCaseDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6BE9C4C3480C89CE080F85D /* IOSDecisionCaseDetailView.swift */; };
+		406B596ECAB2F5CBC52D4E49 /* CanonicalDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86ED8F27C7B5D8EFC0281E3D /* CanonicalDatabase.swift */; };
 		4075D6FA8D5FD5EF7A61295D /* UIExperienceRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E200F24C971E185ADCFD00E2 /* UIExperienceRegressionTests.swift */; };
 		40D845BF06DD900B45B5AF15 /* ManagerWatchTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD19464BAC2A3BF11298492 /* ManagerWatchTimeline.swift */; };
 		40E553406BC3DEDE77F3DA66 /* HoldingCountBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF63079C209E9A67CD1DDF5 /* HoldingCountBadge.swift */; };
@@ -232,6 +233,7 @@
 		50002DD6B68B2A85351295A2 /* RemoteStagingSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = D53E36B7A2DBA7E44CE5E8E6 /* RemoteStagingSync.swift */; };
 		50CF9CAFED748277B063F3D1 /* LocalNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FC593517B7DEBA5B0E18F2B /* LocalNotificationManager.swift */; };
 		50EFF5360135E5A89A424394 /* AlfaPortfolioStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D71767516855F0ABF5A7D549 /* AlfaPortfolioStore.swift */; };
+		527039146918C7A82F2D27F8 /* CanonicalDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86ED8F27C7B5D8EFC0281E3D /* CanonicalDatabase.swift */; };
 		5277B3B44537A76DB8D99542 /* UserDecisionProfilePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5E96F74082C300A7B7AB85D /* UserDecisionProfilePanel.swift */; };
 		53288AD081791EEB4B7BFF8E /* brand-spec.md in Resources */ = {isa = PBXBuildFile; fileRef = DB7DC8275591D21F8D5A981C /* brand-spec.md */; };
 		53C4E4F4F2F58F8AECBA9E03 /* TrendTrackingMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8ECCD0A45E914A30EC8B15 /* TrendTrackingMigrationTests.swift */; };
@@ -470,6 +472,7 @@
 		A7EE196794E8F0CB29F4CB77 /* PersonalAssetPriceTrendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF571CE4A6B4AD240F53CE81 /* PersonalAssetPriceTrendTests.swift */; };
 		A8584A325D9D689F22359ACE /* TrendTrackingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896CB1FBAEEDEA2A5EDAEDBD /* TrendTrackingModels.swift */; };
 		A928385A6C23A3C4DFFC23B3 /* FREDAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D22A7E1E8A4093C17758D6F /* FREDAdapterTests.swift */; };
+		A93C168B5862290C92E83F9C /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 17A4E30BDF3DB88746747DD7 /* GRDB */; };
 		A99825761CD7FDDE9B198F96 /* v2-eastmoney-lsjz-110022.json in Resources */ = {isa = PBXBuildFile; fileRef = 6DE0F9560A3C51D071DF5B04 /* v2-eastmoney-lsjz-110022.json */; };
 		A99FF153D3948FAE8AE3848F /* TrendEvidenceDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69D2E1E01449F24B0D4E362B /* TrendEvidenceDetailSheet.swift */; };
 		AA2447C795FA50669F54EED4 /* MarketCloseReviewArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF030B4FF3F21C5395A3D192 /* MarketCloseReviewArchive.swift */; };
@@ -482,6 +485,7 @@
 		AB27BB5A8C9647420A40DDA6 /* TavilyWebSearchTool.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECA671E22B82F4E28AF9902D /* TavilyWebSearchTool.swift */; };
 		AB526A11F17539AB42E9F5AF /* EnhancementCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF8043CC3870EBB588B7CAB /* EnhancementCenterView.swift */; };
 		AB7C14A2E4641107F5AB5144 /* MenuBarPortfolioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B1A9E427B7E4927D50C7D97 /* MenuBarPortfolioView.swift */; };
+		AC7DD52938F35F5A2BAEF0C8 /* CanonicalDatabaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F0FF525F7F52E52535D1D2 /* CanonicalDatabaseTests.swift */; };
 		ACBD4E28F8A6CD4598A1028B /* QiemanDashboardApp_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74E42CE25E03550FEA35C796 /* QiemanDashboardApp_iOS.swift */; };
 		AD02A4ACAF4AEBD67B7605F1 /* TrendProviderPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353D1F6C29C631825922BD67 /* TrendProviderPreset.swift */; };
 		AD49FCD6EB90DBFE04E1244F /* TrendAnalysisAppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AE2E8917D91041899627C87 /* TrendAnalysisAppModelTests.swift */; };
@@ -530,6 +534,7 @@
 		BB6B97CFD2EAB91421545487 /* LegacyDecisionCaseMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1804072DDEB15886AF05CB6D /* LegacyDecisionCaseMigration.swift */; };
 		BB817D36737B0354B29F4D3E /* IOSProfitAttributionPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399A5D6D5D874E02B13BEE2B /* IOSProfitAttributionPanel.swift */; };
 		BB82DAE029B3037EBD2911E3 /* ArtifactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E30B66C929F7E0F0ACB4D3 /* ArtifactTests.swift */; };
+		BC213DF45D2C32B6A97A2ADD /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = D53FC9F97D26E9F7B245EAFD /* GRDB */; };
 		BCCC5556A703B94E675FCEA0 /* LaunchAtLoginAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B49BD5EA76F592A1AF0350 /* LaunchAtLoginAgent.swift */; };
 		BD14B6C73AA4A6787BAD1C83 /* QiemanCommandLineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC6C611B96990046748ABFC /* QiemanCommandLineTests.swift */; };
 		BD4A056E0D86BEFC80B0FBF5 /* ProviderRecordSchemaValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03100C0A177393F9D5E7B76B /* ProviderRecordSchemaValidator.swift */; };
@@ -693,6 +698,7 @@
 		F3A19DCE7F226C3F8C672F0A /* CanonicalIDs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7561B75C9F91778F8414353D /* CanonicalIDs.swift */; };
 		F3CBD6338280C6621C42D255 /* PersonalAssetPriceTrend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 986302851293C17C2ED494D3 /* PersonalAssetPriceTrend.swift */; };
 		F3EF984C01217058B9A458DF /* EastmoneyResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DFA28D5304296894C4C7E85 /* EastmoneyResponseParser.swift */; };
+		F46E9E75E70C3FD208E7BE46 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = F72943D4F44E542635C6695C /* GRDB */; };
 		F51EE728250FAC78CF79065E /* TrendAnalysisContextBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83EB1E171B5EC94C27F27C83 /* TrendAnalysisContextBuilder.swift */; };
 		F53BF287812682A3207E5007 /* MenuBarTickerEntries.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CC514EAEEEB7C4CF06D811F /* MenuBarTickerEntries.swift */; };
 		F5513E49BC517269FFE68124 /* IOSResearchTermGlossaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B98BF9335F4D1D61F38AE9C4 /* IOSResearchTermGlossaryView.swift */; };
@@ -1004,6 +1010,7 @@
 		8553004FCB896956E1155909 /* PersonalWatchlistDetailChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalWatchlistDetailChart.swift; sourceTree = "<group>"; };
 		860339817107F8E85BA0BA2C /* TrendProviderPresetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendProviderPresetTests.swift; sourceTree = "<group>"; };
 		867205479264A872AC4769C9 /* QiemanPlatformNativeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QiemanPlatformNativeClient.swift; sourceTree = "<group>"; };
+		86ED8F27C7B5D8EFC0281E3D /* CanonicalDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalDatabase.swift; sourceTree = "<group>"; };
 		87506C84FFB208D52F743BA0 /* Contract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Contract.swift; sourceTree = "<group>"; };
 		885C23281EBF64729B8027FE /* PortfolioSnapshotInsight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioSnapshotInsight.swift; sourceTree = "<group>"; };
 		886101E1F9CD62483B19CC45 /* QiemanDashboard-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "QiemanDashboard-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1062,6 +1069,7 @@
 		A552A95EDC0B2250851F9BAC /* DonutChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DonutChart.swift; sourceTree = "<group>"; };
 		A568605B11A6687A68C197D2 /* IOSPlatformVisualizations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSPlatformVisualizations.swift; sourceTree = "<group>"; };
 		A5C9425D297C6065755ED755 /* IdentityResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityResolver.swift; sourceTree = "<group>"; };
+		A5F0FF525F7F52E52535D1D2 /* CanonicalDatabaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalDatabaseTests.swift; sourceTree = "<group>"; };
 		A611ECD5B10B0A1E06A9383A /* DTOs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DTOs.swift; sourceTree = "<group>"; };
 		A674FFA4D1049BB31FA5C8A5 /* SettingsWatchPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWatchPanel.swift; sourceTree = "<group>"; };
 		A6942CBF7EB4BF6CBE9C19D8 /* MarketCloseReviewSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketCloseReviewSection.swift; sourceTree = "<group>"; };
@@ -1237,6 +1245,33 @@
 		FEE0296B80DB59C512D462F5 /* PortfolioValuationAlertStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioValuationAlertStore.swift; sourceTree = "<group>"; };
 		FF9D5862C4EC5BC73CC36E77 /* NextHourGuidanceProgressStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextHourGuidanceProgressStage.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4F66C621CA83939E99CAD838 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A93C168B5862290C92E83F9C /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4FB0B6837020C2DE2109208F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BC213DF45D2C32B6A97A2ADD /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FE2FBACDD177C50A659F78F4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F46E9E75E70C3FD208E7BE46 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		116894AFADDF8CB866A8589A /* Tests */ = {
@@ -1599,6 +1634,7 @@
 				57728C314DE08F3A50C2AB1A /* AlphaVantageAdapterTests.swift */,
 				A0E30B66C929F7E0F0ACB4D3 /* ArtifactTests.swift */,
 				F152BF1064BCCCFC8145B45E /* AvailabilityPolicyTests.swift */,
+				A5F0FF525F7F52E52535D1D2 /* CanonicalDatabaseTests.swift */,
 				133B727BB211B15164D40109 /* CanonicalIDTests.swift */,
 				D31464F1E12B01A1B36CFF9B /* CanonicalObservationTests.swift */,
 				9AB35A470BEF8E280F35C7E9 /* EastmoneyHistoricalHoldingProviderTests.swift */,
@@ -1637,6 +1673,7 @@
 		6D15A214A2CF5F5997F60D41 /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				86ED8F27C7B5D8EFC0281E3D /* CanonicalDatabase.swift */,
 				1CCEFA82F04004D154AA0C4C /* ProviderStaging.swift */,
 				BCC22C250A712314E96ED5CE /* RemoteStagingProvider.swift */,
 			);
@@ -2081,6 +2118,7 @@
 			buildPhases = (
 				B4B7563F009367BD42C32619 /* Sources */,
 				0616D1D870BC8C09A6D9CD11 /* Resources */,
+				FE2FBACDD177C50A659F78F4 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -2088,6 +2126,7 @@
 			);
 			name = "QiemanDashboard-iOS";
 			packageProductDependencies = (
+				F72943D4F44E542635C6695C /* GRDB */,
 			);
 			productName = "QiemanDashboard-iOS";
 			productReference = 886101E1F9CD62483B19CC45 /* QiemanDashboard-iOS.app */;
@@ -2099,6 +2138,7 @@
 			buildPhases = (
 				EBA822499EE7ECD1FD84845F /* Sources */,
 				FC3D59A47C21E9B68B819B36 /* Resources */,
+				4F66C621CA83939E99CAD838 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -2107,6 +2147,7 @@
 			);
 			name = QiemanDashboardTests;
 			packageProductDependencies = (
+				17A4E30BDF3DB88746747DD7 /* GRDB */,
 			);
 			productName = QiemanDashboardTests;
 			productReference = 70A12BAB6C1660E83F2CB571 /* QiemanDashboardTests.xctest */;
@@ -2118,6 +2159,7 @@
 			buildPhases = (
 				DF2B67EA71A98F43CE7458C7 /* Sources */,
 				E996248110BE00F178153BBF /* Resources */,
+				4FB0B6837020C2DE2109208F /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -2125,6 +2167,7 @@
 			);
 			name = QiemanDashboard;
 			packageProductDependencies = (
+				D53FC9F97D26E9F7B245EAFD /* GRDB */,
 			);
 			productName = QiemanDashboard;
 			productReference = 567C573F33E92B623DC4F61B /* QiemanDashboard.app */;
@@ -2156,6 +2199,9 @@
 			);
 			mainGroup = 12C83B12A3296DB44E629472;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6B022DE239992E6C5229DC3F /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4F897B900828DCEA1EBAC8FD /* Products */;
 			projectDirPath = "";
@@ -2231,6 +2277,7 @@
 				C40DA65AC72AB6F18D8AC634 /* Auth.swift in Sources */,
 				584340552460794B0CF4C13A /* Automation.swift in Sources */,
 				8A05E3283CB85934FAE1EB59 /* AvailabilityPolicy.swift in Sources */,
+				406B596ECAB2F5CBC52D4E49 /* CanonicalDatabase.swift in Sources */,
 				5790A268B5BCEA3C7BA7600A /* CanonicalIDs.swift in Sources */,
 				DF4EAED9DA711D2018A5308A /* CanonicalObservation.swift in Sources */,
 				FD4DFC44FEEBEA9858534E4F /* ClaimAssessmentEngine.swift in Sources */,
@@ -2495,6 +2542,7 @@
 				04061C9D2E5FE352BC45615E /* Auth.swift in Sources */,
 				D8AE4B55A0AD7FF827101E09 /* Automation.swift in Sources */,
 				E6FD53820DCF4CC7E31C29BA /* AvailabilityPolicy.swift in Sources */,
+				527039146918C7A82F2D27F8 /* CanonicalDatabase.swift in Sources */,
 				F3A19DCE7F226C3F8C672F0A /* CanonicalIDs.swift in Sources */,
 				09A88A5FBE1EFBFFDAEB3F11 /* CanonicalObservation.swift in Sources */,
 				C398384F6CD1874653174A39 /* ClaimAssessmentEngine.swift in Sources */,
@@ -2806,6 +2854,7 @@
 				BB82DAE029B3037EBD2911E3 /* ArtifactTests.swift in Sources */,
 				4D56CB5D1904774ED9F0887B /* AvailabilityPolicyTests.swift in Sources */,
 				E9D1DD1FA48A40234E2B4AB5 /* CLIContractSnapshotTests.swift in Sources */,
+				AC7DD52938F35F5A2BAEF0C8 /* CanonicalDatabaseTests.swift in Sources */,
 				48BA1632B4BB71DC87FE0055 /* CanonicalIDTests.swift in Sources */,
 				D8D4EA4BCCC8DE20B8E9F017 /* CanonicalObservationTests.swift in Sources */,
 				5B8CF50AFDB022E8937A50C3 /* ConcentrationRiskEngineTests.swift in Sources */,
@@ -3221,6 +3270,35 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6B022DE239992E6C5229DC3F /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.29.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		17A4E30BDF3DB88746747DD7 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6B022DE239992E6C5229DC3F /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		D53FC9F97D26E9F7B245EAFD /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6B022DE239992E6C5229DC3F /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		F72943D4F44E542635C6695C /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6B022DE239992E6C5229DC3F /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 046249297669E110C3B0E434 /* Project object */;
 }

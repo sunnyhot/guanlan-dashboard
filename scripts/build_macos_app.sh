@@ -22,12 +22,6 @@ ICONSET_DIR="$DIST_DIR/${APP_NAME}.iconset"
 ICON_FILE="$RESOURCES_DIR/${APP_NAME}.icns"
 ICON_MASTER="$ROOT_DIR/macos-app/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-iOS-1024.png"
 ZIP_FILE="/tmp/${APP_NAME}-${APP_VERSION}.zip"
-SWIFT_SOURCES=()
-
-while IFS= read -r file; do
-  SWIFT_SOURCES+=("$file")
-done < <(find "$ROOT_DIR/macos-app" -name '*.swift' ! -name 'Package.swift' ! -path "$ROOT_DIR/macos-app/Tests/*" ! -path "$ROOT_DIR/macos-app/CLI/*" ! -path "$ROOT_DIR/macos-app/Views_iOS/*" ! -path "$ROOT_DIR/macos-app/.build/*" | sort)
-
 echo "[1/8] 清理旧产物"
 rm -rf "$APP_DIR"
 rm -rf "$ICONSET_DIR"
@@ -39,23 +33,18 @@ swift "$ROOT_DIR/scripts/render_macos_icon.swift" "$ICON_MASTER" "$ICONSET_DIR"
 iconutil -c icns "$ICONSET_DIR" -o "$ICON_FILE"
 
 echo "[3/8] 编译原生 macOS 应用"
-# BUILD_CONFIG=debug 时跳过 -O 优化，大幅加速编译（开发调试用）
+# Epic 5（GRDB-1）起 App 依赖 SPM 包（GRDB），裸 swiftc 无法解析外部模块；
+# 改由 SPM 构建可执行产物再拷入 .app。源文件排除规则与最低系统版本以
+# macos-app/Package.swift 为单一事实源（Platforms macOS 14 + 目录 exclude）。
+# BUILD_CONFIG=debug 跳过优化加速编译（开发调试用）；TARGET_ARCH 交叉构建
+# （如 arm64 主机上出 x86_64 包）经 --arch 传递，产物目录由 --show-bin-path 探测。
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
-if [ "$BUILD_CONFIG" = "debug" ]; then
-  SWIFTC_OPT_FLAGS=""
-  echo "  (debug 构建，跳过 -O 优化以加速编译)"
-else
-  SWIFTC_OPT_FLAGS="-O -whole-module-optimization"
-fi
-swiftc \
-  "${SWIFT_SOURCES[@]}" \
-  $SWIFTC_OPT_FLAGS \
-  -target "${TARGET_ARCH}-apple-macos${MIN_MACOS_VERSION}" \
-  -framework SwiftUI \
-  -framework Charts \
-  -framework WebKit \
-  -framework AppKit \
-  -o "$MACOS_DIR/$APP_NAME"
+swift build \
+  --package-path "$ROOT_DIR/macos-app" \
+  -c "$BUILD_CONFIG" \
+  --arch "$TARGET_ARCH"
+SPM_BIN_PATH="$(swift build --package-path "$ROOT_DIR/macos-app" -c "$BUILD_CONFIG" --arch "$TARGET_ARCH" --show-bin-path)"
+cp "$SPM_BIN_PATH/$APP_NAME" "$MACOS_DIR/$APP_NAME"
 
 QIEMAN_CLI_OUTPUT="$MACOS_DIR/qieman-cli" \
   TARGET_ARCH="$TARGET_ARCH" \

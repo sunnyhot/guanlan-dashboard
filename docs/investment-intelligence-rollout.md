@@ -619,6 +619,28 @@ macos-app/
 | GRDB-8 | Data Pipeline：Staging → IdentityResolver → TemporalNormalizer → SchemaValidator → DataValidator → Canonical Commit | GRDB-7, REPO-4,5a,5b | 5 | 四防火墙都在 commit 前 |
 | GRDB-9 | 更新 AGENTS.md 第 6 条（数据持久化约定）承认 GRDB 引入 + iOS framework 链接 + Package.swift/Xcode 配置 + 数据目录规划 | GRDB-1 | 2 | 约定与代码一致；两端构建通过 |
 
+> **状态（2026-08-21）**：M2 已 Pass（见 Epic 3 状态块），Epic 5 解锁。
+> **GRDB-1 已签收（3 点）**——`macos-app/Package.swift` 引入 GRDB ≥ 6.29
+>（`Package.resolved` 锁 6.29.3）+ `InvestmentIntelligenceV2/Persistence/CanonicalDatabase.swift`
+>（DB lifecycle：打开/创建/迁移幂等/内存库；`schemaVersion` 常量与迁移清单
+> 数量一致性有测试守护；迁移**只追加不改写**——已发布 id 改名 = 老库全量
+> 重跑，测试冻结 v1_baseline 首位；迁移失败语义：spool 是事实源（ADR-DATA004），
+> 库是派生物）。7 个测试（CanonicalDatabaseTests）。
+> **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
+> 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
+> 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通
+> 出 .app + ad-hoc 签名 + zip 验证；release 档本机编译通过）；`project.yml`
+> 声明 GRDB.swift package（product 名 GRDB）三 target 依赖，xcodegen 重生成，
+> macOS/iOS 双端 xcodebuild 通过。**GRDB `SQL` 类型污染**：同模块内无标注
+> 字符串闭包链会被 SQL 的 ExpressibleByStringInterpolation + Sequence 扩展
+> 劫持推断（TrendLiveLogPanel.copyLogs 显式 `: String` 修复，AGENTS.md 坑点 17）。
+> **AGENTS.md 第 6 条已随 Epic 5 开始更新**（原「无 SQLite」约定废止，
+> GRDB 限 V2 Canonical Store 范围内使用；GRDB-9 剩余：iOS framework 链接细节
+> 与数据目录规划的最终验收）。swift test 全量绿（1142 过，排除环境性崩溃的
+> AppLaunchPresentationPolicyTests，见下）。
+> **已知环境问题（与 Epic 5 无关）**：`AppLaunchPresentationPolicyTests` 在
+> 本机确定性 signal 11（干净 HEAD 复现），全量跑需 `--skip`；待单独排查。
+
 **里程碑 M4：Canonical Store 上线**。
 
 ---
