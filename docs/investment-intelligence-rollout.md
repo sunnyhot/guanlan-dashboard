@@ -395,20 +395,25 @@ macos-app/
 >   akshare_collector.py 单一实现的搜索顺序：--collector-script → 同目录（VPS
 >   部署）→ 仓库源码树；`--generate-key` 单文件部署即可运行）：消费
 >   PROV-3a staging（dataset 白名单 + 文件名严格匹配 + 路径越界拒收 + staging
->   sha256 复验）→ 快照发布（snapshots/<ts>/ 完整一轮 + `current` symlink 原子
->   切换；manifest 显式登记**本轮通过校验的文件**，generatedAt 取 staging 声明
->   的数据产出时间；manifest.json 对齐 RemoteStagingManifest wire 契约 + 可选
->   manifest.sig Ed25519 签名——签名失败废弃快照不切换 current，manifest 与
->   签名永不错配；空 staging / 全部条目非法同理不切换；保留最近 5 个快照）。
->   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，9 项）：Python
+>   sha256 复验）→ 快照发布（snapshots/<ts>/ 完整一轮 + `snapshot.txt` 单文件
+>   原子指针；manifest 显式登记**本轮通过校验的文件**，generatedAt 取 staging
+>   声明的数据产出时间（缺失/非法 fail-closed 拒发 exit 2——新鲜度锚点不可
+>   伪造）；manifest.json 对齐 RemoteStagingManifest wire 契约 + 可选
+>   manifest.sig Ed25519 签名——签名失败废弃快照不切指针，manifest 与
+>   签名永不错配；空 staging / 全部条目非法同理不切；保留最近 5 个快照）。
+>   **客户端快照固定读取**：一次 sync 只读一次 snapshot.txt 固定快照 ID，
+>   manifest / 签名 / 文件整批从 snapshots/<id>/ 不可变路径读取——中途发布
+>   不破坏批次内部一致性（防「旧 manifest + 新签名」误判篡改）。
+>   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，10 项）：Python
 >   `--selftest` / staging 真实产物 → Swift RemoteStagingProvider 端到端
->   （manifest wire 契约 / sha256 完整性 / 增量轮 / 篡改拒收 / Ed25519——
+>   （manifest wire 契约 + 指针 / sha256 完整性 / 增量轮 / 篡改拒收 / Ed25519——
 >   Python cryptography 签 → CryptoKit 验，篡改 manifest 拒收整批 / 部分
->   dataset 重发不登记旧文件 / 签名失败 current 不动且线上仍可验签消费 /
->   staging 路径穿越拒收 / keygen 无 collector 依赖）。nginx/Cloudflare 部署
->   指引（托管 current/）见 remote-collector/README。
+>   dataset 重发不登记旧文件且 generatedAt 与 staging 逐字节相等 / 签名失败
+>   指针不动且线上仍可验签消费 / generatedAt 缺失 fail-closed / staging 路径
+>   穿越拒收 / keygen 无 collector 依赖）。nginx/Cloudflare 部署
+>   指引（托管整个发布根）见 remote-collector/README。
 >
-> **审查修复记录（2026-08-21，两轮，PROV-3b）**：
+> **审查修复记录（2026-08-21，三轮，PROV-3b）**：
 > - 第一轮（2×P1 + 2×P2）：manifest 改显式登记本轮通过校验的文件（不再扫
 >   目录，旧 dataset 不带新 generatedAt 重新上架），generatedAt 取 staging
 >   声明的数据产出时间；发布改 snapshots/<ts>/ 快照 + current symlink 原子
@@ -428,6 +433,16 @@ macos-app/
 >   staging 的运维说明 + FREE001 受控让步声明进 README；DATA010 → Accepted；
 >   ProviderStagingReader.read 复用 decodeLines（逐行容错单一实现）；剩余项
 >   显式补 App 生产接线（RemoteStagingProvider 当前零生产调用点，SYNC-2 入口）。
+> - 第三轮（2×P1）：**快照固定读取**——current symlink 原子切换只保证单次
+>   路径解析，不保证一次 sync 的多次 HTTP 请求同源（旧 manifest + 新签名 →
+>   误判篡改 + 断路器）；改为 snapshot.txt 单文件原子指针（tmp+rename）+
+>   客户端 fetchCurrentSnapshotID 只读一次、manifest/签名/文件整批从
+>   snapshots/<id>/ 不可变路径读取（fetcher 协议改形，FakeRemoteFetcher
+>   多快照重构，中途发布回归测试用双密钥判定）；**generatedAt fail-closed**——
+>   staging 缺失/非 ISO8601 UTC（含小数秒）时拒发 exit 2（原先 `or now()`
+>   会把 schema 漂移的陈旧数据标成刚产出），契约测试补「published ==
+>   staging 声明值逐字节相等」断言 + 缺失 fail-closed 用例（9→10 项）。
+>   nginx 改托管整个发布根（snapshot.txt + snapshots/），回滚 = 原子改指针。
 >
 > **审查修复记录（2026-08-20，五轮）**：
 > - 第一轮（3×P1 + 4×P2）：非法 Ed25519 公钥 init 抛错不静默降级；state 写失败

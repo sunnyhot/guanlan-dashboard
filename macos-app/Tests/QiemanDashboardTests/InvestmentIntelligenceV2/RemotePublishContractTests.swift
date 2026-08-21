@@ -20,10 +20,16 @@ final class RemotePublishContractTests: XCTestCase {
     private var workDir: URL!
     /// 发布根目录（含 snapshots/ 与 current/）
     private var publishRoot: URL!
-    /// nginx 托管面：publishRoot/current（原子切换 symlink）
-    private var serveDir: URL!
     private var spoolURL: URL!
     private var stateURL: URL!
+
+    /// nginx 托管面上的「当前快照」：snapshot.txt 指针解析出的不可变快照目录。
+    /// 计算属性——每次发布（指针切换）后访问即指向新快照。
+    private var serveDir: URL {
+        let text = (try? String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)) ?? ""
+        let id = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return publishRoot.appendingPathComponent("snapshots").appendingPathComponent(id, isDirectory: true)
+    }
 
     private static var pythonURL: URL? {
         let candidates = [
@@ -102,7 +108,6 @@ final class RemotePublishContractTests: XCTestCase {
             .appendingPathComponent("prov3b-contract-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         publishRoot = workDir.appendingPathComponent("publish", isDirectory: true)
-        serveDir = publishRoot.appendingPathComponent("current")
         spoolURL = workDir.appendingPathComponent("spool.jsonl")
         stateURL = workDir.appendingPathComponent("state.json")
     }
@@ -111,35 +116,51 @@ final class RemotePublishContractTests: XCTestCase {
         if let workDir { try? FileManager.default.removeItem(at: workDir) }
     }
 
-    /// 目录型 fetcher：把 publish 根的 current/（nginx 托管面）当远程根。
+    /// 目录型 fetcher：把 publish 根（snapshots/ + snapshot.txt）当远程根，
+    /// 与生产 URLSession 拉取器同款语义——先读指针，再从不可变快照路径整批读取。
     private struct DirectoryRemoteFetcher: RemoteStagingFetcher, Sendable {
-        let directory: URL
+        let root: URL
 
-        func fetchManifest() async throws -> Data {
-            try Data(contentsOf: directory.appendingPathComponent("manifest.json"))
+        func fetchCurrentSnapshotID() async throws -> String {
+            let text = try String(contentsOf: root.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+            let id = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard URLSessionRemoteStagingFetcher.isValidSnapshotID(id) else {
+                throw RemoteStagingError.malformedManifest(detail: "illegal snapshot id: \(id)")
+            }
+            return id
         }
 
-        func fetchManifestSignature() async throws -> Data {
-            try Data(contentsOf: directory.appendingPathComponent("manifest.sig"))
+        private func pinnedURL(_ name: String, snapshotID: String) -> URL {
+            root.appendingPathComponent("snapshots")
+                .appendingPathComponent(snapshotID)
+                .appendingPathComponent(name)
         }
 
-        func fetchFile(_ name: String) async throws -> Data {
+        func fetchManifest(snapshotID: String) async throws -> Data {
+            try Data(contentsOf: pinnedURL("manifest.json", snapshotID: snapshotID))
+        }
+
+        func fetchManifestSignature(snapshotID: String) async throws -> Data {
+            try Data(contentsOf: pinnedURL("manifest.sig", snapshotID: snapshotID))
+        }
+
+        func fetchFile(_ name: String, snapshotID: String) async throws -> Data {
             // 路径穿越防护与生产 fetcher 同款：manifest 白名单外的路径分隔符拒绝
             guard !name.contains("/") else {
                 throw RemoteStagingError.unavailable(detail: "path traversal rejected: \(name)")
             }
-            return try Data(contentsOf: directory.appendingPathComponent(name))
+            return try Data(contentsOf: pinnedURL(name, snapshotID: snapshotID))
         }
     }
 
     private func makeProvider(publicKey: Data? = nil) throws -> RemoteStagingProvider {
         try RemoteStagingProvider(
-            fetcher: DirectoryRemoteFetcher(directory: serveDir),
+            fetcher: DirectoryRemoteFetcher(root: publishRoot),
             signaturePublicKey: publicKey
         )
     }
 
-    /// 读 current/manifest.json 并以客户端同款方式解码。
+    /// 读指针指向快照的 manifest.json 并以客户端同款方式解码。
     private func decodeCurrentManifest() throws -> RemoteStagingManifest {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -185,8 +206,15 @@ final class RemotePublishContractTests: XCTestCase {
             FileManager.default.fileExists(atPath: serveDir.appendingPathComponent("manifest.sig").path),
             "未提供 --signing-key 时不应产 manifest.sig"
         )
-        // 快照布局：current 是指向 snapshots/<ts> 的 symlink（原子切换点）
-        XCTAssertTrue(FileManager.default.fileExists(atPath: serveDir.path))
+        // 快照布局：snapshot.txt 原子指针（内容 = 快照目录名，白名单字符集）
+        let pointerURL = publishRoot.appendingPathComponent("snapshot.txt")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: pointerURL.path), "应产 snapshot.txt 指针")
+        let pointer = try String(contentsOf: pointerURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(URLSessionRemoteStagingFetcher.isValidSnapshotID(pointer),
+                      "指针内容应是合法快照 ID: \(pointer)")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: serveDir.path),
+                      "指针应指向真实存在的快照目录")
         let snapshots = publishRoot.appendingPathComponent("snapshots")
         let snapshotDirs = try FileManager.default.contentsOfDirectory(at: snapshots, includingPropertiesForKeys: nil)
         XCTAssertEqual(snapshotDirs.count, 1, "一轮发布产一个快照")
@@ -243,7 +271,6 @@ final class RemotePublishContractTests: XCTestCase {
         // 首轮：selftest 全量 5 个 dataset
         try publishSelftest()
         XCTAssertEqual(try decodeCurrentManifest().files.count, 5)
-
         // 二轮：staging 只产 2 个 dataset（--dataset 过滤），其余 3 个是首轮旧文件
         let staging = workDir.appendingPathComponent("partial-staging", isDirectory: true)
         let collector = try runCollector([
@@ -256,18 +283,42 @@ final class RemotePublishContractTests: XCTestCase {
         // 新 manifest 只登记本轮的 2 个文件——旧的 3 个不会带着新 generatedAt 重新上架
         let manifest = try decodeCurrentManifest()
         XCTAssertEqual(Set(manifest.files.map(\.name)), ["stock_daily.jsonl", "fund_nav.jsonl"])
-        // current/（新快照）里也只有这 2 个文件
-        // （contentsOfDirectory 的 URL 版不跟随 symlink，用 path 版）
+        // 指针指向的新快照里也只有这 2 个文件
         let served = try FileManager.default.contentsOfDirectory(atPath: serveDir.path)
         XCTAssertEqual(Set(served),
                        ["stock_daily.jsonl", "fund_nav.jsonl", "manifest.json"])
-        // generatedAt 锚定 staging 产出时间（collector manifest 声明），非发布时刻
+        // generatedAt 与 staging 声明逐字节相等（新鲜度锚定源数据，非发布时刻）
         let stagingManifestData = try Data(contentsOf: staging.appendingPathComponent("manifest.json"))
         let stagingJSON = try XCTUnwrap(
             try JSONSerialization.jsonObject(with: stagingManifestData) as? [String: Any]
         )
+        let stagingGeneratedAt = try XCTUnwrap(stagingJSON["generatedAt"] as? String)
+        let formatter = ISO8601DateFormatter()
+        XCTAssertEqual(manifest.generatedAt, formatter.date(from: stagingGeneratedAt),
+                       "published generatedAt 应等于 staging 声明值: \(stagingGeneratedAt)")
         XCTAssertEqual(manifest.collectorVersion, "0.1.0")
-        XCTAssertNotNil(stagingJSON["generatedAt"], "collector manifest 应带 generatedAt")
+    }
+
+    // MARK: - P1 回归：generatedAt 缺失/非法 fail-closed（新鲜度锚点不可伪造）
+
+    func testPublish_missingGeneratedAt_failsClosedPointerUntouched() throws {
+        try publishSelftest()
+        let pointerBefore = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+
+        // staging 产出后删掉 generatedAt（模拟 schema 漂移/损坏）——拒绝发布，
+        // 不伪造为当前时间
+        let staging = workDir.appendingPathComponent("no-gen-staging", isDirectory: true)
+        let collector = try runCollector(["--out-dir", staging.path, "--selftest"])
+        XCTAssertEqual(collector.status, 0)
+        let manifestURL = staging.appendingPathComponent("manifest.json")
+        var json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+        json.removeValue(forKey: "generatedAt")
+        try JSONSerialization.data(withJSONObject: json).write(to: manifestURL)
+
+        let publish = try runPublisher(["--staging-dir", staging.path, "--publish-dir", publishRoot.path])
+        XCTAssertEqual(publish.status, 2, "缺 generatedAt 应 fail-closed exit 2（stderr: \(publish.stderr)）")
+        let pointerAfter = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+        XCTAssertEqual(pointerAfter, pointerBefore, "指针不得被缺锚点的发布切换")
     }
 
     // MARK: - P1 回归：manifest 与签名事务提交（签名失败 current 不动）

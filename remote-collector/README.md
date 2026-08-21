@@ -17,21 +17,27 @@ FREE001 审查。
  akshare_collector.py（PROV-3a，定时抓取）      RemoteStagingProvider
   → staging（{dataset}.jsonl + manifest）        → 验签 + SchemaValidator
  remote_publish.py（本组件，发布）                → Pipeline → Canonical
-  → snapshots/<ts>/ + current 原子切换           失败 → 降级原生 provider
+  → snapshots/<ts>/ + snapshot.txt 原子指针    失败 → 降级原生 provider
 ```
 
-发布根目录布局（nginx 托管 `current/`）：
+发布根目录布局（nginx 托管发布根）：
 
 ```
 {publish_root}/
   snapshots/<UTC 时间戳>/   # 一轮发布的完整快照：{dataset}.jsonl + manifest.json
                            # [+ manifest.sig]；落地后不可变，保留最近 5 个供回滚
-  current -> snapshots/…   # 原子切换点（symlink rename），nginx 托管根
+  snapshot.txt             # 当前快照指针（tmp + rename 原子切换，内容 = 快照目录名）
 ```
 
-- **事务边界**：manifest 与签名都在快照内完成后才切换 `current`——签名失败 /
-  中途崩溃只废弃该快照，线上服务的版本不受影响，不存在「新 manifest 配旧
-  签名」的错配对
+- **快照固定读取**：客户端一次 sync 跨多次 HTTP 请求（manifest → 签名 → 文件），
+  若每次都解析可变入口，中途发布会让批次混入两个快照（旧 manifest + 新签名 →
+  误判篡改 + 断路器）。客户端只读一次 `snapshot.txt` 固定快照 ID，整批从
+  `snapshots/<id>/` 不可变路径读取——nginx 直接托管发布根
+- **事务边界**：manifest 与签名都在快照内完成后才切换 `snapshot.txt`——签名
+  失败 / 中途崩溃只废弃该快照，线上服务的版本不受影响，不存在「新 manifest 配
+  旧签名」的错配对
+- **回滚**：把指针切回旧快照即可（原子写）：
+  `printf '%s\n' <快照名> > snapshot.txt.tmp && mv snapshot.txt.tmp snapshot.txt`
 - **硬链接约定**：staging 文件与快照共享 inode（`install_file` 优先 hardlink），
   线上不可变性依赖 collector 的 write-then-replace 整文件替换（`os.replace`
   换新 inode）。**不得原地修改 staging 目录下的文件**——那会经硬链接直接
@@ -53,7 +59,7 @@ FREE001 审查。
 - **只处理公开市场数据**；用户私有凭证（且慢 cookie / 个人持仓）永不进入本链路
 - staging 仍走 App 端完整 Pipeline（SchemaValidator → ObservationFactory →
   Canonical Commit），服务端不写 Canonical
-- 空 staging（无 status=ok dataset）不切换 current（线上继续服务上一轮快照，
+- 空 staging（无 status=ok dataset）不切指针（线上继续服务上一轮快照，
   客户端靠新鲜度监控降级）
 
 ## VPS 部署
@@ -77,9 +83,9 @@ python3 remote_publish.py --generate-key /etc/collector/ed25519.pem
 
 nginx 侧要点（完整配置按机器情况调整）：
 
-- `location /staging/ { alias /var/www/staging/current/; }`——托管**current/**
-  （符号链接默认跟随）；**原样返回字节**（manifest.sig 签的是磁盘精确字节，
-  禁用任何改写响应体的模块）
+- `location /staging/ { alias /var/www/staging/; }`——托管**整个发布根**
+  （`snapshot.txt` 指针 + `snapshots/` 不可变历史）；**原样返回字节**
+  （manifest.sig 签的是磁盘精确字节，禁用任何改写响应体的模块）
 - 校验 `X-Collector-Key`（App 端 `URLSessionRemoteStagingFetcher` 携带），
   无/错 key 返回 403；配 `limit_req` 防白嫖（超限 429，客户端自动降级）
 - 建议前置 Cloudflare 免费层（隐藏源 IP + Bot 防护，DATA010 §4）
@@ -95,5 +101,5 @@ python3 remote_publish.py --selftest --publish-dir /tmp/publish [--signing-key K
 Tests）即基于此：Python 产物 → Swift `RemoteStagingProvider` 端到端，包括
 Ed25519（Python `cryptography` 签 → Swift CryptoKit 验）。
 
-退出码：`0` 发布成功；`1` 没有任何 dataset 通过校验（不切换 current）；
+退出码：`0` 发布成功；`1` 没有任何 dataset 通过校验（不切指针）；
 `2` 配置/环境错误（含找不到 akshare_collector.py、密钥不可读）。

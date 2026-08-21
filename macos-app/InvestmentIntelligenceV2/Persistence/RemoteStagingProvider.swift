@@ -72,13 +72,21 @@ struct RemoteStagingJournal: Sendable, Codable, Hashable {
 // MARK: - Fetcher（生产 HTTP / 测试注入）
 
 /// 远程 staging 拉取器。
+///
+/// **快照固定读取**（审查 P1）：一次 sync 跨多次 HTTP 请求（manifest → 签名 →
+/// 文件），若每次请求都解析可变入口，中途发布会让批次混入两个快照（旧 manifest +
+/// 新签名 → 误判篡改 + 打开断路器）。因此先读一次 `snapshot.txt`（服务端单文件
+/// 原子切换）固定快照 ID，manifest / 签名 / 文件全部从 `snapshots/<id>/`
+/// **不可变路径**读取——本轮批次内部一致性不受并发发布影响。
 protocol RemoteStagingFetcher: Sendable {
-    /// 拉取 manifest.json 原始字节（验签需要原始字节，不在本层解码）。
-    func fetchManifest() async throws -> Data
-    /// 拉取 manifest.sig（Ed25519 签名，raw 64 字节）。未配置验签的部署不会被调用。
-    func fetchManifestSignature() async throws -> Data
-    /// 拉取 staging 文件原始字节。
-    func fetchFile(_ name: String) async throws -> Data
+    /// 当前快照 ID（读 `snapshot.txt`；一次 sync 只读一次并固定）。
+    func fetchCurrentSnapshotID() async throws -> String
+    /// 固定快照的 manifest.json 原始字节（验签需要原始字节，不在本层解码）。
+    func fetchManifest(snapshotID: String) async throws -> Data
+    /// 固定快照的 manifest.sig（Ed25519 签名，raw 64 字节）。未配置验签的部署不会被调用。
+    func fetchManifestSignature(snapshotID: String) async throws -> Data
+    /// 固定快照的 staging 文件原始字节。
+    func fetchFile(_ name: String, snapshotID: String) async throws -> Data
 }
 
 enum RemoteStagingError: Error, Equatable, Hashable, Sendable {
@@ -97,7 +105,8 @@ enum RemoteStagingError: Error, Equatable, Hashable, Sendable {
     case unavailable(detail: String)
 }
 
-/// URLSession 拉取器（生产）。manifest / 文件 / 签名都在同一 base URL 下。
+/// URLSession 拉取器（生产）。发布根下：snapshot.txt（原子指针）+
+/// snapshots/<id>/（不可变快照，manifest / 签名 / 文件同源）。
 struct URLSessionRemoteStagingFetcher: RemoteStagingFetcher {
     private let baseURL: URL
     private let collectorKey: String?
@@ -113,20 +122,47 @@ struct URLSessionRemoteStagingFetcher: RemoteStagingFetcher {
         self.session = session
     }
 
-    func fetchManifest() async throws -> Data {
-        try await get(baseURL.appendingPathComponent("manifest.json"))
+    func fetchCurrentSnapshotID() async throws -> String {
+        let data = try await get(baseURL.appendingPathComponent("snapshot.txt"))
+        guard let id = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            Self.isValidSnapshotID(id) else {
+            throw RemoteStagingError.malformedManifest(detail: "illegal snapshot id")
+        }
+        return id
     }
 
-    func fetchManifestSignature() async throws -> Data {
-        try await get(baseURL.appendingPathComponent("manifest.sig"))
+    func fetchManifest(snapshotID: String) async throws -> Data {
+        try await get(Self.pinnedURL(base: baseURL, snapshotID: snapshotID, name: "manifest.json"))
     }
 
-    func fetchFile(_ name: String) async throws -> Data {
+    func fetchManifestSignature(snapshotID: String) async throws -> Data {
+        try await get(Self.pinnedURL(base: baseURL, snapshotID: snapshotID, name: "manifest.sig"))
+    }
+
+    func fetchFile(_ name: String, snapshotID: String) async throws -> Data {
         // 文件名来自 manifest（已验签/已拉取的白名单），仍拒绝路径穿越
         guard !name.contains("/"), !name.contains("..") else {
             throw RemoteStagingError.malformedManifest(detail: "illegal file name \(name)")
         }
-        return try await get(baseURL.appendingPathComponent(name))
+        return try await get(Self.pinnedURL(base: baseURL, snapshotID: snapshotID, name: name))
+    }
+
+    /// 快照固定的不可变路径：{base}/snapshots/{id}/{name}。
+    static func pinnedURL(base: URL, snapshotID: String, name: String) -> URL {
+        base.appendingPathComponent("snapshots")
+            .appendingPathComponent(snapshotID)
+            .appendingPathComponent(name)
+    }
+
+    /// 快照 ID 白名单：服务端命名是 UTC 时间戳 + 可选序号；指针内容参与 URL
+    /// 路径构造，必须严格校验（挡注入 / 穿越）。
+    static func isValidSnapshotID(_ id: String) -> Bool {
+        guard !id.isEmpty, id.count <= 64 else { return false }
+        return id.unicodeScalars.allSatisfy { scalar in
+            ("0"..."9").contains(scalar) || ("A"..."Z").contains(scalar)
+                || ("a"..."z").contains(scalar) || scalar == "-" || scalar == "_"
+        }
     }
 
     private func get(_ url: URL) async throws -> Data {
@@ -192,7 +228,8 @@ enum RemoteStagingSyncOutcome: Sendable, Hashable {
 ///
 /// sync 流程：
 /// 1. 断路器检查（退避期内直接 .skipped，避免疯狂重试触发更严风控）
-/// 2. 拉 manifest（原始字节）→（可选）Ed25519 验签 → 解码
+/// 2. 读 snapshot.txt 固定快照 ID → 从 snapshots/<id>/ 不可变路径拉 manifest
+///    （原始字节）→（可选）Ed25519 验签 → 解码（整批同源，不受并发发布影响）
 /// 3. 比对本地 state：sha256 相同的文件跳过（增量，DATA010 §5）
 /// 4. 下载变化文件 → sha256 校验（不符拒收该文件并计数）
 /// 5. Reader 解析 JSONL → SchemaValidator 分桶 → 合法记录 append 本地 spool
@@ -298,10 +335,13 @@ actor RemoteStagingProvider {
             // state 读取/解码失败终止本轮（loadState 抛错，不当空 state——审查 P1：
             // 增基线错误会导致重复下载并再次追加）
             var state = try Self.loadState(from: stateURL, decoder: decoder)
-            // 2. manifest：原始字节 →（可选）验签 → 解码
-            let manifestData = try await fetcher.fetchManifest()
+            // 2. 固定快照：snapshot.txt 只读一次，manifest / 签名 / 文件全部从
+            // snapshots/<id>/ 不可变路径读取——中途发布（指针切换）不影响本轮
+            // 批次的内部一致性（审查 P1：防「旧 manifest + 新签名」误判篡改）
+            let snapshotID = try await fetcher.fetchCurrentSnapshotID()
+            let manifestData = try await fetcher.fetchManifest(snapshotID: snapshotID)
             if let key = signaturePublicKey {
-                let signature = try await fetcher.fetchManifestSignature()
+                let signature = try await fetcher.fetchManifestSignature(snapshotID: snapshotID)
                 guard key.isValidSignature(signature, for: manifestData) else {
                     // 验签失败按被攻陷处理：拒收整批 + 打开断路器（DATA010 §5）
                     recordFailure()
@@ -335,7 +375,7 @@ actor RemoteStagingProvider {
                     unchanged += 1
                     continue
                 }
-                let data = try await fetcher.fetchFile(file.name)
+                let data = try await fetcher.fetchFile(file.name, snapshotID: snapshotID)
                 guard Self.sha256Hex(data) == file.sha256.lowercased() else {
                     tampered += 1   // 拒收该文件，其余继续（内容未触碰 spool）
                     continue

@@ -2,16 +2,21 @@
 """远程 staging 发布器（PROV-3b 服务端，ADR-DATA010）。
 
 消费 PROV-3a collector 的 staging 输出（{dataset}.jsonl + manifest.json），
-产出 nginx 静态托管的发布目录（快照 + current 原子切换）：
+产出 nginx 静态托管的发布根（快照 + 原子指针）：
 
   {publish_root}/
     snapshots/<时间戳>/      # 一轮发布的完整快照：{dataset}.jsonl +
                              #   manifest.json [+ manifest.sig]，落地后不可变
-    current -> snapshots/…   # 原子切换点（symlink rename），nginx 托管根指向它
+    snapshot.txt             # 当前快照指针（tmp + rename 原子切换，内容 = 快照目录名）
 
-事务边界：manifest 与签名都在快照目录内完成后才切换 current——签名失败 /
+事务边界：manifest 与签名都在快照目录内完成后才切换 snapshot.txt——签名失败 /
 中途崩溃只废弃该快照，线上正在服务的版本不受影响，不会出现
 「新 manifest 配旧签名」的错配。保留最近 N 个快照供回滚。
+
+**快照固定读取**：客户端一次 sync 跨多次 HTTP 请求（manifest → 签名 → 文件），
+若每次都读可变入口，中途发布会让批次混入两个快照（旧 manifest + 新签名 →
+误判篡改）。因此客户端只读一次 snapshot.txt 固定快照 ID，整批从
+snapshots/<id>/ 不可变路径读取；nginx 托管整个发布根。
 
 manifest wire 契约（与 Swift RemoteStagingManifest Codable 字节对齐，跨语言
 契约测试守护）：
@@ -48,8 +53,9 @@ dataset 不会带着新 generatedAt 重新上架；generatedAt 取 staging 的�
   # 离线自检（不联网、不依赖 akshare / staging 目录，产固定样本走完整发布路径）
   remote_publish.py --selftest --publish-dir /tmp/publish [--signing-key KEY]
 
-退出码：0 = 发布成功；1 = 没有任何 dataset 通过校验（**不切换 current**，
-线上继续服务上一轮快照，客户端靠新鲜度监控降级）；2 = 配置/环境错误。
+退出码：0 = 发布成功；1 = 没有任何 dataset 通过校验（**不切换 snapshot.txt**，
+线上继续服务上一轮快照，客户端靠新鲜度监控降级）；2 = 配置/环境错误
+（含 staging 缺少合法 generatedAt——新鲜度锚点不可伪造）。
 """
 
 import argparse
@@ -57,6 +63,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
@@ -176,8 +183,22 @@ def sign_manifest(manifest_path: Path, key_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# 快照（snapshot）与原子切换
+# 快照（snapshot）与 current 指针
+#
+# 客户端一次 sync 跨多次 HTTP 请求（manifest → 签名 → 文件）。若每次请求都
+# 读可变入口（指针），中途发布会让批次混入两个快照（旧 manifest + 新签名 →
+# 误判篡改）。因此：
+# - 服务端把「当前快照」写进 **snapshot.txt 单文件**（tmp + os.replace，
+#   原子切换；nginx 直接托管发布根，snapshots/<id>/ 不可变路径可寻址）
+# - 客户端只读一次 snapshot.txt 固定快照 ID，整批从 snapshots/<id>/ 读取
 # ---------------------------------------------------------------------------
+
+# 快照目录名 = UTC 时间戳（%Y%m%dT%H%M%SZ）+ 可选 -<序号>；指针文件内容校验用
+SNAPSHOT_NAME_RE = re.compile(r"^[0-9A-Za-z_-]{1,64}$")
+
+# staging manifest 的 generatedAt（ISO8601 UTC，无小数秒——与 Swift .iso8601 对齐）
+ISO_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
 
 def new_snapshot_dir(publish_root: Path) -> Path:
     """创建本轮快照目录（publish_root/snapshots/<UTC 时间戳>，重名加序号）。"""
@@ -201,33 +222,32 @@ def install_file(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
-def atomic_switch_current(publish_root: Path, snapshot_dir: Path) -> None:
-    """current symlink 原子切换到新快照（rename 语义，读端看不到中间态）。"""
-    current = publish_root / "current"
-    # current 是运维约定的切换点，只应是 symlink；真目录/普通文件说明发布根
-    # 被外部改动过——明确报错交人工检查，不猜测语义继续跑
-    if current.exists() and not current.is_symlink():
-        raise RuntimeError(f"current 已存在且不是 symlink（{current}），发布根目录状态异常")
-    tmp = publish_root / "current.tmp"
-    if tmp.is_symlink() or tmp.is_file():
-        tmp.unlink()
-    elif tmp.is_dir():
-        shutil.rmtree(tmp)
-    # 相对目标（snapshots/<name>）：随 publish_root 整体迁移仍有效
-    os.symlink(f"snapshots/{snapshot_dir.name}", tmp)
-    os.replace(tmp, current)
+def switch_current_pointer(publish_root: Path, snapshot_dir: Path) -> None:
+    """snapshot.txt 原子切换到新快照（tmp + rename，读端只看到完整的新旧之一）。"""
+    pointer = publish_root / "snapshot.txt"
+    tmp = publish_root / "snapshot.txt.tmp"
+    tmp.write_text(snapshot_dir.name + "\n", encoding="utf-8")
+    os.replace(tmp, pointer)
+
+
+def current_pointer_value(publish_root: Path) -> Optional[str]:
+    """读当前指针（不存在/不合法返回 None，供 prune 保留判断）。"""
+    pointer = publish_root / "snapshot.txt"
+    if not pointer.is_file():
+        return None
+    value = pointer.read_text(encoding="utf-8").strip()
+    return value if SNAPSHOT_NAME_RE.match(value) else None
 
 
 def prune_snapshots(publish_root: Path, keep: int) -> None:
-    """保留最近 keep 个快照 + current 指向的那个，其余清理（回滚窗口之外的数据）。"""
+    """保留最近 keep 个快照 + 指针指向的那个，其余清理（回滚窗口之外的数据）。"""
     snapshots = publish_root / "snapshots"
     if not snapshots.is_dir():
         return
     dirs = sorted((d for d in snapshots.iterdir() if d.is_dir()), reverse=True)
     keep_names = {d.name for d in dirs[: max(keep, 1)]}
-    current = publish_root / "current"
-    if current.is_symlink():
-        keep_names.add(os.readlink(current).rsplit("/", 1)[-1])
+    if (pinned := current_pointer_value(publish_root)) is not None:
+        keep_names.add(pinned)
     for d in dirs:
         if d.name not in keep_names:
             shutil.rmtree(d, ignore_errors=True)
@@ -270,7 +290,8 @@ def finalize_snapshot(
     """快照内完成 manifest（+签名）→ 原子切换 current → 清理旧快照。
 
     事务边界：切换前快照对外不可见；manifest / 签名 / 数据文件在同一快照内
-    成对出现，线上永远看不到「新 manifest 配旧签名」或半成品目录。
+    成对出现，客户端固定快照 ID 后从不可变路径整批读取，线上永远看不到
+    「新 manifest 配旧签名」或半成品目录。
     """
     ak = collector_module()
     manifest = {
@@ -285,11 +306,11 @@ def finalize_snapshot(
             sign_manifest(snapshot / "manifest.json", signing_key)
         except Exception as exc:  # 私钥不可读 / cryptography 缺失：废弃快照，线上不动
             shutil.rmtree(snapshot, ignore_errors=True)
-            print(f"[remote-publish] 签名失败（快照已废弃，current 未切换）: {exc}", file=sys.stderr)
+            print(f"[remote-publish] 签名失败（快照已废弃，指针未切换）: {exc}", file=sys.stderr)
             return False
-    atomic_switch_current(publish_root, snapshot)
+    switch_current_pointer(publish_root, snapshot)
     prune_snapshots(publish_root, keep=SNAPSHOT_KEEP_DEFAULT)
-    print(f"[remote-publish] current → {snapshot.name}（{len(file_entries)} 文件）")
+    print(f"[remote-publish] snapshot.txt → {snapshot.name}（{len(file_entries)} 文件）")
     return True
 
 
@@ -301,15 +322,27 @@ def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Opt
         print(f"[remote-publish] staging manifest 不可读: {exc}", file=sys.stderr)
         return 2
 
+    # 新鲜度锚点 fail-closed（审查 P1）：generatedAt 缺失/非法时拒绝发布——
+    # 伪造为当前时间会让陈旧数据（schema 漂移的受害者）看起来刚刚产出
+    generated_at = staging_manifest.get("generatedAt")
+    if not isinstance(generated_at, str) or not ISO_Z_RE.match(generated_at):
+        print(
+            "[remote-publish] staging manifest 缺少合法 generatedAt（ISO8601 UTC），"
+            "新鲜度锚点不可伪造，拒绝发布",
+            file=sys.stderr,
+        )
+        return 2
+    collector_version = staging_manifest.get("collectorVersion") or collector_module().COLLECTOR_VERSION
+
     ok_entries = [
         (name, entry)
         for name, entry in staging_manifest.get("datasets", {}).items()
         if entry.get("status") == "ok" and entry.get("file")
     ]
     if not ok_entries:
-        # 不切换 current：空清单会把客户端新鲜度打穿，且覆盖上一轮有效发布
+        # 不切指针：空清单会把客户端新鲜度打穿，且覆盖上一轮有效发布
         print(
-            "[remote-publish] staging 中没有任何 status=ok 的 dataset，current 保持不变",
+            "[remote-publish] staging 中没有任何 status=ok 的 dataset，snapshot.txt 保持不变",
             file=sys.stderr,
         )
         return 1
@@ -332,14 +365,9 @@ def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Opt
 
     if not file_entries:
         shutil.rmtree(snapshot, ignore_errors=True)
-        print("[remote-publish] 没有任何 dataset 通过校验，current 保持不变", file=sys.stderr)
+        print("[remote-publish] 没有任何 dataset 通过校验，snapshot.txt 保持不变", file=sys.stderr)
         return 1
 
-    # generatedAt 锚定数据产出时间（staging manifest 声明），不是本轮发布动作
-    generated_at = staging_manifest.get("generatedAt") or collector_module().iso_z(
-        datetime.now(timezone.utc)
-    )
-    collector_version = staging_manifest.get("collectorVersion") or collector_module().COLLECTOR_VERSION
     return 0 if finalize_snapshot(
         publish_root, snapshot, file_entries, collector_version, generated_at, signing_key
     ) else 2

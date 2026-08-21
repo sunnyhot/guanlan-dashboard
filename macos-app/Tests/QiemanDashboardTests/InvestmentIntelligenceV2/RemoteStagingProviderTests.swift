@@ -74,35 +74,76 @@ final class RemoteStagingProviderTests: XCTestCase {
         )
     }
 
-    /// 测试 fetcher：内存 manifest / 文件 / 签名 + 可注入错误。
+    /// 测试 fetcher：多快照内存存储 + 可注入错误。
+    ///
+    /// manifest / 签名 / 文件按快照隔离存储，`fetchCurrentSnapshotID` 返回
+    /// `currentSnapshotID`——`onFetchSnapshotID` 钩子可模拟「客户端取到 ID 后、
+    /// 读内容前发生发布」（切指针），用于验证快照固定读取的批次一致性。
+    /// 顶层便捷属性（manifestData / manifestSignature / files）读写 current 快照，
+    /// 保持既有用例的构造姿势不变。
     private final class FakeRemoteFetcher: RemoteStagingFetcher, @unchecked Sendable {
-        var manifestData: Data
-        var manifestSignature: Data?
-        var files: [String: Data] = [:]
+        struct Snapshot {
+            var manifestData: Data
+            var manifestSignature: Data?
+            var files: [String: Data] = [:]
+        }
+
+        var snapshots: [String: Snapshot]
+        var currentSnapshotID: String
         var manifestError: Error?
         var fileErrors: [String: Error] = [:]
         /// 拉取文件时的副作用（模拟「append 前一刻持久层故障」——loadState 已过、
         /// checkpoint 将失败的时间窗）
         var onFetchFile: (@Sendable (String) -> Void)?
+        /// fetchCurrentSnapshotID 返回前触发（模拟读取期间发生发布）
+        var onFetchSnapshotID: (@Sendable () -> Void)?
 
-        init(manifestData: Data) {
-            self.manifestData = manifestData
+        init(manifestData: Data, currentSnapshotID: String = "snap-1") {
+            self.currentSnapshotID = currentSnapshotID
+            self.snapshots = [currentSnapshotID: Snapshot(manifestData: manifestData)]
         }
 
-        func fetchManifest() async throws -> Data {
+        /// 便捷读写：current 快照的 manifest（既有用例构造姿势）
+        var manifestData: Data {
+            get { snapshots[currentSnapshotID]?.manifestData ?? Data() }
+            set { snapshots[currentSnapshotID, default: Snapshot(manifestData: Data())].manifestData = newValue }
+        }
+
+        var manifestSignature: Data? {
+            get { snapshots[currentSnapshotID]?.manifestSignature }
+            set { snapshots[currentSnapshotID, default: Snapshot(manifestData: Data())].manifestSignature = newValue }
+        }
+
+        var files: [String: Data] {
+            get { snapshots[currentSnapshotID]?.files ?? [:] }
+            set { snapshots[currentSnapshotID, default: Snapshot(manifestData: Data())].files = newValue }
+        }
+
+        func fetchCurrentSnapshotID() async throws -> String {
             if let manifestError { throw manifestError }
-            return manifestData
+            let id = currentSnapshotID
+            onFetchSnapshotID?()
+            return id
         }
 
-        func fetchManifestSignature() async throws -> Data {
-            if let manifestSignature { return manifestSignature }
-            throw RemoteStagingError.unavailable(detail: "no signature")
+        func fetchManifest(snapshotID: String) async throws -> Data {
+            guard let snapshot = snapshots[snapshotID] else {
+                throw RemoteStagingError.unavailable(detail: "no snapshot \(snapshotID)")
+            }
+            return snapshot.manifestData
         }
 
-        func fetchFile(_ name: String) async throws -> Data {
+        func fetchManifestSignature(snapshotID: String) async throws -> Data {
+            guard let signature = snapshots[snapshotID]?.manifestSignature else {
+                throw RemoteStagingError.unavailable(detail: "no signature")
+            }
+            return signature
+        }
+
+        func fetchFile(_ name: String, snapshotID: String) async throws -> Data {
             onFetchFile?(name)
             if let error = fileErrors[name] { throw error }
-            guard let data = files[name] else {
+            guard let data = snapshots[snapshotID]?.files[name] else {
                 throw RemoteStagingError.unavailable(detail: "no fixture for \(name)")
             }
             return data
@@ -179,6 +220,50 @@ final class RemoteStagingProviderTests: XCTestCase {
 
     // MARK: - wire 契约闸门（审查 P1）
 
+    func testSync_publishDuringSession_readsPinnedSnapshotConsistently() async throws {
+        // 取到快照 ID 之后、读 manifest 之前发生发布（指针切换到新快照）——
+        // 本轮仍完整读取旧快照（manifest + 签名 + 文件同源），不误判篡改。
+        // 两个快照用不同 Ed25519 密钥签名：若混读必然验签失败（旧行为），
+        // 固定路径读取则成功——这是本回归的判定器
+        let oldKey = Curve25519.Signing.PrivateKey()
+        let newKey = Curve25519.Signing.PrivateKey()
+
+        let oldFile = jsonl([makeRecord()])
+        let oldManifest = manifest(files: [fileEntry(name: "stock_daily.jsonl", data: oldFile)])
+        let newFile = jsonl([makeRecord(symbol: "000001"), makeRecord(symbol: "600036")])
+        let newManifest = manifest(
+            files: [fileEntry(name: "stock_daily.jsonl", data: newFile)],
+            generatedAt: now.addingTimeInterval(3_600)
+        )
+
+        let fetcher = FakeRemoteFetcher(manifestData: oldManifest, currentSnapshotID: "20260821T000000Z")
+        fetcher.snapshots["20260821T000000Z"]?.manifestSignature = try oldKey.signature(for: oldManifest)
+        fetcher.snapshots["20260821T000000Z"]?.files = ["stock_daily.jsonl": oldFile]
+        fetcher.snapshots["20260821T010000Z"] = FakeRemoteFetcher.Snapshot(
+            manifestData: newManifest,
+            manifestSignature: try newKey.signature(for: newManifest),
+            files: ["stock_daily.jsonl": newFile]
+        )
+        // 客户端拿到旧 ID 的瞬间服务端切指针——后续内容读取必须仍走旧快照
+        fetcher.onFetchSnapshotID = { fetcher.currentSnapshotID = "20260821T010000Z" }
+
+        let dir = tempDir
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let provider = try makeProvider(fetcher: fetcher, publicKey: oldKey.publicKey.rawRepresentation)
+        let outcome = await provider.sync(
+            to: dir.appendingPathComponent("spool.jsonl"),
+            state: dir.appendingPathComponent("state.json")
+        )
+
+        guard case .synced(let summary) = outcome else {
+            return XCTFail("中途发布不应破坏批次一致性, got \(outcome)")
+        }
+        XCTAssertEqual(summary.recordsAppended, 1, "读取的是旧快照的 1 条记录")
+        let spool = try ProviderStagingReader().read(from: dir.appendingPathComponent("spool.jsonl"))
+        XCTAssertEqual(spool.map(\.providerCode.value), ["600519"], "spool 内容来自旧快照")
+    }
+
     func testSync_unsupportedManifestVersion_rejectedFailClosed() async throws {
         // 服务端 bump version=2 时客户端显式拒绝，不静默按 v1 语义解读
         let dir = tempDir
@@ -218,7 +303,10 @@ final class RemoteStagingProviderTests: XCTestCase {
             collectorKey: "test-collector-key",
             session: session
         )
-        let data = try await fetcher.fetchManifest()
+        // 先固定快照 ID，再取 manifest（与 sync 流程同款顺序）
+        let snapshotID = try await fetcher.fetchCurrentSnapshotID()
+        XCTAssertTrue(URLSessionRemoteStagingFetcher.isValidSnapshotID(snapshotID))
+        let data = try await fetcher.fetchManifest(snapshotID: snapshotID)
         XCTAssertFalse(data.isEmpty)
 
         let request = try XCTUnwrap(RequestRecorderProtocol.lastRequest, "URLProtocol 应捕获到请求")
@@ -937,6 +1025,13 @@ private final class RequestRecorderProtocol: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         Self.lastRequest = request
+        // snapshot.txt 返回合法快照 ID；其余路径返回预置 stubData
+        let body: Data
+        if request.url?.lastPathComponent == "snapshot.txt" {
+            body = Data("20260821T000000Z\n".utf8)
+        } else {
+            body = Self.stubData
+        }
         let response = HTTPURLResponse(
             url: request.url!,
             statusCode: 200,
@@ -944,7 +1039,7 @@ private final class RequestRecorderProtocol: URLProtocol, @unchecked Sendable {
             headerFields: ["Last-Modified": "Wed, 21 Aug 2026 00:00:00 GMT"]   // 触发启发式缓存的典型响应头
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.stubData)
+        client?.urlProtocol(self, didLoad: body)
         client?.urlProtocolDidFinishLoading(self)
     }
 
