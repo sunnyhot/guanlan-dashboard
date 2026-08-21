@@ -404,7 +404,7 @@ macos-app/
 >   **客户端快照固定读取**：一次 sync 只读一次 snapshot.txt 固定快照 ID，
 >   manifest / 签名 / 文件整批从 snapshots/<id>/ 不可变路径读取——中途发布
 >   不破坏批次内部一致性（防「旧 manifest + 新签名」误判篡改）。
->   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，11 项）：Python
+>   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，12 项）：Python
 >   `--selftest` / staging 真实产物 → Swift RemoteStagingProvider 端到端
 >   （manifest wire 契约 + 指针 / sha256 完整性 / 增量轮 / 篡改拒收 / Ed25519——
 >   Python cryptography 签 → CryptoKit 验，篡改 manifest 拒收整批 / 部分
@@ -414,7 +414,16 @@ macos-app/
 >   25:61:61）fail-closed）。nginx/Cloudflare 部署
 >   指引（托管整个发布根）见 remote-collector/README。
 >
-> **审查修复记录（2026-08-21，四轮，PROV-3b）**：
+> **审查修复记录（2026-08-21，五轮，PROV-3b）**：
+> - 第五轮（1×P1 + 1×P2）：**signed 保证范围收窄**——私钥（未加密 PEM）
+>   与 collector/publisher 同机，完整主机失陷时「攻击者无私钥」不成立
+>   （可读私钥或在签名前替换 staging，产出合法签名的伪造数据）；DATA010 §5
+>   + README 显式改为「静态目录/nginx/传输链被攻陷且 signer 与私钥可信」，
+>   整机失陷不在保证内，覆盖它需签名移独立信任域（当前范围外）。
+>   **generatedAt 未来上界**——远未来时间戳会让新鲜度监控永不触发
+>   degraded（时钟错误/损坏 staging）；超过 now + 10min 容忍度即 exit 2
+>   指针不动（近未来容忍放行），契约测试补远未来用例（11→12 项）。
+> - 第四轮（1×P1 + 2×P2）：
 > - 第四轮（1×P1 + 2×P2）：**威胁模型分档**——「最坏 rollback」结论只适用
 >   signed 模式；unsigned（不传 --signing-key / 客户端不配公钥）下攻陷方可
 >   同时改数据与 manifest sha256，客户端接受伪造数据。DATA010 §5 + README

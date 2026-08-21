@@ -351,6 +351,26 @@ final class RemotePublishContractTests: XCTestCase {
         }
     }
 
+    func testPublish_farFutureGeneratedAt_failsClosed() throws {
+        // 合法日历但远未来的时间戳（时钟错误/损坏 staging）：不设上界会让
+        // 客户端新鲜度监控永不触发 degraded——服务端须拒收（now + 容忍度以内才放行）
+        try publishSelftest()
+        let pointerBefore = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+
+        let staging = workDir.appendingPathComponent("far-future-staging", isDirectory: true)
+        let collector = try runCollector(["--out-dir", staging.path, "--selftest"])
+        XCTAssertEqual(collector.status, 0)
+        let manifestURL = staging.appendingPathComponent("manifest.json")
+        var json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+        json["generatedAt"] = "2099-12-31T23:59:59Z"
+        try JSONSerialization.data(withJSONObject: json).write(to: manifestURL)
+
+        let publish = try runPublisher(["--staging-dir", staging.path, "--publish-dir", publishRoot.path])
+        XCTAssertEqual(publish.status, 2, "远未来 generatedAt 应 fail-closed exit 2（stderr: \(publish.stderr)）")
+        let pointer = try String(contentsOf: publishRoot.appendingPathComponent("snapshot.txt"), encoding: .utf8)
+        XCTAssertEqual(pointer, pointerBefore, "远未来锚点不得切换指针")
+    }
+
     // MARK: - P1 回归：manifest 与签名事务提交（签名失败 current 不动）
 
     func testSigningFailure_keepsCurrentUnchanged() async throws {

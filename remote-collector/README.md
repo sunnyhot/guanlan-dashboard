@@ -53,15 +53,19 @@ FREE001 审查。
 **验签强度分两档，生产必须 signed（发布器对 unsigned 发布打 stderr 告警）**：
 
 - **signed（生产强制：`--signing-key` + App 端验签公钥都配齐）**：
-  - VPS/nginx 被攻陷的最坏效果是 **rollback，不是数据伪造**：无私钥造不出
-    能过验签的 manifest，只能把客户端指向 `snapshots/` 里已存在的旧快照
-    （旧 manifest + 旧签名对仍验签通过）。数据真实性由 Ed25519 保证，
-    攻陷影响的是新鲜度/可用性
-  - **指针 `snapshot.txt` 本身不签名（signed 模式下的已知残余风险）**：
-    能改写指针的一方（服务端攻陷、明文 HTTP 中间人）可指回旧快照。兜底：
+  - 保证范围（显式收窄）：**静态托管目录 / nginx / 传输链被攻陷，且签名进程
+    与私钥仍可信**时，最坏效果是 **rollback，不是数据伪造**——无私钥造不出
+    能过验签的 manifest，只能把客户端指向 `snapshots/` 里已存在的旧快照。
+    **完整 collector 主机失陷不在此保证内**：默认部署私钥（未加密 PEM,
+    0600）与 collector/publisher 同机，主机失陷可读私钥、或在签名前替换
+    staging，产出合法签名的伪造数据；若需覆盖整机失陷，签名须移到独立
+    信任域（离线/CI 签名或独立签名机——当前范围外）
+  - **指针 `snapshot.txt` 本身不签名（signed 且私钥未失陷时的已知残余风险）**：
+    能改写指针的一方（托管链攻陷、明文 HTTP 中间人）可指回旧快照。兜底：
     `manifest.generatedAt` 新鲜度监控（超 N 小时 → ProviderHealth
     `.degraded`，陈旧不冒充新鲜）；generatedAt 服务端严格解析（真实日历
-    时间 + round-trip）+ fail-closed，无法经发布链伪造
+    时间 + round-trip + **未来上界**：不得超过 now + 时钟偏差容忍度）+
+    fail-closed，无法经发布链伪造
 - **unsigned（仅测试 / 受信网络）**：不签名时 sha256 只对**同源 manifest**
   负责——攻陷方可同时改数据与 manifest 里的 sha256，客户端将**接受伪造
   数据**。此模式不提供对抗服务端攻陷的任何真实性保证（只防传输损坏/

@@ -82,6 +82,10 @@ REPO_COLLECTOR = (
 
 PUBLISH_MANIFEST_VERSION = 1
 SNAPSHOT_KEEP_DEFAULT = 5
+# generatedAt 未来上界容忍度：collector 与 publisher 的时钟偏差余量。
+# 远未来时间戳（时钟错误/损坏 staging）会让客户端新鲜度监控永不触发
+# degraded——超过 now + 容忍度即拒收（fail-closed，宁可拒发不可伪造新鲜）
+GENERATED_AT_FUTURE_TOLERANCE_SECONDS = 10 * 60
 # 快照清理宽限期：宽限期内（按快照目录 mtime）的快照一律保留——客户端固定
 # 快照 ID 后整批读取，纯数量保留（最近 N 个）会在「慢客户端 sync 期间又发布
 # N 轮」时删掉它在读的快照，后续 fetchFile 404、留下已完成文件的半批追加
@@ -376,14 +380,28 @@ def publish_from_staging(
         print(f"[remote-publish] staging manifest 不可读: {exc}", file=sys.stderr)
         return 2
 
-    # 新鲜度锚点 fail-closed（审查 P1）：generatedAt 缺失/外形/日历非法时拒绝
+    # 新鲜度锚点 fail-closed（审查）：generatedAt 缺失/外形/日历非法时拒绝
     # 发布——伪造为当前时间会让陈旧数据（schema 漂移的受害者）看起来刚刚产出；
-    # Swift 侧会把 25:61:61 之类滚算成次日，严格解析防锚点失真（审查 P2）
+    # Swift 侧会把 25:61:61 之类滚算成次日，严格解析防锚点失真。
+    # 另设未来上界：远未来时间戳（时钟错误/损坏 staging）会让新鲜度监控
+    # 永不触发 degraded——只允许 now + 时钟偏差容忍度以内
     generated_at = staging_manifest.get("generatedAt")
-    if not isinstance(generated_at, str) or parse_iso_z(generated_at) is None:
+    parsed_generated = parse_iso_z(generated_at) if isinstance(generated_at, str) else None
+    if parsed_generated is None:
         print(
             "[remote-publish] staging manifest 缺少合法 generatedAt"
             "（ISO8601 UTC，真实日历时间，无小数秒），新鲜度锚点不可伪造，拒绝发布",
+            file=sys.stderr,
+        )
+        return 2
+    future_drift = (
+        parsed_generated.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)
+    ).total_seconds()
+    if future_drift > GENERATED_AT_FUTURE_TOLERANCE_SECONDS:
+        print(
+            f"[remote-publish] staging generatedAt 超过未来上界（{generated_at}，"
+            f"超前 {int(future_drift)}s > 容忍度 {GENERATED_AT_FUTURE_TOLERANCE_SECONDS}s），"
+            "新鲜度锚点不可指向远未来，拒绝发布",
             file=sys.stderr,
         )
         return 2
