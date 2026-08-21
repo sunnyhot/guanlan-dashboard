@@ -90,22 +90,33 @@ struct ProviderStagingReader: Sendable {
 
     /// 读取整个 spool。空行跳过；损坏行抛 malformedLine（带行号）。
     func read(from url: URL) throws -> [ProviderRecord] {
-        let content: String
+        let data: Data
         do {
-            content = try String(contentsOf: url, encoding: .utf8)
+            data = try Data(contentsOf: url)
         } catch {
             throw ProviderStagingError.readFailed(detail: "\(error)")
+        }
+        return try decodeLines(from: data)
+    }
+
+    /// 从内存 Data 解析 JSONL（远程文件先验完整再落盘，不经本地中转文件）。
+    ///
+    /// 与 read(from:) 共用同一逐行容错实现——空行跳过、损坏行抛 malformedLine
+    /// 的策略只此一份，避免两处实现将来分叉（审查 P2）。
+    func decodeLines(from data: Data) throws -> [ProviderRecord] {
+        guard let content = String(data: data, encoding: .utf8) else {
+            throw ProviderStagingError.readFailed(detail: "not utf8")
         }
         var records: [ProviderRecord] = []
         let lines = content.components(separatedBy: "\n")
         for (idx, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { continue }   // 空行跳过（含文件末尾换行产生的空行）
-            guard let data = trimmed.data(using: .utf8) else {
+            guard let lineData = trimmed.data(using: .utf8) else {
                 throw ProviderStagingError.malformedLine(lineNumber: idx + 1, detail: "not utf8")
             }
             do {
-                records.append(try decoder.decode(ProviderRecord.self, from: data))
+                records.append(try decoder.decode(ProviderRecord.self, from: lineData))
             } catch {
                 throw ProviderStagingError.malformedLine(lineNumber: idx + 1, detail: "\(error)")
             }

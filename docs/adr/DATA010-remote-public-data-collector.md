@@ -1,7 +1,10 @@
 # DATA010. Remote Public-Data Collector（VPS 部署方案）
 
-- **Status**: Proposed（待 PROV-3b 实施时 Accept）
-- **Date**: 2026-08-12
+- **Status**: Accepted（2026-08-21 随 PROV-3b 实施主体落地：客户端
+  RemoteStagingProvider + 服务端 `remote-collector/` 发布器 + 离线跨语言
+  契约测试；VPS 真实部署与 HTTP 端到端验收跟踪在 rollout PROV-3b 剩余项，
+  不影响本架构决策生效）
+- **Date**: 2026-08-12（Proposed）/ 2026-08-21（Accepted）
 - **Epic / Story**: Epic 4 / PROV-3b
 
 ## Context

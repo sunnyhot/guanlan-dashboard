@@ -50,10 +50,11 @@ final class RemoteStagingProviderTests: XCTestCase {
 
     private func manifest(
         files: [RemoteStagingManifest.File],
-        generatedAt: Date? = nil
+        generatedAt: Date? = nil,
+        version: Int = 1
     ) -> Data {
         let manifest = RemoteStagingManifest(
-            version: 1,
+            version: version,
             collectorVersion: "1.0.0",
             generatedAt: generatedAt ?? now,
             files: files
@@ -174,6 +175,56 @@ final class RemoteStagingProviderTests: XCTestCase {
         let state = try stateDecoder.decode(RemoteStagingLocalState.self, from: stateData)
         XCTAssertEqual(state.fileHashes["stock_daily.jsonl"], RemoteStagingProvider.sha256Hex(fileData))
         XCTAssertNotNil(state.lastSyncedAt)
+    }
+
+    // MARK: - wire 契约闸门（审查 P1）
+
+    func testSync_unsupportedManifestVersion_rejectedFailClosed() async throws {
+        // 服务端 bump version=2 时客户端显式拒绝，不静默按 v1 语义解读
+        let dir = tempDir
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let records = [makeRecord()]
+        let fileData = jsonl(records)
+        let fetcher = FakeRemoteFetcher(
+            manifestData: manifest(files: [fileEntry(name: "stock_daily.jsonl", data: fileData)], version: 2)
+        )
+        fetcher.files["stock_daily.jsonl"] = fileData
+
+        let provider = makeProvider(fetcher: fetcher)
+        let outcome = await provider.sync(
+            to: dir.appendingPathComponent("spool.jsonl"),
+            state: dir.appendingPathComponent("state.json")
+        )
+        guard case .failed(.malformedManifest(let detail)) = outcome else {
+            return XCTFail("expected .failed(.malformedManifest), got \(outcome)")
+        }
+        XCTAssertTrue(detail.contains("unsupported manifest version 2"), "detail: \(detail)")
+        // 版本闸门在下载/落库之前——spool 不应有任何字节
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent("spool.jsonl").path))
+    }
+
+    func testURLSessionFetcher_bypassesURLCache_andSendsCollectorKey() async throws {
+        // nginx 静态文件带 Last-Modified 无 Cache-Control 时，URLCache 启发式缓存
+        // 会让 manifest 变陈旧——生产 fetcher 必须显式绕过本地缓存
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [RequestRecorderProtocol.self]
+        let session = URLSession(configuration: config)
+        RequestRecorderProtocol.stubData = manifest(files: [])
+        defer { RequestRecorderProtocol.reset() }
+
+        let fetcher = URLSessionRemoteStagingFetcher(
+            baseURL: URL(string: "https://collector.example.com/staging/")!,
+            collectorKey: "test-collector-key",
+            session: session
+        )
+        let data = try await fetcher.fetchManifest()
+        XCTAssertFalse(data.isEmpty)
+
+        let request = try XCTUnwrap(RequestRecorderProtocol.lastRequest, "URLProtocol 应捕获到请求")
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData,
+                       "manifest/文件请求必须绕过 URLCache 启发式缓存")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-Collector-Key"), "test-collector-key")
     }
 
     // MARK: - 增量：同 hash 跳过
@@ -856,4 +907,46 @@ final class RemoteStagingProviderTests: XCTestCase {
         let callable = await monitor.isCallable(.akshare)
         XCTAssertFalse(callable)
     }
+}
+
+/// URLProtocol 桩：捕获请求（cachePolicy / header），返回预置字节。
+/// 仅供 URLSessionRemoteStagingFetcher 的请求级断言用。
+private final class RequestRecorderProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    private static var _lastRequest: URLRequest?
+    private static var _stubData = Data()
+
+    static var lastRequest: URLRequest? {
+        get { lock.lock(); defer { lock.unlock() }; return _lastRequest }
+        set { lock.lock(); defer { lock.unlock() }; _lastRequest = newValue }
+    }
+
+    static var stubData: Data {
+        get { lock.lock(); defer { lock.unlock() }; return _stubData }
+        set { lock.lock(); defer { lock.unlock() }; _stubData = newValue }
+    }
+
+    static func reset() {
+        lock.lock(); defer { lock.unlock() }
+        _lastRequest = nil
+        _stubData = Data()
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lastRequest = request
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Last-Modified": "Wed, 21 Aug 2026 00:00:00 GMT"]   // 触发启发式缓存的典型响应头
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.stubData)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

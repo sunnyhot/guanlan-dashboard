@@ -386,7 +386,10 @@ macos-app/
 >   state 当空 state 误截断已提交 spool、不静默跳过未恢复的 journal）。
 >   journal 偏移**负数拒绝**（合法 JSON 可解出负值，静默 clamp 0 会清空 spool）、
 >   越界拒绝（大于当前 spool 大小）、缺失 spool 只允许 offset==0。25 个测试。
->   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通。
+>   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通；App 侧
+>   生产接线（RemoteStagingProvider 目前零生产调用点——需 AppModel 接线 +
+>   URLSessionRemoteStagingFetcher 的 baseURL / X-Collector-Key / 验签公钥
+>   配置面，属 SYNC-2 Market Daily Sync 的入口工作）。
 >   服务端产出物已完成（2026-08-21，仓库根 `remote-collector/remote_publish.py`，
 >   **服务端组件与 macos-app 包分离**，不进 App/SPM/Xcode 工程；定位
 >   akshare_collector.py 单一实现的搜索顺序：--collector-script → 同目录（VPS
@@ -404,6 +407,27 @@ macos-app/
 >   dataset 重发不登记旧文件 / 签名失败 current 不动且线上仍可验签消费 /
 >   staging 路径穿越拒收 / keygen 无 collector 依赖）。nginx/Cloudflare 部署
 >   指引（托管 current/）见 remote-collector/README。
+>
+> **审查修复记录（2026-08-21，两轮，PROV-3b）**：
+> - 第一轮（2×P1 + 2×P2）：manifest 改显式登记本轮通过校验的文件（不再扫
+>   目录，旧 dataset 不带新 generatedAt 重新上架），generatedAt 取 staging
+>   声明的数据产出时间；发布改 snapshots/<ts>/ 快照 + current symlink 原子
+>   切换（签名失败废弃快照不切 current，manifest 与签名永不错配）；staging
+>   条目三层校验（dataset 白名单 / 文件名严格匹配 / resolve 后不越界）；
+>   akshare_collector 延迟导入（--generate-key 单文件部署可用）。契约测试
+>   5→9 项。
+> - 第二轮（3×P1 + 7×P2）：URLSessionRemoteStagingFetcher 显式
+>   reloadIgnoringLocalCacheData（URLCache 启发式缓存会让 manifest 陈旧）；
+>   客户端 manifest.version==1 闸门（服务端 bump v2 fail-closed 拒收，
+>   不静默按 v1 解读）；Xcode 工程收录 InvestmentIntelligenceV2（project.yml
+>   双端 sources + excludes Collector/**，xcodegen 重生成，macOS/iOS scheme
+>   构建通过）；remote_publish main 外层异常兜底统一 exit 2（裸 traceback
+>   的退出码 1 撞「无 dataset 可发布」语义）+ current 非 symlink 显式报错；
+>   keygen O_CREAT|O_EXCL 一步 0600（消除先写后 chmod 的 umask 暴露窗口）；
+>   requirements <2.0.0 封顶 + Python>=3.9/flock/日志轮转/硬链接不可原地改
+>   staging 的运维说明 + FREE001 受控让步声明进 README；DATA010 → Accepted；
+>   ProviderStagingReader.read 复用 decodeLines（逐行容错单一实现）；剩余项
+>   显式补 App 生产接线（RemoteStagingProvider 当前零生产调用点，SYNC-2 入口）。
 >
 > **审查修复记录（2026-08-20，五轮）**：
 > - 第一轮（3×P1 + 4×P2）：非法 Ed25519 公钥 init 抛错不静默降级；state 写失败

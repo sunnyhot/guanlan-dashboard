@@ -146,8 +146,15 @@ def generate_key(path: Path) -> int:
     if path.exists():
         print(f"[remote-publish] 拒绝覆盖已有私钥: {path}", file=sys.stderr)
         return 2
-    path.write_bytes(pem)
-    os.chmod(path, 0o600)
+    # O_CREAT|O_EXCL 一步到位：创建即 0600，不留「先写后 chmod」按 umask
+    # （如 0644）暴露私钥的窗口；O_EXCL 同时是覆盖的 race-free 防线
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        print(f"[remote-publish] 拒绝覆盖已有私钥: {path}", file=sys.stderr)
+        return 2
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(pem)
     public_raw = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
@@ -197,6 +204,10 @@ def install_file(src: Path, dst: Path) -> None:
 def atomic_switch_current(publish_root: Path, snapshot_dir: Path) -> None:
     """current symlink 原子切换到新快照（rename 语义，读端看不到中间态）。"""
     current = publish_root / "current"
+    # current 是运维约定的切换点，只应是 symlink；真目录/普通文件说明发布根
+    # 被外部改动过——明确报错交人工检查，不猜测语义继续跑
+    if current.exists() and not current.is_symlink():
+        raise RuntimeError(f"current 已存在且不是 symlink（{current}），发布根目录状态异常")
     tmp = publish_root / "current.tmp"
     if tmp.is_symlink() or tmp.is_file():
         tmp.unlink()
@@ -388,4 +399,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except SystemExit:
+        raise
+    except Exception as exc:  # 未预期错误统一 exit 2——裸 traceback 的退出码是 1，
+        # 会撞「无可发布 dataset」的语义（如 current 异常时 os.replace 抛错）
+        print(f"[remote-publish] 未预期错误: {type(exc).__name__}: {exc}", file=sys.stderr)
+        sys.exit(2)

@@ -1,9 +1,14 @@
 # Remote Collector 服务端（PROV-3b，ADR-DATA010）
 
-**VPS 侧组件**：与本目录与 macOS App 包（`macos-app/`）完全分离——服务端
+**VPS 侧组件**：本目录与 macOS App 包（`macos-app/`）完全分离——服务端
 部署物不进 App / SPM / Xcode 工程，App 零 Python 依赖。App 端接收面是
 `macos-app/InvestmentIntelligenceV2/Persistence/RemoteStagingProvider.swift`
 （HTTP 拉取 + Ed25519 验签 + sha256 完整性 + SchemaValidator）。
+
+**FREE001 受控让步声明**：本方案的 VPS 持续费用与长期 SRE 维护（监控 /
+重启 / 封禁应对）是 FREE001（Zero Paid Dependency）的**显式受控让步**，
+决策记录见 ADR-DATA010 §Consequences。引入任何新的付费依赖仍需先过
+FREE001 审查。
 
 ## 数据流与发布布局
 
@@ -27,6 +32,10 @@
 - **事务边界**：manifest 与签名都在快照内完成后才切换 `current`——签名失败 /
   中途崩溃只废弃该快照，线上服务的版本不受影响，不存在「新 manifest 配旧
   签名」的错配对
+- **硬链接约定**：staging 文件与快照共享 inode（`install_file` 优先 hardlink），
+  线上不可变性依赖 collector 的 write-then-replace 整文件替换（`os.replace`
+  换新 inode）。**不得原地修改 staging 目录下的文件**——那会经硬链接直接
+  污染已上线快照的字节
 - **manifest 只登记本轮通过校验的文件**（显式清单，不扫描目录）：失败 /
   未请求的旧 dataset 不会带着新 `generatedAt` 重新上架；`generatedAt` 取
   staging 声明的数据产出时间（新鲜度监控锚定数据本身）
@@ -49,17 +58,21 @@
 
 ## VPS 部署
 
-```bash
+要求 Python ≥ 3.9（`Path.is_relative_to`）。cron 建议 flock 防并发 + 日志轮转：
+
+```cron
 # 依赖（akshare 抓取 + cryptography 签名）
 pip3 install -r requirements.txt
 
 # 1. 一次性：生成 Ed25519 签名密钥（stdout 的 base64 = App 端配置的公钥）
 python3 remote_publish.py --generate-key /etc/collector/ed25519.pem
 
-# 2. cron（收盘后）：collector 抓取 → 发布（签名）
-python3 akshare_collector.py --out-dir /var/lib/collector/staging
-python3 remote_publish.py --staging-dir /var/lib/collector/staging \
-  --publish-dir /var/www/staging --signing-key /etc/collector/ed25519.pem
+# 2. cron（收盘后）：collector 抓取 → 发布（签名）；flock 防上一轮未跑完叠加
+17 15 * * 1-5 flock -n /var/run/collector.lock sh -c \
+  'python3 /opt/collector/akshare_collector.py --out-dir /var/lib/collector/staging && \
+   python3 /opt/collector/remote_publish.py --staging-dir /var/lib/collector/staging \
+     --publish-dir /var/www/staging --signing-key /etc/collector/ed25519.pem' \
+  >> /var/log/collector.log 2>&1
 ```
 
 nginx 侧要点（完整配置按机器情况调整）：

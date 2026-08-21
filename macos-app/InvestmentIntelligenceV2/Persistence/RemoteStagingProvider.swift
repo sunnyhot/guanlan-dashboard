@@ -130,7 +130,14 @@ struct URLSessionRemoteStagingFetcher: RemoteStagingFetcher {
     }
 
     private func get(_ url: URL) async throws -> Data {
-        var request = URLRequest(url: url, timeoutInterval: 30)
+        // 绕过 URLCache：nginx 静态文件常带 Last-Modified 而无 Cache-Control，
+        // 启发式缓存会让 manifest 变陈旧、拖慢新鲜度管线；文件同理（sha256 恶化
+        // 为对陈旧字节反复校验失败）。manifest 是每次 sync 的入口，必须取服务器版本
+        var request = URLRequest(
+            url: url,
+            cachePolicy: .reloadIgnoringLocalCacheData,
+            timeoutInterval: 30
+        )
         if let collectorKey, !collectorKey.isEmpty {
             request.setValue(collectorKey, forHTTPHeaderField: "X-Collector-Key")
         }
@@ -191,6 +198,10 @@ enum RemoteStagingSyncOutcome: Sendable, Hashable {
 /// 5. Reader 解析 JSONL → SchemaValidator 分桶 → 合法记录 append 本地 spool
 /// 6. 持久化 state；成功重置断路器，失败累计并指数退避
 actor RemoteStagingProvider {
+
+    /// 客户端支持的 manifest wire 契约版本（与服务端 remote_publish.py 的
+    /// PUBLISH_MANIFEST_VERSION 对齐；bump 需两侧同步 + 契约测试更新）
+    static let supportedManifestVersion = 1
 
     /// 断路器配置（DATA010 §3：连续失败指数退避）。
     struct CircuitBreakerConfig: Sendable, Hashable {
@@ -302,6 +313,14 @@ actor RemoteStagingProvider {
                 manifest = try decoder.decode(RemoteStagingManifest.self, from: manifestData)
             } catch {
                 throw RemoteStagingError.malformedManifest(detail: "\(error)")
+            }
+            // wire 契约版本闸门：服务端 bump version=2 时显式拒绝（fail-closed），
+            // 不静默按 v1 语义解读未知布局（审查 P1）
+            guard manifest.version == Self.supportedManifestVersion else {
+                throw RemoteStagingError.malformedManifest(
+                    detail: "unsupported manifest version \(manifest.version) " +
+                            "(supported: \(Self.supportedManifestVersion))"
+                )
             }
 
             // 3-5. 增量下载 + 完整性 + 解析入库
@@ -560,30 +579,5 @@ actor RemoteStagingProvider {
     }
 }
 
-// MARK: - ProviderStagingReader：内存字节解析（远程文件先验完整再落盘，不经本地中转文件）
-
-extension ProviderStagingReader {
-    /// 从内存 Data 解析 JSONL（与 read(from:) 相同容错：空行跳过，损坏行抛错）。
-    /// 日期策略与 ProviderStaging.defaultDecoder 对齐（iso8601）。
-    func decodeLines(from data: Data) throws -> [ProviderRecord] {
-        guard let content = String(data: data, encoding: .utf8) else {
-            throw ProviderStagingError.readFailed(detail: "not utf8")
-        }
-        let decoder = ProviderStaging.defaultDecoder
-        var records: [ProviderRecord] = []
-        let lines = content.components(separatedBy: "\n")
-        for (idx, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty { continue }
-            guard let lineData = trimmed.data(using: .utf8) else {
-                throw ProviderStagingError.malformedLine(lineNumber: idx + 1, detail: "not utf8")
-            }
-            do {
-                records.append(try decoder.decode(ProviderRecord.self, from: lineData))
-            } catch {
-                throw ProviderStagingError.malformedLine(lineNumber: idx + 1, detail: "\(error)")
-            }
-        }
-        return records
-    }
-}
+// ProviderStagingReader.decodeLines(from:) 已收编为 Reader 本体实现
+//（ProviderStaging.swift）——read(from:) 与内存解析共用同一逐行容错，不分叉。
