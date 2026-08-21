@@ -390,15 +390,20 @@ macos-app/
 >   服务端产出物已完成（2026-08-21，仓库根 `remote-collector/remote_publish.py`，
 >   **服务端组件与 macos-app 包分离**，不进 App/SPM/Xcode 工程；定位
 >   akshare_collector.py 单一实现的搜索顺序：--collector-script → 同目录（VPS
->   部署）→ 仓库源码树）：消费
->   PROV-3a staging（ok dataset 过滤 + staging sha256 复验 + 空 staging 不覆盖
->   旧 manifest）→ 产 nginx 可托管目录（{dataset}.jsonl + manifest.json 对齐
->   RemoteStagingManifest wire 契约 + 可选 manifest.sig Ed25519 签名，
->   `--generate-key` 密钥管理）。**离线跨语言契约测试已落地**
->   （`RemotePublishContractTests`，5 项）：Python `--selftest` 真实产物 →
->   Swift RemoteStagingProvider 端到端（manifest wire 契约 / sha256 完整性 /
->   增量轮 / 篡改拒收 / Ed25519——Python cryptography 签 → CryptoKit 验，
->   篡改 manifest 拒收整批）。nginx/Cloudflare 部署指引见 remote-collector/README。
+>   部署）→ 仓库源码树；`--generate-key` 单文件部署即可运行）：消费
+>   PROV-3a staging（dataset 白名单 + 文件名严格匹配 + 路径越界拒收 + staging
+>   sha256 复验）→ 快照发布（snapshots/<ts>/ 完整一轮 + `current` symlink 原子
+>   切换；manifest 显式登记**本轮通过校验的文件**，generatedAt 取 staging 声明
+>   的数据产出时间；manifest.json 对齐 RemoteStagingManifest wire 契约 + 可选
+>   manifest.sig Ed25519 签名——签名失败废弃快照不切换 current，manifest 与
+>   签名永不错配；空 staging / 全部条目非法同理不切换；保留最近 5 个快照）。
+>   **离线跨语言契约测试已落地**（`RemotePublishContractTests`，9 项）：Python
+>   `--selftest` / staging 真实产物 → Swift RemoteStagingProvider 端到端
+>   （manifest wire 契约 / sha256 完整性 / 增量轮 / 篡改拒收 / Ed25519——
+>   Python cryptography 签 → CryptoKit 验，篡改 manifest 拒收整批 / 部分
+>   dataset 重发不登记旧文件 / 签名失败 current 不动且线上仍可验签消费 /
+>   staging 路径穿越拒收 / keygen 无 collector 依赖）。nginx/Cloudflare 部署
+>   指引（托管 current/）见 remote-collector/README。
 >
 > **审查修复记录（2026-08-20，五轮）**：
 > - 第一轮（3×P1 + 4×P2）：非法 Ed25519 公钥 init 抛错不静默降级；state 写失败

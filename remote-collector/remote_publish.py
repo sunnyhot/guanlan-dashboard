@@ -2,16 +2,25 @@
 """远程 staging 发布器（PROV-3b 服务端，ADR-DATA010）。
 
 消费 PROV-3a collector 的 staging 输出（{dataset}.jsonl + manifest.json），
-产出可直接由 nginx 静态托管的 publish 目录：
+产出 nginx 静态托管的发布目录（快照 + current 原子切换）：
 
-  {publish_dir}/
-    {dataset}.jsonl     # 从 staging 复制（仅 status=ok 的 dataset）
-    manifest.json       # RemoteStagingManifest wire 契约（camelCase + ISO8601 UTC）
-    manifest.sig        # Ed25519 签名（raw 64 字节，仅提供 --signing-key 时产出）
+  {publish_root}/
+    snapshots/<时间戳>/      # 一轮发布的完整快照：{dataset}.jsonl +
+                             #   manifest.json [+ manifest.sig]，落地后不可变
+    current -> snapshots/…   # 原子切换点（symlink rename），nginx 托管根指向它
 
-wire 契约（与 Swift RemoteStagingManifest Codable 字节对齐，跨语言契约测试守护）：
+事务边界：manifest 与签名都在快照目录内完成后才切换 current——签名失败 /
+中途崩溃只废弃该快照，线上正在服务的版本不受影响，不会出现
+「新 manifest 配旧签名」的错配。保留最近 N 个快照供回滚。
+
+manifest wire 契约（与 Swift RemoteStagingManifest Codable 字节对齐，跨语言
+契约测试守护）：
   {"version":1,"collectorVersion":"0.1.0","generatedAt":"2026-08-21T08:00:00Z",
    "files":[{"name":"stock_daily.jsonl","sha256":"<64 位小写 hex>","byteSize":123}]}
+
+manifest 只登记**本轮通过校验的文件**（不是扫描目录）——失败/未请求的旧
+dataset 不会带着新 generatedAt 重新上架；generatedAt 取 staging 的产出时间
+（新鲜度监控锚定数据本身，不是发布动作）。
 
 签名语义：对 manifest.json 落盘后的**精确字节**签名（含结尾换行）——客户端对
 拉取到的原始字节验签，nginx 必须原样托管，不得启用会改写字节的模块。
@@ -21,6 +30,11 @@ wire 契约（与 Swift RemoteStagingManifest Codable 字节对齐，跨语言�
                         stdout 打印公钥 raw 32 字节的 base64（App 端
                         RemoteStagingProvider signaturePublicKey 配置值）
   --signing-key PATH    用 PATH 私钥对本轮 manifest 签名（依赖 cryptography 库）
+
+--generate-key 不依赖 akshare_collector.py（可单文件部署）；发布 / --selftest
+模式才按搜索顺序定位 collector（抓取与序列化的单一实现）：
+--collector-script 显式路径 → 本脚本同目录（VPS 部署两脚本同放）→ 仓库源码树
+默认位置。
 
 凭证边界（DATA010）：本脚本只处理公开市场数据；任何用户私有凭证
 （且慢 cookie / 个人持仓）出现在此脚本或其配置中即为违规。
@@ -34,8 +48,8 @@ wire 契约（与 Swift RemoteStagingManifest Codable 字节对齐，跨语言�
   # 离线自检（不联网、不依赖 akshare / staging 目录，产固定样本走完整发布路径）
   remote_publish.py --selftest --publish-dir /tmp/publish [--signing-key KEY]
 
-退出码：0 = 发布成功；1 = 没有任何 status=ok 的 dataset（**不覆盖旧 manifest**，
-保留上一轮有效发布，客户端继续用旧数据 + 新鲜度监控降级）；2 = 配置/环境错误。
+退出码：0 = 发布成功；1 = 没有任何 dataset 通过校验（**不切换 current**，
+线上继续服务上一轮快照，客户端靠新鲜度监控降级）；2 = 配置/环境错误。
 """
 
 import argparse
@@ -43,6 +57,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,11 +65,19 @@ from typing import Any, Dict, List, Optional
 
 # 本目录是**服务端组件**（PROV-3b），与 macOS App 包（macos-app/）分离；
 # 抓取与序列化的单一实现在 PROV-3a 的 akshare_collector.py（App 侧可选组件），
-# 按搜索顺序定位，不在本脚本重写第二份（字节级一致性是跨语言契约的一部分）。
+# 延迟导入（--generate-key / --help 不触碰它），不在本脚本重写第二份
+# （字节级一致性是跨语言契约的一部分）。
 REPO_COLLECTOR = (
     Path(__file__).resolve().parent.parent
     / "macos-app" / "InvestmentIntelligenceV2" / "Collector" / "akshare_collector.py"
 )
+
+PUBLISH_MANIFEST_VERSION = 1
+SNAPSHOT_KEEP_DEFAULT = 5
+
+# argparse 解析后回填（collector_module 定位 collector 时读取）；None = 默认搜索
+_collector_script_override: Optional[str] = None
+_COLLECTOR_MODULE: Any = None
 
 
 def locate_collector_module(explicit: Optional[str]) -> Path:
@@ -81,28 +104,16 @@ def locate_collector_module(explicit: Optional[str]) -> Path:
     raise SystemExit(2)
 
 
-def _explicit_collector_from_argv() -> Optional[str]:
-    """在 argparse 之前从 argv 取 --collector-script（import 需要它定位模块）。"""
-    args = sys.argv[1:]
-    for i, arg in enumerate(args):
-        if arg == "--collector-script" and i + 1 < len(args):
-            return args[i + 1]
-        if arg.startswith("--collector-script="):
-            return arg.split("=", 1)[1]
-    return None
+def collector_module() -> Any:
+    """延迟加载 akshare_collector（仅发布 / selftest 路径调用）。"""
+    global _COLLECTOR_MODULE
+    if _COLLECTOR_MODULE is None:
+        script = locate_collector_module(_collector_script_override)
+        sys.path.insert(0, str(script.parent))
+        import akshare_collector  # noqa: PLC0415
 
-
-sys.path.insert(0, str(locate_collector_module(_explicit_collector_from_argv()).parent))
-from akshare_collector import (  # noqa: E402
-    ALL_DATASETS,
-    COLLECTOR_VERSION,
-    iso_z,
-    selftest_build,
-    write_json_atomic,
-    write_jsonl_atomic,
-)
-
-PUBLISH_MANIFEST_VERSION = 1
+        _COLLECTOR_MODULE = akshare_collector
+    return _COLLECTOR_MODULE
 
 
 def sha256_hex_of_file(path: Path) -> str:
@@ -158,89 +169,193 @@ def sign_manifest(manifest_path: Path, key_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# 快照（snapshot）与原子切换
+# ---------------------------------------------------------------------------
+
+def new_snapshot_dir(publish_root: Path) -> Path:
+    """创建本轮快照目录（publish_root/snapshots/<UTC 时间戳>，重名加序号）。"""
+    snapshots = publish_root / "snapshots"
+    snapshots.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    candidate = snapshots / stamp
+    suffix = 1
+    while candidate.exists():
+        suffix += 1
+        candidate = snapshots / f"{stamp}-{suffix}"
+    candidate.mkdir()
+    return candidate
+
+
+def install_file(src: Path, dst: Path) -> None:
+    """把 staging 文件放进快照（同文件系统 hardlink，跨设备回退 copy）。"""
+    try:
+        os.link(src, dst)
+    except OSError:
+        shutil.copyfile(src, dst)
+
+
+def atomic_switch_current(publish_root: Path, snapshot_dir: Path) -> None:
+    """current symlink 原子切换到新快照（rename 语义，读端看不到中间态）。"""
+    current = publish_root / "current"
+    tmp = publish_root / "current.tmp"
+    if tmp.is_symlink() or tmp.is_file():
+        tmp.unlink()
+    elif tmp.is_dir():
+        shutil.rmtree(tmp)
+    # 相对目标（snapshots/<name>）：随 publish_root 整体迁移仍有效
+    os.symlink(f"snapshots/{snapshot_dir.name}", tmp)
+    os.replace(tmp, current)
+
+
+def prune_snapshots(publish_root: Path, keep: int) -> None:
+    """保留最近 keep 个快照 + current 指向的那个，其余清理（回滚窗口之外的数据）。"""
+    snapshots = publish_root / "snapshots"
+    if not snapshots.is_dir():
+        return
+    dirs = sorted((d for d in snapshots.iterdir() if d.is_dir()), reverse=True)
+    keep_names = {d.name for d in dirs[: max(keep, 1)]}
+    current = publish_root / "current"
+    if current.is_symlink():
+        keep_names.add(os.readlink(current).rsplit("/", 1)[-1])
+    for d in dirs:
+        if d.name not in keep_names:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# staging 条目校验（P2：dataset 名 / 文件名 / 路径边界）
+# ---------------------------------------------------------------------------
+
+def validated_staging_file(staging_dir: Path, name: str, entry: Dict[str, Any]) -> Optional[Path]:
+    """校验 staging manifest 条目并返回安全路径；不合法返回 None（调用方跳过）。
+
+    - dataset 名必须在 ALL_DATASETS 内
+    - file 必须严格等于 f"{name}.jsonl"（挡绝对路径 / ../ 穿越 / 陌生文件名）
+    - resolve 后必须仍在 staging 目录内（纵深防御）
+    """
+    ak = collector_module()
+    if name not in ak.ALL_DATASETS:
+        return None
+    if entry.get("file") != f"{name}.jsonl":
+        return None
+    src = (staging_dir / entry["file"]).resolve()
+    if not src.is_relative_to(staging_dir.resolve()):
+        return None
+    return src
+
+
+# ---------------------------------------------------------------------------
 # 发布
 # ---------------------------------------------------------------------------
 
-def publish_from_staging(staging_dir: Path, publish_dir: Path) -> int:
-    """常规模式：读 staging manifest.json，复制 ok dataset 到 publish 目录。"""
-    staging_manifest_path = staging_dir / "manifest.json"
+def finalize_snapshot(
+    publish_root: Path,
+    snapshot: Path,
+    file_entries: List[Dict[str, Any]],
+    collector_version: str,
+    generated_at: str,
+    signing_key: Optional[Path],
+) -> bool:
+    """快照内完成 manifest（+签名）→ 原子切换 current → 清理旧快照。
+
+    事务边界：切换前快照对外不可见；manifest / 签名 / 数据文件在同一快照内
+    成对出现，线上永远看不到「新 manifest 配旧签名」或半成品目录。
+    """
+    ak = collector_module()
+    manifest = {
+        "version": PUBLISH_MANIFEST_VERSION,
+        "collectorVersion": collector_version,
+        "generatedAt": generated_at,
+        "files": file_entries,
+    }
+    ak.write_json_atomic(snapshot / "manifest.json", manifest)
+    if signing_key:
+        try:
+            sign_manifest(snapshot / "manifest.json", signing_key)
+        except Exception as exc:  # 私钥不可读 / cryptography 缺失：废弃快照，线上不动
+            shutil.rmtree(snapshot, ignore_errors=True)
+            print(f"[remote-publish] 签名失败（快照已废弃，current 未切换）: {exc}", file=sys.stderr)
+            return False
+    atomic_switch_current(publish_root, snapshot)
+    prune_snapshots(publish_root, keep=SNAPSHOT_KEEP_DEFAULT)
+    print(f"[remote-publish] current → {snapshot.name}（{len(file_entries)} 文件）")
+    return True
+
+
+def publish_from_staging(staging_dir: Path, publish_root: Path, signing_key: Optional[Path]) -> int:
+    """常规模式：读 staging manifest.json，校验后把 ok dataset 装进新快照。"""
     try:
-        staging_manifest = json.loads(staging_manifest_path.read_text(encoding="utf-8"))
+        staging_manifest = json.loads((staging_dir / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         print(f"[remote-publish] staging manifest 不可读: {exc}", file=sys.stderr)
         return 2
+
     ok_entries = [
         (name, entry)
         for name, entry in staging_manifest.get("datasets", {}).items()
         if entry.get("status") == "ok" and entry.get("file")
     ]
     if not ok_entries:
-        # 不写 manifest：空清单会把客户端新鲜度打穿，且覆盖上一轮有效发布
+        # 不切换 current：空清单会把客户端新鲜度打穿，且覆盖上一轮有效发布
         print(
-            "[remote-publish] staging 中没有任何 status=ok 的 dataset，保留旧 manifest",
+            "[remote-publish] staging 中没有任何 status=ok 的 dataset，current 保持不变",
             file=sys.stderr,
         )
         return 1
 
-    publish_dir.mkdir(parents=True, exist_ok=True)
+    snapshot = new_snapshot_dir(publish_root)
+    file_entries: List[Dict[str, Any]] = []
     for name, entry in sorted(ok_entries):
-        src = staging_dir / entry["file"]
-        dst = publish_dir / f"{name}.jsonl"
-        # 校验 staging 自身完整性后再复制（collector manifest 声明的 sha256）
+        src = validated_staging_file(staging_dir, name, entry)
+        if src is None:
+            print(f"[remote-publish] {name}: staging 条目非法（dataset 名/文件名/路径越界），跳过", file=sys.stderr)
+            continue
         if sha256_hex_of_file(src) != entry.get("sha256"):
             print(f"[remote-publish] {name}: staging sha256 与 manifest 不符，跳过", file=sys.stderr)
             continue
-        dst.write_bytes(src.read_bytes())
-
-    collector_version = staging_manifest.get("collectorVersion", COLLECTOR_VERSION)
-    return write_publish_manifest(publish_dir, collector_version)
-
-
-def publish_selftest(publish_dir: Path) -> int:
-    """离线自检：固定样本（selftest_build）走与生产相同的序列化 + 发布路径。"""
-    ingested_at = iso_z(datetime.now(timezone.utc))
-    publish_dir.mkdir(parents=True, exist_ok=True)
-    for name, (records, _dropped) in selftest_build(ingested_at).items():
-        write_jsonl_atomic(publish_dir / f"{name}.jsonl", records)
-    return write_publish_manifest(publish_dir, COLLECTOR_VERSION)
-
-
-def write_publish_manifest(publish_dir: Path, collector_version: str) -> int:
-    """扫描 publish 目录的 {dataset}.jsonl，写 manifest.json（+可选 manifest.sig）。"""
-    known = {f"{name}.jsonl" for name in ALL_DATASETS}
-    files: List[Dict[str, Any]] = []
-    for path in sorted(publish_dir.glob("*.jsonl")):
-        if path.name not in known:
-            # publish 目录里只认 collector 产出的 dataset 文件，陌生文件不进清单
-            #（防手工放置文件被签名背书）
-            continue
-        files.append(
-            {
-                "name": path.name,
-                "sha256": sha256_hex_of_file(path),
-                "byteSize": path.stat().st_size,
-            }
+        dst = snapshot / f"{name}.jsonl"
+        install_file(src, dst)
+        file_entries.append(
+            {"name": dst.name, "sha256": sha256_hex_of_file(dst), "byteSize": dst.stat().st_size}
         )
-    if not files:
-        print("[remote-publish] publish 目录没有可登记的 dataset 文件", file=sys.stderr)
+
+    if not file_entries:
+        shutil.rmtree(snapshot, ignore_errors=True)
+        print("[remote-publish] 没有任何 dataset 通过校验，current 保持不变", file=sys.stderr)
         return 1
 
-    manifest = {
-        "version": PUBLISH_MANIFEST_VERSION,
-        "collectorVersion": collector_version,
-        "generatedAt": iso_z(datetime.now(timezone.utc)),
-        "files": files,
-    }
-    write_json_atomic(publish_dir / "manifest.json", manifest)
-    return 0
+    # generatedAt 锚定数据产出时间（staging manifest 声明），不是本轮发布动作
+    generated_at = staging_manifest.get("generatedAt") or collector_module().iso_z(
+        datetime.now(timezone.utc)
+    )
+    collector_version = staging_manifest.get("collectorVersion") or collector_module().COLLECTOR_VERSION
+    return 0 if finalize_snapshot(
+        publish_root, snapshot, file_entries, collector_version, generated_at, signing_key
+    ) else 2
+
+
+def publish_selftest(publish_root: Path, signing_key: Optional[Path]) -> int:
+    """离线自检：固定样本（selftest_build）走与生产相同的序列化 + 发布路径。"""
+    ak = collector_module()
+    generated_at = ak.iso_z(datetime.now(timezone.utc))
+    snapshot = new_snapshot_dir(publish_root)
+    file_entries: List[Dict[str, Any]] = []
+    for name, (records, _dropped) in ak.selftest_build(generated_at).items():
+        dst = snapshot / f"{name}.jsonl"
+        digest = ak.write_jsonl_atomic(dst, records)
+        file_entries.append({"name": dst.name, "sha256": digest, "byteSize": dst.stat().st_size})
+    return 0 if finalize_snapshot(
+        publish_root, snapshot, file_entries, ak.COLLECTOR_VERSION, generated_at, signing_key
+    ) else 2
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    global _collector_script_override
     parser = argparse.ArgumentParser(
         description="远程 staging 发布器（PROV-3b 服务端，ADR-DATA010）"
     )
     parser.add_argument("--staging-dir", help="PROV-3a collector 输出目录（常规模式）")
-    parser.add_argument("--publish-dir", help="nginx 托管的发布目录（--generate-key 模式无需）")
+    parser.add_argument("--publish-dir", help="发布根目录（nginx 托管 current/；--generate-key 模式无需）")
     parser.add_argument("--signing-key", help="Ed25519 私钥 PEM 路径（可选验签）")
     parser.add_argument("--generate-key", help="生成 Ed25519 私钥到该路径并打印公钥 base64")
     parser.add_argument(
@@ -252,8 +367,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="离线自检：不联网不依赖 staging，产固定样本走完整发布路径",
     )
     args = parser.parse_args(argv)
+    _collector_script_override = args.collector_script
 
     if args.generate_key:
+        # 密钥生成不依赖 collector / staging / cryptography 之外的任何环境
         return generate_key(Path(args.generate_key))
 
     if not args.publish_dir:
@@ -262,25 +379,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.selftest and not args.staging_dir:
         parser.error("常规模式需要 --staging-dir（或使用 --selftest）")
 
-    publish_dir = Path(args.publish_dir)
+    publish_root = Path(args.publish_dir)
+    signing_key = Path(args.signing_key) if args.signing_key else None
 
     if args.selftest:
-        exit_code = publish_selftest(publish_dir)
-    else:
-        exit_code = publish_from_staging(Path(args.staging_dir), publish_dir)
-    if exit_code != 0:
-        return exit_code
-
-    if args.signing_key:
-        try:
-            sig_path = sign_manifest(publish_dir / "manifest.json", Path(args.signing_key))
-        except Exception as exc:  # 私钥不可读 / cryptography 缺失都是环境错误
-            print(f"[remote-publish] 签名失败: {exc}", file=sys.stderr)
-            return 2
-        print(f"[remote-publish] manifest.sig → {sig_path}")
-
-    print(f"[remote-publish] manifest → {publish_dir / 'manifest.json'}")
-    return 0
+        return publish_selftest(publish_root, signing_key)
+    return publish_from_staging(Path(args.staging_dir), publish_root, signing_key)
 
 
 if __name__ == "__main__":
