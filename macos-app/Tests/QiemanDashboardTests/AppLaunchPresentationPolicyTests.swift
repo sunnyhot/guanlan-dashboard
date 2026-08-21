@@ -128,6 +128,191 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("Task.sleep(nanoseconds: 500_000_000)"))
     }
 
+    // MARK: - Early reveal queuing (double-window fix)
+
+    func testEarlyRevealWaitsForSceneWithinLaunchGrace() {
+        XCTAssertTrue(AppMainWindowRevealPolicy.shouldWaitForSceneWindow(
+            hasSceneOpener: false,
+            launchGraceElapsed: false
+        ))
+        XCTAssertFalse(AppMainWindowRevealPolicy.shouldWaitForSceneWindow(
+            hasSceneOpener: true,
+            launchGraceElapsed: false
+        ))
+        XCTAssertFalse(AppMainWindowRevealPolicy.shouldWaitForSceneWindow(
+            hasSceneOpener: false,
+            launchGraceElapsed: true
+        ))
+    }
+
+    @MainActor
+    func testShowMainWindowBeforeSceneRegistrationQueuesInsteadOfCreatingManualWindow() {
+        let delegate = QiemanApplicationDelegate()
+
+        delegate.showMainWindow()
+
+        XCTAssertNil(delegate.mainWindow)
+        XCTAssertFalse(NSApplication.shared.windows.contains {
+            $0.identifier == NSUserInterfaceItemIdentifier("QiemanDashboard.mainWindow")
+        })
+    }
+
+    @MainActor
+    func testPendingRevealFlushedWhenSceneOpenerRegisters() {
+        let delegate = QiemanApplicationDelegate()
+        delegate.showMainWindow()
+
+        var openerCalled = false
+        delegate.registerMainWindowSceneOpener { openerCalled = true }
+
+        XCTAssertTrue(openerCalled)
+    }
+
+    @MainActor
+    func testGraceElapsedWithoutSceneFallsBackToManualWindow() {
+        let delegate = QiemanApplicationDelegate()
+        delegate.configure(model: AppModel())
+        delegate.finishLaunchingDate = Date(timeIntervalSinceNow: -10)
+
+        delegate.showMainWindow()
+
+        let created = delegate.mainWindow
+        XCTAssertNotNil(created)
+        XCTAssertEqual(created?.identifier, NSUserInterfaceItemIdentifier("QiemanDashboard.mainWindow"))
+        created?.delegate = nil
+        created?.orderOut(nil)
+        created?.close()
+    }
+
+    // MARK: - Duplicate reconciliation
+
+    func testDuplicatePolicyPrefersSceneWindowOverTrackedManualWindow() {
+        let manual = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        let scene = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        manual.isReleasedWhenClosed = false
+        scene.isReleasedWhenClosed = false
+        defer {
+            manual.close()
+            scene.close()
+        }
+
+        let keep = AppMainWindowDuplicatePolicy.windowToKeep(
+            candidates: [manual, scene],
+            trackedWindow: manual,
+            isSceneWindow: { $0 === scene }
+        )
+
+        XCTAssertTrue(keep === scene)
+    }
+
+    func testDuplicatePolicyKeepsTrackedWindowWithoutSceneCandidate() {
+        let tracked = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        let other = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        tracked.isReleasedWhenClosed = false
+        other.isReleasedWhenClosed = false
+        defer {
+            tracked.close()
+            other.close()
+        }
+
+        let keep = AppMainWindowDuplicatePolicy.windowToKeep(
+            candidates: [tracked, other],
+            trackedWindow: tracked,
+            isSceneWindow: { _ in false }
+        )
+
+        XCTAssertTrue(keep === tracked)
+    }
+
+    @MainActor
+    func testShowMainWindowCollapsesDuplicateMainWindowsToOne() {
+        let delegate = QiemanApplicationDelegate()
+        let first = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        let second = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        first.title = "且慢主理人"
+        second.title = "且慢主理人"
+        first.isReleasedWhenClosed = false
+        second.isReleasedWhenClosed = false
+        first.orderFront(nil)
+        second.orderFront(nil)
+        defer {
+            for window in [first, second] {
+                window.delegate = nil
+                window.orderOut(nil)
+                window.close()
+            }
+        }
+
+        delegate.showMainWindow()
+
+        XCTAssertTrue(first.isVisible)
+        XCTAssertFalse(second.isVisible)
+        XCTAssertTrue(delegate.mainWindow === first)
+    }
+
+    @MainActor
+    func testTrackingSceneWindowAfterManualFallbackDiscardsStrayManualWindow() throws {
+        let delegate = QiemanApplicationDelegate()
+        delegate.configure(model: AppModel())
+        delegate.finishLaunchingDate = Date(timeIntervalSinceNow: -10)
+        delegate.showMainWindow()
+        let manual = try XCTUnwrap(delegate.mainWindow)
+
+        let scene = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        scene.title = "且慢主理人"
+        scene.isReleasedWhenClosed = false
+        scene.orderFront(nil)
+        defer {
+            scene.delegate = nil
+            scene.orderOut(nil)
+            scene.close()
+            manual.delegate = nil
+            manual.orderOut(nil)
+            manual.close()
+        }
+
+        let tracked = delegate.trackSwiftUISceneMainWindow(scene)
+
+        XCTAssertTrue(tracked)
+        XCTAssertTrue(delegate.mainWindow === scene)
+        XCTAssertFalse(manual.isVisible)
+    }
+
     @MainActor
     func testDarkAppearanceOverridesALightSystemWindow() throws {
         let model = AppModel()
