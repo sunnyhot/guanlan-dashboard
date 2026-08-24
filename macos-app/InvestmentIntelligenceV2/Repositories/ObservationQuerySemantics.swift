@@ -75,28 +75,53 @@ enum ObservationQuerySemantics {
 
     /// 单点查询（dailyBar(on:) / navObservation(on:) 的共享语义）。
     ///
-    /// 与序列查询同一套 context 语义（审查 P1 修复：此前单点只按可见性过滤 +
-    /// 最大 vintage，绕过 vintageFilter / preferredProvider / 跨源择优）：
-    /// - `vintageFilter` 指定：返回该 vintage（可见性过滤后）的最新一条
-    /// - `exactSnapshot`：可见的全部 vintage 中取最新
-    /// - `economic / operational`：走 filterByContext 的分组择优（同日一组），
-    ///   返回择优结果（多组时取排序末位，确定性兜底）
+    /// 与序列查询同一套 context 语义（一轮审查 P1 修复：此前单点只按可见性
+    /// 过滤 + 最大 vintage，绕过 vintageFilter / preferredProvider / 跨源择优；
+    /// 二轮审查 P2 修复：vintageFilter / exactSnapshot 分支此前又漏了
+    /// preferredProvider）：
+    /// - `vintageFilter` 指定：可见的该 vintage 候选中按 `isPreferred` 全序
+    ///   取最优（含来源偏好）
+    /// - `exactSnapshot`：先取可见的最新 vintage，再在该 vintage 候选中按
+    ///   `isPreferred` 全序取最优（序列型 exactSnapshot 保留全部来源，单点
+    ///   必须选一条，故走择优）
+    /// - `economic / operational`：走 filterByContext 的分组择优（同日一组，
+    ///   择优链已含 preferredProvider），多组时取确定性末位兜底
     static func selectPointObservation<T: CanonicalObservation>(
         _ observations: [T],
         context: KnowledgeContext
     ) -> T? {
-        if context.vintageFilter != nil {
-            return filterByContext(observations, context: context).last
+        if let wanted = context.vintageFilter {
+            let matched = observations
+                .filter { $0.vintage == wanted }
+                .filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
+            return best(of: matched, preferredProvider: context.preferredProvider)
         }
         switch context.mode {
         case .exactSnapshot:
-            return observations
+            let visible = observations
                 .filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
-                .max(by: byVintageThenDeterministicOrder)
+            guard let latestVintage = visible.map(\.vintage).max() else { return nil }
+            let atLatest = visible.filter { $0.vintage == latestVintage }
+            return best(of: atLatest, preferredProvider: context.preferredProvider)
         case .economicKnowledge, .operationalKnowledge:
             return filterByContext(observations, context: context)
                 .max(by: byVintageThenDeterministicOrder)
         }
+    }
+
+    /// 候选集内按 `isPreferred` 全序取最优（确定性：isPreferred 是与输入顺序
+    /// 无关的全序，reduce 收敛到唯一最优；空集返回 nil）。
+    private static func best<T: CanonicalObservation>(
+        of candidates: [T],
+        preferredProvider: DataProviderID?
+    ) -> T? {
+        guard var best = candidates.first else { return nil }
+        for next in candidates.dropFirst() {
+            if isPreferred(candidate: next, over: best, preferredProvider: preferredProvider) {
+                best = next
+            }
+        }
+        return best
     }
 
     /// vintage → effectiveAt → id 的全序确定性排序（exactSnapshot /

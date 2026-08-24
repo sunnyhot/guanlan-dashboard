@@ -183,6 +183,68 @@ final class GRDBRepositoryParityTests: XCTestCase {
         XCTAssertEqual(exact[0].temporalEnvelope.ingestedAt, Self.day(0.5))
     }
 
+    /// 二轮审查 P1：同一业务事实、同 Provider、不同 ObservationID（经另一个
+    /// identifier alias 摄入派生不同 ID）→ 按业务身份幂等归并，不误判冲突。
+    func testUpsert_sameIdentityDifferentObservationID_idempotent() throws {
+        let w = Self.lstWuliangye
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_alias-a"), listing: w))
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_alias-b"), listing: w))
+        let exact = grdb.dailyBars(listingID: w, context: .exactSnapshot(at: Self.day(0)))
+        XCTAssertEqual(exact.count, 1, "不同 ID 的同业务内容按身份幂等归并为一行")
+        XCTAssertEqual(exact.first?.id.rawValue, "obs_alias-a", "首行保留，后者归并")
+    }
+
+    /// 二轮审查 P2：单点查询的 vintageFilter / exactSnapshot 分支也尊重
+    /// preferredProvider（同 vintage 多来源时显式偏好生效）。
+    func testPointQuery_preferredProviderInVintageFilterAndExactBranches() throws {
+        let w = Self.lstWuliangye
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_pp-em"), listing: w))   // eastmoney community
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.99")!, provider: .stooq,
+                                 reliability: .documentFreeAPI,
+                                 id: ObservationID(rawValue: "obs_pp-st"), listing: w))    // stooq documentFree
+
+        // vintageFilter 分支：偏好 eastmoney（低 reliability）胜
+        let vintageFilterContext = KnowledgeContext(
+            mode: .economicKnowledge(asOf: Self.day(10)), vintageFilter: Self.v1,
+            preferredProvider: .eastmoney
+        )
+        XCTAssertEqual(
+            grdb.dailyBar(listingID: w, on: Self.day(0), context: vintageFilterContext)?
+                .dataQuality.sourceProviderID,
+            .eastmoney
+        )
+        // exactSnapshot 分支：同 vintage 候选中偏好生效
+        let exactContext = KnowledgeContext(
+            mode: .exactSnapshot(at: Self.day(0)), preferredProvider: .eastmoney
+        )
+        XCTAssertEqual(
+            grdb.dailyBar(listingID: w, on: Self.day(0), context: exactContext)?
+                .dataQuality.sourceProviderID,
+            .eastmoney
+        )
+        // 不带偏好时 reliability 高者胜（两分支一致）
+        XCTAssertEqual(
+            grdb.dailyBar(listingID: w, on: Self.day(0),
+                          context: .exactSnapshot(at: Self.day(0)))?
+                .dataQuality.sourceProviderID,
+            .stooq
+        )
+        // InMemory 同语义（共享实现）
+        inMemory.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_pp-em"), listing: w))
+        inMemory.upsert(Self.bar(close: Decimal(string: "10.99")!, provider: .stooq,
+                                 reliability: .documentFreeAPI,
+                                 id: ObservationID(rawValue: "obs_pp-st"), listing: w))
+        XCTAssertEqual(
+            inMemory.dailyBar(listingID: w, on: Self.day(0), context: exactContext)?
+                .dataQuality.sourceProviderID,
+            .eastmoney
+        )
+    }
+
     /// 不同 vintage（更正公告）的同身份重摄入不受冲突规则影响：新 vintage 新行。
     func testUpsert_newVintageNotConflicting() throws {
         let w = Self.lstWuliangye

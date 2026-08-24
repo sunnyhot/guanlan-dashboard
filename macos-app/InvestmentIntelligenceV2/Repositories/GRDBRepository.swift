@@ -12,12 +12,13 @@ import GRDB
 // 共用的单一权威）。golden test 以 parity 形式守护（GRDBRepositoryParityTests：
 // 同一 fixture 灌进两套实现，所有查询 API 在多种 context 下输出必须相等）。
 //
-// **写入语义**：INSERT OR REPLACE——同 id 或同 (维度, effectiveAt, vintage,
-// provider) 的重摄入幂等替换（v7 唯一键）。与 InMemory「按 id 替换、查询期
-// 跨源择优」的差异：同 Provider 同键换 id 重摄入，InMemory 保留两行、查询
-// 按 id tie-break 择一，GRDB 直接替换为最新——查询结果在该病态输入下才可能
-// 不同（合法摄入流不会为同一 Provider 同 vintage 生成新 id，GRDB-8 Pipeline
-// 的 ObservationID 稳定性是前置契约）。
+// **写入语义**（显式冲突语义，一轮审查后废弃 INSERT OR REPLACE）：按
+// (维度, effectiveAt, vintage, provider) 身份键（v7 唯一索引列集）先行查旧：
+// 同身份且业务内容相同（指纹排除摄入元数据与代理键）→ 幂等，保留最早
+// ingestedAt；同身份但内容不同 → 拒收 `observationContentConflict`（更正应
+// 携带新 publishedAt 走新 vintage，静默覆盖 = 篡改历史）；无旧行 → 插入。
+// 身份键不含 ObservationID——同一事实经不同 identifier alias 摄入（派生
+// 不同 ID）仍按业务身份幂等归并。
 //
 // **错误策略**（协议方法非 throwing，读取失败不能上抛）：
 // - 打不开库 / 查询抛错 / 行解码 fail-closed（枚举列被外部改坏等）：
@@ -121,18 +122,23 @@ final class GRDBRepository: @unchecked Sendable, Repository {
         try row.insert(db)
     }
 
-    /// 内容指纹：观测内容列的确定性拼接（列名排序）。
+    /// 内容指纹：观测**业务内容**列的确定性拼接（列名排序）。
     ///
-    /// 排除两类**摄入元数据**（重放必然变化、不代表观测内容变化）：
-    /// - `ingested_at`：本机首抓时间，有自己的保留规则（见写入语义注释）；
-    /// - `policy_derived_at`：availableAt 的推导时刻（TemporalNormalizer 取
-    ///   当时 now）——每次重放都不同，把它算进内容会让幂等重放永远判冲突。
+    /// 排除三类非业务内容列：
+    /// - 摄入元数据（重放必然变化）：`ingested_at`（本机首抓时间，有自己的
+    ///   保留规则，见写入语义注释）、`policy_derived_at`（availableAt 推导
+    ///   时刻，TemporalNormalizer 取当时 now——纳入会让幂等重放永远判冲突）；
+    /// - **代理键**（二轮审查 P1）：`id`（ObservationID 由 Provider identifier
+    ///   派生——同一事实经同 Provider 的另一个精确 alias 摄入会派生不同 ID，
+    ///   Canonical 身份与业务内容相同，纳入指纹会误判内容冲突）、
+    ///   `snapshot_id`（持仓子行指向父行的代理外键，同理）。
     private static func contentFingerprint<Row: EncodableRecord>(_ row: Row) throws -> String {
         // databaseDictionary：列名 → DatabaseValue（GRDB 公开 API）；
         // DatabaseValue.description 是 SQL 字面量渲染，确定性
         var parts: [String] = []
         for (key, value) in try row.databaseDictionary
-        where key != "ingested_at" && key != "policy_derived_at" {
+        where key != "ingested_at" && key != "policy_derived_at"
+            && key != "id" && key != "snapshot_id" {
             parts.append(key + "=" + value.description)
         }
         parts.sort()

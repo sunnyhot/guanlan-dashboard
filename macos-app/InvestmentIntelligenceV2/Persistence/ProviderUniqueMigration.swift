@@ -11,8 +11,9 @@ import GRDB
 // 第二家 Provider 的行直接拒收，跨源去重退化为跨源丢弃。
 //
 // 修正后的唯一键 = (维度键, effective_at, vintage, source_provider_id)：
-// - 同 Provider 重复摄入同 (维度, vintage) 仍然拒重（幂等重摄入走
-//   INSERT OR REPLACE 替换，值相同无感）；
+// - 同 Provider 同 (维度, vintage) 的唯一性由 schema 保证；GRDBRepository
+//   写入路径在该键上做显式冲突处理（同内容幂等 / 异内容拒收，见
+//   GRDBRepository 的写入语义注释）；
 // - 跨 Provider 共存，查询择优走 ObservationQuerySemantics（单一权威）。
 //
 // 落地方式（迁移只追加不改写）：

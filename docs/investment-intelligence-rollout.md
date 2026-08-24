@@ -795,9 +795,12 @@ macos-app/
 > - **单点查询逐字对齐**：dailyBar/navObservation 不走 filterByContext
 >   （黄金行为 = 同日 + 可见性过滤取 vintage 最大，不经分组/vintageFilter——
 >   parity 测试抓出的真实分歧点，以 InMemory 为准修复）。
-> - **写入语义**：INSERT OR REPLACE（同 id 或同 (维度, vintage, provider)
->   幂等替换）；持仓快照重摄入 = 快照行 + positions 整组替换（测试守护
->   不累积）；写入方法保留 throws（FK 违例 = identity 未登记，管道要暴露）。
+> - **写入语义**（一轮审查后改写，见下方审查修复记录）：按
+>   (维度, effectiveAt, vintage, provider) 身份键显式冲突处理——同身份同
+>   业务内容幂等（保留最早 ingestedAt）、同身份不同内容拒收
+>   `observationContentConflict`（逐条不阻塞批次）、持仓快照骨架 + positions
+>   全组参与内容比对；写入方法保留 throws（FK 违例 = identity 未登记，
+>   管道要暴露）。
 > - **读取错误策略**（协议非 throwing）：失败 → 该查询返回空（缺口语义，
 >   DATA006）+ `lastQueryError` 线程安全诊断面（NSLock，与 InMemory 同款
 >   约定），不静默不伪造。
@@ -817,10 +820,11 @@ macos-app/
 >   回滚（commitError 上报，不留半批）。
 > - **确定性派生（ADR-DATA004 重放幂等）**：ObservationID =
 >   SHA256(provider|scheme|value|kind|effective|published) 截断 16 字节——
->   同一条 ProviderRecord 任何时刻重放生成同 ID，INSERT OR REPLACE 幂等替换
->   （重放测试守护行数不翻倍）；Vintage = (publishedAt, 1)——Provider 更正
->   重公布 = 新 publishedAt = 新 vintage 行，旧 vintage 保留（DATA008）；
->   publisherVersion > 1 保留给同公告日多次修订（ProviderRecord 无法表达）。
+>   同一条 ProviderRecord 任何时刻重放生成同 ID，Repository 的显式冲突
+>   语义按业务身份幂等归并（重放测试守护行数不翻倍）；Vintage =
+>   (publishedAt, 1)——Provider 更正重公布 = 新 publishedAt = 新 vintage 行，
+>   旧 vintage 保留（DATA008）；publisherVersion > 1 保留给同公告日多次修订
+>  （ProviderRecord 无法表达）。
 > - **晚发布语义（一轮审查后闭环）**：初版记录过「MarketClose 晚于可知窗口
 >   的重公布被 temporalNormalizeFailed 拒收」的边界；审查确认这是 DATA008
 >   行情修订能力的缺口而非 policy 设计意图，已在审查修复中闭环——
@@ -869,6 +873,26 @@ macos-app/
 > - **遗留闭环（MarketClose 晚发布修订）**：见上方「晚发布语义」修订段。
 > - 审查结论「暂不标记 Epic 5 完全收口」据此撤销：上述全部修复落地，
 >   swift test 全量绿（排除环境性 AppLaunchPresentationPolicyTests）。
+>
+> **Epic 5 二轮审查修复（2026-08-24，1×P1 + 2×P2 + 注释同步）**：
+> - **P1 内容指纹误含代理键**：指纹原含 `id`（持仓子行还含 `snapshot_id`）
+>   ——同一事实经同 Provider 的另一个精确 identifier alias 摄入会派生不同
+>   ObservationID，业务身份与内容相同却被误判内容冲突。指纹改为只含业务
+>   内容列（排除摄入元数据 + 代理键 id / snapshot_id）；补**不同
+>   ObservationID 的幂等归并测试**（repository 级 + Pipeline 级 alias 场景，
+>   行数不翻倍、首行保留）。
+> - **P2 单点 vintageFilter / exactSnapshot 分支漏 preferredProvider**：
+>   `selectPointObservation` 的这两个分支原按确定性排序取末位，同 vintage
+>   多来源时显式偏好失效。改为先确定目标 vintage，再在同 vintage 候选内走
+>   `isPreferred` 全序（含来源偏好）；序列型 exactSnapshot 保留全部来源
+>   不变。补 vintageFilter / exact 两分支 × 有无偏好的契约测试（双实现）。
+> - **P2 内容冲突拒收丢失原始记录身份**：Pipeline 现保留
+>   ObservationID → ProviderRecord 映射，contentConflict 拒收携带真实的
+>   provider/scheme/value/kind（可诊断、可按记录重试），ObservationID 移入
+>   reason；测试断言四字段。
+> - **注释与文档同步**：GRDBRepository 文件头、CanonicalPipeline 文件头、
+>   rollout GRDB-7/GRDB-8 签收段的「INSERT OR REPLACE」表述全部改写为
+>   显式冲突语义。
 >
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：

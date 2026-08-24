@@ -218,6 +218,11 @@ final class CanonicalPipelineTests: XCTestCase {
         XCTAssertEqual(result.committedCount, 1, "批内合法记录照常提交")
         XCTAssertEqual(result.rejections.count, 1)
         XCTAssertEqual(result.rejections[0].stage, .contentConflict)
+        // 二轮审查 P2：拒收携带原始记录身份（诊断 / 按记录重试的契约）
+        XCTAssertEqual(result.rejections[0].provider, "eastmoney")
+        XCTAssertEqual(result.rejections[0].scheme, "stock_symbol")
+        XCTAssertEqual(result.rejections[0].value, "600519")
+        XCTAssertEqual(result.rejections[0].kind, "DAILY_BAR")
         // 原行未被覆盖
         let exact = repository.dailyBars(
             listingID: ListingID(rawValue: "lst_600519"),
@@ -268,6 +273,35 @@ final class CanonicalPipelineTests: XCTestCase {
             on: Self.day(0),
             context: .economicKnowledge(asOf: Self.day(4))
         ))
+    }
+
+    /// 二轮审查 P1：同一事实经同 Provider 的另一个精确 identifier alias 摄入
+    ///（派生不同 ObservationID）→ 业务身份幂等归并，不误判内容冲突。
+    func testAliasIngestion_differentObservationID_idempotent() throws {
+        // 登记 alias：ticker "600519.SH" 也指向 lst_600519（authoritative）
+        try repository.upsert(ProviderIdentifier(
+            providerID: .eastmoney, identifierScheme: "ticker",
+            identifierValue: "600519.SH", canonical: .listing(ListingID(rawValue: "lst_600519")),
+            resolutionMethod: .exchangeSymbolExact, resolvedAt: Self.day(0)
+        ))
+        _ = pipeline.commit(records: [Self.barRecord()])
+        var alias = Self.barRecord()
+        alias = ProviderRecord(
+            providerID: alias.providerID,
+            providerCode: ProviderCode(scheme: "ticker", value: "600519.SH"),
+            effectiveAt: alias.effectiveAt, publishedAt: alias.publishedAt,
+            ingestedAt: alias.ingestedAt, kind: alias.kind,
+            rawPayload: alias.rawPayload,
+            reliabilityClass: alias.reliabilityClass, jurisdiction: alias.jurisdiction
+        )
+        let result = pipeline.commit(records: [alias])
+        XCTAssertEqual(result.committedCount, 1, "alias 摄入幂等归并，非冲突")
+        XCTAssertTrue(result.rejections.isEmpty)
+        let exact = repository.dailyBars(
+            listingID: ListingID(rawValue: "lst_600519"),
+            context: .exactSnapshot(at: Self.day(0))
+        )
+        XCTAssertEqual(exact.count, 1, "业务身份一行，不因 alias 翻倍")
     }
 
     // MARK: - fixture

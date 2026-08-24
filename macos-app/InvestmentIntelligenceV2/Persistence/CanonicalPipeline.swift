@@ -19,8 +19,9 @@ import CryptoKit
 //
 // **幂等与确定性**（ADR-DATA004：spool 是事实源、库是派生物，重放重建）：
 // - ObservationID = SHA256(provider + scheme + value + kind + effectiveAt +
-//   publishedAt)——同一条 ProviderRecord 重放生成同 ID，INSERT OR REPLACE
-//   幂等替换；
+//   publishedAt)——同一条 ProviderRecord 重放生成同 ID；Repository 的显式
+//   冲突语义按业务身份幂等归并（同身份同内容保留最早 ingestedAt，不同内容
+//   逐条拒收 contentConflict，不静默覆盖）；
 // - Vintage = (announcementDate: publishedAt, publisherVersion: 1)——Provider
 //   重新公布（更正公告）= 不同 publishedAt = 新 vintage 行，旧 vintage 保留
 //   （ADR-DATA008）。publisherVersion > 1 保留给同公告日的多次修订
@@ -89,6 +90,9 @@ struct CanonicalPipeline: Sendable {
         let factory = ObservationFactory(normalizer: TemporalNormalizer(calendar: calendar), resolver: resolver)
 
         var accepted: [CanonicalObservationKind] = []
+        // ObservationID → 原始 ProviderRecord（二轮审查 P2：内容冲突拒收必须
+        // 能定位到原始记录身份，供诊断与按记录重试，不能只给占位符）
+        var acceptedByID: [String: ProviderRecord] = [:]
         var rejections: [Rejection] = []
 
         for record in records {
@@ -96,14 +100,16 @@ struct CanonicalPipeline: Sendable {
                 // ① 结构闸门
                 let structural = try schemaValidator.validate(record)
                 // ② identity 解析 + 时间规范化（防火墙 1 + 2）
+                let observationID = Self.deriveObservationID(from: record)
                 let observation = try factory.makeObservation(
                     from: structural,
-                    observationID: Self.deriveObservationID(from: record),
+                    observationID: observationID,
                     vintage: Self.deriveVintage(from: record)
                 )
                 // ③ 语义闸门
                 try dataValidator.validate(observation)
                 accepted.append(observation)
+                acceptedByID[observationID.rawValue] = record
             } catch {
                 rejections.append(Self.rejection(for: record, error: error))
             }
@@ -114,13 +120,18 @@ struct CanonicalPipeline: Sendable {
             let conflicts = try repository.commit(accepted)
             var allRejections = rejections
             for conflict in conflicts {
-                if case .observationContentConflict(let observationID, let table) = conflict {
-                    allRejections.append(Rejection(
-                        provider: "-", scheme: "-", value: observationID,
-                        kind: "-", stage: .contentConflict,
-                        reason: "\(table) 同身份重摄入内容不同：\(conflict)"
-                    ))
+                guard case .observationContentConflict(let observationID, let table) = conflict else {
+                    continue
                 }
+                let record = acceptedByID[observationID]
+                allRejections.append(Rejection(
+                    provider: record?.providerID.rawValue ?? observationID,
+                    scheme: record?.providerCode.scheme ?? observationID,
+                    value: record?.providerCode.value ?? observationID,
+                    kind: record?.kind.rawValue ?? observationID,
+                    stage: .contentConflict,
+                    reason: "\(table) 同身份重摄入内容不同（observationID \(observationID)）：\(conflict)"
+                ))
             }
             return CommitResult(
                 committedCount: accepted.count - conflicts.count,
