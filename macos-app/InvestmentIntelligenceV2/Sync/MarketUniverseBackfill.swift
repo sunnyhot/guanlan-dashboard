@@ -78,6 +78,9 @@ struct MarketUniverseBackfillState: Codable, Sendable, Equatable {
     var completedEntries: Set<String> = []
     /// 上轮各条目覆盖数缓存（诊断）
     var coveredDays: [String: Int] = [:]
+    /// 公平轮转游标（universe 优先级序中的扫描起点；P1 修复：
+    /// 防持续失败条目饿死后续目标）
+    var rotationCursor: Int = 0
     var lastRunAt: Date?
 }
 
@@ -131,15 +134,36 @@ struct MarketUniverseBackfill: Sendable {
         let store = SyncStateStore<MarketUniverseBackfillState>()
         var state = try store.load(from: stateURL) ?? MarketUniverseBackfillState()
 
-        // 批次选择：未完成条目按优先级（稳定序）取前 N
-        let pending = universe.entries
-            .filter { !state.completedEntries.contains($0.key) }
+        // 批次选择（P1 修复：公平轮转）：沿 universe 优先级序从持久化轮转游标
+        // 处起扫，跳过已完成条目、取满预算为止。固定取前 N 会让持续失败的
+        // 高优先级条目永久占据批次、饿死后续目标；轮转保证每个未完成条目
+        // 在 ceil(pending/budget)+1 轮内必被尝试一次。
+        let universeOrdered = universe.entries
             .sorted { lhs, rhs in
                 lhs.priority != rhs.priority
                     ? lhs.priority < rhs.priority
                     : lhs.key < rhs.key
             }
-        let batch = Array(pending.prefix(maxTargetsPerRound))
+        let batch: [MarketUniverseEntry]
+        if universeOrdered.isEmpty {
+            batch = []
+        } else {
+            let start = state.rotationCursor % universeOrdered.count
+            var picked: [MarketUniverseEntry] = []
+            var scanned = 0
+            // 单圈扫描：每个条目一轮至多入选一次（两圈会把同一未完成条目
+            // 重复塞进批次）；pending 稀疏时批次可短于预算——这是正确行为
+            let scanLimit = universeOrdered.count
+            while picked.count < maxTargetsPerRound && scanned < scanLimit {
+                let entry = universeOrdered[(start + scanned) % universeOrdered.count]
+                if !state.completedEntries.contains(entry.key) {
+                    picked.append(entry)
+                }
+                scanned += 1
+            }
+            batch = picked
+            state.rotationCursor = (start + scanned) % universeOrdered.count
+        }
 
         var result = MarketUniverseBackfillRoundResult(batchKeys: batch.map(\.key))
 
@@ -171,7 +195,8 @@ struct MarketUniverseBackfill: Sendable {
 
         // 进度更新
         for entry in batch {
-            let key = "bar|\(entry.code.value)"
+            // P1 修复：coverage key 与 HistoricalBackfill 一致使用 listingID
+            let key = "bar|\(entry.listingID.rawValue)"
             guard let coverage = result.coverage[key] else { continue }
             state.coveredDays[entry.key] = coverage.covered
             if coverage.isSufficient {

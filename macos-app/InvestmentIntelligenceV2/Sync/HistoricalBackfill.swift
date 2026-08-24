@@ -121,7 +121,9 @@ struct HistoricalBackfill: Sendable {
                 kind: .navObservation, spoolURL: spoolURL
             )
             result.navOutcomes[fund.code.value] = outcome
-            result.coverage["nav|\(fund.code.value)"] = coverage(
+            // P1 修复：coverage key 用 canonical 维度（shareClassID），不同
+            // scheme/Provider 的同码标的不会互相覆盖
+            result.coverage["nav|\(fund.shareClassID.rawValue)"] = coverage(
                 expected: navExpected,
                 actualDates: repository.navObservations(
                     shareClassID: fund.shareClassID,
@@ -153,7 +155,8 @@ struct HistoricalBackfill: Sendable {
                 outcome = .failed(summary: fallback.localFallbackSummary)
             }
             result.barOutcomes[target.code.value] = outcome
-            result.coverage["bar|\(target.code.value)"] = coverage(
+            // P1 修复：coverage key 用 canonical 维度（listingID）
+            result.coverage["bar|\(target.listingID.rawValue)"] = coverage(
                 expected: expected,
                 actualDates: repository.dailyBars(
                     listingID: target.listingID,
@@ -224,7 +227,7 @@ struct HistoricalBackfill: Sendable {
             let expected = marketCalendar.tradingDays(
                 endingAt: anchor, count: requiredTradingDays, jurisdiction: target.jurisdiction
             )
-            report["bar|\(target.code.value)"] = coverage(
+            report["bar|\(target.listingID.rawValue)"] = coverage(
                 expected: expected,
                 actualDates: repository.dailyBars(
                     listingID: target.listingID,

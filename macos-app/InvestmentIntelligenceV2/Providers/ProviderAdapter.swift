@@ -356,8 +356,19 @@ enum ProviderEndpoint: Sendable, Hashable {
     case eastmoneyFundAnnouncements(fundCode: String, reportType: Int)
     /// Stooq 历史日线 CSV：`stooq.com/q/d/l/?s={symbol}&i=d`（PROV-2，美股 primary）
     case stooqHistory(symbol: String)
-    /// FRED 宏观指标观测：`api.stlouisfed.org/fred/series/observations?series_id=...`（PROV-5）
-    case fredObservations(seriesID: String)
+    /// FRED 宏观指标观测：`api.stlouisfed.org/fred/series/observations`（PROV-5）。
+    ///
+    /// realtimeStart/realtimeEnd 是 FRED 的 real-time period 参数——**不传时
+    /// 默认当天**，返回的只是当前快照（所有历史值共用手抓当天的 realtime_start，
+    /// 会伪造 publishedAt / 伪 vintage，P1 审查修复）。要取真实 vintage 历史，
+    /// realtimeStart 必须显式早于序列起点（FRED 约定最早 1776-07-04）。
+    /// apiKey 必填（nil 由 adapter fail-closed 拒绝，不再用 PLACEHOLDER 静默坏请求）。
+    case fredObservations(
+        seriesID: String,
+        realtimeStart: String?,
+        realtimeEnd: String?,
+        apiKey: String
+    )
 }
 
 /// 静态响应 fetcher（测试用：注入预录真实响应文本）。
@@ -414,10 +425,26 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         case .stooqHistory(let symbol):
             // Stooq 日线 CSV 下载端点（personal-use，FREE001 合规：免费、无 key）
             urlString = "https://stooq.com/q/d/l/?s=\(symbol)&i=d"
-        case .fredObservations(let seriesID):
-            // FRED 观测序列（免费 API，需 api_key；realtime_start/end 用于 PIT vintage）
-            // 生产由 adapter 注入 api_key；此处占位供集成测试（Epic 4 补 key 管理）
-            urlString = "https://api.stlouisfed.org/fred/series/observations?series_id=\(seriesID)&file_type=json&api_key=PLACEHOLDER"
+        case .fredObservations(let seriesID, let realtimeStart, let realtimeEnd, let apiKey):
+            // FRED 观测序列（免费 API）：realtime_start/end 显式传宽窗口取全部
+            // vintage（缺省会退化成当天快照——P1 修复）；api_key 由调用方注入
+            var components = URLComponents(
+                string: "https://api.stlouisfed.org/fred/series/observations"
+            )!
+            var items = [
+                URLQueryItem(name: "series_id", value: seriesID),
+                URLQueryItem(name: "file_type", value: "json"),
+                URLQueryItem(name: "api_key", value: apiKey),
+                URLQueryItem(name: "output_type", value: "1"),
+            ]
+            if let realtimeStart {
+                items.append(URLQueryItem(name: "realtime_start", value: realtimeStart))
+            }
+            if let realtimeEnd {
+                items.append(URLQueryItem(name: "realtime_end", value: realtimeEnd))
+            }
+            components.queryItems = items
+            urlString = components.url!.absoluteString
         }
         let providerID = Self.providerID(for: endpoint)
         guard let url = URL(string: urlString) else {

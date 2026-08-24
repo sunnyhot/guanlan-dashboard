@@ -71,7 +71,7 @@ final class HistoricalBackfillTests: XCTestCase {
             return XCTFail("期望 committed，实际 \(String(describing: result.navOutcomes))")
         }
         XCTAssertEqual(count, 252)
-        let coverage = try XCTUnwrap(result.coverage["nav|110022"])
+        let coverage = try XCTUnwrap(result.coverage["nav|fsc_110022_A"])
         XCTAssertEqual(coverage.covered, 252)
         XCTAssertTrue(coverage.isSufficient, coverage.summary)
         XCTAssertTrue(result.allSufficient)
@@ -97,7 +97,7 @@ final class HistoricalBackfillTests: XCTestCase {
             )],
             barTargets: [], spoolURL: spoolURL
         )
-        let coverage = try XCTUnwrap(result.coverage["nav|110022"])
+        let coverage = try XCTUnwrap(result.coverage["nav|fsc_110022_A"])
         XCTAssertEqual(coverage.covered, 100)
         XCTAssertFalse(coverage.isSufficient)
         XCTAssertFalse(result.allSufficient)
@@ -133,7 +133,7 @@ final class HistoricalBackfillTests: XCTestCase {
             context: .economicKnowledge(asOf: cst(2026, 12, 31))
         )
         XCTAssertEqual(navs.count, 252, "重跑不翻倍")
-        XCTAssertTrue(second.coverage["nav|110022"]!.isSufficient)
+        XCTAssertTrue(second.coverage["nav|fsc_110022_A"]!.isSufficient)
     }
 
     // MARK: - 行情回填（降级链）
@@ -163,7 +163,7 @@ final class HistoricalBackfillTests: XCTestCase {
             return XCTFail("期望 committed，实际 \(String(describing: result.barOutcomes))")
         }
         XCTAssertEqual(count, 252)
-        let coverage = try XCTUnwrap(result.coverage["bar|AAPL"])
+        let coverage = try XCTUnwrap(result.coverage["bar|lst_aapl"])
         XCTAssertTrue(coverage.isSufficient, coverage.summary)
         // 期望窗口跨 2026 美股节假日（耶稣受难日 04-03、独立日补休 07-03 都被跳过）
         XCTAssertTrue(expectedDays.allSatisfy { !Set(["2026-04-03", "2026-07-03"]).contains(dayKey($0, tz: "America/New_York")) })
@@ -193,7 +193,7 @@ final class HistoricalBackfillTests: XCTestCase {
             return XCTFail("期望 failed")
         }
         XCTAssertTrue(summary.contains("local canonical only"))
-        let coverage = try XCTUnwrap(result.coverage["bar|AAPL"])
+        let coverage = try XCTUnwrap(result.coverage["bar|lst_aapl"])
         XCTAssertEqual(coverage.covered, 0)
         XCTAssertFalse(coverage.isSufficient)
         XCTAssertFalse(result.allSufficient)

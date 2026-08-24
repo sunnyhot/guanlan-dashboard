@@ -8,6 +8,14 @@ import XCTest
 /// 格式（非 live 录制，手工构造的代表性 wire 格式）。
 final class FREDAdapterTests: XCTestCase {
 
+    /// 与 FREDProviderAdapter 默认参数一致的 endpoint（realtime 全窗口 + key）。
+    private static let gdpEndpoint = ProviderEndpoint.fredObservations(
+        seriesID: "GDP",
+        realtimeStart: "1900-01-01",
+        realtimeEnd: nil,
+        apiKey: "test-key"
+    )
+
     private struct WeekdayCalendar: TradingCalendar {
         func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
             let w = Calendar(identifier: .gregorian).component(.weekday, from: date)
@@ -111,8 +119,10 @@ final class FREDAdapterTests: XCTestCase {
         let ingested = date(2024, 8, 1)
         let adapter = FREDProviderAdapter(
             config: gdpConfig,
-            fetcher: StaticResponseFetcher([.fredObservations(seriesID: "GDP"): sampleJSON])
-        ) { ingested }
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: sampleJSON]),
+            ingestedAt: { ingested },
+            apiKey: "test-key"
+        )
         let records = try await adapter.fetch(
             code: ProviderCode(scheme: "fred_series", value: "GDP"),
             from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
@@ -147,8 +157,10 @@ final class FREDAdapterTests: XCTestCase {
         let ingested = date(2024, 8, 1)
         let adapter = FREDProviderAdapter(
             config: gdpConfig,
-            fetcher: StaticResponseFetcher([.fredObservations(seriesID: "GDP"): json])
-        ) { ingested }
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: json]),
+            ingestedAt: { ingested },
+            apiKey: "test-key"
+        )
         let result = try await adapter.fetchWithDiagnostics(
             code: ProviderCode(scheme: "fred_series", value: "GDP"),
             from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
@@ -158,6 +170,53 @@ final class FREDAdapterTests: XCTestCase {
         XCTAssertEqual(result.records.count, 1)
     }
 
+    // MARK: - P1 修复：realtime 窗口与 api key
+
+    func testMissingAPIKeyFailsClosed() async {
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([:]),
+            apiKey: ""   // 缺 key
+        )
+        do {
+            _ = try await adapter.fetch(
+                code: ProviderCode(scheme: "fred_series", value: "GDP"),
+                from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+            )
+            XCTFail("缺 key 应拒绝抓取")
+        } catch let error as ProviderError {
+            guard case .unavailable(_, let underlying) = error else {
+                return XCTFail("期望 unavailable：\(error)")
+            }
+            XCTAssertTrue(underlying.contains("FRED API key"), "报错应指向缺失的 key：\(underlying)")
+        } catch {
+            XCTFail("期望 ProviderError：\(error)")
+        }
+    }
+
+    func testRealtimeWindowFlowsToEndpoint() async throws {
+        // 自定义窗口的 endpoint 命中 → 证明 realtimeStart/End 从 adapter 传到了 fetcher
+        let customEndpoint = ProviderEndpoint.fredObservations(
+            seriesID: "GDP",
+            realtimeStart: "2020-01-01",
+            realtimeEnd: "2024-12-31",
+            apiKey: "test-key"
+        )
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([customEndpoint: sampleJSON]),
+            ingestedAt: { self.date(2024, 8, 1) },
+            apiKey: "test-key",
+            realtimeStart: "2020-01-01",
+            realtimeEnd: "2024-12-31"
+        )
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fred_series", value: "GDP"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(records.count, 3, "自定义 realtime 窗口的 endpoint 被命中")
+    }
+
     // MARK: - ProviderRecord → ObservationFactory → MacroObservation（PIT）
 
     func testProviderRecordToMacroObservation_macroReleaseAvailability() async throws {
@@ -165,8 +224,10 @@ final class FREDAdapterTests: XCTestCase {
         let ingested = date(2024, 8, 1)
         let adapter = FREDProviderAdapter(
             config: gdpConfig,
-            fetcher: StaticResponseFetcher([.fredObservations(seriesID: "GDP"): sampleJSON])
-        ) { ingested }
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: sampleJSON]),
+            ingestedAt: { ingested },
+            apiKey: "test-key"
+        )
         let records = try await adapter.fetch(
             code: ProviderCode(scheme: "fred_series", value: "GDP"),
             from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)

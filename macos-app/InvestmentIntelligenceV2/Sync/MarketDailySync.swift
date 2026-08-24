@@ -35,7 +35,9 @@ enum MarketDailySyncOutcome: Equatable, Sendable {
     case upToDate
     case committed(recordCount: Int, newCursor: Date, usedRole: ProviderFallbackCandidate.Role)
     case noNewData(windowFrom: Date, windowThrough: Date)
-    case rejectedCursorHeld(committedCount: Int, rejectionCount: Int)
+    /// 本轮不完整（管道拒收 / 结构非法 / 上游丢行）——游标保守不动
+    ///（P1 修复：dropped 未消费 + 混合 invalid 时推进会永久跳过中间日期）
+    case rejectedCursorHeld(committedCount: Int, rejectionCount: Int, droppedMalformed: Int)
     /// 全候选失败——local 兜底（游标不动，读取面不受影响）
     case allProvidersFailed(summary: String)
 }
@@ -159,6 +161,9 @@ struct MarketDailySync: Sendable {
             return .allProvidersFailed(summary: fallback.localFallbackSummary)
         }
 
+        // 上游丢行诊断（P1 修复：未消费会让被丢的中间日期被游标跨过）
+        let droppedMalformed = success.diagnostics.droppedMalformedBySource.values.reduce(0, +)
+
         let barRecords = success.records.filter { $0.kind == .dailyBar }
         guard barRecords.isEmpty == false else {
             return .noNewData(windowFrom: windowFrom, windowThrough: anchor)
@@ -167,7 +172,10 @@ struct MarketDailySync: Sendable {
         let partition = ProviderRecordSchemaValidator().partition(barRecords)
         guard partition.valid.isEmpty == false else {
             if !partition.invalid.isEmpty {
-                return .rejectedCursorHeld(committedCount: 0, rejectionCount: partition.invalid.count)
+                return .rejectedCursorHeld(
+                    committedCount: 0, rejectionCount: partition.invalid.count,
+                    droppedMalformed: droppedMalformed
+                )
             }
             return .noNewData(windowFrom: windowFrom, windowThrough: anchor)
         }
@@ -187,9 +195,13 @@ struct MarketDailySync: Sendable {
             $0.scheme == target.code.scheme && $0.value == target.code.value
         }
         result.rejections.append(contentsOf: commitResult.rejections)
-        if !targetRejections.isEmpty {
+        let rejectionCount = targetRejections.count + partition.invalid.count
+        // 保守推进条件（P1 修复）：管道零拒收 + 无结构非法 + 上游零丢行
+        if rejectionCount > 0 || droppedMalformed > 0 {
             return .rejectedCursorHeld(
-                committedCount: commitResult.committedCount, rejectionCount: targetRejections.count
+                committedCount: commitResult.committedCount,
+                rejectionCount: rejectionCount,
+                droppedMalformed: droppedMalformed
             )
         }
 

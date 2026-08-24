@@ -39,8 +39,10 @@ enum FundNAVSyncOutcome: Equatable, Sendable {
     case committed(recordCount: Int, newCursor: Date, droppedMalformed: Int)
     /// 窗口内 Provider 无数据（如 QDII T+2 滞后）——游标不动，下轮重试
     case noNewData(windowFrom: Date, windowThrough: Date)
-    /// 有防火墙拒收（记录已拒收清单在 round 级）——游标保守不动
-    case rejectedCursorHeld(committedCount: Int, rejectionCount: Int)
+    /// 本轮不完整（防火墙拒收 / 上游丢行）——已提交行保留（幂等），但游标
+    /// 保守不动：droppedMalformed > 0 或混有 invalid 记录时，中间日期可能
+    /// 缺失，推进会永久跳过它们
+    case rejectedCursorHeld(committedCount: Int, rejectionCount: Int, droppedMalformed: Int)
     /// Provider 不可调用（健康监控 unavailable）——本轮跳过
     case providerNotCallable
     /// 抓取 / 持久化失败——游标不动，单只隔离
@@ -171,7 +173,11 @@ struct FundNAVSync: Sendable {
         guard partition.valid.isEmpty == false else {
             if !partition.invalid.isEmpty {
                 await healthMonitor?.recordSchemaDrift(providerID)
-                return .rejectedCursorHeld(committedCount: 0, rejectionCount: partition.invalid.count)
+                return .rejectedCursorHeld(
+                    committedCount: 0,
+                    rejectionCount: partition.invalid.count,
+                    droppedMalformed: droppedMalformed
+                )
             }
             return .noNewData(windowFrom: windowFrom, windowThrough: anchor)
         }
@@ -198,11 +204,17 @@ struct FundNAVSync: Sendable {
         result.rejections.append(contentsOf: commitResult.rejections)
 
         let committed = commitResult.committedCount
-        if !fundRejections.isEmpty {
-            // 保守：有拒收不推进游标（重试幂等，不跳过被拒日期）
+        let rejectionCount = fundRejections.count + partition.invalid.count
+        // 保守推进条件（P1 修复）：窗口内本轮必须**完整**——
+        // ① 管道零拒收；② 无结构非法记录；③ 上游零丢行（droppedMalformed）。
+        // 任一不满足 → 游标不动：T/T+2 合法而 T+1 被丢时推进到 T+2 会永久
+        // 跳过 T+1。已提交的合法行保留（确定性 ID 幂等），下轮重抓不翻倍。
+        if rejectionCount > 0 || droppedMalformed > 0 {
             await healthMonitor?.recordSuccess(providerID)
             return .rejectedCursorHeld(
-                committedCount: committed, rejectionCount: fundRejections.count
+                committedCount: committed,
+                rejectionCount: rejectionCount,
+                droppedMalformed: droppedMalformed
             )
         }
 

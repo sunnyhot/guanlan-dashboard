@@ -114,6 +114,30 @@ final class MarketUniverseBackfillTests: XCTestCase {
         XCTAssertEqual(round2.completedCount, 3)
     }
 
+    func testPersistentlyFailingEntriesDoNotStarveLaterTargets() async throws {
+        // P1 修复回归：5 个标的、预算 3，S0/S1/S2 永久失败——轮转保证
+        // S3/S4 在第二轮就获得机会（固定前缀会永久饿死它们）
+        stub.failSymbols = ["S0", "S1", "S2"]
+        let universe = MarketUniverse(universeVersion: 1, entries: (0..<5).map { i in
+            Self.entry(key: "us_\(i)", symbol: "S\(i)", priority: i, fetchDirectly: true)
+        })
+        let engine = makeEngine(maxTargetsPerRound: 3)
+
+        let round1 = try await engine.syncOnce(universe: universe, spoolURL: spoolURL, stateURL: stateURL)
+        XCTAssertEqual(round1.batchKeys, ["us_0", "us_1", "us_2"])
+
+        let round2 = try await engine.syncOnce(universe: universe, spoolURL: spoolURL, stateURL: stateURL)
+        XCTAssertTrue(round2.batchKeys.contains("us_3"), "轮转让后续目标进入批次：\(round2.batchKeys)")
+        XCTAssertTrue(round2.batchKeys.contains("us_4"), "轮转让后续目标进入批次：\(round2.batchKeys)")
+        XCTAssertEqual(round2.completedCount, 2, "S3/S4 达标完成（即使 S0-S2 永久失败）")
+
+        // 轮转继续覆盖失败目标（不会因为完成了 S3/S4 就丢下它们）
+        stub.failSymbols = []
+        let round3 = try await engine.syncOnce(universe: universe, spoolURL: spoolURL, stateURL: stateURL)
+        XCTAssertEqual(Set(round3.batchKeys), ["us_0", "us_1", "us_2"], "恢复后失败目标优先补齐")
+        XCTAssertEqual(round3.completedCount, 5)
+    }
+
     // MARK: - remote 通道（只验证覆盖）
 
     func testRemoteChannelEntriesVerifyCoverageOnly() async throws {

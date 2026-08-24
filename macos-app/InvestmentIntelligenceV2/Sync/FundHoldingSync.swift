@@ -294,9 +294,11 @@ struct FundHoldingSync: Sendable {
 
             let holdingRecords = fetched.records.filter { $0.kind == .fundHoldingSnapshot }
             guard holdingRecords.isEmpty == false else {
-                // 窗口命中但无记录：视同该期无数据，不推进游标（保守，
-                // 与 NAV 的 noNewData 同语义）——升序继续会把洞留在身后
-                continue
+                // P2 修复：窗口命中但零记录——立即停在该期（held），不 continue。
+                // 否则更晚的期成功后游标会越过这个空洞，永久缺失。该期若确认
+                // 「不适用」（如指数基金不披露季报），需要显式的持久化跳过状态
+                // （后续 story），不能用「跳过去」代替
+                return .notYetPublished(heldAt: newCursor, nextCandidate: period)
             }
 
             let partition = ProviderRecordSchemaValidator().partition(holdingRecords)

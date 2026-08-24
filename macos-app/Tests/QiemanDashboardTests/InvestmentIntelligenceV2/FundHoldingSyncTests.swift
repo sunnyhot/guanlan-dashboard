@@ -264,6 +264,35 @@ final class FundHoldingSyncTests: XCTestCase {
         XCTAssertEqual(stub.fetchCount, 0)
     }
 
+    func testEmptyPeriodHoldsCursorImmediately() async throws {
+        // P2 修复回归：某期窗口命中但零记录——立即 held 在该期，
+        // 不因更晚的期可抓而跨过空洞
+        var state = FundHoldingSyncState()
+        state.lastIngestedPeriods["110022"] = FundReportPeriod(year: 2025, quarter: 4)
+        try SyncStateStore<FundHoldingSyncState>().save(state, to: stateURL)
+
+        let stub = StubHoldingAdapter(
+            emptyPeriods: [FundReportPeriod(year: 2026, quarter: 1)]
+        )
+        let sync = makeSync(stub: stub, now: cst(2026, 8, 24))
+        let result = try await sync.syncOnce(
+            funds: [ProviderCode(scheme: "fund_product_code", value: "110022")],
+            spoolURL: spoolURL, stateURL: stateURL
+        )
+        XCTAssertEqual(
+            result.outcomes["110022"],
+            .notYetPublished(
+                heldAt: FundReportPeriod(year: 2025, quarter: 4),
+                nextCandidate: FundReportPeriod(year: 2026, quarter: 1)
+            ),
+            "空期立即停住，不跨期推进"
+        )
+        XCTAssertEqual(stub.fetchCount, 1, "空期后不再尝试更晚的期")
+        let after = try SyncStateStore<FundHoldingSyncState>().load(from: stateURL)
+        XCTAssertEqual(after?.lastIngestedPeriods["110022"],
+                       FundReportPeriod(year: 2025, quarter: 4), "游标停在空洞前")
+    }
+
     // MARK: - 测试基础设施
 
     private func makeSync(stub: StubHoldingAdapter, now: Date) -> FundHoldingSync {
@@ -281,6 +310,7 @@ final class FundHoldingSyncTests: XCTestCase {
 
         private let missingPeriods: Set<String>
         private let customPayloadPeriods: Set<String>
+        private let emptyPeriods: Set<String>
         private let failureForFunds: Set<String>
         private let lock = NSLock()
         private(set) var fetchCount = 0
@@ -288,10 +318,12 @@ final class FundHoldingSyncTests: XCTestCase {
         init(
             missingPeriods: Set<FundReportPeriod> = [],
             customPayloadPeriods: Set<FundReportPeriod> = [],
+            emptyPeriods: Set<FundReportPeriod> = [],
             failureForFunds: Set<String> = []
         ) {
             self.missingPeriods = Set(missingPeriods.map(\.label))
             self.customPayloadPeriods = Set(customPayloadPeriods.map(\.label))
+            self.emptyPeriods = Set(emptyPeriods.map(\.label))
             self.failureForFunds = failureForFunds
         }
 
@@ -312,6 +344,12 @@ final class FundHoldingSyncTests: XCTestCase {
             let period = Self.period(of: from)
             if missingPeriods.contains(period.label) {
                 throw EastmoneyHistoricalHoldingError.announcementNotFound(reportDate: from)
+            }
+            if emptyPeriods.contains(period.label) {
+                return ProviderFetchResult(
+                    records: [],
+                    diagnostics: ProviderFetchDiagnostics(completeness: .complete)
+                )
             }
             let bad = customPayloadPeriods.contains(period.label)
             return ProviderFetchResult(

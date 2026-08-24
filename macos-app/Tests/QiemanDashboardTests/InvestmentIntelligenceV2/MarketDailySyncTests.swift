@@ -188,6 +188,61 @@ final class MarketDailySyncTests: XCTestCase {
         XCTAssertEqual(bars.count, 2)
     }
 
+    func testIncompleteDiagnosticsHoldCursor() async throws {
+        // P1 修复回归 a：混合结构非法——合法行入库、游标不动
+        var bad = Self.usBarRecord(day: est(2026, 8, 18))
+        bad = ProviderRecord(
+            providerID: bad.providerID, providerCode: bad.providerCode,
+            effectiveAt: bad.effectiveAt, publishedAt: bad.publishedAt, ingestedAt: bad.ingestedAt,
+            kind: .dailyBar,
+            rawPayload: Data(#"{"warp":true}"#.utf8),
+            reliabilityClass: bad.reliabilityClass, jurisdiction: bad.jurisdiction
+        )
+        let primary = StubBarAdapter(providerID: .stooq, records: [
+            Self.usBarRecord(day: est(2026, 8, 17)),
+            bad,
+        ])
+        let chain = ProviderFallbackChain(adapters: [primary])
+        let sync = MarketDailySync(pipeline: pipeline, now: { self.est(2026, 8, 19, hour: 20) })
+        let result = try await sync.syncOnce(
+            targets: [MarketDailyTarget(
+                code: ProviderCode(scheme: "stock_symbol", value: "AAPL"),
+                jurisdiction: .unitedStates, chain: chain
+            )],
+            spoolURL: spoolURL, stateURL: stateURL, remoteSpoolURL: nil
+        )
+        guard case let .rejectedCursorHeld(committed, rejectionCount, _) = result.outcomes["stock_symbol|AAPL"] else {
+            return XCTFail("期望 rejectedCursorHeld，实际 \(String(describing: result.outcomes))")
+        }
+        XCTAssertEqual(committed, 1)
+        XCTAssertEqual(rejectionCount, 1)
+        let state = try SyncStateStore<MarketDailySyncState>().load(from: stateURL)
+        XCTAssertNil(state?.lastIngestedEffectiveDates["stock_symbol|AAPL"], "混合 invalid 游标不推进")
+
+        // P1 修复回归 b：上游丢行诊断（降级链透传）——记录全合法也不推进
+        let droppedPrimary = StubBarAdapter(
+            providerID: .stooq,
+            records: [Self.usBarRecord(day: est(2026, 8, 17)), Self.usBarRecord(day: est(2026, 8, 18))],
+            droppedMalformed: 1
+        )
+        let droppedChain = ProviderFallbackChain(adapters: [droppedPrimary])
+        let result2 = try await sync.syncOnce(
+            targets: [MarketDailyTarget(
+                code: ProviderCode(scheme: "stock_symbol", value: "AAPL"),
+                jurisdiction: .unitedStates, chain: droppedChain
+            )],
+            spoolURL: spoolURL, stateURL: stateURL, remoteSpoolURL: nil
+        )
+        guard case let .rejectedCursorHeld(committed2, rejectionCount2, dropped2) = result2.outcomes["stock_symbol|AAPL"] else {
+            return XCTFail("期望 rejectedCursorHeld（上游丢行）")
+        }
+        XCTAssertEqual(committed2, 2, "合法行照常入库（幂等）")
+        XCTAssertEqual(rejectionCount2, 0)
+        XCTAssertEqual(dropped2, 1)
+        let state2 = try SyncStateStore<MarketDailySyncState>().load(from: stateURL)
+        XCTAssertNil(state2?.lastIngestedEffectiveDates["stock_symbol|AAPL"], "上游丢行游标不推进")
+    }
+
     // MARK: - 远程 staging 提交通道（A 股）
 
     func testRemoteSpoolCommitsIntoCanonical() async throws {
@@ -241,15 +296,22 @@ final class MarketDailySyncTests: XCTestCase {
 
         private let records: [ProviderRecord]
         private let error: Error?
+        private let droppedMalformed: Int
         private let lock = NSLock()
         private(set) var fetchCount = 0
         private(set) var lastWindowFrom: Date?
         private(set) var lastWindowThrough: Date?
 
-        init(providerID: DataProviderID, records: [ProviderRecord], error: Error? = nil) {
+        init(
+            providerID: DataProviderID,
+            records: [ProviderRecord],
+            error: Error? = nil,
+            droppedMalformed: Int = 0
+        ) {
             self.providerID = providerID
             self.records = records
             self.error = error
+            self.droppedMalformed = droppedMalformed
         }
 
         func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
@@ -270,7 +332,10 @@ final class MarketDailySyncTests: XCTestCase {
             }
             return ProviderFetchResult(
                 records: inWindow,
-                diagnostics: ProviderFetchDiagnostics(completeness: .complete)
+                diagnostics: ProviderFetchDiagnostics(
+                    completeness: .complete,
+                    droppedMalformedBySource: droppedMalformed > 0 ? ["stub": droppedMalformed] : [:]
+                )
             )
         }
     }

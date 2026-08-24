@@ -1165,6 +1165,44 @@ macos-app/
 > SYNC-4（2）/ SYNC-5（1）/ SYNC-6a（3）/ SYNC-6b（5）/ SYNC-7（3）/
 > SYNC-8（5）= 26 点全部签收，M5 能力落地（引擎层离线验证，新增 9 个测试
 > 套件、以套件通过为准）。Epic 7（Factor Engine）解锁。
+>
+> **Epic 6 一轮审查修复（2026-08-24，6×P1 + 1×P2）**：
+> - **P1 FRED 未真正抓取 vintage**：endpoint 缺 realtime_start/end 时 FRED
+>   默认当天——响应是当前快照而非历史 vintage，且会把抓取当天标成所有
+>   历史值的 publishedAt（后续运行伪造 vintage）。修复：`fredObservations`
+>   endpoint 显式携带 realtime 窗口（adapter 默认 realtime_start=1900-01-01
+>   早于一切 FRED 序列）+ output_type=1；**api key fail-closed**（缺失直接
+>   unavailable 报「缺少 FRED API key」，废止 PLACEHOLDER 静默坏请求）。
+>   realtime 参数从 adapter 到 fetcher 的端到端传递与缺 key 拒收有测试。
+> - **P1 universe 固定前缀批次饿死后续目标**：每轮对相同排序取前 N，持续
+>   失败的高优先级条目会永久占据批次。修复：持久化**轮转游标**
+>   （rotationCursor，沿 universe 优先级序单圈扫描、跳过已完成、取满预算），
+>   保证每个未完成条目在有限轮内必被尝试；永久失败不饿死后续目标的
+>   轮转行为有测试（5 标的预算 3，S0-S2 永久失败时 S3/S4 第二轮完成）。
+> - **P1 displayName 派生 Canonical ID 合并不同证券**：同名不同码的标的会
+>   派生相同 LegalEntity/Instrument ID 被错误合并。修复：创建模式的 ID 锚点
+>   **只从权威键派生**——listing 路径 exchange|symbol、ISIN 路径校验后 ISIN；
+>   displayName 降为可变属性；占位发行人按标的独立派生（宁可多建不误并，
+>   真实归属由披露数据走权威路径合并）。同名不同码三层实体独立有测试。
+> - **P1 过期 Verification 覆盖权威映射**：verify() 无冲突检查地 upsert，
+>   fuzzy 生成后另一轮建立的权威映射会被旧 accept 覆盖。修复：只升级
+>   「当前仍是 fuzzy candidate 且候选一致」的行；已有权威映射时一致=幂等
+>   成功、不同=过期提案拒收（映射不动）。过期/幂等两态有测试。
+> - **P1 保守游标跨过被丢弃的日期（SYNC-3/2）**：droppedMalformed 计数被
+>   读取但未参与推进判定，valid/invalid 混合时也推进——T/T+2 合法而 T+1
+>   被丢时游标直接到 T+2，T+1 永不重试。修复：推进条件收紧为三重干净
+>   （管道零拒收 + 无结构非法 + 上游零丢行），任一不满足游标不动（已提交
+>   合法行保留，幂等重抓不翻倍）；MarketDailySync 同步消费降级链透传的
+>   diagnostics。混合 invalid / 上游丢行两形态（NAV + 行情）都有回归测试。
+> - **P1 coverage key 跨标的碰撞**：`bar|code.value` 无法区分不同 scheme/
+>   交易所/法域的同码标的，覆盖结果互相覆盖并错误标记完成。修复：
+>   HistoricalBackfill / coverageReport / MarketUniverseBackfill 全链路
+>   改用 canonical 维度——`bar|<listingID>` / `nav|<shareClassID>`。
+> - **P2 空报告期后 continue 跨期推进（SYNC-4）**：某期零记录时 continue，
+>   更晚的期成功后游标越过空洞。修复：空期立即返回 held（停在空洞前，
+>   不再尝试更晚的期）；「确认不适用」的显式持久化跳过状态留作后续
+>   story（不能用跳过去代替）。空期立即 hold 有测试。
+> - 修复后 swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 

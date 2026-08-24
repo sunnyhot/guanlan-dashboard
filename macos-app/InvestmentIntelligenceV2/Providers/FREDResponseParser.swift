@@ -179,15 +179,29 @@ struct FREDProviderAdapter: ProviderAdapter {
     private let parser = FREDResponseParser()
     private let fetcher: any ResponseFetcher
     private let ingestedAt: @Sendable () -> Date
+    /// FRED API key（免费申请）。**必填**——缺失直接拒绝抓取（fail-closed，
+    /// 不再用 PLACEHOLDER 静默发出注定失败的请求）
+    private let apiKey: String
+    /// real-time 窗口起点（默认 1900-01-01，早于一切 FRED 序列——请求全量
+    /// vintage 历史；FRED 缺省=当天快照会伪造 publishedAt，P1 修复）
+    private let realtimeStart: String
+    /// real-time 窗口终点（nil = 今天，FRED 缺省）
+    private let realtimeEnd: String?
 
     init(
         config: FREDSeriesConfig,
         fetcher: any ResponseFetcher,
-        ingestedAt: @escaping @Sendable () -> Date = { .now }
+        ingestedAt: @escaping @Sendable () -> Date = { .now },
+        apiKey: String = "",
+        realtimeStart: String = "1900-01-01",
+        realtimeEnd: String? = nil
     ) {
         self.config = config
         self.fetcher = fetcher
         self.ingestedAt = ingestedAt
+        self.apiKey = apiKey
+        self.realtimeStart = realtimeStart
+        self.realtimeEnd = realtimeEnd
     }
 
     func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
@@ -200,7 +214,19 @@ struct FREDProviderAdapter: ProviderAdapter {
         guard code.scheme == "fred_series" else {
             return ProviderFetchResult(records: [], diagnostics: ProviderFetchDiagnostics())
         }
-        let body = try await fetcher.fetch(.fredObservations(seriesID: config.seriesID))
+        // fail-closed：没有 key 的请求必然 403，显式拒绝优于静默坏请求
+        guard !apiKey.isEmpty else {
+            throw ProviderError.unavailable(
+                providerID: .fred,
+                underlying: "缺少 FRED API key（fred.stlouisfed.org 免费申请，注入 FREDProviderAdapter apiKey）"
+            )
+        }
+        let body = try await fetcher.fetch(.fredObservations(
+            seriesID: config.seriesID,
+            realtimeStart: realtimeStart,
+            realtimeEnd: realtimeEnd,
+            apiKey: apiKey
+        ))
         let history = try parser.parse(body, seriesID: config.seriesID)
         let allRecords = parser.toProviderRecords(
             history, config: config, reliabilityClass: reliabilityClass, ingestedAt: ingestedAt()

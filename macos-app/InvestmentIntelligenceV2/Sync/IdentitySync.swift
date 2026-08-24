@@ -256,6 +256,12 @@ struct IdentitySync: Sendable {
     }
 
     /// 创建实体链（确定性 ID → 幂等 upsert，重复建立不翻倍）。
+    ///
+    /// ID 锚点规则（P1 修复）：**只从权威键派生**——listing 路径用
+    /// exchange|symbol（交易所代码全局唯一），ISIN 路径用校验后的 ISIN。
+    /// displayName 只是可变属性，参与派生会让同名不同码的证券合并成同一
+    /// Instrument/LegalEntity。发行人实体是占位（每标的独立派生，宁可多建
+    /// 不误并），真实发行人归属由后续披露数据经人工/权威路径合并。
     private func createEntities(for hint: IdentityHint, canonical: CanonicalRef) throws {
         let jurisdiction = hint.jurisdiction ?? hint.exchange?.jurisdiction ?? .chinaMainland
         let kind = hint.instrumentKind ?? .stock
@@ -263,18 +269,17 @@ struct IdentitySync: Sendable {
         let currency = hint.currency ?? (jurisdiction == .unitedStates ? .usd : .cny)
         let name = hint.displayName ?? hint.code.value
 
-        // 1) LegalEntity（发行人占位——真实发行人信息后续由披露数据补）
-        let entityID = LegalEntityID(Self.deriveID("le", "\(jurisdiction.rawValue)|\(kind.rawValue)|\(name)"))
-        try repository.upsert(LegalEntity(
-            id: entityID, displayName: name, jurisdiction: jurisdiction,
-            kind: kind == .stock ? .listedCompany : .other
-        ))
-
         switch canonical {
         case .listing(let listingID):
-            // 2) Instrument + 3) Listing（exchange + symbol 注册即权威）
+            // 权威锚点 = exchange|symbol
             let exchange = hint.exchange!
-            let instrumentID = InstrumentID(Self.deriveID("inst", "\(exchange.rawValue)|\(kind.rawValue)|\(name)"))
+            let anchor = "\(exchange.rawValue)|\(hint.code.value)"
+            let entityID = LegalEntityID(Self.deriveID("le", anchor))
+            let instrumentID = InstrumentID(Self.deriveID("inst", anchor))
+            try repository.upsert(LegalEntity(
+                id: entityID, displayName: name, jurisdiction: jurisdiction,
+                kind: kind == .stock ? .listedCompany : .other
+            ))
             try repository.upsert(Instrument(
                 id: instrumentID, issuerID: entityID, kind: kind,
                 displayName: name, baseCurrency: currency, assetClass: assetClass,
@@ -285,11 +290,17 @@ struct IdentitySync: Sendable {
                 symbol: hint.code.value, tradingCurrency: currency
             ))
         case .instrument(let instrumentID):
-            // ISIN-only：无挂牌层（指数 / 场外抽象工具）
+            // 权威锚点 = ISIN（creationMatch 已保证非 nil 且大写归一）
+            let isin = hint.isin!.uppercased()
+            let entityID = LegalEntityID(Self.deriveID("le", "isin|\(isin)"))
+            try repository.upsert(LegalEntity(
+                id: entityID, displayName: name, jurisdiction: jurisdiction,
+                kind: kind == .stock ? .listedCompany : .other
+            ))
             try repository.upsert(Instrument(
                 id: instrumentID, issuerID: entityID, kind: kind,
                 displayName: name, baseCurrency: currency, assetClass: assetClass,
-                isin: hint.isin?.uppercased()
+                isin: isin
             ))
         default:
             // creationMatch 只产 listing/instrument 两种提案
@@ -367,6 +378,11 @@ struct IdentitySync: Sendable {
 
     /// 对 fuzzy candidate 做 Verification：accept 升级为 manualVerified
     /// （此后 lookup 可解析），reject 保持 lookup 拒绝（fuzzy 行无害保留）。
+    ///
+    /// P1 修复（过期 Verification 保护）：只升级「当前仍是 fuzzy candidate 且
+    /// 候选一致」的行——若 fuzzy 生成后另一轮已建立权威映射，旧的 accept
+    /// 不得覆盖（返回 false，既有映射不动），与 establish 的冲突不覆盖语义
+    /// 对齐。
     @discardableResult
     func verify(
         providerID: DataProviderID,
@@ -376,6 +392,18 @@ struct IdentitySync: Sendable {
         decision: IdentityVerificationDecision
     ) throws -> Bool {
         guard decision == .accept else { return false }
+        if let registered = repository.allProviderIdentifiers().first(where: {
+            $0.providerID == providerID
+                && $0.identifierScheme == scheme
+                && $0.identifierValue == value
+        }) {
+            if registered.resolutionMethod.isAuthoritative {
+                // 已有权威映射：一致视为幂等成功，不同 = 过期提案，拒收
+                return registered.canonical == canonical
+            }
+            // 仍是 fuzzy 行：只允许升级与登记候选一致的提案
+            guard registered.canonical == canonical else { return false }
+        }
         try repository.upsert(ProviderIdentifier(
             providerID: providerID,
             identifierScheme: scheme,

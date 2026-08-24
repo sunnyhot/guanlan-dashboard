@@ -337,6 +337,98 @@ final class IdentitySyncTests: XCTestCase {
         XCTAssertEqual(outcomes["eastmoney|stock_symbol|999999"], .unresolved)
     }
 
+    // MARK: - P1 修复回归
+
+    func testSameNameDifferentSymbolsDoNotMerge() throws {
+        // 两个同名不同码的证券：创建模式必须产出彼此独立的实体链
+        let outcomes = try sync.establish(hints: [
+            IdentityHint(
+                providerID: .stooq,
+                code: ProviderCode(scheme: "stock_symbol", value: "MSFT"),
+                exchange: .nasdaq,
+                displayName: "同名公司",
+                instrumentKind: .stock,
+                jurisdiction: .unitedStates
+            ),
+            IdentityHint(
+                providerID: .stooq,
+                code: ProviderCode(scheme: "stock_symbol", value: "FAKE"),
+                exchange: .nasdaq,
+                displayName: "同名公司",
+                instrumentKind: .stock,
+                jurisdiction: .unitedStates
+            ),
+        ])
+        var canonicals: [CanonicalRef] = []
+        for key in ["stooq|stock_symbol|MSFT", "stooq|stock_symbol|FAKE"] {
+            guard case let .established(_, canonical, _) = outcomes[key] else {
+                return XCTFail("期望 established：\(key)")
+            }
+            canonicals.append(canonical)
+        }
+        XCTAssertNotEqual(canonicals[0], canonicals[1], "同名不同码不得合并")
+
+        // 深入实体层：listing / instrument / entity 三层都各自独立
+        guard case let .listing(l1) = canonicals[0], case let .listing(l2) = canonicals[1] else {
+            return XCTFail("挂牌级目标")
+        }
+        let listing1 = try XCTUnwrap(repository.listing(l1))
+        let listing2 = try XCTUnwrap(repository.listing(l2))
+        XCTAssertNotEqual(listing1.instrumentID, listing2.instrumentID)
+        let inst1 = try XCTUnwrap(repository.instrument(listing1.instrumentID))
+        let inst2 = try XCTUnwrap(repository.instrument(listing2.instrumentID))
+        XCTAssertNotEqual(inst1.issuerID, inst2.issuerID, "占位发行人也按标的独立派生")
+        // 名称只是属性：两者显示名相同但 ID 不同
+        XCTAssertEqual(inst1.displayName, inst2.displayName)
+    }
+
+    func testStaleVerificationCannotOverwriteAuthoritativeMapping() throws {
+        // 1) fuzzy 候选生成（登记到 canonical A）
+        let hint = IdentityHint(
+            providerID: .eastmoney,
+            code: ProviderCode(scheme: "stock_symbol", value: "600519X"),
+            displayName: "贵州茅台股份有限公司"
+        )
+        let outcomes = try sync.establish(hints: [hint])
+        guard case let .fuzzyCandidates(candidates) = outcomes["eastmoney|stock_symbol|600519X"],
+              let best = candidates.first else {
+            return XCTFail("期望 fuzzyCandidates")
+        }
+
+        // 2) 期间另一轮建立了权威映射（指向已存在的 AAPL listing，≠ fuzzy 候选 A）
+        let authoritativeRef = CanonicalRef.listing(ListingID(rawValue: "lst_aapl"))
+        XCTAssertNotEqual(authoritativeRef, best.canonical)
+        try repository.upsert(ProviderIdentifier(
+            providerID: .eastmoney, identifierScheme: "stock_symbol",
+            identifierValue: "600519X",
+            canonical: authoritativeRef,
+            resolutionMethod: .exchangeSymbolExact, resolvedAt: Self.fixedNow
+        ))
+
+        // 3) 过期的 fuzzy accept（仍指向 A）不得覆盖权威映射
+        let accepted = try sync.verify(
+            providerID: .eastmoney, scheme: "stock_symbol", value: "600519X",
+            canonical: best.canonical, decision: .accept
+        )
+        XCTAssertFalse(accepted, "过期 Verification 必须被拒收")
+        XCTAssertEqual(
+            repository.resolve(providerID: .eastmoney, scheme: "stock_symbol", value: "600519X"),
+            authoritativeRef,
+            "既有权威映射不动"
+        )
+
+        // 4) 与既有权威一致的 verify 视为幂等成功
+        let idempotent = try sync.verify(
+            providerID: .eastmoney, scheme: "stock_symbol", value: "600519X",
+            canonical: authoritativeRef, decision: .accept
+        )
+        XCTAssertTrue(idempotent)
+        XCTAssertEqual(
+            repository.resolve(providerID: .eastmoney, scheme: "stock_symbol", value: "600519X"),
+            authoritativeRef
+        )
+    }
+
     // MARK: - 测试基础设施
 
     private func seedMaster() throws {
