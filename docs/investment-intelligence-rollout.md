@@ -1095,6 +1095,23 @@ macos-app/
 >   未启用，正常跳过；文件级读取失败上抛不静默）。本引擎不直接抓 A 股。
 > - 游标保守推进同 SYNC-3；7 个测试（MarketDailySyncTests）。swift test
 >   全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-6a 已签收（3 点，2026-08-24）**——`Sync/HistoricalBackfill.swift`
+> （持仓 universe 历史回填 ≥252 交易日 + 覆盖率验证）：
+> - **窗口 = 交易日数而非日历天**：锚点往回 `requiredTradingDays`（默认
+>   252）个交易日（NAV 锚点用 T+1 公布语义、bar 锚点法域感知），直接对应
+>   M5 验收语义；测试断言窗口跨 2026 春节/美股节假日正确跳休市。
+> - **抓取+提交与增量引擎同款**（结构分桶 → spool append → 四防火墙），
+>   **幂等**（重跑 252 行不翻倍有测试）；**不动增量游标**——回填补历史，
+>   重叠部分下轮增量幂等归并。
+> - **覆盖率验证是验收本体**：`TargetCoverage` 对比期望交易日集合与库内
+>   实际 effectiveAt 集合（**以查询为准不以 fetch 返回为准**——Provider
+>   可能少给），报告 covered/required、缺口样本、allSufficient。
+>   Provider 只给 100 天 → insufficient + 头部缺口如实报告（有测试）；
+>   降级链全失败 → local 兜底 + 覆盖率 0/252 如实呈现。
+> - universe（用户当前持仓）是 App 侧装配（B.3 时点），本类型收显式清单。
+>   5 个测试（HistoricalBackfillTests）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
 
 ---
 
