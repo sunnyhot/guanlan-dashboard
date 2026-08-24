@@ -225,7 +225,10 @@ struct EastmoneyHistoricalHoldingProviderAdapter: ProviderAdapter {
         from: Date,
         to: Date
     ) async throws -> ProviderFetchResult {
-        guard code.scheme == "fund_code" else {
+        // fund_code（兼容既有调用方）与 fund_product_code（持仓快照的 canonical
+        // 维度——ObservationFactory 要求 FundProduct 目标）都接受，输出保持
+        // 输入 scheme，由调用方按 identity 登记形态选择。
+        guard code.scheme == "fund_code" || code.scheme == "fund_product_code" else {
             return ProviderFetchResult(records: [], diagnostics: ProviderFetchDiagnostics())
         }
 

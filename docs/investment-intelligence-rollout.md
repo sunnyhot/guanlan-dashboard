@@ -1024,6 +1024,29 @@ macos-app/
 > - App 接线遵守 B.3 时点（Epic 9 集成时参照 RemoteStagingSyncLoop 模式）。
 >   12 个测试（FundNAVSyncTests）。swift test 全量绿（跳过环境性
 >   AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-4 已签收（2 点，2026-08-24）**——`Sync/FundHoldingSync.swift`
+> （持仓披露检测 + 新 snapshot 自动入库，报告期驱动）：
+> - **`FundReportPeriod`**（year+quarter，Comparable + "2026Q2" wire 形态，
+>   非法解码 fail-closed）+ **`FundDisclosureSchedule`**（披露时限保守下界：
+>   季报 quarter-end +15 **交易日**（节假日使之下界不早于监管的 15 工作日）、
+>   年报 +3 日历月；`latestGuaranteedPublishedPeriod(asOf:)` 为披露检测锚点）。
+>   时限是**下界不是承诺**——真实公告以公告 API 为准，指数/ETF 类基金
+>   Q1/Q3 可能不披露季报。
+> - **`FundHoldingSync` 引擎**（fund 粒度隔离）：候选期 = (游标, 锚点] 升序
+>   逐期抓取（`EastmoneyHistoricalHoldingProviderAdapter` 按报告期构造，
+>   公告 API 提供真实 publishedAt）；**公告未出 ≠ 失败**——
+>   `announcementNotFound` 记 .notYetPublished、游标停在最后成功期、
+>   停止本基金后续期（升序下更晚的期更不可能已公布），不计 ProviderHealth
+>   失败（对齐 PROV-8 notFound 语义）。结构分桶 → spool append → 四防火墙
+>   commit；有拒收 / commit 失败游标不推进（重试幂等，不跳期）。
+> - **适配器 scheme 扩展**：`EastmoneyHistoricalHoldingProviderAdapter`
+>   接受/透传 `fund_product_code`（持仓快照的 canonical 维度是 FundProduct，
+>   ObservationFactory 要求 fundProduct 目标；fund_code 兼容保留）。
+> - 11 个测试（FundHoldingSyncTests）：报告期导航/编解码、时限数学
+>   （含清明/年报 3 个月）、首轮 7 期回补、upToDate、新季度检测只补缺失期、
+>   公告未出游标保持、拒收游标保持、失败隔离、健康降级。swift test
+>   全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 
