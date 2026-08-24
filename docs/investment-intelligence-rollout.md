@@ -1062,6 +1062,23 @@ macos-app/
 > - 失败语义同 SYNC-3/4：series 粒度隔离、ProviderHealth 上报、
 >   isCallable 跳过、坏状态 fail-closed。7 个测试（MacroSyncTests）。
 >   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-7 已签收（3 点，2026-08-24）**——`Sync/ProviderFallbackChain.swift`
+> （DATA006 §Decision 3 三档降级在抓取面的落地）：
+> - **编排**：primary → secondary → … 有序候选；每候选前置 `isCallable`
+>   闸门（unavailable / 额度尽 / 限流冷却中 → 零网络跳过）；抓取失败换下家
+>   （quotaExhausted / rateLimited 的冷却与恢复语义在 ProviderHealthMonitor，
+>   链只消费判定 + 上报成功/失败/quota +1）。
+> - **local 兜底非致命化**：全部候选失败返回 `.allFailed`（不抛错不阻塞），
+>   读取面继续由本地 Canonical Store 服务——结构性测试验证「先入库一根 bar、
+>   再全失败、查询照常返回」。`localFallbackSummary` 是降级语义的可观测出口。
+> - **空链合法**（无远程候选 → 直接 allFailed → local-only，不 trap——
+>   配置错误用降级语义表达比崩溃更符合 DATA006）。
+> - 与 PROV-8 的分工：monitor 管状态（谁健康/冷却/额度），链管一次抓取的
+>   编排；未注册 Provider 的 isCallable=false（未声明即拒绝）语义保持。
+> - SYNC-2 Market Daily Sync（Stooq primary → Alpha Vantage secondary，
+>   M2 已验证的候选链）将消费本链。8 个测试（ProviderFallbackChainTests）。
+>   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 
