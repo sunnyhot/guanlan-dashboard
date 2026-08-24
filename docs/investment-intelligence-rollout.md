@@ -803,6 +803,41 @@ macos-app/
 >   约定），不静默不伪造。
 > - 9 个 GRDBRepositoryParityTests。
 >
+> **GRDB-8 已签收（5 点，2026-08-24）**——`Persistence/CanonicalPipeline.swift`
+> （Staging → Canonical Commit 四防火墙管道）+
+> `Persistence/CanonicalDataValidator.swift`（语义闸门）+ GRDBRepository 的
+> 单事务 `commit(_:)` 批量入口：
+> - **管道**：ProviderRecord[] → ① ProviderRecordSchemaValidator（结构）→
+>   ② ObservationFactory（identity 解析防火墙 + TemporalNormalizer PIT 标注）
+>   → ③ CanonicalDataValidator（四时间不变量 / OHLC 拓扑 low≤body≤high /
+>   价格·复权因子·NAV 正性 / 持仓权重 [0,1] 与披露总权界 / 公司行动比例 /
+>   基本面期间序）→ ④ GRDBRepository.commit 单事务提交（FK 违例整批回滚，
+>   库级兜底）。**拒收粒度 = 单条**：坏记录逐条报告（stage + 原因）不阻塞
+>   批内合法子集（DATA006 拒收不阻塞的管道侧语义）；提交事务失败则整批
+>   回滚（commitError 上报，不留半批）。
+> - **确定性派生（ADR-DATA004 重放幂等）**：ObservationID =
+>   SHA256(provider|scheme|value|kind|effective|published) 截断 16 字节——
+>   同一条 ProviderRecord 任何时刻重放生成同 ID，INSERT OR REPLACE 幂等替换
+>   （重放测试守护行数不翻倍）；Vintage = (publishedAt, 1)——Provider 更正
+>   重公布 = 新 publishedAt = 新 vintage 行，旧 vintage 保留（DATA008）；
+>   publisherVersion > 1 保留给同公告日多次修订（ProviderRecord 无法表达）。
+> - **已知语义边界（如实记录，非管道缺陷）**：MarketClose 的 availableAt 由
+>   effectiveAt 推导，晚于可知窗口的重公布修订违反 published ≤ available
+>   不变量，temporalNormalizeFailed 拒收——行情修订须在可知窗口内重公布才
+>   入库（基金披露/Filing 类 policy base=publishedAt 无此边界）。修订 policy
+>   需走 ADR-DATA009 事实修订路径另行立 story。
+> - **spool 直连**：`commitRecords(fromSpool:)`（PROV-1 Reader → pipeline，
+>   SYNC-2..5 循环的每轮入口；文件级读取失败上抛，非记录级拒收）。
+> - 9 个 CanonicalPipelineTests（端到端提交可查 / 幂等重放 / 窗口内更正产生
+>   新 vintage 且 economic 取修订 / 四防火墙各有专项拒收测试含 FK 整批回滚 /
+>   spool 直连）。
+>
+> **✅ M4 达成（2026-08-24）**：GRDBRepository 经 `GRDBRepositoryParityTests`
+> 与 InMemoryRepository 在全部查询 API × 10 种 context 下输出逐一相等
+>（「InMemory 时代的 golden test 同样过」的结构化落地）；四防火墙全部在
+> CanonicalPipeline 的 commit 路径上（含 FK 库级兜底）。**Epic 5 全部
+> story（GRDB-1..9，30 点）签收完毕**，Epic 6（Sync / Backfill）解锁。
+>
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：
 > - **10 表**：evidence / evidence_facts / signals / theses / artifacts /

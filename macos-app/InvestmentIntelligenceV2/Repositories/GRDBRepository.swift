@@ -192,6 +192,41 @@ final class GRDBRepository: @unchecked Sendable, Repository {
         return self
     }
 
+    // MARK: - 批量提交（GRDB-8 Pipeline 的 Canonical Commit 入口）
+
+    /// 单事务提交一批 CanonicalObservation（全部成功或全部回滚）。
+    ///
+    /// Pipeline 的四防火墙（schema / identity+temporal / data validation /
+    /// 本方法的 FK 约束兜底）都在写入路径上；任一行失败整批回滚——
+    /// Canonical Store 不留半批。
+    func commit(_ observations: [CanonicalObservationKind]) throws {
+        try database.queue.write { db in
+            for kind in observations {
+                switch kind {
+                case .dailyBar(let bar):
+                    try DailyBarRow.from(bar).insert(db, onConflict: .replace)
+                case .navObservation(let nav):
+                    try NAVObservationRow.from(nav).insert(db, onConflict: .replace)
+                case .fundHoldingSnapshot(let snapshot):
+                    try FundHoldingSnapshotRow.from(snapshot).insert(db, onConflict: .replace)
+                    try db.execute(
+                        sql: "DELETE FROM holding_positions WHERE snapshot_id = ?",
+                        arguments: [snapshot.id.rawValue]
+                    )
+                    for (index, position) in snapshot.positions.enumerated() {
+                        try FundHoldingPositionRow.from(position, snapshotID: snapshot.id, index: index).insert(db)
+                    }
+                case .macroObservation(let macro):
+                    try MacroObservationRow.from(macro).insert(db, onConflict: .replace)
+                case .corporateAction(let action):
+                    try CorporateActionRow.from(action).insert(db, onConflict: .replace)
+                case .fundamentalObservation(let fundamental):
+                    try FundamentalObservationRow.from(fundamental).insert(db, onConflict: .replace)
+                }
+            }
+        }
+    }
+
     // MARK: - InstrumentRepository
 
     func instrument(_ id: InstrumentID) -> Instrument? {
