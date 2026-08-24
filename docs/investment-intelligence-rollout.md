@@ -752,6 +752,35 @@ macos-app/
 >   两态、唯一键含 NULL 封口、修订+换标签共存、Q2/H1 同 periodEnd 不互斥、
 >   FK、未知 form/unit fail-closed）。
 >
+> **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
+> `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：
+> - **10 表**：evidence / evidence_facts / signals / theses / artifacts /
+>   artifact_dependencies / decisions / agent_jobs / agent_job_events /
+>   agent_checkpoints。
+> - **两类表**：有领域类型的（evidence=EvidenceObservation、evidence_facts=
+>   EvidenceFact、signals=InvestmentSignal、artifacts+artifact_dependencies=
+>   Artifact 协议，当前以 PlaceholderArtifact 为 codec 载体，Epic 7-10 各
+>   具体 Artifact 补 codec）；通用形状的（theses / decisions / agent_jobs /
+>   events / checkpoints——领域类型在 WF-1/DEC-9/AGENT-1 落地时补 toDomain，
+>   schema 列不改只追加 migration）。
+> - **EvidenceID 是 UNIQUE 逻辑身份**：evidence 同时存 ObservationID（行
+>   主键）与 EvidenceID；下游引用（evidence_facts FK / signals 的
+>   derivedFrom JSON）一律 EvidenceID——DailyBar 的 ObservationID 无法冒充。
+>   signals.derivedFrom 不建跨表 FK（JSON 数组做不到行级 FK），完整性由
+>   RES-5 Validation + RES-8 Evidence Matcher 保证（M8 验收项）。
+> - **artifact_dependencies 规范化**（不进 JSON）：(kind, reference_id)
+>   索引服务失效传播查询「dependency 变化 → 受影响 artifacts」
+>   （untilDependencyChanges 策略的存储基础），(artifact_id, dep_index)
+>   主键保序。
+> - **AgentJobStatus** 定义（ATTR-4 生命周期五态，schema 层 fail-closed 解码）；
+>   agent_jobs.idempotency_key UNIQUE 可空（AGENT-1 幂等语义库级兜底，NULL
+>   手工运行共存）；events/checkpoints (job_id, seq) 主键（事件流保序 + 断点
+>   续跑）。
+> - 15 个 IntelligenceSchemaTests（10 表存在 / evidence 双 ID 唯一 / facts
+>   数值两态 + FK / signal 溯源往返 + 未知方向 fail-closed / artifact 依赖
+>   规范化往返 + 失效传播查询 + 约束 / job 幂等键唯一与 NULL 共存 / 事件流
+>   保序 + 同 seq 拒收 / status fail-closed / theses·decisions 原始读写）。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通

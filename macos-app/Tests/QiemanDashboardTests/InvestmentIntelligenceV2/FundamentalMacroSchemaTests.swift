@@ -22,7 +22,8 @@ final class FundamentalMacroSchemaTests: XCTestCase {
             ["v1_baseline", "v2_identity", "v3_market", "v4_fund", "v5_fundamental_macro"]
         )
         XCTAssertEqual(CanonicalDatabase.schemaVersion, migrations.count)
-        XCTAssertEqual(try db.appliedMigrations().suffix(1), ["v5_fundamental_macro"])
+        XCTAssertEqual(CanonicalDatabase.makeMigrations().migrations.dropFirst(4).first, "v5_fundamental_macro",
+                       "v5_fundamental_macro 固定排在第 5 位（不可变清单）")
     }
 
     func testBothTablesExist() throws {
