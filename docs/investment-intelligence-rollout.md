@@ -1415,6 +1415,50 @@ macos-app/
 
 **里程碑 M7：Decision 子系统可独立运行（mock signals）**。
 
+> **状态（2026-08-24，Epic 10 全部收口，M7 达成）**：**DEC-1（5）/
+> DEC-2（5）/ DEC-3（3）/ DEC-4（3）/ DEC-5（8）/ DEC-6（5）/
+> DEC-7（5）/ DEC-8（8）/ DEC-9（3）= 45 点全部签收**，代码在
+> `InvestmentIntelligenceV2/Decision/`（9 源文件：StrategicAllocationPolicy /
+> StateConstraintEvaluator / PortfolioProjection / ActionDomainBuilder /
+> TargetRebalancePlanner / ConstraintGate / CriterionEvaluator /
+> CriterionComparator / PortfolioDecisionArtifact）。测试以套件通过为准：
+> 同名 9 个测试套件（StrategicAllocationPolicyTests…PortfolioDecisionArtifactTests）。
+> swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests 崩溃与
+> M2Live 场景 1 当日外网阻塞）。mock signals 验证：DEC-9 的 replay 测试
+> 用 signalCardinal 通道的固定分数闭环（same inputs → same decision）。
+>
+> 实现要点（与 Story 表述的对齐）：
+> - **DEC-1（D000）**：Target 唯一写入路径 = StrategicAllocationPolicy 两
+>   apply 方法，签名不含任何 Signal 类型（「Signal 不能改 Target」类型层
+>   保证）；provenance 只两类；Validator 拒权重和≠1（禁止「剩余配 cash」）。
+> - **DEC-2**：三态判定（violated/satisfied/unknown）用 EXP-2 上下界；
+>   unknown = 跨阈值（可能违规不猜）；违规产 remediation 不是 veto；
+>   OperationalObligation 独立类型。
+> - **DEC-3**：忠实投影（不归一不 clamp 负值，非法留给 Gate）；新标的
+>   两不（不猜资产类 / 不静默丢弃 → unresolvedNewSubjects）。
+> - **DEC-4**：动作域 = per-subject Δw 区间 + 新标的白名单（默认裁剪），
+>   搜索空间结构性缩小。
+> - **DEC-5（D001）**：Δw 唯一生产者；SizingProvenance 三来源
+>   （target/remediation/user），输入无 Signal 类型（LLM 不能产 Δw）；
+>   pro-rata 类内分配 + toleranceBand + 目标 0 清仓 + 无持仓类 note
+>   不引入新标的；域外动作剔除留证。
+> - **DEC-6（D001 §4）**：Layer1 动作硬约束裁剪；Layer2 投影联合约束
+>   （负权重/无杠杆/零和/换手预算/加权平均相关——unknown 对跳过不猜）；
+>   rescale 按比例缩放不引入新 Δw。
+> - **DEC-7（D002）**：weightedSum/absoluteDevination 确定性求值 +
+>   inputReferences（signal 影响唯一通道 = signalCardinal 显式标注）+
+>   computation 审计轨迹；缺失输入 → unknown。
+> - **DEC-8（D003）**：Effective Dominance（禁止加权聚合）；IndifferenceBand
+>   heuristic 显式 provenance（rationale 空 precondition 拒）；unknown 阻断
+>   + blockingUnknowns 透明；非传递循环不打破（全部成员 admissible）；
+>   unresolvedTradeoff 真实可触发。类型改名 PlanComparisonResult 避开
+>   Foundation 同名。
+> - **DEC-9（D004）**：引用层 IDs（signal/criterion/factorSnapshot/target/
+>   band）+ immutableHistorical + 确定性 id；Validator provenance 闭环
+>   四查；Replay 不重跑 Research，what-if 产新决策不动原 artifact。
+>
+> Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
+
 ---
 
 ### Epic 11 — LLM Research 子系统
