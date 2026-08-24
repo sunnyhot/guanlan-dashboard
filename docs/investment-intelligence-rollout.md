@@ -650,6 +650,21 @@ macos-app/
 >   MIN_MACOS_VERSION 从可覆盖环境变量改为固定常量 14.0（主程序实际按
 >   Package.swift 编译，可覆盖的声明门槛是谎言），注释指向单一事实源。
 >
+> **GRDB-1 二轮审查修复（2026-08-24，2×P2）**：
+> - **迁移状态语义重写**：原手写 `allSatisfy`/count 比较有双重错误——init 已
+>   自动迁移所以升级后调用恒 false；降级库（含当前代码不认识的 migration）
+>   反被误报「待执行」。改用 GRDB 原生 `hasCompletedMigrations` /
+>   `hasBeenSuperseded` 区分三态（`CanonicalMigrationState`：current /
+>   pending(count) / superseded(unknown)），`migrationState(of:)` 可对裸库
+>   调用（自动迁移前窗口的真实状态）。
+> - **降级保护落地**（迁移前预检）：文件库打开时发现 superseded 直接抛
+>   `CanonicalDatabaseError.supersededByNewerSchema` 拒绝打开——老代码继续
+>   迁移/读写会把新库置于未知状态；恢复路径 = 升级 App 或删库走 spool 重放。
+> - **内存库 init 去掉 Bool 参数**：`init(inMemory:)` 的参数被静默忽略
+>   （true/false 都建内存库），误传 false 会静默得到易失库；改为无参
+>   `init()`（文件库走 `init(path:)`，意图不可混）。+3 测试
+>   （裸库 pending / superseded 拒开 / 未知项清单），共 10 个。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通
@@ -660,7 +675,7 @@ macos-app/
 > 劫持推断（TrendLiveLogPanel.copyLogs 显式 `: String` 修复，AGENTS.md 坑点 17）。
 > **AGENTS.md 第 6 条已随 Epic 5 开始更新**（原「无 SQLite」约定废止，
 > GRDB 限 V2 Canonical Store 范围内使用；GRDB-9 剩余：iOS framework 链接细节
-> 与数据目录规划的最终验收）。swift test 全量绿（1146 过含审查修复轮，排除环境性崩溃的
+> 与数据目录规划的最终验收）。swift test 全量绿（1149 过含二轮审查修复，排除环境性崩溃的
 > AppLaunchPresentationPolicyTests，见下）。
 > **已知环境问题（与 Epic 5 无关）**：`AppLaunchPresentationPolicyTests` 在
 > 本机确定性 signal 11（干净 HEAD 复现），全量跑需 `--skip`；待单独排查。

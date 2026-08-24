@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import QiemanDashboard
 
 /// GRDB-1 测试：DB lifecycle（打开/创建/迁移幂等）、schemaVersion 语义、
@@ -23,7 +24,7 @@ final class CanonicalDatabaseTests: XCTestCase {
         let path = tempDir.appendingPathComponent("canonical.sqlite3").path
         let db = try CanonicalDatabase(path: path)
         XCTAssertTrue(FileManager.default.fileExists(atPath: path), "打开后应落库文件")
-        XCTAssertFalse(try db.hasPendingMigrations(), "新库应已跑到最新 schema")
+        XCTAssertEqual(try db.migrationState(), .current, "初始化自动迁移后应为 current")
         XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline"])
     }
 
@@ -33,12 +34,12 @@ final class CanonicalDatabaseTests: XCTestCase {
         // 第二次打开：已应用的同名 migration 必须跳过（GRDB 按名去重）
         let reopened = try CanonicalDatabase(path: path)
         XCTAssertEqual(try reopened.appliedMigrations(), ["v1_baseline"], "重开不得重复应用")
-        XCTAssertFalse(try reopened.hasPendingMigrations())
+        XCTAssertEqual(try reopened.migrationState(), .current)
     }
 
     func testInMemory_databaseWorksForTests() throws {
-        let db = try CanonicalDatabase(inMemory: true)
-        XCTAssertFalse(try db.hasPendingMigrations())
+        let db = try CanonicalDatabase()
+        XCTAssertEqual(try db.migrationState(), .current)
         XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline"])
         XCTAssertEqual(db.queue.path, ":memory:", "内存库无落盘路径")
     }
@@ -85,5 +86,54 @@ final class CanonicalDatabaseTests: XCTestCase {
             path: v2Dir.appendingPathComponent("canonical.sqlite3").path
         )
         XCTAssertEqual(try db.appliedMigrations().count, CanonicalDatabase.schemaVersion)
+    }
+}
+
+// MARK: - 迁移状态语义（审查 P2：pending / superseded 分档 + 降级保护）
+
+extension CanonicalDatabaseTests {
+
+    /// 未迁移的裸库：migrationState 应报 pending（自动迁移前的真实状态）。
+    /// 直接构造 DatabaseQueue（不走 CanonicalDatabase.init——init 会自动跑迁移），
+    /// 这是「代码升级后首次打开」窗口里磁盘上的真实形态。
+    func testMigrationState_unmigratedDatabase_reportsPending() throws {
+        let path = tempDir.appendingPathComponent("bare.sqlite3").path
+        let bare = try DatabaseQueue(path: path)
+        XCTAssertEqual(
+            try CanonicalDatabase.migrationState(of: bare),
+            .pending(count: CanonicalDatabase.schemaVersion)
+        )
+    }
+
+    /// 降级保护：库带着本代码不认识的 migration（模拟来自更新版本的 App）时，
+    /// CanonicalDatabase 必须拒绝打开——老代码继续迁移/读写会把新库置于未知状态。
+    func testOpen_supersededDatabase_failsLoudlyInsteadOfMigrating() throws {
+        let path = tempDir.appendingPathComponent("future.sqlite3").path
+        // 用「未来版本」的迁移清单造库：当前 v1_baseline + 未来的 v2_identity
+        var futureMigrations = CanonicalDatabase.makeMigrations()
+        futureMigrations.registerMigration("v2_identity_future") { db in
+            try db.execute(sql: "CREATE TABLE future_only (id INTEGER PRIMARY KEY)")
+        }
+        try futureMigrations.migrate(DatabaseQueue(path: path))
+
+        XCTAssertThrowsError(try CanonicalDatabase(path: path)) { error in
+            XCTAssertEqual(
+                error as? CanonicalDatabaseError,
+                .supersededByNewerSchema(unknownMigrations: ["v2_identity_future"])
+            )
+        }
+    }
+
+    func testMigrationState_supersededDatabase_listsUnknownMigrations() throws {
+        let path = tempDir.appendingPathComponent("future2.sqlite3").path
+        var futureMigrations = CanonicalDatabase.makeMigrations()
+        futureMigrations.registerMigration("v2_identity_future") { _ in }
+        try futureMigrations.migrate(DatabaseQueue(path: path))
+
+        let futureQueue = try DatabaseQueue(path: path)
+        XCTAssertEqual(
+            try CanonicalDatabase.migrationState(of: futureQueue),
+            .superseded(unknownMigrations: ["v2_identity_future"])
+        )
     }
 }
