@@ -966,6 +966,42 @@ macos-app/
 
 **里程碑 M5：数据自给**。Factor Engine 才有可信输入。
 
+> **状态（2026-08-24）**：M5 进行中。**SYNC-1 已签收（3 点）**——
+> `Sync/TradingCalendars.swift`（真实交易日历 + 基金净值公布日历）：
+> - **交易日 = 当地日历周一~周五 减 交易所休市表**。两个结构性事实由算法保证
+>   不进数据表：周末从不开市（含国务院「调休上班」的周末——交易所不跟随
+>   调休开市，2025-01-26/2026-02-14 等有测试）；表只登记周内休市日，周末
+>   条目 init 即拒收（fail-closed，数据源给出周末休市日 = 抓取/转录有错）。
+> - **版本化 `MarketHolidayTable`**（jurisdiction/year/version/closedDates/
+>   provenance 可审计；同法域同年双表构造失败不静默择一；日期串严格校验
+>   ——格式 round-trip、年份匹配、真实日历日，非法抛
+>   `MarketHolidayTableError`）。新一年安排由交易所年末公告后**追加**新表，
+>   已发布表不改写。种子数据 2024–2026 三年 SSE + NYSE 全量休市日
+>   （上交所三份官方通知 + NYSE 节假日惯例，2026-07-04 周六→07-03 周五补休），
+>   测试用**全集相等**冻结（任何转录漂移即红）。
+> - **`HolidayTableTradingCalendar`**：同时实现 `TradingCalendar`（DOM-7 协议，
+>   AvailabilityPolicy/TemporalNormalizer/InMemoryRepository/GRDBRepository
+>   既有依赖面直接换真日历）与 `CalendarRepository`（八域 Calendar 域）。
+>   时区按法域（CN=Asia/Shanghai、US=America/New_York、HK 无种子表退化
+>   仅周末且覆盖 API 如实报告空）。`tradingDay(after:)` 返回归一化当地日界
+>   （与 policy 二次 tradingDayStart 幂等）。
+> - **覆盖缺口显式化**：表外年份退化为仅周末判断（sync 不崩），
+>   `verifiedCoverageYears` / `hasVerifiedHolidayCoverage` 把「无权威休市表
+>   背书」暴露给调用方。
+> - **导航辅助**（SYNC-2..6 窗口计算用）：latestTradingDayOnOrBefore /
+>   previousTradingDay / nextTradingDay / tradingDays(endingAt:count:)，
+>   跨春节缺口（2026-02-13→02-24）语义有测试。
+> - **`FundNAVPublicationCalendar`**（基金净值公布日历）：语义锚点 =
+>   `AvailabilityPolicyV1.FundNAV`（T 日净值 availableAt=startOfDay(next(T))），
+>   `latestGuaranteedPublishedNAVDate(asOf:)` = asOf 所在（或之前最近）交易日的
+>   前一个交易日——交易日晚间/休市日/周末三态有测试；
+>   `navEffectiveDates(from:through:)` 跳过休市与周末（backfill 窗口）。
+>   QDII T+2 不建模：保守 +1 只影响「这轮抓不到下轮补」，不伪造数据。
+> - **与 policy 的集成验证**：FundNAV policy + 真日历 → 2026-02-13（节前最后
+>   交易日）的 availableAt = 02-24（无休市表会错算成 02-16）；MarketClose
+>   policy 美股跨耶稣受难日 04-17→04-21。25 个测试（TradingCalendarTests）。
+>   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+
 ---
 
 ### Epic 7 — Factor Engine
