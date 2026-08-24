@@ -1457,6 +1457,33 @@ macos-app/
 >   band）+ immutableHistorical + 确定性 id；Validator provenance 闭环
 >   四查；Replay 不重跑 Research，what-if 产新决策不动原 artifact。
 >
+> **Epic 7–10 跨 Epic 审查修复（2026-08-24，8×P1 + 1×P2）**：
+> - **P1 约束判定**：单标的暴露改集合三级判定（任一 lower 超阈 →
+>   violated，不再被更宽区间掩盖）；资产类偏差改区间数学（Target 落在
+>   暴露区间内时偏差下界为 0，不再误报 violated）。
+> - **P1 相关性键域**：投影主体键剥 listing| 前缀 + 无序对匹配裸
+>   ListingID（修复前生产 pair 全部 skipped、约束形同虚设）；基金主体
+>   显式跳过。
+> - **P1 ID 碰撞**：统一 StableDigest（sortedKeys JSON 语义 payload，
+>   只排除 producedAt）——Lookthrough/Attribution/Decision/Target 四处
+>   ID 补全语义输入（纯直接持股组合同日曾全部同 ID）。
+> - **P1 Target 构造封闭**：AllocationTarget memberwise init 被
+>   fileprivate 抑制（同文件 Policy 唯一入口）；Codable 校验式解码
+>   （脏权重在解码点拒绝）。
+> - **P1 D004 闭环**：DecisionValidator 四类引用（signal/factor/
+>   criterion/band）fail-closed resolvers；DecisionReplayer 完整重放
+>   Planner→Compare→Decide（重放产出含行动计划与 provenance）。
+> - **P1 Artifact 持久化**：IntelligenceSchema+ArtifactCodecs 落地五类
+>   Artifact + AgentJob 的 GRDB 往返 codec（payload 自包含 + 依赖表行
+>   同步写；不触碰已发布迁移）。
+> - **P1 App 归因口径**：portfolioReturn 仅估值与涨跌双全覆盖时提供
+>   （子集收益不再当全组合 residual 基准）；覆盖状态透出 + high 档
+>   措辞不再声称「全部持仓」。
+> - **P2 归因日界**：回退用上海时区当日零点（同日内 ID 稳定）；
+>   macOS section 单次读取 outcome。
+> - 修复后 swift test 全量绿（跳过环境性同前）；iOS Simulator 构建验证
+>   通过；新增回归测试覆盖每个修复点。
+
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
 ---
