@@ -212,6 +212,29 @@ struct HistoricalBackfill: Sendable {
         return .committed(recordCount: commit.committedCount)
     }
 
+    /// 只验证覆盖率、不抓取（remote 通道标的的数据由 RemoteStagingSync +
+    /// MarketDailySync 提交，回填阶段只报告覆盖状态）。
+    func coverageReport(barTargets: [BarBackfillTarget]) -> [String: TargetCoverage] {
+        var report: [String: TargetCoverage] = [:]
+        for target in barTargets {
+            let anchor = marketCalendar.previousTradingDay(
+                before: marketCalendar.latestTradingDayOnOrBefore(now(), jurisdiction: target.jurisdiction),
+                jurisdiction: target.jurisdiction
+            )
+            let expected = marketCalendar.tradingDays(
+                endingAt: anchor, count: requiredTradingDays, jurisdiction: target.jurisdiction
+            )
+            report["bar|\(target.code.value)"] = coverage(
+                expected: expected,
+                actualDates: repository.dailyBars(
+                    listingID: target.listingID,
+                    context: .economicKnowledge(asOf: anchor.addingTimeInterval(30 * 86_400))
+                ).map { $0.temporalEnvelope.effectiveAt }
+            )
+        }
+        return report
+    }
+
     // MARK: - 覆盖率计算（验收口径）
 
     private func coverage(expected: [Date], actualDates: [Date]) -> TargetCoverage {

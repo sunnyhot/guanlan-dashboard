@@ -966,7 +966,12 @@ macos-app/
 
 **里程碑 M5：数据自给**。Factor Engine 才有可信输入。
 
-> **状态（2026-08-24）**：M5 进行中。**SYNC-1 已签收（3 点）**——
+> **状态（2026-08-24，Epic 6 全部收口）**：**SYNC-1..8（含 6a/6b，21 点）全部签收**，
+> M5 验收能力全部落地（引擎层离线验证；生产数据积累随 App 接线[Epic 9/B.3]
+> 与真实 Provider 持续运行达成——见 §4.3 逐项对应：SYNC-6a 覆盖率验收 /
+> SYNC-6b 分批增量补全 / SYNC-7 local 兜底降级 / SYNC-1 节假日日历 /
+> SYNC-8 新标的进 Instrument Master）。universe 内容策展归 WF-2。
+> **SYNC-1 已签收（3 点）**——
 > `Sync/TradingCalendars.swift`（真实交易日历 + 基金净值公布日历）：
 > - **交易日 = 当地日历周一~周五 减 交易所休市表**。两个结构性事实由算法保证
 >   不进数据表：周末从不开市（含国务院「调休上班」的周末——交易所不跟随
@@ -1136,6 +1141,29 @@ macos-app/
 >      （协议 + InMemory + GRDB 同步实现，扫描匹配用）。
 > - 12 个测试（IdentitySyncTests）。swift test 全量绿（跳过环境性
 >   AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-6b 已签收（5 点，2026-08-24）**——`Sync/MarketUniverseBackfill.swift`
+> （全市场 universe 分批历史回填，Epic 6 收口）：
+> - **分批预算**：每轮 `maxTargetsPerRound` 个目标（优先级序、稳定 tie-break），
+>   partial completion 一等公民——「受免费 Provider 额度限制，可分阶段」的
+>   引擎语义；额度感知复用降级链 isCallable 闸门（AV 25/天耗尽 → 当轮
+>   allFailed → 留队列下轮再试，测试覆盖）。
+> - **进度状态持久化**：sufficient 条目记入 completedEntries 后续轮次跳过
+>   （省额度、幂等）；覆盖不足自动留队列。universe 版本化数据文件**增量
+>   补全**：新增条目自动进批次、旧完成项按 key 跳过、universe 收缩时陈旧
+>   完成项不计入进度（都有测试）。
+> - **双通道**：直接抓取条目（美股）走 HistoricalBackfill 全流程；remote
+>   通道条目（A 股，数据由 RemoteStagingSync + MarketDailySync 提交）只
+>   验证覆盖率（`coverageReport` 新增免抓取入口）——零网络零误报。
+> - universe 内容策展（哪些指数/行业进 300+ 清单）是 WF-2（Market
+>   Discovery）的工作，本引擎只收版本化清单。6 个测试
+>   （MarketUniverseBackfillTests）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
+>
+> **✅ Epic 6 完全收口（2026-08-24）**：SYNC-1（3）/ SYNC-2（2）/ SYNC-3（2）/
+> SYNC-4（2）/ SYNC-5（1）/ SYNC-6a（3）/ SYNC-6b（5）/ SYNC-7（3）/
+> SYNC-8（5）= 21 点全部签收，M5 能力落地（引擎层离线验证 + 86 个新增测试，
+> 以套件通过为准）。Epic 7（Factor Engine）解锁。
 
 ---
 
