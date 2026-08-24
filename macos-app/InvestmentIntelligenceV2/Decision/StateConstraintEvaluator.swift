@@ -116,18 +116,34 @@ struct StateConstraintEvaluator: Sendable {
                 return unknown(constraint, note: "约束缺 threshold 参数")
             }
             let securities = exposure.estimates.filter { $0.dimension == .singleSecurity }
-            guard let worst = securities.max(by: {
-                $0.upperBound.value != $1.upperBound.value
-                    ? $0.upperBound.value < $1.upperBound.value
-                    : $0.key < $1.key
-            }) else {
+            guard !securities.isEmpty else {
                 return unknown(constraint, note: "无穿透标的暴露数据")
             }
-            return boundCheck(
-                constraint, lower: worst.lowerBound.value, upper: worst.upperBound.value,
-                threshold: threshold, relatedKey: worst.key,
-                violatedDirective: "将标的 \(worst.key) 的组合暴露降至 \(percent(threshold)) 以下",
-                satisfiedIfBelow: true
+            // 判定优先级（审查 P1 修复：不看单项，看全集合）：
+            // ① 任一标的已确认超限（lower > threshold）→ violated（取确认暴露最深者）
+            // ② 全部标的最坏情况都不超（upper ≤ threshold）→ satisfied
+            // ③ 其间（存在跨阈值的上下界）→ unknown
+            if let confirmed = securities
+                .filter({ $0.lowerBound.value > threshold })
+                .max(by: { $0.lowerBound.value < $1.lowerBound.value })
+            {
+                return violated(
+                    constraint,
+                    directive: "将标的 \(confirmed.key) 的组合暴露降至 \(percent(threshold)) 以下（已确认 \(percent(confirmed.lowerBound.value))）",
+                    relatedKey: confirmed.key
+                )
+            }
+            if securities.allSatisfy({ $0.upperBound.value <= threshold }) {
+                return satisfied(constraint)
+            }
+            let straddling = securities
+                .filter { $0.upperBound.value > threshold }
+                .max(by: { $0.upperBound.value < $1.upperBound.value })
+            return StateConstraintFinding(
+                constraint: constraint,
+                status: .unknown,
+                remediation: nil,
+                insufficiencyNote: "标的 \(straddling?.key ?? "?") 确认值未超阈值，最坏情况 \(percent(straddling?.upperBound.value ?? 0)) 超过 \(percent(threshold))——披露缺口内可能违规"
             )
 
         case .maxAssetClassDeviation:
@@ -137,34 +153,60 @@ struct StateConstraintEvaluator: Sendable {
             guard let target else {
                 return unknown(constraint, note: "无 AllocationTarget，偏差无法定义（Target 不可从数据推断——D000）")
             }
-            // 逐资产类对照目标取最大偏差（AC 维上下界来自 ExposureReport）
             let classes = exposure.estimates.filter { $0.dimension == .assetClass }
             guard !classes.isEmpty else {
                 return unknown(constraint, note: "无资产大类暴露数据")
             }
-            var worstDeviation = Decimal.zero
-            var worstLower = Decimal.zero
-            var worstUpper = Decimal.zero
-            var worstKey = ""
+            // 偏差区间数学（审查 P1 修复：Target 落在暴露区间 [lo, hi] 内时
+            // 偏差下界为 0，不是 |lo − t|）：
+            //   deviationLower = max(0, lo − t, t − hi)   （到区间的最短距离）
+            //   deviationUpper = max(|lo − t|, |hi − t|)  （到端点的最长距离）
+            func deviationInterval(_ estimate: ExposureEstimate, target t: Decimal) -> (lower: Decimal, upper: Decimal) {
+                let lo = estimate.lowerBound.value
+                let hi = estimate.upperBound.value
+                let shortest = max(0, max(lo - t, t - hi))
+                let longest = max(abs(lo - t), abs(hi - t))
+                return (shortest, longest)
+            }
+            // 逐类区间 → 全局判定（同单标的三级优先）：
+            // ① 任一类确认偏差超阈 → violated；② 全部类最坏不超 → satisfied
+            var anyConfirmedOver = false
+            var allWorstUnder = true
+            var worstConfirmed: (key: String, lower: Decimal)?
+            var worstUnknown: (key: String, lower: Decimal, upper: Decimal)?
             for estimate in classes {
-                let assetClass = estimate.key
-                let targetWeight = target.targetWeight(for: AssetClass(rawValue: assetClass)!)?.value
+                let targetWeight = target.targetWeight(for: AssetClass(rawValue: estimate.key)!)?.value
                     ?? Decimal.zero  // Target 无该类 = 目标 0（显式：Target 定义域缺即 0 目标）
-                let deviationLower = abs((estimate.lowerBound.value) - targetWeight)
-                let deviationUpper = abs((estimate.upperBound.value) - targetWeight)
-                if max(deviationLower, deviationUpper) > max(worstLower, worstUpper) {
-                    worstDeviation = deviationLower
-                    worstLower = deviationLower
-                    worstUpper = deviationUpper
-                    worstKey = assetClass
+                let interval = deviationInterval(estimate, target: targetWeight)
+                if interval.lower > threshold {
+                    anyConfirmedOver = true
+                    if worstConfirmed == nil || interval.lower > worstConfirmed!.lower {
+                        worstConfirmed = (estimate.key, interval.lower)
+                    }
+                }
+                if interval.upper > threshold {
+                    allWorstUnder = false
+                    if worstUnknown == nil || interval.upper > worstUnknown!.upper {
+                        worstUnknown = (estimate.key, interval.lower, interval.upper)
+                    }
                 }
             }
-            _ = worstDeviation
-            return boundCheck(
-                constraint, lower: worstLower, upper: worstUpper,
-                threshold: threshold, relatedKey: worstKey,
-                violatedDirective: "将资产大类 \(worstKey) 与目标的偏差收敛到 \(percent(threshold) ) 以内",
-                satisfiedIfBelow: true
+            if anyConfirmedOver, let confirmed = worstConfirmed {
+                return violated(
+                    constraint,
+                    directive: "将资产大类 \(confirmed.key) 与目标的偏差收敛到 \(percent(threshold)) 以内（已确认偏差 \(percent(confirmed.lower))）",
+                    relatedKey: confirmed.key
+                )
+            }
+            if allWorstUnder {
+                return satisfied(constraint)
+            }
+            let s = worstUnknown!
+            return StateConstraintFinding(
+                constraint: constraint,
+                status: .unknown,
+                remediation: nil,
+                insufficiencyNote: "资产大类 \(s.key) 的偏差区间 [\(percent(s.lower)), \(percent(s.upper))] 跨阈值 \(percent(threshold))——披露缺口内可能违规"
             )
 
         case .minDisclosureCoverage:
@@ -182,26 +224,7 @@ struct StateConstraintEvaluator: Sendable {
         }
     }
 
-    // MARK: - 三态判定
-
-    private func boundCheck(
-        _ constraint: StateConstraintDefinition,
-        lower: Decimal, upper: Decimal, threshold: Decimal,
-        relatedKey: String?, violatedDirective: String, satisfiedIfBelow: Bool
-    ) -> StateConstraintFinding {
-        if lower > threshold {
-            return violated(constraint, directive: violatedDirective, relatedKey: relatedKey)
-        }
-        if upper <= threshold {
-            return satisfied(constraint)
-        }
-        return StateConstraintFinding(
-            constraint: constraint,
-            status: .unknown,
-            remediation: nil,
-            insufficiencyNote: "确认值 \(percent(lower)) 未超阈值，最坏情况 \(percent(upper)) 超过 \(percent(threshold))——披露缺口内可能违规"
-        )
-    }
+    // MARK: - 判定 helper
 
     private func satisfied(_ constraint: StateConstraintDefinition) -> StateConstraintFinding {
         StateConstraintFinding(constraint: constraint, status: .satisfied, remediation: nil, insufficiencyNote: nil)

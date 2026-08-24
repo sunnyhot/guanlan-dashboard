@@ -182,8 +182,11 @@ struct ConstraintGate: Sendable {
     private static func weightedAverageCorrelation(
         projected: ProjectedPortfolio, correlations: [CorrelationPair]
     ) -> (average: Decimal?, skipped: Int) {
-        let byPair = Dictionary(
-            uniqueKeysWithValues: correlations.map { ("\($0.listingA.rawValue)|\($0.listingB.rawValue)", $0) }
+        // 对键：无序对（两侧排序后拼接），与投影主体的 listing| 前缀剥除匹配
+        let correlationByPairKey = Dictionary(
+            uniqueKeysWithValues: correlations.map {
+                ([$0.listingA.rawValue, $0.listingB.rawValue].sorted().joined(separator: "|"), $0)
+            }
         )
         var numerator: Decimal = .zero
         var denominator: Decimal = .zero
@@ -192,9 +195,14 @@ struct ConstraintGate: Sendable {
         for i in 0..<positions.count {
             for j in (i + 1)..<positions.count {
                 let a = positions[i], b = positions[j]
-                let key1 = "\(subjectCorrelationKey(a.subjectKey))|\(subjectCorrelationKey(b.subjectKey))"
-                let key2 = "\(subjectCorrelationKey(b.subjectKey))|\(subjectCorrelationKey(a.subjectKey))"
-                guard let pair = byPair[key1] ?? byPair[key2],
+                guard let keyA = Self.listingKey(a.subjectKey),
+                      let keyB = Self.listingKey(b.subjectKey)
+                else {
+                    skipped += 1  // 基金等非 listing 主体无行情序列——跳过不猜
+                    continue
+                }
+                let pairKey = [keyA, keyB].sorted().joined(separator: "|")
+                guard let pair = correlationByPairKey[pairKey],
                       let rho = pair.pearson?.value
                 else {
                     skipped += 1
@@ -209,11 +217,13 @@ struct ConstraintGate: Sendable {
         return (numerator / denominator, skipped)
     }
 
-    /// subjectKey（fund|xxx / listing|xxx）→ 相关对的 listing 表达。
-    /// 基金主体无法直接映射行情序列——相关性约束对基金持仓天然数据不足
-    /// （跳过不猜），只对 listing| 主体精确匹配。
-    private static func subjectCorrelationKey(_ subjectKey: String) -> String {
-        subjectKey
+    /// subjectKey（fund|xxx / listing|xxx）→ CorrelationPair 的 ListingID 域。
+    /// 审查 P1 修复：CorrelationPair 存裸 ListingID（rawValue 无前缀），
+    /// 投影主体键是 listing|code 形态——必须剥前缀后按无序对匹配；
+    /// 基金主体返回 nil（无法映射行情序列，跳过不猜）。
+    private static func listingKey(_ subjectKey: String) -> String? {
+        guard subjectKey.hasPrefix("listing|") else { return nil }
+        return String(subjectKey.dropFirst("listing|".count))
     }
 }
 

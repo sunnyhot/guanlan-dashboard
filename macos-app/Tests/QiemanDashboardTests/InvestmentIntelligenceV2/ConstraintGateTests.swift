@@ -147,6 +147,38 @@ final class ConstraintGateTests: XCTestCase {
         )
     }
 
+    /// 审查 P1 回归:CorrelationPair 存裸 ListingID(生产形态),
+    /// 投影主体键是 listing| 前缀——键域剥前缀后必须命中。
+    func testCorrelationMatchesWithBareListingIDs() {
+        let gate = ConstraintGate()
+        let projected = ProjectedPortfolio.project(base: base, applying: [])
+        // 裸 ID 的 pair(顺序反向也要命中:无序对)
+        let verdict = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("B", "A", "0.9")]
+        )
+        XCTAssertFalse(verdict.passed, "裸 ID + 反序 pair 必须命中(修复前全 skipped)")
+        XCTAssertEqual(verdict.correlationSkippedPairs, 0)
+    }
+
+    func testFundSubjectPairsSkipped() {
+        // 基金主体(fund| 前缀)无法映射行情序列 → skipped,不猜
+        let gate = ConstraintGate()
+        let fundPortfolio = PortfolioSnapshot(asOf: day, positions: [
+            PortfolioPosition(subjectKey: "fund|A", assetClass: .equity, weight: r("0.6")),
+            PortfolioPosition(subjectKey: "fund|B", assetClass: .equity, weight: r("0.4")),
+        ])
+        let projected = ProjectedPortfolio.project(base: fundPortfolio, applying: [])
+        let verdict = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("A", "B", "0.9")]
+        )
+        XCTAssertTrue(verdict.passed, "基金主体对跳过 → 无均值不判违规")
+        XCTAssertEqual(verdict.correlationSkippedPairs, 1)
+    }
+
     func testMaxAverageCorrelation() {
         let gate = ConstraintGate()
         // 组合 A 0.5 + B 0.3(正权重);ρ(A,B) = 0.9
@@ -155,7 +187,7 @@ final class ConstraintGateTests: XCTestCase {
         let violated = gate.evaluate(
             projected: projected, actions: [],
             rules: [.maxAverageCorrelation(cap: d("0.8"))],
-            correlations: [correlationPair("listing|A", "listing|B", "0.9")]
+            correlations: [correlationPair("A", "B", "0.9")]
         )
         XCTAssertFalse(violated.passed)
         XCTAssertTrue(violated.violations[0].contains("maxAverageCorrelation"))
@@ -164,7 +196,7 @@ final class ConstraintGateTests: XCTestCase {
         let ok = gate.evaluate(
             projected: projected, actions: [],
             rules: [.maxAverageCorrelation(cap: d("0.8"))],
-            correlations: [correlationPair("listing|A", "listing|B", "0.5")]
+            correlations: [correlationPair("A", "B", "0.5")]
         )
         XCTAssertTrue(ok.passed)
         XCTAssertEqual(ok.correlationSkippedPairs, 0)
@@ -175,7 +207,7 @@ final class ConstraintGateTests: XCTestCase {
         let gate = ConstraintGate()
         let projected = ProjectedPortfolio.project(base: base, applying: [])
         let unknownPair = CorrelationPair(
-            listingA: ListingID(rawValue: "listing|A"), listingB: ListingID(rawValue: "listing|B"),
+            listingA: ListingID(rawValue: "A"), listingB: ListingID(rawValue: "B"),
             pearson: nil, sampleCount: 5,
             insufficiency: .init(reason: .insufficientSamples, requiredSamples: 30)
         )

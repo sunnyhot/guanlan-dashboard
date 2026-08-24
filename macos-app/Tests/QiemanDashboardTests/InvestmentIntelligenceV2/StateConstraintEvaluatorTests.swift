@@ -172,6 +172,52 @@ final class StateConstraintEvaluatorTests: XCTestCase {
 
     // MARK: - Operational Obligation 分离 + 形态
 
+    func testSingleSecurity_confirmedViolationNotMaskedByWiderBound() {
+        // 审查 P1 回归:A=[8%,30%](upper 最大)、B=[15%,16%](lower 已超 10%)
+        // 旧实现只看 A(upper 最大)→ unknown,漏掉 B 已确认违规
+        let finding = StateConstraintEvaluator().evaluate(
+            constraints: [maxSecurity],
+            exposure: exposureReport(securities: [("A", "0.08", "0.30"), ("B", "0.15", "0.16")]),
+            target: nil
+        )[0]
+        XCTAssertEqual(finding.status, .violated, "任一标的 lower 超阈 → violated,不被更宽的区间掩盖")
+        XCTAssertEqual(finding.remediation?.relatedKey, "B")
+    }
+
+    func testAssetClassDeviation_targetInsideIntervalLowerIsZero() {
+        // 审查 P1 回归:暴露区间 [30%,70%]、Target 50% → 真实偏差区间 [0,20%]
+        // 旧实现 |30−50|=20 / |70−50|=20 → 误报 violated;正确为 unknown(20% > 10% 阈)
+        let deviation = constraint(.maxAssetClassDeviation, ["threshold": "0.1"])
+        let target = try! StrategicAllocationPolicy().applyUserAllocation(
+            entries: [
+                AllocationTargetEntry(assetClass: .equity, targetWeight: Ratio(value: Decimal(string: "0.5")!)),
+                AllocationTargetEntry(assetClass: .fixedIncome, targetWeight: Ratio(value: Decimal(string: "0.5")!)),
+            ],
+            note: nil, now: day
+        )
+        let finding = StateConstraintEvaluator().evaluate(
+            constraints: [deviation],
+            exposure: exposureReport(
+                securities: [],
+                assetClasses: [("EQUITY", "0.3", "0.7"), ("FIXED_INCOME", "0.5", "0.5")]
+            ),
+            target: target
+        )[0]
+        XCTAssertEqual(finding.status, .unknown, "Target 在区间内 → 偏差下界 0,上界 20% 跨阈 → unknown")
+        XCTAssertTrue(finding.insufficiencyNote?.contains("0%") ?? false)
+
+        // 区间收紧到 [45%,55%]:偏差 [0,5%] ≤ 10% → satisfied
+        let ok = StateConstraintEvaluator().evaluate(
+            constraints: [deviation],
+            exposure: exposureReport(
+                securities: [],
+                assetClasses: [("EQUITY", "0.45", "0.55"), ("FIXED_INCOME", "0.45", "0.55")]
+            ),
+            target: target
+        )[0]
+        XCTAssertEqual(ok.status, .satisfied, "最坏偏差 5% ≤ 10%")
+    }
+
     func testOperationalObligationIsSeparateKind() throws {
         let obligation = OperationalObligation(
             id: "ob-refresh", version: "v1",
