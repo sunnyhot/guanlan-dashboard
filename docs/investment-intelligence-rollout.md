@@ -1361,6 +1361,40 @@ macos-app/
 
 **里程碑 M6：第一个 Workflow 上线**。整条链路通了，后面 Decision/Research 才有信心。
 
+> **状态（2026-08-24，Epic 9 全部收口，M6 达成）**：**ATTR-1（5）/
+> ATTR-2（2）/ ATTR-3（3）/ ATTR-4（3）/ ATTR-5（3）= 16 点全部签收**。
+> 引擎层代码在 `InvestmentIntelligenceV2/Attribution/`
+> （AttributionEngine / DailyAttribution / AttributionRenderer /
+> DailyAttributionWorkflow），App 桥在
+> `Core/AppModel/AttributionV2Bridge.swift`（唯一 App→V2 桥），
+> UI 在 `Views_macOS/InvestmentIntelligence/AttributionV2Section.swift` +
+> `Views_iOS/EnhancementSectionView.swift` 双轨段。测试以套件通过为准：
+> AttributionEngineTests / DailyAttributionTests / AttributionRendererTests /
+> DailyAttributionWorkflowTests / AttributionV2BridgeTests（5 套件）。
+> swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests 崩溃与
+> M2Live 场景 1 当日外网阻塞）；双端构建验证通过（SPM macOS +
+> xcodebuild iOS Simulator，xcodegen 重新生成工程编入新文件）。
+>
+> 实现要点（与 Story 表述的对齐）：
+> - **ATTR-1**：contribution = w×r；coverage = 已知权重和；residual =
+>   portfolioReturn − attributed（仅当提供组合实际收益）。收益率未知进
+>   coverage 缺口不猜；全 Decimal、确定性排序。
+> - **ATTR-2**：immutableHistorical（历史归因永不失效，上游修订走新
+>   artifact）；producedAt 不参与 id（重算幂等）。
+> - **ATTR-3**：三档分级措辞随覆盖度递减（<50% 必须「不宜据此下结论」）；
+>   LLM Narrative 契约 = AttributionNarrativeProvider 协议 + 冻结摘要
+>   输入 + 独立 narrative 字符串（withNarrative 整体附加），类型层不存在
+>   「LLM 改写归因值」通道；deterministicNarrative 提供无 LLM 兜底。
+> - **ATTR-4**：AgentJob/AgentEvent 基础形态（五态状态机 + 非法迁移守护 +
+>   幂等指纹 id）；Epic 13 AGENT-1 在此之上扩展 Registry/Recovery。
+>   provider 抛错 = failed；成分收益率未知 ≠ 失败。
+> - **ATTR-5（B.3 兑现：App 层首次引用 V2）**：双轨展示与旧
+>   marketCloseReview 并存（旧代码零改动）；无市值行不进归因（需权重
+>   基础），Double→Decimal 经字符串舍入避免浮点尾噪；归因日取
+>   latestChangeDate；macOS/iOS 双端同步接入。
+>
+> Epic 10（Decision 子系统，mock signals）解锁。
+
 ---
 
 ### Epic 10 — Decision 子系统（V2.2 内容）
