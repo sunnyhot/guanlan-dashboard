@@ -752,6 +752,21 @@ macos-app/
 >   两态、唯一键含 NULL 封口、修订+换标签共存、Q2/H1 同 periodEnd 不互斥、
 >   FK、未知 form/unit fail-closed）。
 >
+> **GRDB-9 已签收（2 点，2026-08-24，Epic 5 收尾之一）**——约定与代码一致：
+> - **数据目录规划落地**：`Persistence/CanonicalStorePaths.swift`——库文件
+>   `<AppData>/investment-intelligence-v2/canonical.sqlite3`，与 remote-staging
+>   spool 同住 V2 工作目录（spool 是事实源、库是派生物，删库重放走 spool，
+>   ADR-DATA004）；`openDatabase(in:)` 幂等建目录 + 迁移的单一入口（补上
+>   CanonicalDatabase.init 刻意不代建目录的「App 侧统一负责」层）。
+> - **iOS framework 链接验证**：xcodegen 重生成（收录 GRDB-2..6 新文件），
+>   macOS + iOS 双端 xcodebuild Debug 构建通过；iOS 产物 GRDB 静态链入
+>   （debug dylib 链系统 libsqlite3）+ GRDB_GRDB.bundle 资源在 bundle 内。
+> - **AGENTS.md 第 6 条最终化**：原「无 SQLite」约定废止改写为完整现状
+>   （六版 schema 清单 / 各域 schema 文件位置 / 列编解码约定 / 迁移只追加 /
+>   CanonicalStorePaths / GRDB 限 V2 范围）。
+> - 3 个 CanonicalStorePathsTests（落点约定 + 与 spool 共存 / openDatabase
+>   建目录幂等 + 重开迁移不重跑）。
+>
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：
 > - **10 表**：evidence / evidence_facts / signals / theses / artifacts /
