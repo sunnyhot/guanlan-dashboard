@@ -16,9 +16,13 @@ struct AttributionV2Section: View {
             trailing: {
                 Spacer()
                 if let rendered = outcome?.rendered {
+                    // 二轮审查 P2-9:badge 综合估值覆盖——大量持仓无估值时
+                    // 引擎 coverage 只反映参与归一的部分,不再单凭 grade
+                    // 声称「覆盖完整」
+                    let coverage = model.attributionV2Coverage
                     InvestmentStateBadge(
-                        text: badgeText(rendered.grade),
-                        tint: badgeTint(rendered.grade)
+                        text: badgeText(rendered.grade, valuationComplete: coverage?.hasFullValuation ?? true),
+                        tint: badgeTint(rendered.grade, valuationComplete: coverage?.hasFullValuation ?? true)
                     )
                 }
             }
@@ -110,19 +114,22 @@ struct AttributionV2Section: View {
         return AppPalette.ink
     }
 
-    private func badgeText(_ grade: AttributionCoverageGrade) -> String {
-        switch grade {
-        case .high: return "覆盖完整"
-        case .partial: return "部分覆盖"
-        case .low: return "覆盖不足"
+    /// badge 文案：估值覆盖不完整时明确限定「已知估值持仓」域（二轮 P2-9）。
+    private func badgeText(_ grade: AttributionCoverageGrade, valuationComplete: Bool) -> String {
+        switch (grade, valuationComplete) {
+        case (.high, true): return "覆盖完整"
+        case (.high, false): return "已知估值内完整"
+        case (.partial, _): return "部分覆盖"
+        case (.low, _): return "覆盖不足"
         }
     }
 
-    private func badgeTint(_ grade: AttributionCoverageGrade) -> Color {
-        switch grade {
-        case .high: return AppPalette.positive
-        case .partial: return AppPalette.warning
-        case .low: return AppPalette.danger
+    private func badgeTint(_ grade: AttributionCoverageGrade, valuationComplete: Bool) -> Color {
+        switch (grade, valuationComplete) {
+        case (.high, true): return AppPalette.positive
+        case (.high, false): return AppPalette.warning
+        case (.partial, _): return AppPalette.warning
+        case (.low, _): return AppPalette.danger
         }
     }
 

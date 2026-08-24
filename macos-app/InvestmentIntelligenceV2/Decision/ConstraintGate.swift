@@ -182,12 +182,19 @@ struct ConstraintGate: Sendable {
     private static func weightedAverageCorrelation(
         projected: ProjectedPortfolio, correlations: [CorrelationPair]
     ) -> (average: Decimal?, skipped: Int) {
-        // 对键：无序对（两侧排序后拼接），与投影主体的 listing| 前缀剥除匹配
-        let correlationByPairKey = Dictionary(
-            uniqueKeysWithValues: correlations.map {
-                ([$0.listingA.rawValue, $0.listingB.rawValue].sorted().joined(separator: "|"), $0)
+        // 对键：无序对（两侧排序后拼接），与投影主体的 listing| 前缀剥除匹配。
+        // 反序重复对（(A,B) 与 (B,A)）确定性合并（二轮审查 P2-8：不再 trap）：
+        // 值完全一致 → 幂等保留；不一致 → 保留序列化字典序较小者（上游
+        // 数据矛盾的确定性行为，不静默不崩溃）。
+        var correlationByPairKey: [String: CorrelationPair] = [:]
+        for pair in correlations {
+            let key = [pair.listingA.rawValue, pair.listingB.rawValue].sorted().joined(separator: "|")
+            if let existing = correlationByPairKey[key] {
+                correlationByPairKey[key] = Self.deterministicPick(existing, pair)
+            } else {
+                correlationByPairKey[key] = pair
             }
-        )
+        }
         var numerator: Decimal = .zero
         var denominator: Decimal = .zero
         var skipped = 0
@@ -215,6 +222,22 @@ struct ConstraintGate: Sendable {
         }
         guard denominator > 0 else { return (nil, skipped) }
         return (numerator / denominator, skipped)
+    }
+
+    /// 冲突对的确定性选择：pearson/sampleCount 一致 → 任取（幂等）；
+    /// 否则取序列化字典序较小者（稳定的合并规则）。
+    private static func deterministicPick(_ a: CorrelationPair, _ b: CorrelationPair) -> CorrelationPair {
+        if a.pearson == b.pearson && a.sampleCount == b.sampleCount {
+            return a
+        }
+        return serialize(a) <= serialize(b) ? a : b
+    }
+
+    private static func serialize(_ pair: CorrelationPair) -> String {
+        let rho = pair.pearson.map { "\($0.value)" } ?? "nil"
+        // 规范对键（排序）:选择只取决于数值,与输入方向无关
+        let pairKey = [pair.listingA.rawValue, pair.listingB.rawValue].sorted().joined(separator: "|")
+        return "\(pairKey)|\(rho)|\(pair.sampleCount)"
     }
 
     /// subjectKey（fund|xxx / listing|xxx）→ CorrelationPair 的 ListingID 域。

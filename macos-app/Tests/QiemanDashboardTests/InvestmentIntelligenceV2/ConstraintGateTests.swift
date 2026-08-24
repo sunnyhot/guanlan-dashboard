@@ -220,6 +220,41 @@ final class ConstraintGateTests: XCTestCase {
         XCTAssertEqual(verdict.correlationSkippedPairs, 1)
     }
 
+    func testReversedDuplicatePairsMergeDeterministically() {
+        // 二轮审查 P2-8 回归:(A,B) 与 (B,A) 同时输入不再 trap;
+        // 值一致幂等,值不一致确定性选择
+        let gate = ConstraintGate()
+        let projected = ProjectedPortfolio.project(base: base, applying: [])
+        // 同值反序对:幂等保留,正常评估
+        XCTAssertNoThrow(try gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("A", "B", "0.5"), correlationPair("B", "A", "0.5")]
+        ))
+        let consistent = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("A", "B", "0.5"), correlationPair("B", "A", "0.5")]
+        )
+        XCTAssertTrue(consistent.passed)
+        XCTAssertEqual(consistent.correlationSkippedPairs, 0)
+
+        // 矛盾对(0.9 vs 0.5):确定性合并(序列化字典序小者:0.5),不崩溃
+        let conflicting = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("A", "B", "0.9"), correlationPair("B", "A", "0.5")]
+        )
+        XCTAssertTrue(conflicting.passed, "合并选择 |0.5|(字典序较小)→ 0.5 ≤ 0.8 通过")
+        // 输入顺序无关:反转输入顺序结果一致(确定性)
+        let reversed = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: [correlationPair("B", "A", "0.5"), correlationPair("A", "B", "0.9")]
+        )
+        XCTAssertEqual(reversed.passed, conflicting.passed)
+    }
+
     // MARK: - Rescale(不引入新 Δw)
 
     func testRescaleProportionalWithProvenanceKept() {
