@@ -30,6 +30,7 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
             TrendLiveLogPanel()
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
+            AttributionV2Section()
             intradayContent
             trendContent
             recordsSection

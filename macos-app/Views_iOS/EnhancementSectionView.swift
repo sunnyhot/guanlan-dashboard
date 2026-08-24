@@ -208,6 +208,35 @@ struct EnhancementSectionView: View {
                 )
             }
 
+            // V2 双轨归因（ATTR-5）：确定性引擎，与上方 LLM 复盘对照
+            Divider()
+            Text("当日归因 · V2 引擎")
+                .font(.headline)
+                .foregroundStyle(IOSDesign.ink)
+            if let outcome = model.dailyAttributionV2,
+               let rendered = outcome.rendered {
+                Text(rendered.headline)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(IOSDesign.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(rendered.contributionLines.prefix(3).enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.caption)
+                        .foregroundStyle(AppPalette.marketTint(
+                            for: line.contains("贡献 +") ? 1 : (line.contains("贡献 -") ? -1 : 0)
+                        ))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(rendered.caveat)
+                    .font(.caption2)
+                    .foregroundStyle(IOSDesign.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("刷新个人持仓后显示当日收益的确定性归因。")
+                    .font(.caption)
+                    .foregroundStyle(IOSDesign.muted)
+            }
+
             if !review.tomorrowWatch.isEmpty {
                 Divider()
                 Text("明日关注").font(.headline).foregroundStyle(IOSDesign.ink)
