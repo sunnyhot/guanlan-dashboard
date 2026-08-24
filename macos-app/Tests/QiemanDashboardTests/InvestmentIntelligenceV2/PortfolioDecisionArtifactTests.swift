@@ -36,7 +36,10 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
     private func makeArtifact(
         decision: PartialDecision,
-        plans: [String: PortfolioActionPlan]
+        plans: [String: PortfolioActionPlan],
+        comparison: PlanComparisonResult = PlanComparisonResult(
+            pairwise: [:], paretoFront: [], blockingUnknowns: []
+        )
     ) -> PortfolioDecisionArtifact {
         .assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
@@ -46,6 +49,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             bandVersion: "b@v1",
             knowledgeContextSummary: "economicKnowledge(2024-07-20)",
             decision: decision,
+            comparison: comparison,
             plans: plans,
             producedAt: day
         )
@@ -58,7 +62,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
                                        explanation: "互不支配")
         let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05"),
                                                                 "B": makePlan("B", delta: "-0.05")])
-        try DecisionValidator().validate(artifact: artifact)
+        try DecisionValidator().validate(artifact: artifact, resolvers: .everythingResolvable)
     }
 
     func testValidatorRejectsAdmissiblePlanNotInPlans() {
@@ -77,6 +81,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             signalIDs: [], criterionVersions: [],
             factorSnapshotIDs: [], target: nil, bandVersion: "b@v1",
             knowledgeContextSummary: "", decision: decision,
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
             plans: ["A": makePlan("A", delta: "0.05")], producedAt: day
         )
         XCTAssertThrowsError(try DecisionValidator().validate(artifact: artifact)) { error in
@@ -164,6 +169,77 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         XCTAssertEqual(replayer.replay(inputs: base, now: day), original)
     }
 
+    func testArtifactBoundReplayVerifiesEndToEnd() throws {
+        // 二轮审查 P1-2 回归:以 artifact 为入口的完整重放——键域校验 +
+        /// decision/comparison/plans 三层全等验证(同 IDs → 同决策)
+        func score(_ id: String, _ v: Decimal) -> CriterionScore {
+            CriterionScore(
+                definition: CriterionDefinition(
+                    id: id, version: "v1", evaluatorKind: .weightedSum,
+                    inputReferences: [CriterionDefinition.InputReference(
+                        kind: .signalCardinal, referenceID: "\(id)-in", weight: 1)],
+                    unit: .ratio),
+                value: v, missingInputs: [], computation: "t")
+        }
+        let inputs = DecisionReplayer.ReplayInputs(
+            plannerRuns: ["A": plannerRun(delta: "0.05"), "B": plannerRun(delta: "-0.05")],
+            scores: [
+                "A": [score("momentum", d("0.05")), score("costScore", d("0.005"))],
+                "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
+            ],
+            band: band, higherIsBetter: [:]
+        )
+        // 先重放产 outcome,用其结果组装 artifact(与重放一致)
+        let outcome = DecisionReplayer().replay(inputs: inputs, now: day)
+        let artifact = makeArtifact(
+            decision: outcome.decision,
+            plans: outcome.plans,
+            comparison: outcome.comparison
+        )
+        // verify 通过(decision/comparison/plans 全等)
+        XCTAssertNoThrow(try DecisionReplayer().verify(artifact: artifact, inputs: inputs, now: day))
+
+        // 键域不一致(plannerRuns 多了 C)→ planKeyDomainMismatch
+        var badPlanner = inputs.plannerRuns
+        badPlanner["C"] = plannerRun(delta: "0")
+        XCTAssertThrowsError(try DecisionReplayer().replay(
+            artifact: artifact,
+            inputs: .init(plannerRuns: badPlanner, scores: inputs.scores,
+                          band: inputs.band, higherIsBetter: inputs.higherIsBetter),
+            now: day
+        )) { error in
+            guard case DecisionReplayer.ReplayError.planKeyDomainMismatch = error else {
+                return XCTFail("应为键域不一致,实际 \(error)")
+            }
+        }
+
+        // artifact 域不一致(artifact 只含 A)→ artifactPlanDomainMismatch
+        let singleArtifact = makeArtifact(
+            decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
+            plans: ["A": outcome.plans["A"]!],
+            comparison: outcome.comparison
+        )
+        XCTAssertThrowsError(try DecisionReplayer().replay(
+            artifact: singleArtifact, inputs: inputs, now: day
+        )) { error in
+            guard case DecisionReplayer.ReplayError.artifactPlanDomainMismatch = error else {
+                return XCTFail("应为 artifact 域不一致,实际 \(error)")
+            }
+        }
+
+        // 内容漂移(artifact 的 decision 与重放不一致)→ replayMismatch
+        let drifted = makeArtifact(
+            decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "漂移"),
+            plans: outcome.plans,
+            comparison: outcome.comparison
+        )
+        XCTAssertThrowsError(try DecisionReplayer().verify(artifact: drifted, inputs: inputs, now: day)) { error in
+            guard case DecisionReplayer.ReplayError.replayMismatch = error else {
+                return XCTFail("应为重放不一致,实际 \(error)")
+            }
+        }
+    }
+
     func testValidatorFailsClosedOnUnresolvableReferences() {
         // 审查 P1-1 回归:任一类引用无法解析 → 抛错,不静默放行
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
@@ -177,32 +253,54 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             XCTAssertEqual(error as? DecisionValidator.ValidationError,
                            .unresolvableReference(kind: "signal", id: "sig-1"))
         }
-        // FactorSnapshot 不可解析
+        // FactorSnapshot 不可解析(其余项显式放行)
         XCTAssertThrowsError(try DecisionValidator().validate(
             artifact: artifact,
-            resolvers: .init(factorSnapshot: { id in id.rawValue != "fs_abc" })
+            resolvers: .init(
+                signal: { _ in true },
+                factorSnapshot: { id in id.rawValue != "fs_abc" },
+                criterion: { _ in true },
+                indifferenceBand: { _ in true }
+            )
         )) { error in
             XCTAssertEqual(error as? DecisionValidator.ValidationError,
                            .unresolvableReference(kind: "factorSnapshot", id: "fs_abc"))
         }
-        // Criterion 不可解析
+        // Criterion 不可解析(其余项显式放行)
         XCTAssertThrowsError(try DecisionValidator().validate(
             artifact: artifact,
-            resolvers: .init(criterion: { _ in false })
+            resolvers: .init(
+                signal: { _ in true },
+                factorSnapshot: { _ in true },
+                criterion: { _ in false }
+            )
         )) { error in
             XCTAssertEqual(error as? DecisionValidator.ValidationError,
                            .unresolvableReference(kind: "criterion", id: "portfolio-momentum@v1"))
         }
-        // Band 不可解析
+        // Band 不可解析(其余项显式放行)
         XCTAssertThrowsError(try DecisionValidator().validate(
             artifact: artifact,
-            resolvers: .init(indifferenceBand: { _ in false })
+            resolvers: .init(
+                signal: { _ in true },
+                factorSnapshot: { _ in true },
+                criterion: { _ in true },
+                indifferenceBand: { _ in false }
+            )
         )) { error in
             XCTAssertEqual(error as? DecisionValidator.ValidationError,
                            .unresolvableReference(kind: "indifferenceBand", id: "b@v1"))
         }
-        // 全部可解析 → 通过
-        XCTAssertNoThrow(try DecisionValidator().validate(artifact: artifact))
+        // 二轮审查 P1-1:默认调用(不传 resolver)fail-closed 拒绝一切引用
+        XCTAssertThrowsError(try DecisionValidator().validate(artifact: artifact)) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .unresolvableReference(kind: "signal", id: "sig-1"),
+                           "默认无 resolver = 无法证明可解析 = 拒绝")
+        }
+        // 显式声明全部可解析 → 通过(调用方为引用真实性背书)
+        XCTAssertNoThrow(try DecisionValidator().validate(
+            artifact: artifact, resolvers: .everythingResolvable
+        ))
     }
 
     // MARK: - Artifact 形态
@@ -225,7 +323,9 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             criterionVersions: ["portfolio-momentum@v1"],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
             target: nil, bandVersion: "b@v1", knowledgeContextSummary: "",
-            decision: decision, plans: plans, producedAt: day
+            decision: decision,
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
+            plans: plans, producedAt: day
         )
         XCTAssertNotEqual(a.id, differentSignals.id)
     }
