@@ -20,6 +20,10 @@ struct CanonicalDataValidator: Sendable {
         case nonPositiveValue(field: String, value: String)
         /// 持仓权重出界（< 0 或 > 1）或披露覆盖总权出界
         case holdingWeightOutOfRange(weight: String)
+        /// 全部 position 权重合计超过 100%（审查 P2：单项合法但合计越界）
+        case positionsWeightSumExceedsHundredPercent(sum: String)
+        /// 已披露 position 合计与 disclosedWeightTotal 不一致（明细与自报总权矛盾）
+        case disclosedTotalMismatch(positionsSum: String, disclosedTotal: String)
         /// 公司行动比例非正
         case actionRatioNonPositive(ratio: String)
         /// 基本面期间倒置（periodStart > periodEnd）
@@ -31,6 +35,8 @@ struct CanonicalDataValidator: Sendable {
             case .barOHLCTopology: return "OHLC 拓扑不一致（low ≤ open/close ≤ high 不成立）"
             case .nonPositiveValue(let f, let v): return "\(f) 非正：\(v)"
             case .holdingWeightOutOfRange(let w): return "持仓权重出界 [0,1]：\(w)"
+            case .positionsWeightSumExceedsHundredPercent(let s): return "持仓权重合计超过 100%：\(s)"
+            case .disclosedTotalMismatch(let p, let t): return "已披露权重合计（\(p)）与披露总权（\(t)）不一致"
             case .actionRatioNonPositive(let r): return "公司行动比例非正：\(r)"
             case .fundamentalPeriodReversed: return "基本面期间倒置（periodStart > periodEnd）"
             }
@@ -65,8 +71,24 @@ struct CanonicalDataValidator: Sendable {
                     throw Violation.holdingWeightOutOfRange(weight: describe(position.weight.value))
                 }
             }
-            // 披露覆盖总权 ∈ [0, 1]（1 的万分位容差：浮点来源的权重合计）
+            // 审查 P2 修复：只查单项不查合计会让 0.6+0.6 穿过防火墙，
+            // 穿透计算放大成 120% 暴露。两条合计约束：
+            // 1. 全部 position 权重合计 ≤ 1（千分位容差吸收披露端的舍入）
+            let sum = snapshot.positions.reduce(Decimal.zero) { $0 + $1.weight.value }
+            guard sum <= Decimal(string: "1.001")! else {
+                throw Violation.positionsWeightSumExceedsHundredPercent(sum: describe(sum))
+            }
+            // 2. 已披露 position 的权重合计与 disclosedWeightTotal 一致
+            //   （Provider 自报总权与明细互相印证；千分位容差）
+            let disclosedSum = snapshot.positions
+                .filter { $0.isDisclosed }
+                .reduce(Decimal.zero) { $0 + $1.weight.value }
             let total = snapshot.disclosedWeightTotal.value
+            guard abs(disclosedSum - total) <= Decimal(string: "0.001")! else {
+                throw Violation.disclosedTotalMismatch(
+                    positionsSum: describe(disclosedSum), disclosedTotal: describe(total)
+                )
+            }
             guard total >= 0, total <= Decimal(string: "1.0001")! else {
                 throw Violation.holdingWeightOutOfRange(weight: describe(total))
             }

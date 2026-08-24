@@ -34,7 +34,9 @@ import GRDB
 /// 同款 NSLock 约定：新增可变存储必须走 lock）。
 final class GRDBRepository: @unchecked Sendable, Repository {
 
-    private let database: CanonicalDatabase
+    /// 持有的库（internal：测试 / 诊断路径需要原生 SQL 注入模拟外部改库场景；
+    /// 生产代码走 Repository API 与 commit 入口，不绕过防火墙）。
+    let database: CanonicalDatabase
     private let calendarBackend: TradingCalendar
     private let lock = NSLock()
     private var _lastQueryError: String?
@@ -80,6 +82,81 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     // MARK: - 写入（Builder 风格，与 InMemoryRepository 对齐；Fixture loader /
     // GRDB-8 Pipeline / 测试灌数据用）
 
+    /// 观测写入的冲突语义（审查 P1 修复：重摄入不得篡改历史可知边界）。
+    ///
+    /// 原 INSERT OR REPLACE 整行覆盖——同一历史记录稍后重抓时 ingestedAt 被
+    /// 改写，`operationalKnowledge(asOf:)` 的历史结果漂移。新语义（按
+    /// (维度, effectiveAt, vintage, provider) 身份键）：
+    /// 1. **同身份同内容**（除 ingestedAt 外全列相等）：保留**最早** ingestedAt
+    ///    （晚到的重摄入不推迟历史可知边界；更早的补录会前移到真实首抓时间）；
+    /// 2. **同身份不同内容**：拒收（`observationContentConflict`）——同 vintage
+    ///    内容变化不是幂等重摄入，静默覆盖 = 篡改历史；更正应携带新
+    ///    publishedAt 走新 vintage（Pipeline 的确定性派生保证）；
+    /// 3. **无既有行**：普通插入。
+    private func insertObservationRow<Row: CanonicalObservationRow>(
+        _ row: Row,
+        table: String,
+        identityWhere: String,
+        identityArguments: [DatabaseValueConvertible],
+        in db: Database
+    ) throws {
+        if let existing = try Row.fetchOne(
+            db,
+            sql: "SELECT * FROM \(table) WHERE \(identityWhere)",
+            arguments: StatementArguments(identityArguments)
+        ) {
+            guard try Self.contentFingerprint(row) == Self.contentFingerprint(existing) else {
+                throw GRDBRepositoryError.observationContentConflict(
+                    observationID: row.id, table: table
+                )
+            }
+            if row.envelope.ingestedAt < existing.envelope.ingestedAt {
+                try db.execute(
+                    sql: "UPDATE \(table) SET ingested_at = ? WHERE \(identityWhere)",
+                    arguments: StatementArguments([row.envelope.ingestedAt] + identityArguments)
+                )
+            }
+            return
+        }
+        try row.insert(db)
+    }
+
+    /// 内容指纹：观测内容列的确定性拼接（列名排序）。
+    ///
+    /// 排除两类**摄入元数据**（重放必然变化、不代表观测内容变化）：
+    /// - `ingested_at`：本机首抓时间，有自己的保留规则（见写入语义注释）；
+    /// - `policy_derived_at`：availableAt 的推导时刻（TemporalNormalizer 取
+    ///   当时 now）——每次重放都不同，把它算进内容会让幂等重放永远判冲突。
+    private static func contentFingerprint<Row: EncodableRecord>(_ row: Row) throws -> String {
+        // databaseDictionary：列名 → DatabaseValue（GRDB 公开 API）；
+        // DatabaseValue.description 是 SQL 字面量渲染，确定性
+        var parts: [String] = []
+        for (key, value) in try row.databaseDictionary
+        where key != "ingested_at" && key != "policy_derived_at" {
+            parts.append(key + "=" + value.description)
+        }
+        parts.sort()
+        return parts.joined(separator: "|")
+    }
+
+    /// 观测身份键（v7 唯一索引的列集；各表维度列不同）。
+    private static func observationIdentity(
+        dimension: String,
+        dimensionValue: String,
+        envelope: ObservationEnvelopeColumns
+    ) -> (whereSQL: String, arguments: [DatabaseValueConvertible]) {
+        (
+            whereSQL: "\(dimension) = ? AND effective_at = ? AND vintage_announcement_date = ? AND vintage_publisher_version = ? AND source_provider_id = ?",
+            arguments: [
+                dimensionValue,
+                envelope.effectiveAt,
+                envelope.vintageAnnouncementDate,
+                envelope.vintagePublisherVersion,
+                envelope.sourceProviderID,
+            ]
+        )
+    }
+
     @discardableResult
     func upsert(_ entity: LegalEntity) throws -> Self {
         try database.queue.write { db in
@@ -123,9 +200,36 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ pid: ProviderIdentifier) throws -> Self {
         try database.queue.write { db in
+            // 审查 P2 修复：polymorphic canonical 目标的事务内存在性验证——
+            // 悬空的 authoritative 映射会通过 resolver，直到观测提交时触发 FK
+            // 回滚整个合法子批次。在登记处拦截（同一事务）。
+            try Self.assertCanonicalTargetExists(pid.canonical, in: db)
             try ProviderIdentifierRow.from(pid).insert(db, onConflict: .replace)
         }
         return self
+    }
+
+    /// canonical 目标实体在其对应表必须已存在（provider_identifiers 的
+    /// polymorphic 引用没有 FK 可用，应用层事务内兜底）。
+    private static func assertCanonicalTargetExists(_ ref: CanonicalRef, in db: Database) throws {
+        let table: String
+        switch ref {
+        case .legalEntity: table = "legal_entities"
+        case .instrument: table = "instruments"
+        case .listing: table = "listings"
+        case .fundProduct: table = "fund_products"
+        case .fundShareClass: table = "fund_share_classes"
+        }
+        let exists = try Bool.fetchOne(
+            db,
+            sql: "SELECT EXISTS(SELECT 1 FROM \(table) WHERE id = ?)",
+            arguments: [ref.entityIDRawValue]
+        ) ?? false
+        guard exists else {
+            throw GRDBRepositoryError.danglingCanonicalTarget(
+                entityType: ref.entityType, entityID: ref.entityIDRawValue
+            )
+        }
     }
 
     @discardableResult
@@ -139,7 +243,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ bar: DailyBar) throws -> Self {
         try database.queue.write { db in
-            try DailyBarRow.from(bar).insert(db, onConflict: .replace)
+            try insertObservation(.dailyBar(bar), in: db)
         }
         return self
     }
@@ -147,7 +251,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ nav: NAVObservation) throws -> Self {
         try database.queue.write { db in
-            try NAVObservationRow.from(nav).insert(db, onConflict: .replace)
+            try insertObservation(.navObservation(nav), in: db)
         }
         return self
     }
@@ -155,23 +259,14 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ snapshot: FundHoldingSnapshot) throws -> Self {
         try database.queue.write { db in
-            try FundHoldingSnapshotRow.from(snapshot).insert(db, onConflict: .replace)
-            // positions 整组替换（快照 + positions 是一个聚合：重摄入 = 全量覆盖）
-            try db.execute(
-                sql: "DELETE FROM holding_positions WHERE snapshot_id = ?",
-                arguments: [snapshot.id.rawValue]
-            )
-            for (index, position) in snapshot.positions.enumerated() {
-                try FundHoldingPositionRow.from(position, snapshotID: snapshot.id, index: index).insert(db)
-            }
+            try insertHoldingSnapshot(snapshot, in: db)
         }
         return self
     }
-
     @discardableResult
     func upsert(_ macro: MacroObservation) throws -> Self {
         try database.queue.write { db in
-            try MacroObservationRow.from(macro).insert(db, onConflict: .replace)
+            try insertObservation(.macroObservation(macro), in: db)
         }
         return self
     }
@@ -179,7 +274,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ action: CorporateAction) throws -> Self {
         try database.queue.write { db in
-            try CorporateActionRow.from(action).insert(db, onConflict: .replace)
+            try insertObservation(.corporateAction(action), in: db)
         }
         return self
     }
@@ -187,44 +282,137 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     @discardableResult
     func upsert(_ fundamental: FundamentalObservation) throws -> Self {
         try database.queue.write { db in
-            try FundamentalObservationRow.from(fundamental).insert(db, onConflict: .replace)
+            try insertFundamental(fundamental, in: db)
         }
         return self
     }
-
     // MARK: - 批量提交（GRDB-8 Pipeline 的 Canonical Commit 入口）
 
-    /// 单事务提交一批 CanonicalObservation（全部成功或全部回滚）。
+    /// 单事务提交一批 CanonicalObservation。
     ///
     /// Pipeline 的四防火墙（schema / identity+temporal / data validation /
-    /// 本方法的 FK 约束兜底）都在写入路径上；任一行失败整批回滚——
-    /// Canonical Store 不留半批。
-    func commit(_ observations: [CanonicalObservationKind]) throws {
+    /// 本方法的 FK 约束兜底）都在写入路径上。
+    ///
+    /// **错误分档**（审查 P1 修复后）：
+    /// - 内容冲突（同身份不同内容的重摄入）：**逐条拒收**，返回冲突清单，
+    ///   批内其余照常提交（不静默覆盖历史）；
+    /// - FK 违例等库级错误：抛错，**整批回滚**（Canonical Store 不留半批）。
+    ///
+    /// - Returns: 被拒收的内容冲突清单（已跳过、未写入）。
+    @discardableResult
+    func commit(_ observations: [CanonicalObservationKind]) throws -> [GRDBRepositoryError] {
         try database.queue.write { db in
+            var conflicts: [GRDBRepositoryError] = []
             for kind in observations {
-                switch kind {
-                case .dailyBar(let bar):
-                    try DailyBarRow.from(bar).insert(db, onConflict: .replace)
-                case .navObservation(let nav):
-                    try NAVObservationRow.from(nav).insert(db, onConflict: .replace)
-                case .fundHoldingSnapshot(let snapshot):
-                    try FundHoldingSnapshotRow.from(snapshot).insert(db, onConflict: .replace)
-                    try db.execute(
-                        sql: "DELETE FROM holding_positions WHERE snapshot_id = ?",
-                        arguments: [snapshot.id.rawValue]
-                    )
-                    for (index, position) in snapshot.positions.enumerated() {
-                        try FundHoldingPositionRow.from(position, snapshotID: snapshot.id, index: index).insert(db)
-                    }
-                case .macroObservation(let macro):
-                    try MacroObservationRow.from(macro).insert(db, onConflict: .replace)
-                case .corporateAction(let action):
-                    try CorporateActionRow.from(action).insert(db, onConflict: .replace)
-                case .fundamentalObservation(let fundamental):
-                    try FundamentalObservationRow.from(fundamental).insert(db, onConflict: .replace)
+                do {
+                    try insertObservation(kind, in: db)
+                } catch let conflict as GRDBRepositoryError {
+                    conflicts.append(conflict)
                 }
             }
+            return conflicts
         }
+    }
+
+    /// 按观测类型分派（公开 upsert 与 Pipeline commit 共用同一实现，
+    /// 保证两路径的冲突语义一致）。
+    private func insertObservation(_ kind: CanonicalObservationKind, in db: Database) throws {
+        switch kind {
+        case .dailyBar(let bar):
+            let row = try DailyBarRow.from(bar)
+            let identity = Self.observationIdentity(
+                dimension: "listing_id", dimensionValue: row.listingID, envelope: row.envelope
+            )
+            try insertObservationRow(row, table: "daily_bars",
+                                     identityWhere: identity.whereSQL,
+                                     identityArguments: identity.arguments, in: db)
+        case .navObservation(let nav):
+            let row = try NAVObservationRow.from(nav)
+            let identity = Self.observationIdentity(
+                dimension: "share_class_id", dimensionValue: row.shareClassID, envelope: row.envelope
+            )
+            try insertObservationRow(row, table: "nav_observations",
+                                     identityWhere: identity.whereSQL,
+                                     identityArguments: identity.arguments, in: db)
+        case .fundHoldingSnapshot(let snapshot):
+            try insertHoldingSnapshot(snapshot, in: db)
+        case .macroObservation(let macro):
+            let row = try MacroObservationRow.from(macro)
+            let identity = Self.observationIdentity(
+                dimension: "indicator_id", dimensionValue: row.indicatorID, envelope: row.envelope
+            )
+            try insertObservationRow(row, table: "macro_observations",
+                                     identityWhere: identity.whereSQL,
+                                     identityArguments: identity.arguments, in: db)
+        case .corporateAction(let action):
+            let row = try CorporateActionRow.from(action)
+            let identity = Self.observationIdentity(
+                dimension: "listing_id", dimensionValue: row.listingID, envelope: row.envelope
+            )
+            try insertObservationRow(row, table: "corporate_actions",
+                                     identityWhere: identity.whereSQL,
+                                     identityArguments: identity.arguments, in: db)
+        case .fundamentalObservation(let fundamental):
+            try insertFundamental(fundamental, in: db)
+        }
+    }
+
+    /// 持仓快照写入（骨架 + positions 全组的内容比对，见 upsert 语义注释）。
+    private func insertHoldingSnapshot(_ snapshot: FundHoldingSnapshot, in db: Database) throws {
+        let row = FundHoldingSnapshotRow.from(snapshot)
+        let newPositions = snapshot.positions.enumerated().map {
+            FundHoldingPositionRow.from($1, snapshotID: snapshot.id, index: $0)
+        }
+        let identity = Self.observationIdentity(
+            dimension: "product_id", dimensionValue: row.productID, envelope: row.envelope
+        )
+        if let existing = try FundHoldingSnapshotRow.fetchOne(
+            db,
+            sql: "SELECT * FROM holding_snapshots WHERE \(identity.whereSQL)",
+            arguments: StatementArguments(identity.arguments)
+        ) {
+            let existingPositions = try FundHoldingPositionRow.fetchAll(
+                db,
+                sql: "SELECT * FROM holding_positions WHERE snapshot_id = ? ORDER BY position_index",
+                arguments: [existing.id]
+            )
+            let skeletonEqual = try Self.contentFingerprint(row) == Self.contentFingerprint(existing)
+            let positionsEqual = try existingPositions.map(Self.contentFingerprint)
+                == newPositions.map(Self.contentFingerprint)
+            guard skeletonEqual && positionsEqual else {
+                throw GRDBRepositoryError.observationContentConflict(
+                    observationID: row.id, table: "holding_snapshots"
+                )
+            }
+            if row.envelope.ingestedAt < existing.envelope.ingestedAt {
+                try db.execute(
+                    sql: "UPDATE holding_snapshots SET ingested_at = ? WHERE \(identity.whereSQL)",
+                    arguments: StatementArguments([row.envelope.ingestedAt] + identity.arguments)
+                )
+            }
+            return
+        }
+        try row.insert(db)
+        for positionRow in newPositions {
+            try positionRow.insert(db)
+        }
+    }
+
+    /// 基本面事实写入（身份键 = REPO-1b 期间分组语义）。
+    private func insertFundamental(_ fundamental: FundamentalObservation, in db: Database) throws {
+        let row = FundamentalObservationRow.from(fundamental)
+        // 事实身份键（period_start NULL 经 COALESCE 封口，与 v5/v7 唯一索引一致）
+        let identityWhere = """
+            entity_id = ? AND metric_key = ? AND unit = ?             AND COALESCE(period_start, '') = COALESCE(?, '') AND period_end = ?             AND vintage_announcement_date = ? AND vintage_publisher_version = ?             AND source_provider_id = ?
+            """
+        let identityArguments: [DatabaseValueConvertible] = [
+            row.entityID, row.metricKey, row.unit, row.periodStart ?? "", row.periodEnd,
+            row.envelope.vintageAnnouncementDate, row.envelope.vintagePublisherVersion,
+            row.envelope.sourceProviderID,
+        ]
+        try insertObservationRow(row, table: "fundamental_observations",
+                                 identityWhere: identityWhere,
+                                 identityArguments: identityArguments, in: db)
     }
 
     // MARK: - InstrumentRepository
@@ -316,25 +504,25 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     func dailyBars(listingID: ListingID, context: KnowledgeContext) -> [DailyBar] {
         let all: [DailyBar] = read("dailyBars(\(listingID.rawValue))") { db in
             try DailyBarRow
-                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ? ORDER BY effective_at, id", arguments: [listingID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
         return ObservationQuerySemantics.filterByContext(all, context: context)
     }
 
     func dailyBar(listingID: ListingID, on day: Date, context: KnowledgeContext) -> DailyBar? {
-        // 与 InMemoryRepository 逐字对齐：单点查询不走 filterByContext（不经
-        // 分组 / vintageFilter——黄金行为是「同日 + 可见性过滤，取 vintage 最大」）
+        // 审查 P1 修复：单点查询复用完整 context 择优语义（vintageFilter /
+        // preferredProvider / 跨源 tie-break），与 InMemoryRepository 共用
+        // selectPointObservation——不再是「mode 过滤 + 最大 vintage」的旁路。
         let all: [DailyBar] = read("dailyBars(\(listingID.rawValue))") { db in
             try DailyBarRow
-                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ? ORDER BY effective_at, id", arguments: [listingID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
-        let candidates = all.filter { bar in
+        let sameDay = all.filter { bar in
             Calendar(identifier: .gregorian).isDate(bar.temporalEnvelope.effectiveAt, inSameDayAs: day)
-                && ObservationQuerySemantics.contextIncludes(context, envelope: bar.temporalEnvelope)
         }
-        return candidates.max { $0.vintage < $1.vintage }
+        return ObservationQuerySemantics.selectPointObservation(sameDay, context: context)
     }
 
     // MARK: - NAVTimeSeriesRepository
@@ -342,24 +530,23 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     func navObservations(shareClassID: FundShareClassID, context: KnowledgeContext) -> [NAVObservation] {
         let all: [NAVObservation] = read("navObservations(\(shareClassID.rawValue))") { db in
             try NAVObservationRow
-                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ?", arguments: [shareClassID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ? ORDER BY effective_at, id", arguments: [shareClassID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
         return ObservationQuerySemantics.filterByContext(all, context: context)
     }
 
     func navObservation(shareClassID: FundShareClassID, on day: Date, context: KnowledgeContext) -> NAVObservation? {
-        // 与 InMemoryRepository 逐字对齐（见 dailyBar 注释）
+        // 审查 P1 修复：见 dailyBar 注释
         let all: [NAVObservation] = read("navObservations(\(shareClassID.rawValue))") { db in
             try NAVObservationRow
-                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ?", arguments: [shareClassID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ? ORDER BY effective_at, id", arguments: [shareClassID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
-        let candidates = all.filter { nav in
+        let sameDay = all.filter { nav in
             Calendar(identifier: .gregorian).isDate(nav.temporalEnvelope.effectiveAt, inSameDayAs: day)
-                && ObservationQuerySemantics.contextIncludes(context, envelope: nav.temporalEnvelope)
         }
-        return candidates.max { $0.vintage < $1.vintage }
+        return ObservationQuerySemantics.selectPointObservation(sameDay, context: context)
     }
 
     // MARK: - FundHoldingRepository
@@ -367,7 +554,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     func holdingSnapshots(productID: FundProductID, context: KnowledgeContext) -> [FundHoldingSnapshot] {
         let assembled: [FundHoldingSnapshot] = read("holdingSnapshots(\(productID.rawValue))") { db in
             try FundHoldingSnapshotRow
-                .fetchAll(db, sql: "SELECT * FROM holding_snapshots WHERE product_id = ?", arguments: [productID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM holding_snapshots WHERE product_id = ? ORDER BY effective_at, id", arguments: [productID.rawValue])
                 .map { row -> FundHoldingSnapshot in
                     let skeleton = try row.toDomain()
                     let positions = try FundHoldingPositionRow
@@ -417,7 +604,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
                 """
             let args: [DatabaseValueConvertible] = metricKey.map { [entityID.rawValue, $0] } ?? [entityID.rawValue]
             return try FundamentalObservationRow
-                .fetchAll(db, sql: sql, arguments: StatementArguments(args))
+                .fetchAll(db, sql: sql + " ORDER BY effective_at, id", arguments: StatementArguments(args))
                 .map { try $0.toDomain() }
         } ?? []
         return ObservationQuerySemantics.filterByContext(all, context: context) { obs in
@@ -443,7 +630,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     func macroObservations(indicatorID: InstrumentID, context: KnowledgeContext) -> [MacroObservation] {
         let all: [MacroObservation] = read("macroObservations(\(indicatorID.rawValue))") { db in
             try MacroObservationRow
-                .fetchAll(db, sql: "SELECT * FROM macro_observations WHERE indicator_id = ?", arguments: [indicatorID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM macro_observations WHERE indicator_id = ? ORDER BY effective_at, id", arguments: [indicatorID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
         return ObservationQuerySemantics.filterByContext(all, context: context)
@@ -454,7 +641,7 @@ final class GRDBRepository: @unchecked Sendable, Repository {
     func corporateActions(listingID: ListingID, context: KnowledgeContext) -> [CorporateAction] {
         let all: [CorporateAction] = read("corporateActions(\(listingID.rawValue))") { db in
             try CorporateActionRow
-                .fetchAll(db, sql: "SELECT * FROM corporate_actions WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .fetchAll(db, sql: "SELECT * FROM corporate_actions WHERE listing_id = ? ORDER BY effective_at, id", arguments: [listingID.rawValue])
                 .map { try $0.toDomain() }
         } ?? []
         return ObservationQuerySemantics.filterByContext(all, context: context)
@@ -472,5 +659,40 @@ final class GRDBRepository: @unchecked Sendable, Repository {
 
     func tradingDayStart(_ date: Date, jurisdiction: Jurisdiction) -> Date {
         calendarBackend.tradingDayStart(date, jurisdiction: jurisdiction)
+    }
+}
+
+// MARK: - 观测行协议（冲突检测需要读 id 与 envelope）
+
+/// GRDBRepository 内部写入路径对观测行的一致视图（全部观测表 row 已满足）。
+protocol CanonicalObservationRow: FetchableRecord, PersistableRecord {
+    var id: String { get }
+    var envelope: ObservationEnvelopeColumns { get }
+}
+
+extension DailyBarRow: CanonicalObservationRow {}
+extension NAVObservationRow: CanonicalObservationRow {}
+extension FundHoldingSnapshotRow: CanonicalObservationRow {}
+extension MacroObservationRow: CanonicalObservationRow {}
+extension CorporateActionRow: CanonicalObservationRow {}
+extension FundamentalObservationRow: CanonicalObservationRow {}
+
+// MARK: - 错误
+
+enum GRDBRepositoryError: Error, Equatable, Sendable, CustomStringConvertible {
+    /// 同 (维度, effectiveAt, vintage, provider) 已有**不同内容**的行——
+    /// 同 vintage 内容变化不是幂等重摄入，拒绝静默覆盖（审查 P1）；
+    /// 更正应携带新 publishedAt 走新 vintage。
+    case observationContentConflict(observationID: String, table: String)
+    /// provider identifier 指向未登记的 canonical 实体（审查 P2：登记事务内验证）。
+    case danglingCanonicalTarget(entityType: String, entityID: String)
+
+    var description: String {
+        switch self {
+        case .observationContentConflict(let id, let table):
+            return "GRDBRepository: \(table) 行 \(id) 同身份重摄入但内容不同，拒绝覆盖"
+        case .danglingCanonicalTarget(let type, let id):
+            return "GRDBRepository: provider identifier 指向不存在的 \(type) \(id)"
+        }
     }
 }

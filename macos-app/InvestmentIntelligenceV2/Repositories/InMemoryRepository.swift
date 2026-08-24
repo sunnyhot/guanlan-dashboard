@@ -247,12 +247,10 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     func dailyBar(listingID: ListingID, on day: Date, context: KnowledgeContext) -> DailyBar? {
         lock.lock(); defer { lock.unlock() }
         let all = dailyBars[listingID] ?? []
-        // 筛出 effectiveAt == day 且符合 context 的 vintage，取最新
-        let candidates = all.filter { bar in
+        let sameDay = all.filter { bar in
             Calendar(identifier: .gregorian).isDate(bar.temporalEnvelope.effectiveAt, inSameDayAs: day)
-                && Self.contextIncludes(context, envelope: bar.temporalEnvelope)
         }
-        return candidates.max { $0.vintage < $1.vintage }
+        return ObservationQuerySemantics.selectPointObservation(sameDay, context: context)
     }
 
     // MARK: - NAVTimeSeriesRepository
@@ -266,11 +264,10 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
     func navObservation(shareClassID: FundShareClassID, on day: Date, context: KnowledgeContext) -> NAVObservation? {
         lock.lock(); defer { lock.unlock() }
         let all = navObservations[shareClassID] ?? []
-        let candidates = all.filter { nav in
+        let sameDay = all.filter { nav in
             Calendar(identifier: .gregorian).isDate(nav.temporalEnvelope.effectiveAt, inSameDayAs: day)
-                && Self.contextIncludes(context, envelope: nav.temporalEnvelope)
         }
-        return candidates.max { $0.vintage < $1.vintage }
+        return ObservationQuerySemantics.selectPointObservation(sameDay, context: context)
     }
 
     // MARK: - FundHoldingRepository

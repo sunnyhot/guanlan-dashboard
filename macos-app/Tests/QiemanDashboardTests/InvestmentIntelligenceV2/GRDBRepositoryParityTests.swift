@@ -146,17 +146,117 @@ final class GRDBRepositoryParityTests: XCTestCase {
 
     /// 同 Provider 同 (维度, effectiveAt, vintage) 幂等重摄入：替换不报错，
     /// 值更新。
-    func testUpsert_sameProviderSameKey_idempotentReplace() throws {
-        let revisedBar = Self.bar(
-            close: Decimal(string: "11.00")!,
-            id: ObservationID(rawValue: "obs_bar-replaced")
+    /// 审查 P1 修复后的写入契约：
+    /// - 同身份同内容重摄入 → 幂等，**保留最早 ingestedAt**（不漂移历史可知边界）；
+    /// - 同身份不同内容 → 拒收（observationContentConflict），原行不被覆盖。
+    func testUpsert_sameIdentity_conflictAndIngestionPreservation() throws {
+        let w = Self.lstWuliangye   // 独立 listing：不受 parity fixture 预载行影响
+        let base = Self.bar(close: Decimal(string: "10.62")!,
+                            id: ObservationID(rawValue: "obs_w-1"), listing: w)
+        try grdb.upsert(base)
+
+        // (a) 同内容、更晚 ingestedAt 的重摄入：保留最早 ingestedAt
+        try grdb.upsert(Self.reingest(base, ingestedAt: Self.day(30)))
+        var exact = grdb.dailyBars(listingID: w, context: .exactSnapshot(at: Self.day(0)))
+        XCTAssertEqual(exact.count, 1)
+        XCTAssertEqual(exact[0].temporalEnvelope.ingestedAt, Self.day(1),
+                       "重摄入不得推迟首次可知时间")
+
+        // (b) 同内容、更早 ingestedAt 的补录：前移到真实首抓时间
+        try grdb.upsert(Self.reingest(base, ingestedAt: Self.day(0.5)))
+        exact = grdb.dailyBars(listingID: w, context: .exactSnapshot(at: Self.day(0)))
+        XCTAssertEqual(exact[0].temporalEnvelope.ingestedAt, Self.day(0.5),
+                       "更早的首抓时间应前移（真实历史）")
+
+        // (c) 同身份不同内容（改收盘价）：拒收，原行不被覆盖
+        var tampered = Self.bar(close: Decimal(string: "99.99")!,
+                                id: ObservationID(rawValue: "obs_w-1"), listing: w)
+        tampered = Self.reingest(tampered, ingestedAt: Self.day(40))
+        XCTAssertThrowsError(try grdb.upsert(tampered)) { error in
+            guard case .observationContentConflict = error as? GRDBRepositoryError else {
+                return XCTFail("应为 observationContentConflict，实际 \(error)")
+            }
+        }
+        exact = grdb.dailyBars(listingID: w, context: .exactSnapshot(at: Self.day(0)))
+        XCTAssertEqual(exact.count, 1)
+        XCTAssertEqual(exact[0].rawClose.value, Decimal(string: "10.62"), "原行未被覆盖")
+        XCTAssertEqual(exact[0].temporalEnvelope.ingestedAt, Self.day(0.5))
+    }
+
+    /// 不同 vintage（更正公告）的同身份重摄入不受冲突规则影响：新 vintage 新行。
+    func testUpsert_newVintageNotConflicting() throws {
+        let w = Self.lstWuliangye
+        let base = Self.bar(close: Decimal(string: "10.62")!,
+                            id: ObservationID(rawValue: "obs_w2-1"), listing: w)
+        try grdb.upsert(base)
+        try grdb.upsert(Self.revise(base, publishedAt: Self.day(3), ingestedAt: Self.day(4)))
+        let exact = grdb.dailyBars(listingID: w, context: .exactSnapshot(at: Self.day(0)))
+        XCTAssertEqual(exact.count, 2, "新 vintage 是新行，不是冲突")
+    }
+
+    /// 审查 P1-2 契约：preferredProvider 在同 vintage 跨源间生效
+    ///（高于 reliability），vintage 修订仍最优先。
+    func testPreferredProvider_overridesReliabilityWithinSameVintage() throws {
+        let w = Self.lstWuliangye   // 无 fixture 预载行：跨源比较不被 v2 修订干扰
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_w3-em"), listing: w))
+        try grdb.upsert(Self.bar(close: Decimal(string: "10.99")!, provider: .stooq,
+                                 reliability: .documentFreeAPI,
+                                 id: ObservationID(rawValue: "obs_w3-stooq"), listing: w))
+        let contexts: [KnowledgeContext] = [
+            KnowledgeContext(mode: .economicKnowledge(asOf: Self.day(5))),
+            KnowledgeContext(mode: .economicKnowledge(asOf: Self.day(5)), preferredProvider: .eastmoney),
+        ]
+        // 无偏好：reliability 高者胜（stooq documentFreeAPI）
+        XCTAssertEqual(
+            grdb.dailyBars(listingID: w, context: contexts[0]).first?.dataQuality.sourceProviderID,
+            .stooq
         )
-        try grdb.upsert(revisedBar)
-        let bars = grdb.dailyBars(listingID: Self.lstMaotai, context: .exactSnapshot(at: Self.day(0)))
-        // v1 槽位被替换（原 obs_bar-1 消失，换为 obs_bar-replaced），v2 修订行保留
-        XCTAssertFalse(bars.contains { $0.id.rawValue == "obs_bar-1" }, "同 provider 同键重摄入应替换旧行")
-        XCTAssertTrue(bars.contains { $0.id.rawValue == "obs_bar-replaced" })
-        XCTAssertTrue(bars.contains { $0.id.rawValue == "obs_bar-1-v2" })
+        // 偏好 eastmoney：覆盖 reliability（同 vintage 间）
+        XCTAssertEqual(
+            grdb.dailyBars(listingID: w, context: contexts[1]).first?.dataQuality.sourceProviderID,
+            .eastmoney
+        )
+        // 单点查询同样尊重偏好（P1-3）
+        XCTAssertEqual(
+            grdb.dailyBar(listingID: w, on: Self.day(0), context: contexts[1])?
+                .dataQuality.sourceProviderID,
+            .eastmoney
+        )
+        // InMemory 同 fixture 同结果（共享语义，双实现一致）
+        inMemory.upsert(Self.bar(close: Decimal(string: "10.62")!,
+                                 id: ObservationID(rawValue: "obs_w3-em"), listing: w))
+        inMemory.upsert(Self.bar(close: Decimal(string: "10.99")!, provider: .stooq,
+                                 reliability: .documentFreeAPI,
+                                 id: ObservationID(rawValue: "obs_w3-stooq"), listing: w))
+        XCTAssertEqual(
+            inMemory.dailyBars(listingID: w, context: contexts[1]).first?.dataQuality.sourceProviderID,
+            .eastmoney
+        )
+    }
+
+    /// 审查 P1-3 契约：单点查询尊重 vintageFilter（此前被旁路）。
+    func testPointQuery_honorsVintageFilter() throws {
+        let w = Self.lstWuliangye
+        let base = Self.bar(close: Decimal(string: "10.62")!,
+                            id: ObservationID(rawValue: "obs_w4-1"), listing: w)
+        try grdb.upsert(base)   // v1
+        try grdb.upsert(Self.revise(base, publishedAt: Self.day(3), ingestedAt: Self.day(4)))   // v2
+        let context = KnowledgeContext(
+            mode: .economicKnowledge(asOf: Self.day(50)), vintageFilter: Self.v1
+        )
+        XCTAssertEqual(
+            grdb.dailyBar(listingID: w, on: Self.day(0), context: context)?.vintage,
+            Self.v1,
+            "vintageFilter=v1 的单点查询应返回 v1，不被 v2 修订覆盖"
+        )
+        // InMemory 同语义（修复同步落地双实现）
+        inMemory.upsert(base)
+        inMemory.upsert(Self.revise(base, publishedAt: Self.day(3), ingestedAt: Self.day(4)))
+        XCTAssertEqual(
+            inMemory.dailyBar(listingID: w, on: Self.day(0), context: context)?.vintage,
+            Self.v1
+        )
     }
 
     /// 跨 Provider 同 (维度, effectiveAt, vintage) 共存（REPO-2b 的存储前提，
@@ -344,11 +444,12 @@ final class GRDBRepositoryParityTests: XCTestCase {
         close: Decimal,
         provider: DataProviderID = .eastmoney,
         reliability: ProviderReliabilityClass = .communityAggregated,
-        id: ObservationID = ObservationID(rawValue: "obs_bar-1")
+        id: ObservationID = ObservationID(rawValue: "obs_bar-1"),
+        listing: ListingID = lstMaotai
     ) -> DailyBar {
         DailyBar(
             id: id,
-            listingID: lstMaotai,
+            listingID: listing,
             temporalEnvelope: TemporalEnvelope(
                 effectiveAt: day(0), publishedAt: day(0),
                 availableAt: day(1), ingestedAt: day(1)
@@ -365,6 +466,44 @@ final class GRDBRepositoryParityTests: XCTestCase {
             volume: 1_000_000,
             adjustmentFactor: Decimal(string: "1.0")!,
             fxRate: nil
+        )
+    }
+
+    /// 同 vintage 重摄入：只改 ingestedAt（身份键不变）。
+    private static func reingest(_ bar: DailyBar, ingestedAt: Date) -> DailyBar {
+        DailyBar(
+            id: bar.id, listingID: bar.listingID,
+            temporalEnvelope: TemporalEnvelope(
+                effectiveAt: bar.temporalEnvelope.effectiveAt,
+                publishedAt: bar.temporalEnvelope.publishedAt,
+                availableAt: bar.temporalEnvelope.availableAt,
+                ingestedAt: ingestedAt
+            ),
+            availabilityProvenance: bar.availabilityProvenance,
+            dataQuality: bar.dataQuality, vintage: bar.vintage,
+            rawOpen: bar.rawOpen, rawHigh: bar.rawHigh, rawLow: bar.rawLow, rawClose: bar.rawClose,
+            volume: bar.volume, adjustmentFactor: bar.adjustmentFactor, fxRate: bar.fxRate
+        )
+    }
+
+    /// 更正公告：新 publishedAt（= 新 vintage）+ 可选新收盘价。
+    private static func revise(_ bar: DailyBar, publishedAt: Date, ingestedAt: Date,
+                               close: Decimal? = nil) -> DailyBar {
+        DailyBar(
+            id: ObservationID(rawValue: bar.id.rawValue + "-v2"),
+            listingID: bar.listingID,
+            temporalEnvelope: TemporalEnvelope(
+                effectiveAt: bar.temporalEnvelope.effectiveAt,
+                publishedAt: publishedAt,
+                availableAt: max(publishedAt, bar.temporalEnvelope.availableAt),
+                ingestedAt: ingestedAt
+            ),
+            availabilityProvenance: bar.availabilityProvenance,
+            dataQuality: bar.dataQuality,
+            vintage: Vintage(announcementDate: publishedAt, publisherVersion: 1),
+            rawOpen: bar.rawOpen, rawHigh: bar.rawHigh, rawLow: bar.rawLow,
+            rawClose: close.map { Price(value: $0, currency: .cny) } ?? bar.rawClose,
+            volume: bar.volume, adjustmentFactor: bar.adjustmentFactor, fxRate: bar.fxRate
         )
     }
 
@@ -431,8 +570,9 @@ final class GRDBRepositoryParityTests: XCTestCase {
         id: InstrumentID(rawValue: "inst_000858"), issuerID: leX, kind: .stock,
         displayName: "五粮液", baseCurrency: .cny, assetClass: .equity
     )
+    private static let lstWuliangye = ListingID(rawValue: "lst_000858")
     private static let listingWuliangye = Listing(
-        id: ListingID(rawValue: "lst_000858"), instrumentID: InstrumentID(rawValue: "inst_000858"),
+        id: lstWuliangye, instrumentID: InstrumentID(rawValue: "inst_000858"),
         exchange: .szse, symbol: "000858", tradingCurrency: .cny
     )
     private static let instrumentGdp = Instrument(

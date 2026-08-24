@@ -34,6 +34,9 @@ struct CanonicalPipeline: Sendable {
         case schema = "SCHEMA"
         case identityTemporal = "IDENTITY_TEMPORAL"
         case dataValidation = "DATA_VALIDATION"
+        /// 同 (维度, effectiveAt, vintage, provider) 已有不同内容——审查 P1：
+        /// 重摄入不得静默覆盖历史；逐条拒收不阻塞批次。
+        case contentConflict = "CONTENT_CONFLICT"
         case commit = "COMMIT"
     }
 
@@ -106,10 +109,24 @@ struct CanonicalPipeline: Sendable {
             }
         }
 
-        // ④ Canonical Commit（单事务；FK 违例整批回滚）
+        // ④ Canonical Commit（单事务；内容冲突逐条拒收，FK 违例整批回滚）
         do {
-            try repository.commit(accepted)
-            return CommitResult(committedCount: accepted.count, rejections: rejections, commitError: nil)
+            let conflicts = try repository.commit(accepted)
+            var allRejections = rejections
+            for conflict in conflicts {
+                if case .observationContentConflict(let observationID, let table) = conflict {
+                    allRejections.append(Rejection(
+                        provider: "-", scheme: "-", value: observationID,
+                        kind: "-", stage: .contentConflict,
+                        reason: "\(table) 同身份重摄入内容不同：\(conflict)"
+                    ))
+                }
+            }
+            return CommitResult(
+                committedCount: accepted.count - conflicts.count,
+                rejections: allRejections,
+                commitError: nil
+            )
         } catch {
             return CommitResult(
                 committedCount: 0,

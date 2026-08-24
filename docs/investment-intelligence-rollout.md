@@ -821,11 +821,12 @@ macos-app/
 >   （重放测试守护行数不翻倍）；Vintage = (publishedAt, 1)——Provider 更正
 >   重公布 = 新 publishedAt = 新 vintage 行，旧 vintage 保留（DATA008）；
 >   publisherVersion > 1 保留给同公告日多次修订（ProviderRecord 无法表达）。
-> - **已知语义边界（如实记录，非管道缺陷）**：MarketClose 的 availableAt 由
->   effectiveAt 推导，晚于可知窗口的重公布修订违反 published ≤ available
->   不变量，temporalNormalizeFailed 拒收——行情修订须在可知窗口内重公布才
->   入库（基金披露/Filing 类 policy base=publishedAt 无此边界）。修订 policy
->   需走 ADR-DATA009 事实修订路径另行立 story。
+> - **晚发布语义（一轮审查后闭环）**：初版记录过「MarketClose 晚于可知窗口
+>   的重公布被 temporalNormalizeFailed 拒收」的边界；审查确认这是 DATA008
+>   行情修订能力的缺口而非 policy 设计意图，已在审查修复中闭环——
+>   TemporalNormalizer 现按 availableAt = max(policy 保守下界, publishedAt)
+>   （DATA005「客观可知」：早于下界公布仍按下界不乐观，晚于下界公布上抬到
+>   publishedAt；对满足下界的既有数据零影响）。
 > - **spool 直连**：`commitRecords(fromSpool:)`（PROV-1 Reader → pipeline，
 >   SYNC-2..5 循环的每轮入口；文件级读取失败上抛，非记录级拒收）。
 > - 9 个 CanonicalPipelineTests（端到端提交可查 / 幂等重放 / 窗口内更正产生
@@ -837,6 +838,37 @@ macos-app/
 >（「InMemory 时代的 golden test 同样过」的结构化落地）；四防火墙全部在
 > CanonicalPipeline 的 commit 路径上（含 FK 库级兜底）。**Epic 5 全部
 > story（GRDB-1..9，30 点）签收完毕**，Epic 6（Sync / Backfill）解锁。
+>
+> **Epic 5 一轮审查修复（2026-08-24，3×P1 + 2×P2 + 1 遗留闭环）**：
+> - **P1 重摄入篡改历史 ingestedAt**：INSERT OR REPLACE 整行覆盖会使
+>   operationalKnowledge 的历史可见边界漂移。观测写入改为显式冲突语义
+>   （按 v7 身份键查既有行）：同身份同内容 → 保留**最早** ingestedAt
+>  （更早补录前移、更晚重摄入不动）；同身份不同内容 → 拒收
+>   `observationContentConflict`（Pipeline 逐条 contentConflict 拒收不阻塞
+>   批次，更正走新 publishedAt = 新 vintage）。内容指纹排除摄入元数据
+>  （ingested_at / policy_derived_at——后者每次重放必变，纳入会让幂等
+>   重放永远判冲突，修复中实测发现）。
+> - **P1 preferredProvider 未生效**：isPreferred 择优链补第二层
+>   「同 vintage 时 context.preferredProvider 命中者优先」（位于 vintage
+>   之后、reliability 之前——修订仍优先于来源偏好）；filterByContext 传入
+>   context.preferredProvider。契约测试：无偏好 reliability 胜 / 有偏好覆盖
+>   reliability / 单点查询同语义 / InMemory 与 GRDB 双实现一致。
+> - **P1 单点查询绕过 context 语义**：dailyBar / navObservation 此前只按
+>   mode 过滤 + 最大 vintage（vintageFilter / preferredProvider / 跨源
+>   tie-break 全部旁路；parity 测试未发现因 InMemory 共享同一缺陷实现）。
+>   新增共享 `selectPointObservation`（vintageFilter 精确 / exact 取最新
+>   vintage / economic 走完整分组择优），**双实现同步修复**（InMemory 的
+>   缺陷一并纠正）；全部维度查询补 ORDER BY（确定性卫生）。
+> - **P2 Provider 映射悬空目标**：upsert(ProviderIdentifier) 在同一事务内
+>   验证 polymorphic canonical 目标实体存在（悬空 → 拒收，不再等到观测
+>   commit 时 FK 回滚整批合法子集）；commit 级 FK 仍是兜底（原生 SQL 注入
+>   悬空映射的模拟测试保留）。
+> - **P2 持仓权重合计缺口**：CanonicalDataValidator 补两条合计约束——全部
+>   position 权重合计 ≤ 1（千分位容差；0.6+0.6 此前可穿过防火墙）、已披露
+>   明细合计与 disclosedWeightTotal 一致（互相印证）。
+> - **遗留闭环（MarketClose 晚发布修订）**：见上方「晚发布语义」修订段。
+> - 审查结论「暂不标记 Epic 5 完全收口」据此撤销：上述全部修复落地，
+>   swift test 全量绿（排除环境性 AppLaunchPresentationPolicyTests）。
 >
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：

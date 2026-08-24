@@ -138,12 +138,18 @@ final class CanonicalPipelineTests: XCTestCase {
     /// ④ 提交事务：identity 映射存在但 FK 目标行缺失（listing 表没有该行）→
     /// 整批回滚，未提交任何行（含防火墙通过的记录）。
     func testFirewall4_commitFKViolationRollsBackWholeBatch() throws {
-        // 登记 provider identifier 指向一个「不存在于 listings 表」的 ListingID
-        try repository.upsert(ProviderIdentifier(
-            providerID: .eastmoney, identifierScheme: "stock_symbol",
-            identifierValue: "888888", canonical: .listing(ListingID(rawValue: "lst_ghost")),
-            resolutionMethod: .manualVerified, resolvedAt: Self.day(0)
-        ))
+        // 悬空映射现在会被 upsert 的目标存在性验证拦截（见
+        // testUpsertProviderIdentifier_danglingTargetRejected）；本测试用
+        // 原生 SQL 注入一条悬空映射（模拟外部改库 / 旧版库），验证 commit 级
+        // FK 仍然是兜底防火墙
+        try repository.database.queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO provider_identifiers (provider_id, identifier_scheme, identifier_value,
+                    canonical_entity_type, canonical_entity_id, resolution_method, resolved_at)
+                VALUES ('eastmoney', 'stock_symbol', '888888', 'listing', 'lst_ghost',
+                    'MANUAL_VERIFIED', '2025-08-24T01:46:40.000Z')
+                """)
+        }
         var ghost = Self.barRecord()
         ghost = ProviderRecord(
             providerID: ghost.providerID,
@@ -181,6 +187,89 @@ final class CanonicalPipelineTests: XCTestCase {
         XCTAssertNil(result.commitError)
     }
 
+    // MARK: - 审查修复新增（P2-4 / 内容冲突 / P2-5 / 晚发布闭环）
+
+    /// P2-4：upsert ProviderIdentifier 指向不存在的 canonical 实体 → 事务内拒收。
+    func testUpsertProviderIdentifier_danglingTargetRejected() {
+        XCTAssertThrowsError(
+            try repository.upsert(ProviderIdentifier(
+                providerID: .eastmoney, identifierScheme: "stock_symbol",
+                identifierValue: "777777", canonical: .listing(ListingID(rawValue: "lst_never")),
+                resolutionMethod: .manualVerified, resolvedAt: Self.day(0)
+            ))
+        ) { error in
+            guard case .danglingCanonicalTarget = error as? GRDBRepositoryError else {
+                return XCTFail("应为 danglingCanonicalTarget，实际 \(error)")
+            }
+        }
+        // 未落库
+        XCTAssertNil(repository.resolve(providerID: .eastmoney, scheme: "stock_symbol", value: "777777"))
+    }
+
+    /// 审查 P1：同身份不同内容的重摄入经 Pipeline 逐条拒收（contentConflict），
+    /// 不阻塞批内其他记录、不覆盖既有行。
+    func testPipeline_contentConflictRejectedPerRecord() {
+        _ = pipeline.commit(records: [Self.barRecord()])
+        // 篡改收盘价的重摄入（同 providerCode / effective / published → 同身份）
+        let tampered = Self.barRecord(close: Decimal(string: "10.63")!)   // 拓扑合法的不同内容
+        let freshNAV = Self.navRecord()
+        let result = pipeline.commit(records: [tampered, freshNAV])
+        XCTAssertNil(result.commitError)
+        XCTAssertEqual(result.committedCount, 1, "批内合法记录照常提交")
+        XCTAssertEqual(result.rejections.count, 1)
+        XCTAssertEqual(result.rejections[0].stage, .contentConflict)
+        // 原行未被覆盖
+        let exact = repository.dailyBars(
+            listingID: ListingID(rawValue: "lst_600519"),
+            context: .exactSnapshot(at: Self.day(0))
+        )
+        XCTAssertEqual(exact.first?.rawClose.value, Decimal(string: "10.62"))
+    }
+
+    /// P2-5：单项权重合法但合计 0.6+0.6 越界 → 语义闸门拒收。
+    func testFirewall3_positionsSumExceedsHundredPercent() {
+        let bad = Self.holdingRecord(weights: [Decimal(string: "0.6")!, Decimal(string: "0.6")!],
+                                     total: Decimal(string: "1.0")!)
+        let result = pipeline.commit(records: [bad])
+        XCTAssertEqual(result.committedCount, 0)
+        XCTAssertTrue(result.rejections[0].reason.contains("合计超过 100%"))
+    }
+
+    /// P2-5：披露总权与已披露明细合计不一致 → 拒收。
+    func testFirewall3_disclosedTotalMismatch() {
+        let bad = Self.holdingRecord(weights: [Decimal(string: "0.4")!, Decimal(string: "0.3")!],
+                                     total: Decimal(string: "0.9")!)   // 明细 0.7 ≠ 0.9
+        let result = pipeline.commit(records: [bad])
+        XCTAssertEqual(result.committedCount, 0)
+        XCTAssertTrue(result.rejections[0].reason.contains("不一致"))
+    }
+
+    /// 晚发布闭环：publishedAt 晚于 policy 可知窗口的行情记录不再被拒收，
+    /// availableAt 上抬到 publishedAt（DATA005 客观可知）。
+    func testLatePublishedRecord_acceptedWithLiftedAvailability() {
+        var late = Self.barRecord()
+        late = ProviderRecord(
+            providerID: late.providerID, providerCode: late.providerCode,
+            effectiveAt: Self.day(0), publishedAt: Self.day(5), ingestedAt: Self.day(5),
+            kind: late.kind, rawPayload: late.rawPayload,
+            reliabilityClass: late.reliabilityClass, jurisdiction: late.jurisdiction
+        )
+        let result = pipeline.commit(records: [late])
+        XCTAssertEqual(result.committedCount, 1, "晚发布不再被 temporalNormalizeFailed 拒收")
+        let bars = repository.dailyBars(
+            listingID: ListingID(rawValue: "lst_600519"),
+            context: .economicKnowledge(asOf: Self.day(6))
+        )
+        XCTAssertEqual(bars.first?.temporalEnvelope.availableAt, Self.day(5),
+                       "availableAt = max(下界, publishedAt)")
+        // 可知窗口之前仍不可见（PIT 语义保持）
+        XCTAssertNil(repository.dailyBar(
+            listingID: ListingID(rawValue: "lst_600519"),
+            on: Self.day(0),
+            context: .economicKnowledge(asOf: Self.day(4))
+        ))
+    }
+
     // MARK: - fixture
 
     private struct WeekdayCalendar: TradingCalendar {
@@ -210,12 +299,15 @@ final class CanonicalPipelineTests: XCTestCase {
         day0.addingTimeInterval(offset * 86_400)
     }
 
-    private static func barPayload(rawLow: Decimal = Decimal(string: "10.40")!) -> Data {
+    private static func barPayload(
+        rawLow: Decimal = Decimal(string: "10.40")!,
+        close: Decimal = Decimal(string: "10.62")!
+    ) -> Data {
         let payload = DailyBarPayload(
             rawOpen: Price(value: Decimal(string: "10.50")!, currency: .cny),
             rawHigh: Price(value: Decimal(string: "10.80")!, currency: .cny),
             rawLow: Price(value: rawLow, currency: .cny),
-            rawClose: Price(value: Decimal(string: "10.62")!, currency: .cny),
+            rawClose: Price(value: close, currency: .cny),
             volume: 1_000_000,
             adjustmentFactor: Decimal(string: "1.0")!,
             fxRate: nil
@@ -224,26 +316,29 @@ final class CanonicalPipelineTests: XCTestCase {
         return try! encoder.encode(payload)
     }
 
-    private static func barRecord(rawLow: Decimal = Decimal(string: "10.40")!) -> ProviderRecord {
+    private static func barRecord(
+        rawLow: Decimal = Decimal(string: "10.40")!,
+        close: Decimal = Decimal(string: "10.62")!
+    ) -> ProviderRecord {
         ProviderRecord(
             providerID: .eastmoney,
             providerCode: ProviderCode(scheme: "stock_symbol", value: "600519"),
             effectiveAt: day(0), publishedAt: day(0), ingestedAt: day(1),
             kind: .dailyBar,
-            rawPayload: barPayload(rawLow: rawLow),
+            rawPayload: barPayload(rawLow: rawLow, close: close),
             reliabilityClass: .communityAggregated,
             jurisdiction: .chinaMainland
         )
     }
 
-    /// 更正重公布：同日晚间（仍在可知窗口内——MarketClose 的 availableAt 由
-    /// effectiveAt 推导，晚于可知日的重公布会违反 published ≤ available 被
-    /// temporalNormalizeFailed 拒收，这是 policy 的真实语义而非管道缺陷）+ 收盘价修正。
+    /// 更正重公布：publishedAt 晚 3 天（超出 MarketClose 的 T+1 可知窗口）。
+    /// 审查遗留闭环：normalizer 现按 availableAt = max(policy 下界, publishedAt)
+    /// 处理晚发布（DATA005「客观可知」），此类修订不再被拒收。
     private static func correctedBarRecord() -> ProviderRecord {
-        var base = barRecord()
+        let base = barRecord()
         return ProviderRecord(
             providerID: base.providerID, providerCode: base.providerCode,
-            effectiveAt: base.effectiveAt, publishedAt: day(0.5), ingestedAt: day(1),
+            effectiveAt: base.effectiveAt, publishedAt: day(3), ingestedAt: day(4),
             kind: base.kind,
             rawPayload: {
                 let payload = DailyBarPayload(
@@ -280,7 +375,15 @@ final class CanonicalPipelineTests: XCTestCase {
         )
     }
 
-    private static func holdingRecord(weight: Decimal) -> ProviderRecord {
+    private static func holdingRecord(
+        weight: Decimal? = nil, weights: [Decimal]? = nil, total: Decimal? = nil
+    ) -> ProviderRecord {
+        let positionWeights = weights ?? [weight ?? Decimal(string: "0.0987")!]
+        let disclosedTotal = total ?? positionWeights.reduce(Decimal.zero, +)
+        return holdingRecordRaw(weights: positionWeights, total: disclosedTotal)
+    }
+
+    private static func holdingRecordRaw(weights: [Decimal], total: Decimal) -> ProviderRecord {
         ProviderRecord(
             providerID: .eastmoney,
             providerCode: ProviderCode(scheme: "fund_product_code", value: "110022"),
@@ -289,15 +392,15 @@ final class CanonicalPipelineTests: XCTestCase {
             rawPayload: {
                 let payload = FundHoldingPayload(
                     reportPeriod: .q2,
-                    positions: [
+                    positions: weights.map {
                         FundHoldingPayload.Position(
                             providerID: .eastmoney,
                             providerCode: ProviderCode(scheme: "stock_symbol", value: "600519"),
-                            weight: Ratio(value: weight),
+                            weight: Ratio(value: $0),
                             shares: nil, marketValue: nil, isDisclosed: true
-                        ),
-                    ],
-                    disclosedWeightTotal: Ratio(value: weight)
+                        )
+                    },
+                    disclosedWeightTotal: Ratio(value: total)
                 )
                 return try! JSONEncoder().encode(payload)
             }(),
@@ -307,9 +410,11 @@ final class CanonicalPipelineTests: XCTestCase {
     }
 
     private func seedFuzzyIdentifier() throws {
+        // fuzzy 映射指向真实存在的 listing（目标存在性验证是 P2-4 新增；
+        // fuzzy 的拒收语义在 resolutionMethod，与目标真假无关）
         try repository.upsert(ProviderIdentifier(
             providerID: .eastmoney, identifierScheme: "stock_symbol",
-            identifierValue: "999999", canonical: .listing(ListingID(rawValue: "lst_guess")),
+            identifierValue: "999999", canonical: .listing(ListingID(rawValue: "lst_600519")),
             resolutionMethod: .fuzzyCandidate, resolvedAt: Self.day(0)
         ))
     }

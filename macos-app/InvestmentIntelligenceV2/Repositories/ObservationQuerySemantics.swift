@@ -56,7 +56,7 @@ enum ObservationQuerySemantics {
             for obs in visible {
                 let key = grouping(obs)
                 if let existing = bestPerGroup[key] {
-                    if isPreferred(candidate: obs, over: existing) {
+                    if isPreferred(candidate: obs, over: existing, preferredProvider: context.preferredProvider) {
                         bestPerGroup[key] = obs
                     }
                 } else {
@@ -70,6 +70,32 @@ enum ObservationQuerySemantics {
                 }
                 return $0.id.rawValue < $1.id.rawValue
             }
+        }
+    }
+
+    /// 单点查询（dailyBar(on:) / navObservation(on:) 的共享语义）。
+    ///
+    /// 与序列查询同一套 context 语义（审查 P1 修复：此前单点只按可见性过滤 +
+    /// 最大 vintage，绕过 vintageFilter / preferredProvider / 跨源择优）：
+    /// - `vintageFilter` 指定：返回该 vintage（可见性过滤后）的最新一条
+    /// - `exactSnapshot`：可见的全部 vintage 中取最新
+    /// - `economic / operational`：走 filterByContext 的分组择优（同日一组），
+    ///   返回择优结果（多组时取排序末位，确定性兜底）
+    static func selectPointObservation<T: CanonicalObservation>(
+        _ observations: [T],
+        context: KnowledgeContext
+    ) -> T? {
+        if context.vintageFilter != nil {
+            return filterByContext(observations, context: context).last
+        }
+        switch context.mode {
+        case .exactSnapshot:
+            return observations
+                .filter { contextIncludes(context, envelope: $0.temporalEnvelope) }
+                .max(by: byVintageThenDeterministicOrder)
+        case .economicKnowledge, .operationalKnowledge:
+            return filterByContext(observations, context: context)
+                .max(by: byVintageThenDeterministicOrder)
         }
     }
 
@@ -89,23 +115,38 @@ enum ObservationQuerySemantics {
     ///
     /// 全序、确定性（不依赖数组顺序），规则（ADR-DATA006 §Decision 1 + rollout REPO-2b）：
     /// 1. 更高 vintage 优先（数据修订，ADR-DATA008）
-    /// 2. 同 vintage：更高 reliabilityClass 优先（更可信的 Provider 胜）
-    /// 3. 同 reliability：sourceProviderID 确定性 tie-break（"unspecified" 排最后，
+    /// 2. 同 vintage：**context.preferredProvider 命中者优先**（调用方显式
+    ///    声明的数据源偏好，REPO-2b 契约；nil = 未声明，跳过本层）
+    /// 3. 更高 reliabilityClass 优先（更可信的 Provider 胜）
+    /// 4. 同 reliability：sourceProviderID 确定性 tie-break（"unspecified" 排最后，
     ///    其余按 rawValue 字典序，保证跨运行稳定）
-    /// 4. 完全同源：ObservationID rawValue 字典序（最终稳定兜底）
-    static func isPreferred<T: CanonicalObservation>(candidate: T, over existing: T) -> Bool {
+    /// 5. 完全同源：ObservationID rawValue 字典序（最终稳定兜底）
+    ///
+    /// preferredProvider 只在**同 vintage 跨源**间生效：修订（更高 vintage）
+    /// 仍优先于来源偏好——旧 vintage 的偏好源数据不能盖过新修订。
+    static func isPreferred<T: CanonicalObservation>(
+        candidate: T,
+        over existing: T,
+        preferredProvider: DataProviderID? = nil
+    ) -> Bool {
         // 1. vintage（数据修订）
         if candidate.vintage > existing.vintage { return true }
         if candidate.vintage < existing.vintage { return false }
-        // 2. reliabilityClass（跨源偏好）
+        // 2. preferredProvider（调用方显式来源偏好，REPO-2b）
+        if let preferred = preferredProvider {
+            let candHit = candidate.dataQuality.sourceProviderID == preferred
+            let exHit = existing.dataQuality.sourceProviderID == preferred
+            if candHit != exHit { return candHit }
+        }
+        // 3. reliabilityClass（跨源偏好）
         let candRel = reliabilityPreferenceRank(candidate.dataQuality.providerReliability)
         let exRel = reliabilityPreferenceRank(existing.dataQuality.providerReliability)
         if candRel != exRel { return candRel > exRel }
-        // 3. sourceProviderID 确定性 tie-break
+        // 4. sourceProviderID 确定性 tie-break
         let candProv = providerSortKey(candidate.dataQuality.sourceProviderID.rawValue)
         let exProv = providerSortKey(existing.dataQuality.sourceProviderID.rawValue)
         if candProv != exProv { return candProv < exProv }
-        // 4. ObservationID 兜底
+        // 5. ObservationID 兜底
         return candidate.id.rawValue < existing.id.rawValue
     }
 

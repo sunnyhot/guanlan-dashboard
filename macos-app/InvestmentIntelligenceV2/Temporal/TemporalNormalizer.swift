@@ -51,7 +51,7 @@ struct TemporalNormalizer: Sendable {
         timestamps: ProviderTimestamps,
         policy: any AvailabilityPolicy
     ) -> (envelope: TemporalEnvelope, provenance: AvailabilityProvenance)? {
-        guard let availableAt = policy.availableAt(
+        guard let policyAvailableAt = policy.availableAt(
             effectiveAt: timestamps.effectiveAt,
             publishedAt: timestamps.publishedAt,
             jurisdiction: timestamps.jurisdiction,
@@ -59,6 +59,15 @@ struct TemporalNormalizer: Sendable {
         ) else {
             return nil
         }
+        // DATA005「客观可知时间」= max(policy 保守下界, 实际公布时间)：
+        // - Provider 早于下界公布（盘后即给）→ 仍按下界（不乐观假设，既有语义）；
+        // - Provider 晚于下界公布（QDII T+2 净值、行情更正重公布）→ 上抬到
+        //   publishedAt——数据不可能在公布前可知，此前这类记录被不变量
+        //   published ≤ available 拒收，行情修订链路（DATA008）存在缺口
+        //  （审查遗留闭环：GRDB-8 记录的「晚于 T+1 发布的行情修订拒收」）。
+        //   修订 policy 版本不在此层——这是 normalizer 的一般正确性规则，
+        //   对满足下界的既有数据零影响（max 恒等）。
+        let availableAt = max(policyAvailableAt, timestamps.publishedAt)
         let envelope = TemporalEnvelope(
             effectiveAt: timestamps.effectiveAt,
             publishedAt: timestamps.publishedAt,
