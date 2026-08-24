@@ -19,13 +19,12 @@ final class IdentitySchemaTests: XCTestCase {
     // MARK: - 迁移与表结构
 
     func testV2Migration_RegistersAfterBaseline() throws {
-        XCTAssertEqual(
-            Array(CanonicalDatabase.makeMigrations().migrations),
-            ["v1_baseline", "v2_identity"],
-            "迁移清单只追加：v1 基线之后是 v2_identity"
-        )
-        XCTAssertEqual(CanonicalDatabase.schemaVersion, 2)
-        XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline", "v2_identity"])
+        // 全量清单随后续 story 追加而变，此处只断言 v2 的位置语义
+        //（排在 v1 基线之后、不被后续 migration 顶掉）
+        let migrations = CanonicalDatabase.makeMigrations().migrations
+        XCTAssertEqual(migrations.prefix(2), ["v1_baseline", "v2_identity"])
+        XCTAssertEqual(CanonicalDatabase.schemaVersion, migrations.count)
+        XCTAssertEqual(try db.appliedMigrations(), Array(migrations))
     }
 
     /// 升级路径：只有 v1 的旧库（GRDB-1 时代发布）打开后自动补 v2，不重跑 v1。
@@ -42,7 +41,7 @@ final class IdentitySchemaTests: XCTestCase {
         try v1Migrator.migrate(DatabaseQueue(path: path))
 
         let upgraded = try CanonicalDatabase(path: path)
-        XCTAssertEqual(try upgraded.appliedMigrations(), ["v1_baseline", "v2_identity"])
+        XCTAssertEqual(try upgraded.appliedMigrations(), Array(CanonicalDatabase.makeMigrations().migrations))
         XCTAssertEqual(try upgraded.migrationState(), .current)
         // v2 表已建（抽查一张）
         try upgraded.queue.read { d in
@@ -245,7 +244,7 @@ final class IdentitySchemaTests: XCTestCase {
             try db.queue.read { d in try LegalEntityRow.fetchOne(d, key: "le_bad")!.toDomain() }
         ) { error in
             XCTAssertEqual(
-                error as? IdentitySchemaError,
+                error as? CanonicalColumnCodecError,
                 .unknownEnumValue(column: "jurisdiction", rawValue: "XX")
             )
         }

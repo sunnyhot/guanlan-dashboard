@@ -196,9 +196,6 @@ extension CanonicalRef {
 enum IdentitySchemaError: Error, Equatable, CustomStringConvertible {
     /// entity_type 列出现五层之外的类型字符串
     case unknownEntityType(String)
-    /// 枚举列出现该 enum 不认识的 rawValue（fail-closed：不静默回落默认值，
-    /// 否则库被外部改过会把错语义实体静默换壳——Identity 是一切计算的锚点）
-    case unknownEnumValue(column: String, rawValue: String)
     /// instrument_relationships 行的端点类型与 relationship_type 的契约不符
     case relationshipEndpointMismatch(relationshipType: String, detail: String)
 
@@ -206,25 +203,9 @@ enum IdentitySchemaError: Error, Equatable, CustomStringConvertible {
         switch self {
         case .unknownEntityType(let t):
             return "IdentitySchema: 未知实体类型列值 \(t)"
-        case .unknownEnumValue(let column, let raw):
-            return "IdentitySchema: 列 \(column) 出现未知枚举值 \(raw)"
         case .relationshipEndpointMismatch(let type, let detail):
             return "IdentitySchema: 关系 \(type) 端点类型错配（\(detail)）"
         }
-    }
-}
-
-// MARK: - 枚举列解码（fail-closed）
-
-extension IdentitySchemaError {
-    /// 枚举 rawValue 列解码：未知值抛 `unknownEnumValue`，不静默回落默认值。
-    static func decodeEnum<T: RawRepresentable>(
-        _ type: T.Type, rawValue: String, column: String
-    ) throws -> T where T.RawValue == String {
-        guard let value = T(rawValue: rawValue) else {
-            throw IdentitySchemaError.unknownEnumValue(column: column, rawValue: rawValue)
-        }
-        return value
     }
 }
 
@@ -282,10 +263,10 @@ struct LegalEntityRow: FetchableRecord, PersistableRecord {
         try LegalEntity(
             id: LegalEntityID(rawValue: id),
             displayName: displayName,
-            jurisdiction: IdentitySchemaError.decodeEnum(
+            jurisdiction: CanonicalColumnCodec.decodeEnum(
                 Jurisdiction.self, rawValue: jurisdiction, column: "jurisdiction"
             ),
-            kind: IdentitySchemaError.decodeEnum(
+            kind: CanonicalColumnCodec.decodeEnum(
                 LegalEntity.Kind.self, rawValue: kind, column: "kind"
             ),
             regulatoryIDs: try CanonicalColumnCodec.decodeJSON([RegulatoryID].self, from: regulatoryIDsJSON)
@@ -350,14 +331,14 @@ struct InstrumentRow: FetchableRecord, PersistableRecord {
         try Instrument(
             id: InstrumentID(rawValue: id),
             issuerID: LegalEntityID(rawValue: issuerID),
-            kind: IdentitySchemaError.decodeEnum(
+            kind: CanonicalColumnCodec.decodeEnum(
                 InstrumentKind.self, rawValue: kind, column: "kind"
             ),
             displayName: displayName,
-            baseCurrency: IdentitySchemaError.decodeEnum(
+            baseCurrency: CanonicalColumnCodec.decodeEnum(
                 Currency.self, rawValue: baseCurrency, column: "base_currency"
             ),
-            assetClass: IdentitySchemaError.decodeEnum(
+            assetClass: CanonicalColumnCodec.decodeEnum(
                 AssetClass.self, rawValue: assetClass, column: "asset_class"
             ),
             isin: isin
@@ -417,11 +398,11 @@ struct ListingRow: FetchableRecord, PersistableRecord {
         try Listing(
             id: ListingID(rawValue: id),
             instrumentID: InstrumentID(rawValue: instrumentID),
-            exchange: IdentitySchemaError.decodeEnum(
+            exchange: CanonicalColumnCodec.decodeEnum(
                 Exchange.self, rawValue: exchange, column: "exchange"
             ),
             symbol: symbol,
-            tradingCurrency: IdentitySchemaError.decodeEnum(
+            tradingCurrency: CanonicalColumnCodec.decodeEnum(
                 Currency.self, rawValue: tradingCurrency, column: "trading_currency"
             ),
             isActive: isActive
@@ -476,7 +457,7 @@ struct FundProductRow: FetchableRecord, PersistableRecord {
         try FundProduct(
             id: FundProductID(rawValue: id),
             instrumentID: InstrumentID(rawValue: instrumentID),
-            fundType: IdentitySchemaError.decodeEnum(
+            fundType: CanonicalColumnCodec.decodeEnum(
                 FundProduct.FundType.self, rawValue: fundType, column: "fund_type"
             ),
             displayName: displayName,
@@ -620,7 +601,7 @@ struct ProviderIdentifierRow: FetchableRecord, PersistableRecord {
             canonical: try CanonicalRef(
                 entityType: canonicalEntityType, entityIDRawValue: canonicalEntityID
             ),
-            resolutionMethod: try IdentitySchemaError.decodeEnum(
+            resolutionMethod: try CanonicalColumnCodec.decodeEnum(
                 IdentityResolutionMethod.self,
                 rawValue: resolutionMethod,
                 column: "resolution_method"
@@ -742,7 +723,7 @@ struct InstrumentRelationshipRow: FetchableRecord, PersistableRecord {
     }
 
     func toDomain() throws -> InstrumentRelationship {
-        let type = try IdentitySchemaError.decodeEnum(
+        let type = try CanonicalColumnCodec.decodeEnum(
             RelationshipType.self, rawValue: relationshipType, column: "relationship_type"
         )
 
@@ -790,7 +771,7 @@ struct InstrumentRelationshipRow: FetchableRecord, PersistableRecord {
     }
 
     private func decodeProvenance() throws -> InstrumentRelationship.RelationshipProvenance {
-        try IdentitySchemaError.decodeEnum(
+        try CanonicalColumnCodec.decodeEnum(
             InstrumentRelationship.RelationshipProvenance.self,
             rawValue: provenance,
             column: "provenance"

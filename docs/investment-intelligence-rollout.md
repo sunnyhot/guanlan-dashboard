@@ -694,6 +694,30 @@ macos-app/
 >   三元组查询命中与 miss。swift test 全量绿（跳过环境性
 >   AppLaunchPresentationPolicyTests）。
 >
+> **GRDB-3 已签收（3 点，2026-08-24）**——migration `v3_market` +
+> `Persistence/MarketSchema.swift`（3 表 DDL + row codec）+
+> `Persistence/ObservationColumns.swift`（观测表共享列组，GRDB-4/5 复用）：
+> - **3 表**：daily_bars / nav_observations / corporate_actions，维度键外键到
+>   Identity（listing_id → listings、share_class_id → fund_share_classes）——
+>   观测只能挂在已解析的 Canonical Identity 上（防火墙 1 库级兜底）。
+> - **DATA008 合规**：三表统一 (维度键, effective_at, vintage) 唯一索引
+>   （vintage = announcement_date + publisher_version 两列）；行情单 vintage
+>   简化体现在查询形态，schema 仍完整支持 multi-vintage（同 effectiveAt
+>   不同 vintage 共存测试守护）。
+> - **PIT 字符串比较约定落地**：四时间为 ISO8601 UTC 毫秒 TEXT，字典序 =
+>   时间序（跨 ±400 天抽样测试），`available_at <= ?` 直接 SQL 比较——
+>   GRDB-7 Repository 的 economic/operational 查询依赖此路径（测试用
+>   两根不同 availableAt 的 bar 验证 asOf 过滤语义）。
+> - **共享列组**（ObservationEnvelopeColumns）：四时间 + policy 溯源 3 列 +
+>   质量 4 列 + vintage 2 列，列名/编解码单一权威；enum 列 fail-closed
+>   解码（decodeEnum 移至 CanonicalColumnCodec 共享，IdentitySchemaError
+>   收窄回 identity 专属错误）。
+> - **价格列**：同观测多 Price 币种必须一致（单 currency 列 + codec 校验，
+>   混币拒收）；NAV 的累计净值/累计分红缺失保持 nil 不伪造。
+> - 14 个 MarketSchemaTests（迁移追加 / 共享列 / 三表往返含 nil 边界 /
+>   唯一索引拒重 / multi-vintage 共存 / FK / PIT 字符串比较 / 字典序=时间序 /
+>   混币拒收 / 未知枚举 fail-closed）。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通

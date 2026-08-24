@@ -75,6 +75,19 @@ enum CanonicalColumnCodec {
         }
         return try jsonDecoder.decode(type, from: data)
     }
+
+    // MARK: - 枚举列（fail-closed）
+
+    /// 枚举 rawValue 列解码：未知值抛 `unknownEnumValue`，不静默回落默认值
+    ///（否则库被外部改过会把错语义实体静默换壳——Canonical 是一切计算的锚点）。
+    static func decodeEnum<T: RawRepresentable>(
+        _ type: T.Type, rawValue: String, column: String
+    ) throws -> T where T.RawValue == String {
+        guard let value = T(rawValue: rawValue) else {
+            throw CanonicalColumnCodecError.unknownEnumValue(column: column, rawValue: rawValue)
+        }
+        return value
+    }
 }
 
 /// 列编解码失败（库内容与 codec 约定不符——理论上只有外部改库才会触发）。
@@ -82,12 +95,15 @@ enum CanonicalColumnCodecError: Error, Equatable, CustomStringConvertible {
     case malformedTimestamp(String)
     case malformedDecimal(String)
     case malformedJSON(String)
+    case unknownEnumValue(column: String, rawValue: String)
 
     var description: String {
         switch self {
         case .malformedTimestamp(let raw): return "CanonicalColumnCodec: 非法时间戳列值 \(raw)"
         case .malformedDecimal(let raw): return "CanonicalColumnCodec: 非法 Decimal 列值 \(raw)"
         case .malformedJSON(let raw): return "CanonicalColumnCodec: 非法 JSON 列值 \(raw)"
+        case .unknownEnumValue(let column, let raw):
+            return "CanonicalColumnCodec: 列 \(column) 出现未知枚举值 \(raw)"
         }
     }
 }
