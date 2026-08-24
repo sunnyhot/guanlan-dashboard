@@ -1252,6 +1252,42 @@ macos-app/
 
 **铁律**：每个 factor 返回 metric（Decimal + unit），不返回分数；ordinal signal 由独立 SignalPolicy 产生。
 
+> **状态（2026-08-24，Epic 7 全部收口）**：**FAC-1..8（18 点）全部签收**，
+> 代码在 `InvestmentIntelligenceV2/Factors/`（FactorModel / SignalPolicy /
+> TrendFactor / MomentumFactor / VolatilityFactor / DrawdownFactor /
+> RelativeStrengthFactor，共 7 源文件），测试以套件通过为准：
+> FactorModelTests / SignalPolicyTests / TrendFactorTests /
+> MomentumFactorTests / VolatilityFactorTests / DrawdownFactorTests /
+> RelativeStrengthFactorTests / FactorPITGoldenTests（8 套件）。
+> swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> 实现要点（与 Story 表述的对齐）：
+> - **铁律落实**：全部 factor 产出 `FactorMetric`（Decimal + 强类型
+>   FactorUnit，scale=12 舍入）；`OrdinalFactorSignal` 刻意不携带任何数值
+>   字段——ordinal 无法回流 cardinal 运算是类型层保证，不靠约定。
+> - **FAC-1**：FactorSnapshot 实现 Artifact 协议（`id: ArtifactID`，
+>   FactorSnapshotID 收敛为 typealias）；provenance 三件套
+>   sourceObservationIDs / factorVersion / asOf；id 确定性派生（重算幂等），
+>   factorVersion = 全部 definition key@version 的双 FNV-1a 摘要。
+>   FactorEngine 以 economicKnowledge(asOf:) 读数（PIT 语义由 Repository
+>   既有语义保证，引擎不重复实现）。
+> - **FAC-2**：SignalPolicy 阈值带 provenance（policyID/version/basis/
+>   rationale，heuristic 必附 rationale）；规则缝隙 / 未配置 metricKey /
+>   数据不足一律 fail-open 到 .uncertain（「没规则」≠「中性」）。
+> - **FAC-3..7**：窗口全部 versioned 参数进 FactorDefinition.parameters
+>   （windowBars / slopeHorizon / denominator=n-1 / windowPolicy=cap /
+>   benchmarkListingID / alignment=independent-tail）。两个刻意的语义
+>   决策：① drawdown 窗口是 cap 上限（不足 252 用可得，政策差异在
+>   parameters 显式声明）；② 相对强度两侧独立取尾部区间收益，不逐日
+>   对齐（跨市场日历不同，强制对齐是猜测）。Decimal 全程，sqrt 用
+>   Double 初值 + 牛顿精化（确定性）。
+> - **FAC-8**：golden 套件锁定「固定序列 → 固定输出」（等差序列闭式解
+>   字面量）+ 跨 vintage 一致（不可见 vintage 重算 byte-identical、可见后
+>   旧 vintage 择优淘汰不双计、benchmark 修订同样受 PIT 约束）+ 未来数据
+>   不泄漏（完整库 vs 截断库同一 asOf 的 snapshot 相等）。
+>
+> Epic 8（Exposure / Risk）解锁。
+
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | FAC-1 | `FactorDefinition` + `FactorSnapshot`（provenance: sourceObservationIDs / factorVersion / asOf）| M5 | 2 | 历史 Factor 可重算 |
