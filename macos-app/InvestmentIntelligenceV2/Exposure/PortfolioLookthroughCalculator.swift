@@ -404,10 +404,14 @@ struct PortfolioLookthroughCalculator: Sendable {
         // ID 语义完备（审查 P1 修复）：asOf + 版本 + 组合输入（权重/直接持股/
         // 资产类）+ 参数（行业映射/陈旧阈值）+ 参与披露——纯直接持股组合
         // 在同一日期不再互相碰撞。producedAt 排除（重算幂等）。
-        let payload = identityPayload(
+        let payload = try? identityPayload(
             asOf: asOf, positions: positions, parameters: parameters,
             sourceIDs: sourceIDs.map(\.rawValue)
         )
+        // identityPayload 只做确定性编码，失败即编程错误——fail-fast
+        guard let payload else {
+            preconditionFailure("Lookthrough ID payload 编码失败（语义类型新增了不可编码字段）")
+        }
         let id = ArtifactID(rawValue: "lt_\(StableDigest.digest(payload))")
 
         return LookthroughSnapshot(
@@ -433,21 +437,45 @@ struct PortfolioLookthroughCalculator: Sendable {
 
     // MARK: - helpers
 
-    /// ID 身份 payload（语义完备；审查 P1-3）。
+    /// ID 身份 payload（语义完备 + **跨进程稳定**——二轮审查 P1-3）：
+    /// 无市值行权重 / 直接持股 / 资产类全进 positions 串；行业映射是
+    /// Hashable 键字典（JSON 交替数组顺序随进程漂移）——显式转排序数组；
+    /// positions 输入顺序不稳定——按规范串排序后编码。
     private struct IdentityPayload: Encodable {
         let kind = "lookthrough"
         let version = PortfolioLookthroughCalculator.calculatorVersion
         let asOf: Date
-        let positions: [LookthroughPositionInput]
-        let parameters: Parameters
+        /// 每持仓的规范串（"fund|A|0.6" / "direct|L1|0.2|EQUITY"），排序后
+        let positions: [String]
+        /// 行业分类（"listing|label|system"），排序后
+        let sectorClassifications: [String]
+        let maxDisclosureAgeDays: Int
         let sourceIDs: [String]
     }
 
     private func identityPayload(
         asOf: Date, positions: [LookthroughPositionInput],
         parameters: Parameters, sourceIDs: [String]
-    ) -> String {
-        StableDigest.jsonPayload(IdentityPayload(asOf: asOf, positions: positions, parameters: parameters, sourceIDs: sourceIDs))
+    ) throws -> String {
+        let positionStrings = positions.map { input -> String in
+            let weight = input.weight.value
+            if let fund = input.fundProductID {
+                return "fund|\(fund.rawValue)|\(weight)"
+            }
+            let listing = input.directListingID?.rawValue ?? "-"
+            let assetClass = input.directAssetClass?.rawValue ?? "-"
+            return "direct|\(listing)|\(weight)|\(assetClass)"
+        }.sorted()
+        let sectorStrings = StableDigest.sortedKeyEntries(parameters.sectorClassifications) { sector in
+            "\(sector.label)|\(sector.classificationSystem ?? "-")"
+        }
+        return try StableDigest.jsonPayload(IdentityPayload(
+            asOf: asOf,
+            positions: positionStrings,
+            sectorClassifications: sectorStrings,
+            maxDisclosureAgeDays: parameters.maxDisclosureAgeDays,
+            sourceIDs: sourceIDs
+        ))
     }
 
     private static let secondsPerDay: Double = 86400

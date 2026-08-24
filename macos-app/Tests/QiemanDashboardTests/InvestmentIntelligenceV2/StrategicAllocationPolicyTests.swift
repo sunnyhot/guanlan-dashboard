@@ -177,6 +177,31 @@ final class StrategicAllocationPolicyTests: XCTestCase {
         }
     }
 
+    func testDecodingRejectsForgedID() throws {
+        // 二轮审查 P1-4 回归:改内容保旧 ID 的「伪造 Target」在解码点拒绝
+        struct RawTarget: Codable {
+            let id: InvestmentTargetID
+            let entries: [AllocationTargetEntry]
+            let provenance: TargetAllocationProvenance
+            let createdAt: Date
+        }
+        let original = try policy.applyUserAllocation(
+            entries: [entry(.equity, "0.6"), entry(.cash, "0.4")], note: nil, now: now
+        )
+        let forged = RawTarget(
+            id: original.id,   // 保留旧 ID
+            entries: [entry(.equity, "0.7"), entry(.cash, "0.3")],   // 换内容(仍合法权重)
+            provenance: original.provenance,
+            createdAt: original.createdAt
+        )
+        let dirty = try JSONEncoder().encode(forged)
+        XCTAssertThrowsError(try JSONDecoder().decode(AllocationTarget.self, from: dirty)) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("应为 dataCorrupted,实际 \(error)")
+            }
+        }
+    }
+
     func testDeterministicIdAndCodable() throws {
         let a = try policy.applyUserAllocation(
             entries: [entry(.equity, "0.6"), entry(.fixedIncome, "0.4")], note: nil, now: now

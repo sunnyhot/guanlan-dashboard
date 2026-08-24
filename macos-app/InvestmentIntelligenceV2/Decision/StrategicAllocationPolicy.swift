@@ -83,6 +83,18 @@ struct AllocationTarget: Sendable, Codable, Hashable {
                 debugDescription: "AllocationTarget 解码校验失败（D000 门禁）: \(error)"
             ))
         }
+        // 二轮审查 P1-4：ID 必须与内容自洽——按规范化 entries + provenance +
+        // createdAt 重算派生 ID，与 JSON 提供的 id 核对（换内容保旧 ID 的
+        // 「伪造 Target」在解码点拒绝，Target 引用与 D000 防火墙成立）。
+        let recomputed = StrategicAllocationPolicy.deriveID(
+            provenance: provenance, entries: entries, createdAt: createdAt
+        )
+        guard recomputed == id else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "AllocationTarget ID 与内容不一致（应为 \(recomputed.rawValue)，实为 \(id.rawValue)）——拒绝伪造 ID"
+            ))
+        }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -230,10 +242,11 @@ struct StrategicAllocationPolicy: Sendable {
 
     /// Target ID 确定性派生（语义完备：provenance + 时间 + entries——
     /// 审查 P1-3 修复：不同 entries 的同日配置不再互相碰撞）。
-    private static func deriveID(
+    fileprivate static func deriveID(
         provenance: TargetAllocationProvenance, entries: [AllocationTargetEntry], createdAt: Date
     ) -> InvestmentTargetID {
-        let payload = StableDigest.jsonPayload(IdentityPayload(
+        // 确定性类型的编码失败 = 编程错误,fail-fast
+        let payload = try! StableDigest.jsonPayload(IdentityPayload(
             provenance: provenance,
             entries: normalized(entries),
             createdAt: createdAt

@@ -166,8 +166,15 @@ struct ExposureEngine: Sendable {
         let holdingIDs = holdings.values.map(\.id).sorted { $0.rawValue < $1.rawValue }
         let lookthroughIDs = lookthrough.sourceObservationIDs
         let sourceIDs = (lookthroughIDs + holdingIDs).sorted { $0.rawValue < $1.rawValue }
-        let canonical = "exposure|\(lookthrough.id.rawValue)|\(Self.engineVersion)|\(holdings.keys.map(\.rawValue).sorted().joined(separator: ","))"
-        let id = ArtifactID(rawValue: "exp_\(Self.digest(canonical))")
+        // ID 语义完备（二轮审查 P1-7）：lookthrough ID + 引擎版本 + 参与计算的
+        // observation IDs（同产品新披露换 ID）+ 完整参数（overlapTopN）。
+        let payload = try! StableDigest.jsonPayload(IdentityPayload(
+            lookthroughID: lookthrough.id.rawValue,
+            engineVersion: Self.engineVersion,
+            holdingObservationIDs: holdingIDs.map(\.rawValue),
+            overlapTopN: parameters.overlapTopN
+        ))
+        let id = ArtifactID(rawValue: "exp_\(StableDigest.digest(payload))")
 
         return ExposureReport(
             id: id,
@@ -227,16 +234,13 @@ struct ExposureEngine: Sendable {
         )
     }
 
-    /// 双 FNV-1a 确定性摘要（与 FactorEngine / LookthroughCalculator 同算法）。
-    private static func digest(_ input: String) -> String {
-        let data = Data(input.utf8)
-        var h1: UInt64 = 0xcbf29ce484222325
-        var h2: UInt64 = 0x9e3779b97f4a7c15
-        for byte in data {
-            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
-            h2 = (h2 &+ UInt64(byte)) &* 0xbf58476d1ce4e5b9
-        }
-        return String(format: "%016lx%016lx", h1, h2)
+    /// ID 身份 payload（语义完备 + 跨进程稳定；二轮审查 P1-7）。
+    private struct IdentityPayload: Encodable {
+        let lookthroughID: String
+        let engineVersion: String
+        /// 参与计算的持仓披露 observation IDs（排序数组——同产品新披露换 ID）
+        let holdingObservationIDs: [String]
+        let overlapTopN: Int
     }
 }
 

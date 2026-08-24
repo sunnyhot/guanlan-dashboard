@@ -96,8 +96,17 @@ struct PortfolioRiskProfiler: Sendable {
             lookthrough.sourceObservationIDs.map(\.rawValue) + seriesIDs
         ).sorted()
 
-        let canonical = "risk-profile|\(lookthrough.id.rawValue)|\(Self.profileVersion)|\(sourceIDs.joined(separator: ","))"
-        let id = ArtifactID(rawValue: "risk_\(Self.digest(canonical))")
+        // ID 语义完备（二轮审查 P1-7）：lookthrough ID + 版本 + 源 IDs +
+        // 完整计算参数（correlationTopN / 窗口 / 最小样本）——参数变化换 ID。
+        let payload = try! StableDigest.jsonPayload(IdentityPayload(
+            lookthroughID: lookthrough.id.rawValue,
+            profileVersion: Self.profileVersion,
+            sourceIDs: sourceIDs,
+            correlationTopN: parameters.correlationTopN,
+            correlationWindowReturns: parameters.correlationParameters.windowReturns,
+            correlationMinSampleCount: parameters.correlationParameters.minSampleCount
+        ))
+        let id = ArtifactID(rawValue: "risk_\(StableDigest.digest(payload))")
 
         return PortfolioRiskProfile(
             id: id,
@@ -125,15 +134,13 @@ struct PortfolioRiskProfiler: Sendable {
         return result
     }
 
-    /// 双 FNV-1a 确定性摘要（与同模块其他 id 派生同算法）。
-    private static func digest(_ input: String) -> String {
-        let data = Data(input.utf8)
-        var h1: UInt64 = 0xcbf29ce484222325
-        var h2: UInt64 = 0x9e3779b97f4a7c15
-        for byte in data {
-            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
-            h2 = (h2 &+ UInt64(byte)) &* 0xbf58476d1ce4e5b9
-        }
-        return String(format: "%016lx%016lx", h1, h2)
+    /// ID 身份 payload（语义完备；二轮审查 P1-7：参数纳入）。
+    private struct IdentityPayload: Encodable {
+        let lookthroughID: String
+        let profileVersion: String
+        let sourceIDs: [String]
+        let correlationTopN: Int
+        let correlationWindowReturns: Int
+        let correlationMinSampleCount: Int
     }
 }
