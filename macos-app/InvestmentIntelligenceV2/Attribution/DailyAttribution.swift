@@ -38,7 +38,8 @@ struct DailyAttribution: Artifact {
 
         // ID 语义完备（审查 P1 修复）：日期 + 组合键 + 完整结果
         // （attributed/coverage/residual/贡献分布）+ 源 IDs——只排除 producedAt。
-        let payload = StableDigest.jsonPayload(IdentityPayload(
+        // 确定性类型的编码失败 = 编程错误,fail-fast
+        let payload = try! StableDigest.jsonPayload(IdentityPayload(
             attributionDate: attributionDate, portfolioKey: portfolioKey,
             result: result, sourceIDs: sourceIDs.map(\.rawValue).sorted()
         ))
