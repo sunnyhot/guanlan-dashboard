@@ -36,19 +36,21 @@ struct DailyAttribution: Artifact {
             .map { ArtifactDependency(kind: .observation, referenceID: $0.rawValue) }
             .sorted { $0.referenceID < $1.referenceID }
 
-        let canonical = "daily-attribution|\(portfolioKey)|\(Int(attributionDate.timeIntervalSince1970))|\(result.engineVersion)|\(result.attributedReturn.value)|\(result.coverage.value)|\(sourceIDs.map(\.rawValue).sorted().joined(separator: ","))"
-        self.id = ArtifactID(rawValue: "attr_\(Self.digest(canonical))")
+        // ID 语义完备（审查 P1 修复）：日期 + 组合键 + 完整结果
+        // （attributed/coverage/residual/贡献分布）+ 源 IDs——只排除 producedAt。
+        let payload = StableDigest.jsonPayload(IdentityPayload(
+            attributionDate: attributionDate, portfolioKey: portfolioKey,
+            result: result, sourceIDs: sourceIDs.map(\.rawValue).sorted()
+        ))
+        self.id = ArtifactID(rawValue: "attr_\(StableDigest.digest(payload))")
     }
 
-    /// 双 FNV-1a 确定性摘要（与同模块其他 id 派生同算法）。
-    private static func digest(_ input: String) -> String {
-        let data = Data(input.utf8)
-        var h1: UInt64 = 0xcbf29ce484222325
-        var h2: UInt64 = 0x9e3779b97f4a7c15
-        for byte in data {
-            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
-            h2 = (h2 &+ UInt64(byte)) &* 0xbf58476d1ce4e5b9
-        }
-        return String(format: "%016lx%016lx", h1, h2)
+    /// ID 身份 payload（语义完备；审查 P1-3）。
+    private struct IdentityPayload: Encodable {
+        let attributionDate: Date
+        let portfolioKey: String
+        let result: AttributionResult
+        let sourceIDs: [String]
     }
+
 }

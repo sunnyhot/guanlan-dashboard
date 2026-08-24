@@ -43,6 +43,11 @@ struct AllocationTargetEntry: Sendable, Codable, Hashable {
 }
 
 /// 一份战略目标配置（不可变值；变更走 StrategicAllocationPolicy 产新实例）。
+///
+/// **构造封闭（审查 P1-7 修复，D000）**：memberwise init 被 `fileprivate`
+/// init 抑制——同文件的 StrategicAllocationPolicy 是唯一构造入口，模块内
+/// 其他代码（含未来 Epic 11 的 Agent）无法绕过 Policy/Validator 直接构造。
+/// Codable 解码走校验式 init(from:)：脏数据（权重和≠1 等）在解码点拒绝。
 struct AllocationTarget: Sendable, Codable, Hashable {
     let id: InvestmentTargetID
     /// 全部资产大类的目标（完备：Validator 保证无缺漏由调用方对齐
@@ -50,6 +55,39 @@ struct AllocationTarget: Sendable, Codable, Hashable {
     let entries: [AllocationTargetEntry]
     let provenance: TargetAllocationProvenance
     let createdAt: Date
+
+    /// 唯一构造入口（fileprivate：抑制 memberwise init，只有同文件的
+    /// StrategicAllocationPolicy 两个 apply 方法能构造）。
+    fileprivate init(
+        id: InvestmentTargetID, entries: [AllocationTargetEntry],
+        provenance: TargetAllocationProvenance, createdAt: Date
+    ) {
+        self.id = id
+        self.entries = entries
+        self.provenance = provenance
+        self.createdAt = createdAt
+    }
+
+    /// 校验式解码：不满足 Validator 门禁的 JSON 在解码点拒绝（fail-closed）。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(InvestmentTargetID.self, forKey: .id)
+        entries = try container.decode([AllocationTargetEntry].self, forKey: .entries)
+        provenance = try container.decode(TargetAllocationProvenance.self, forKey: .provenance)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        do {
+            try StrategicAllocationValidator().validate(entries: entries)
+        } catch {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "AllocationTarget 解码校验失败（D000 门禁）: \(error)"
+            ))
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, entries, provenance, createdAt
+    }
 
     /// 某资产大类的目标权重（缺省 nil——缺即缺，不默认 0）
     func targetWeight(for assetClass: AssetClass) -> Ratio? {
@@ -143,7 +181,7 @@ struct StrategicAllocationPolicy: Sendable {
             .init(configuredAt: now, note: note)
         )
         return AllocationTarget(
-            id: Self.deriveID(provenance: provenance, createdAt: now),
+            id: Self.deriveID(provenance: provenance, entries: entries, createdAt: now),
             entries: Self.normalized(entries),
             provenance: provenance,
             createdAt: now
@@ -176,7 +214,7 @@ struct StrategicAllocationPolicy: Sendable {
             recommendedByAgent: viaAgentRecommendation
         ))
         return AllocationTarget(
-            id: Self.deriveID(provenance: provenance, createdAt: now),
+            id: Self.deriveID(provenance: provenance, entries: template.entries, createdAt: now),
             entries: Self.normalized(template.entries),
             provenance: provenance,
             createdAt: now
@@ -190,21 +228,22 @@ struct StrategicAllocationPolicy: Sendable {
         entries.sorted { $0.assetClass.rawValue < $1.assetClass.rawValue }
     }
 
-    /// Target ID 确定性派生（同 provenance + 时间 → 同 id；重放稳定）。
-    private static func deriveID(provenance: TargetAllocationProvenance, createdAt: Date) -> InvestmentTargetID {
-        let canonical = "allocation-target|\(createdAt.timeIntervalSince1970)|\(provenance)"
-        return InvestmentTargetID(rawValue: "at_\(digest(canonical))")
+    /// Target ID 确定性派生（语义完备：provenance + 时间 + entries——
+    /// 审查 P1-3 修复：不同 entries 的同日配置不再互相碰撞）。
+    private static func deriveID(
+        provenance: TargetAllocationProvenance, entries: [AllocationTargetEntry], createdAt: Date
+    ) -> InvestmentTargetID {
+        let payload = StableDigest.jsonPayload(IdentityPayload(
+            provenance: provenance,
+            entries: normalized(entries),
+            createdAt: createdAt
+        ))
+        return InvestmentTargetID(rawValue: "at_\(StableDigest.digest(payload))")
     }
 
-    /// 双 FNV-1a 确定性摘要（与同模块其他 id 派生同算法）。
-    private static func digest(_ input: String) -> String {
-        let data = Data(input.utf8)
-        var h1: UInt64 = 0xcbf29ce484222325
-        var h2: UInt64 = 0x9e3779b97f4a7c15
-        for byte in data {
-            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
-            h2 = (h2 &+ UInt64(byte)) &* 0xbf58476d1ce4e5b9
-        }
-        return String(format: "%016lx%016lx", h1, h2)
+    private struct IdentityPayload: Encodable {
+        let provenance: TargetAllocationProvenance
+        let entries: [AllocationTargetEntry]
+        let createdAt: Date
     }
 }

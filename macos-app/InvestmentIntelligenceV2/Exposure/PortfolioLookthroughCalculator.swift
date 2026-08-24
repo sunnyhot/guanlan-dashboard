@@ -401,8 +401,14 @@ struct PortfolioLookthroughCalculator: Sendable {
             .filter { $0.input.fundProductID != nil && disclosureByProduct[$0.input.fundProductID!]?.holding != nil }
             .reduce(Decimal.zero) { $0 + $1.weight }
 
-        let canonical = "lookthrough|\(asOf.timeIntervalSince1970)|\(Self.calculatorVersion)|\(sourceIDs.map(\.rawValue).joined(separator: ","))"
-        let id = ArtifactID(rawValue: "lt_\(Self.digest(canonical))")
+        // ID 语义完备（审查 P1 修复）：asOf + 版本 + 组合输入（权重/直接持股/
+        // 资产类）+ 参数（行业映射/陈旧阈值）+ 参与披露——纯直接持股组合
+        // 在同一日期不再互相碰撞。producedAt 排除（重算幂等）。
+        let payload = identityPayload(
+            asOf: asOf, positions: positions, parameters: parameters,
+            sourceIDs: sourceIDs.map(\.rawValue)
+        )
+        let id = ArtifactID(rawValue: "lt_\(StableDigest.digest(payload))")
 
         return LookthroughSnapshot(
             id: id,
@@ -426,6 +432,23 @@ struct PortfolioLookthroughCalculator: Sendable {
     }
 
     // MARK: - helpers
+
+    /// ID 身份 payload（语义完备；审查 P1-3）。
+    private struct IdentityPayload: Encodable {
+        let kind = "lookthrough"
+        let version = PortfolioLookthroughCalculator.calculatorVersion
+        let asOf: Date
+        let positions: [LookthroughPositionInput]
+        let parameters: Parameters
+        let sourceIDs: [String]
+    }
+
+    private func identityPayload(
+        asOf: Date, positions: [LookthroughPositionInput],
+        parameters: Parameters, sourceIDs: [String]
+    ) -> String {
+        StableDigest.jsonPayload(IdentityPayload(asOf: asOf, positions: positions, parameters: parameters, sourceIDs: sourceIDs))
+    }
 
     private static let secondsPerDay: Double = 86400
 

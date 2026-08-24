@@ -139,6 +139,44 @@ final class StrategicAllocationPolicyTests: XCTestCase {
         XCTAssertTrue(true)
     }
 
+    func testMemberwiseInitSuppressed_constructionOnlyViaPolicy() throws {
+        // 审查 P1-7 回归:AllocationTarget 的 memberwise init 被 fileprivate
+        // 抑制——同文件 Policy 是唯一构造入口,模块内无法绕过
+        // (编译期保证:以下写法无法编译,此处以 API 表面存档)
+        let target = try policy.applyUserAllocation(
+            entries: [entry(.equity, "1.0")], note: nil, now: now
+        )
+        // 解码是第二入口:走校验式 init(from:)
+        let data = try JSONEncoder().encode(target)
+        XCTAssertNoThrow(try JSONDecoder().decode(AllocationTarget.self, from: data))
+    }
+
+    func testDecodingRejectsInvalidWeights() throws {
+        // 审查 P1-7 回归:脏 JSON(权重和≠1)在解码点拒绝(fail-closed)
+        let target = try policy.applyUserAllocation(
+            entries: [entry(.equity, "0.6"), entry(.cash, "0.4")], note: nil, now: now
+        )
+        // 用中间表示篡改权重后重新编码
+        struct RawTarget: Codable {
+            let id: InvestmentTargetID
+            let entries: [AllocationTargetEntry]
+            let provenance: TargetAllocationProvenance
+            let createdAt: Date
+        }
+        let raw = RawTarget(
+            id: target.id,
+            entries: [entry(.equity, "0.9")],   // 和 0.9 ≠ 1
+            provenance: target.provenance,
+            createdAt: target.createdAt
+        )
+        let dirty = try JSONEncoder().encode(raw)
+        XCTAssertThrowsError(try JSONDecoder().decode(AllocationTarget.self, from: dirty)) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("应为 dataCorrupted,实际 \(error)")
+            }
+        }
+    }
+
     func testDeterministicIdAndCodable() throws {
         let a = try policy.applyUserAllocation(
             entries: [entry(.equity, "0.6"), entry(.fixedIncome, "0.4")], note: nil, now: now

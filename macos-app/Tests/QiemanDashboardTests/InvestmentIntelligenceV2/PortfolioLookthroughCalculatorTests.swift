@@ -400,6 +400,28 @@ final class PortfolioLookthroughCalculatorTests: XCTestCase {
         XCTAssertEqual(snap.underlyingPositions.first?.contributors.count, 2)
     }
 
+    func testDistinctDirectHoldingPortfoliosDoNotCollide() {
+        // 审查 P1 回归:同日期的纯直接持股组合(不同标的)曾因 ID 只含
+        // asOf+version+sourceIDs(直接持股无披露 → sourceIDs 空)而全部撞 ID
+        let calc = PortfolioLookthroughCalculator()
+        let a = calc.compute(
+            positions: [.init(weight: Ratio(value: 1), directListingID: ListingID(rawValue: "L1"))],
+            disclosures: [], asOf: asOf, producedAt: producedAt()
+        )
+        let b = calc.compute(
+            positions: [.init(weight: Ratio(value: 1), directListingID: ListingID(rawValue: "L2"))],
+            disclosures: [], asOf: asOf, producedAt: producedAt()
+        )
+        XCTAssertNotEqual(a?.id, b?.id, "不同直接持股组合必须不同 ID")
+
+        // 同输入仍同 ID(幂等不回归)
+        let a2 = calc.compute(
+            positions: [.init(weight: Ratio(value: 1), directListingID: ListingID(rawValue: "L1"))],
+            disclosures: [], asOf: asOf, producedAt: producedAt()
+        )
+        XCTAssertEqual(a?.id, a2?.id)
+    }
+
     // MARK: - helpers
 
     private struct TwoFundInputs {
