@@ -718,6 +718,24 @@ macos-app/
 >   唯一索引拒重 / multi-vintage 共存 / FK / PIT 字符串比较 / 字典序=时间序 /
 >   混币拒收 / 未知枚举 fail-closed）。
 >
+> **GRDB-4 已签收（3 点，2026-08-24）**——migration `v4_fund` +
+> `Persistence/FundSchema.swift`（3 表 DDL + row codec）+ **新领域类型
+> `AllocationSnapshot`**（`Observations/CanonicalObservation.swift`，基金
+> 报告期资产大类占比快照——此前 DOM-5 未定义，GRDB-4 随 schema 一并落地；
+> Exposure 的 asset class 通道消费它）：
+> - **3 表**：holding_snapshots（快照骨架）/ holding_positions（一行一持仓，
+>   (snapshot_id, position_index) 主键保序）/ allocation_snapshots（大类占比
+>   JSON 列——条目小且整读，与持仓子表形态刻意不同：后者需要跨基金按
+>   listing 聚合，前者无此查询路径）。
+> - **持仓多 vintage**（DATA008）：(product_id, effective_at, vintage) 唯一
+>   索引，修订 = 追加行不覆盖（测试守护）。
+> - **外键链**：snapshot → fund_products、position → snapshot + listings
+>   （REPO-5b「未解析 position 拒收整条快照」的库级兜底）；listing_id 索引
+>   服务 RISK-1 多基金重复持股聚合。
+> - **往返保序**：positions 乱序插入读回仍按 position_index = 披露顺序；
+>   可选 Price 双列（market_value + currency）同空同非空，不配套 fail-closed。
+> - 11 个 FundSchemaTests。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通

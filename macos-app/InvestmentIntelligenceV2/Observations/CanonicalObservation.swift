@@ -437,6 +437,61 @@ struct FundamentalObservation: CanonicalObservation {
     }
 }
 
+// MARK: - AllocationSnapshot（基金资产配置快照，GRDB-4）
+//
+// 基金定期报告披露的资产大类占比（股票 / 债券 / 现金 / 其他）。
+// 与 FundHoldingSnapshot（个股持仓明细）互补：allocation 是大类颗粒度、
+// 全口径披露；holding 是个股颗粒度、通常只披露前十大。
+// Exposure（EXP-2）的 asset class 通道消费本类型做覆盖度交叉校验。
+
+/// 基金产品的资产配置快照（报告期披露的资产大类占比，multi-vintage）。
+struct AllocationSnapshot: CanonicalObservation {
+    let id: ObservationID
+    /// 对应的基金产品（配置是 Product 维度，A/C 类共享）
+    let productID: FundProductID
+    let temporalEnvelope: TemporalEnvelope
+    let availabilityProvenance: AvailabilityProvenance
+    let dataQuality: DataQuality
+    let vintage: Vintage
+
+    /// 报告期类型（与 FundHoldingSnapshot 共用枚举）
+    let reportPeriod: FundHoldingSnapshot.ReportPeriod
+    /// 各资产大类占比（0-1）。**未披露 / 未归类的类别不出现在数组里**
+    ///（剩余 = 1 − Σ 已披露项，缺口语义由 Exposure 层处理，不伪造 0）
+    let allocations: [AllocationEntry]
+
+    /// 单个大类占比条目。
+    struct AllocationEntry: Sendable, Codable, Hashable {
+        let assetClass: AssetClass
+        let ratio: Ratio
+
+        init(assetClass: AssetClass, ratio: Ratio) {
+            self.assetClass = assetClass
+            self.ratio = ratio
+        }
+    }
+
+    init(
+        id: ObservationID,
+        productID: FundProductID,
+        temporalEnvelope: TemporalEnvelope,
+        availabilityProvenance: AvailabilityProvenance,
+        dataQuality: DataQuality,
+        vintage: Vintage,
+        reportPeriod: FundHoldingSnapshot.ReportPeriod,
+        allocations: [AllocationEntry]
+    ) {
+        self.id = id
+        self.productID = productID
+        self.temporalEnvelope = temporalEnvelope
+        self.availabilityProvenance = availabilityProvenance
+        self.dataQuality = dataQuality
+        self.vintage = vintage
+        self.reportPeriod = reportPeriod
+        self.allocations = allocations
+    }
+}
+
 // MARK: - CorporateAction（公司行动）
 
 /// 公司行动（分红 / 送股 / 拆股 / 合并）。

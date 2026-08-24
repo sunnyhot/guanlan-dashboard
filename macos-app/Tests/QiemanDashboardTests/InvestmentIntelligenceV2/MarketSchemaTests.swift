@@ -16,13 +16,11 @@ final class MarketSchemaTests: XCTestCase {
     // MARK: - 迁移与表结构
 
     func testV3Migration_RegistersAfterIdentity() throws {
-        XCTAssertEqual(
-            Array(CanonicalDatabase.makeMigrations().migrations),
-            ["v1_baseline", "v2_identity", "v3_market"],
-            "迁移清单只追加"
-        )
-        XCTAssertEqual(CanonicalDatabase.schemaVersion, 3)
-        XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline", "v2_identity", "v3_market"])
+        // 全量清单随后续 story 追加而变，此处断言 v3 的位置语义 + 版本一致性
+        let migrations = CanonicalDatabase.makeMigrations().migrations
+        XCTAssertEqual(migrations.prefix(3), ["v1_baseline", "v2_identity", "v3_market"])
+        XCTAssertEqual(CanonicalDatabase.schemaVersion, migrations.count)
+        XCTAssertEqual(try db.appliedMigrations(), Array(migrations))
     }
 
     func testAllThreeTablesExist() throws {

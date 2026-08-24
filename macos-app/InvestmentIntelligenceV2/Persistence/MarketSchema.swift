@@ -404,11 +404,15 @@ struct CorporateActionRow: FetchableRecord, PersistableRecord {
 enum MarketSchemaError: Error, Equatable, CustomStringConvertible {
     /// 同一观测的多个 Price 币种不一致（单 currency 列的完整性前提被破坏）
     case mixedPriceCurrency(table: String, id: String)
+    /// 可选 Price 的 value/currency 双列只有一列非空（正常写入同空同非空）
+    case priceColumnsDisagree(value: String?, currency: String?)
 
     var description: String {
         switch self {
         case .mixedPriceCurrency(let table, let id):
             return "MarketSchema: \(table) 行 \(id) 的 Price 币种不一致"
+        case .priceColumnsDisagree(let value, let currency):
+            return "MarketSchema: 可选 Price 列不配套（value=\(value ?? "nil"), currency=\(currency ?? "nil")）"
         }
     }
 }
