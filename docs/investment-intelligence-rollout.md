@@ -804,7 +804,9 @@ macos-app/
 > - **读取错误策略**（协议非 throwing）：失败 → 该查询返回空（缺口语义，
 >   DATA006）+ `lastQueryError` 线程安全诊断面（NSLock，与 InMemory 同款
 >   约定），不静默不伪造。
-> - 9 个 GRDBRepositoryParityTests。
+> - GRDBRepositoryParityTests（身份 / 全 context 矩阵 / resolve 与关系 /
+>   多 Provider 共存 / v6→v7 升级数据存活 / 冲突与幂等写入 / 单点语义与
+>   preferredProvider 契约；项数随审查修复追加，以套件通过为准）。
 >
 > **GRDB-8 已签收（5 点，2026-08-24）**——`Persistence/CanonicalPipeline.swift`
 > （Staging → Canonical Commit 四防火墙管道）+
@@ -833,9 +835,9 @@ macos-app/
 >   publishedAt；对满足下界的既有数据零影响）。
 > - **spool 直连**：`commitRecords(fromSpool:)`（PROV-1 Reader → pipeline，
 >   SYNC-2..5 循环的每轮入口；文件级读取失败上抛，非记录级拒收）。
-> - 9 个 CanonicalPipelineTests（端到端提交可查 / 幂等重放 / 窗口内更正产生
->   新 vintage 且 economic 取修订 / 四防火墙各有专项拒收测试含 FK 整批回滚 /
->   spool 直连）。
+> - CanonicalPipelineTests（端到端提交可查 / 幂等重放 / 更正产生新 vintage
+>   且 economic 取修订 / 四防火墙各有专项拒收测试含 FK 整批回滚 / alias
+>   幂等归并 / 冲突拒收溯源 / spool 直连；项数随审查修复追加，以套件通过为准）。
 >
 > **✅ M4 达成（2026-08-24）**：GRDBRepository 经 `GRDBRepositoryParityTests`
 > 与 InMemoryRepository 在全部查询 API × 10 种 context 下输出逐一相等
@@ -894,6 +896,12 @@ macos-app/
 >   rollout GRDB-7/GRDB-8 签收段的「INSERT OR REPLACE」表述全部改写为
 >   显式冲突语义。
 >
+> **✅ Epic 5 三轮复审通过（2026-08-24，`93c2c69`）**：三个代码边界收口
+> 确认、无新 P0–P2 问题，**Epic 5 标记为完全完成**（含两轮审查修复 +
+> 一轮复审通过；全量回归与目标套件通过，跳过环境性
+> AppLaunchPresentationPolicyTests）。P3 文档数字偏差同步清理：测试项数
+> 表述改为「以套件通过为准」防漂移。
+>
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：
 > - **10 表**：evidence / evidence_facts / signals / theses / artifacts /
@@ -933,7 +941,7 @@ macos-app/
 > 劫持推断（TrendLiveLogPanel.copyLogs 显式 `: String` 修复，AGENTS.md 坑点 17）。
 > **AGENTS.md 第 6 条已随 Epic 5 开始更新**（原「无 SQLite」约定废止，
 > GRDB 限 V2 Canonical Store 范围内使用；GRDB-9 剩余：iOS framework 链接细节
-> 与数据目录规划的最终验收）。swift test 全量绿（1149 过含二轮审查修复，排除环境性崩溃的
+> 与数据目录规划的最终验收）。swift test 全量绿（排除环境性崩溃的
 > AppLaunchPresentationPolicyTests，见下）。
 > **已知环境问题（与 Epic 5 无关）**：`AppLaunchPresentationPolicyTests` 在
 > 本机确定性 signal 11（干净 HEAD 复现），全量跑需 `--skip`；待单独排查。
