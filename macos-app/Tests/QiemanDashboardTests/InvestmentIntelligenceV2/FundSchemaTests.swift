@@ -21,8 +21,9 @@ final class FundSchemaTests: XCTestCase {
             CanonicalDatabase.makeMigrations().migrations.prefix(4),
             ["v1_baseline", "v2_identity", "v3_market", "v4_fund"]
         )
-        XCTAssertEqual(CanonicalDatabase.schemaVersion, 4)
-        XCTAssertEqual(try db.appliedMigrations().suffix(1), ["v4_fund"])
+        XCTAssertEqual(CanonicalDatabase.schemaVersion, CanonicalDatabase.makeMigrations().migrations.count)
+        XCTAssertEqual(CanonicalDatabase.makeMigrations().migrations.dropFirst(3).first, "v4_fund",
+                       "v4_fund 固定排在第 4 位（不可变清单）")
     }
 
     func testAllThreeTablesExist() throws {

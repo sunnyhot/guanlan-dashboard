@@ -43,7 +43,7 @@ final class CanonicalDatabase: @unchecked Sendable {
 
     /// 当前代码认识的 schema 版本（= 已登记的最高 migration 序号）。
     /// GRDB-2..6 每加一个域的建表 migration 就 +1；**已发布的序号永不复用**。
-    static let schemaVersion = 4
+    static let schemaVersion = 5
 
     /// 全部迁移（按序登记，只追加不改写）。
     ///
@@ -66,6 +66,10 @@ final class CanonicalDatabase: @unchecked Sendable {
         // v4（GRDB-4）：Fund 域 3 表（持仓 multi-vintage）。
         migrator.registerMigration("v4_fund") { db in
             try FundSchema.create(in: db)
+        }
+        // v5（GRDB-5）：Fundamental / Macro 域 2 表（对齐 FRED vintage）。
+        migrator.registerMigration("v5_fundamental_macro") { db in
+            try FundamentalMacroSchema.create(in: db)
         }
         return migrator
     }

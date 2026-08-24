@@ -736,6 +736,22 @@ macos-app/
 >   可选 Price 双列（market_value + currency）同空同非空，不配套 fail-closed。
 > - 11 个 FundSchemaTests。
 >
+> **GRDB-5 已签收（2 点，2026-08-24）**——migration `v5_fundamental_macro` +
+> `Persistence/FundamentalMacroSchema.swift`（2 表 DDL + row codec）：
+> - **2 表**：fundamental_observations（entity_id → legal_entities，SEC CIK
+>   的 Canonical 目标）/ macro_observations（indicator_id → instruments）。
+> - **事实身份唯一键**（REPO-1b 分组语义）：(entity, metricKey, unit,
+>   periodStart, periodEnd, vintage)。**concept 不进键**——公司换 XBRL 标签
+>   年份的同事实两段历史靠 metricKey 归并（PROV-4 逐事实概念选择）。
+> - **NULL 陷阱封口**：period_start 可空（时点项），SQLite 唯一索引视 NULL
+>   互不相等——两条同键 NULL 行不撞约束；用 `COALESCE(period_start,'')`
+>   表达式索引封死（专项测试守护）。
+> - **FRED vintage 对齐**：macro (indicator, effectiveAt, vintage) 唯一，
+>   advance/second 修订行共存；base_period JSON 列（非指数指标 nil）。
+> - 11 个 FundamentalMacroSchemaTests（流量/时点事实往返、宏观 basePeriod
+>   两态、唯一键含 NULL 封口、修订+换标签共存、Q2/H1 同 periodEnd 不互斥、
+>   FK、未知 form/unit fail-closed）。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通

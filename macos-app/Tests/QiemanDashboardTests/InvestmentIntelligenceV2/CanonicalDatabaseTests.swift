@@ -25,7 +25,7 @@ final class CanonicalDatabaseTests: XCTestCase {
         let db = try CanonicalDatabase(path: path)
         XCTAssertTrue(FileManager.default.fileExists(atPath: path), "打开后应落库文件")
         XCTAssertEqual(try db.migrationState(), .current, "初始化自动迁移后应为 current")
-        XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline", "v2_identity", "v3_market", "v4_fund"])
+        XCTAssertEqual(try db.appliedMigrations(), Array(CanonicalDatabase.makeMigrations().migrations))
     }
 
     func testReopen_isIdempotent_migrationsNotRerun() throws {
@@ -33,14 +33,14 @@ final class CanonicalDatabaseTests: XCTestCase {
         _ = try CanonicalDatabase(path: path)
         // 第二次打开：已应用的同名 migration 必须跳过（GRDB 按名去重）
         let reopened = try CanonicalDatabase(path: path)
-        XCTAssertEqual(try reopened.appliedMigrations(), ["v1_baseline", "v2_identity", "v3_market", "v4_fund"], "重开不得重复应用")
+        XCTAssertEqual(try reopened.appliedMigrations(), Array(CanonicalDatabase.makeMigrations().migrations), "重开不得重复应用")
         XCTAssertEqual(try reopened.migrationState(), .current)
     }
 
     func testInMemory_databaseWorksForTests() throws {
         let db = try CanonicalDatabase()
         XCTAssertEqual(try db.migrationState(), .current)
-        XCTAssertEqual(try db.appliedMigrations(), ["v1_baseline", "v2_identity", "v3_market", "v4_fund"])
+        XCTAssertEqual(try db.appliedMigrations(), Array(CanonicalDatabase.makeMigrations().migrations))
         XCTAssertEqual(db.queue.path, ":memory:", "内存库无落盘路径")
     }
 
