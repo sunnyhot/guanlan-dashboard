@@ -50,15 +50,39 @@ struct DecisionValidator: Sendable {
         case bandVersionMismatch(artifact: String, referenced: String)
         /// criterion 版本指纹为空（criterion 不可追溯，D002）
         case emptyCriterionVersions
+        /// 引用无法解析到具体实例（审查 P1-1：fail-closed，不静默放行）
+        case unresolvableReference(kind: String, id: String)
+    }
+
+    /// 各类引用的可解析性检查（D004 §2「所有引用 ID 都能解析到具体实例」）。
+    /// 生产接 Signal Store（RES-6）/ Repository / Artifact Store；测试传 stub。
+    /// 非 Sendable：仅作为 validate 的方法参数透传，不被 validator 存储。
+    struct ReferenceResolvers {
+        var signal: (SignalID) -> Bool = { _ in true }
+        var factorSnapshot: (ArtifactID) -> Bool = { _ in true }
+        var criterion: (String) -> Bool = { _ in true }
+        var indifferenceBand: (String) -> Bool = { _ in true }
+
+        init(
+            signal: @escaping (SignalID) -> Bool = { _ in true },
+            factorSnapshot: @escaping (ArtifactID) -> Bool = { _ in true },
+            criterion: @escaping (String) -> Bool = { _ in true },
+            indifferenceBand: @escaping (String) -> Bool = { _ in true }
+        ) {
+            self.signal = signal
+            self.factorSnapshot = factorSnapshot
+            self.criterion = criterion
+            self.indifferenceBand = indifferenceBand
+        }
     }
 
     /// 校验 artifact 完备性与 provenance 闭环。
     ///
-    /// - resolver：引用可解析性检查（Signal / Factor / Target 实例是否可取；
-    ///   测试传 stub，生产接 Signal Store（RES-6）/ Repository）
+    /// 审查 P1-1 修复：**全部引用 fail-closed**——Signal / FactorSnapshot /
+    /// Criterion / Band 任一无法解析立即抛错，不再静默放行（D004 §2）。
     func validate(
         artifact: PortfolioDecisionArtifact,
-        referenceResolver: (SignalID) -> Bool = { _ in true }
+        resolvers: ReferenceResolvers = ReferenceResolvers()
     ) throws {
         // D002：criterion 可追溯
         guard !artifact.criterionVersions.isEmpty else {
@@ -70,14 +94,13 @@ struct DecisionValidator: Sendable {
                 artifact: "", referenced: "")
         }
         // D001：全部动作 provenance 闭环（类型已保证枚举封闭,复核非空域）
-        for (key, plan) in artifact.plans {
+        for (_, plan) in artifact.plans {
             for item in plan.actions {
                 switch item.provenance {
                 case .targetRebalance, .remediation, .userDirective:
                     break
                 }
             }
-            _ = key
         }
         // admissible ∈ plans
         for admissible in artifact.decision.admissiblePlans {
@@ -85,52 +108,102 @@ struct DecisionValidator: Sendable {
                 throw ValidationError.admissiblePlanNotFound(admissible)
             }
         }
-        // 引用可解析（Signal IDs）
-        for signalID in artifact.signalIDs where !referenceResolver(signalID) {
-            // 单个不可解析不在此抛——D004：supersede 不改旧引用，resolver
-            // 返回 false 时上游已丢失,属存储层问题;此处只做完备性结构校验
+        // 引用可解析（fail-closed）
+        for signalID in artifact.signalIDs where !resolvers.signal(signalID) {
+            throw ValidationError.unresolvableReference(kind: "signal", id: signalID.rawValue)
+        }
+        for factorID in artifact.factorSnapshotIDs where !resolvers.factorSnapshot(factorID) {
+            throw ValidationError.unresolvableReference(kind: "factorSnapshot", id: factorID.rawValue)
+        }
+        for criterion in artifact.criterionVersions where !resolvers.criterion(criterion) {
+            throw ValidationError.unresolvableReference(kind: "criterion", id: criterion)
+        }
+        if !resolvers.indifferenceBand(artifact.indifferenceBandVersion) {
+            throw ValidationError.unresolvableReference(kind: "indifferenceBand", id: artifact.indifferenceBandVersion)
         }
     }
 }
 
 /// 决策重放器（DEC-9，D004 §3/5）。
+///
+/// 审查 P1-1 修复：完整重放覆盖 **Planner → Compare → Decide 全链**——
+/// plans 的 Δw 由 Planner 从（按 artifact 引用取齐的）确定性输入重新生成，
+/// 重放结论含行动计划本身，不只是方案键。不重跑 Research / 不重抓数据 /
+/// 不重算 factor（取数是调用方职责，输入按引用 IDs 取齐）。
 struct DecisionReplayer: Sendable {
-    /// 重放的确定性输入快照（按 artifact 引用取齐后组装；**不重跑 Research /
-    /// 不重抓数据 / 不重算 factor**——取数是调用方职责，replayer 只重跑
-    /// Planner→Compare→Decide 的确定性链）。
-    struct ReplayInputs: Sendable, Codable, Hashable {
-        let plans: [String: [CriterionScore]]
-        let band: IndifferenceBand
-        let higherIsBetter: [String: Bool]
-        let allPlanKeys: [String]
+    /// 单个 plan 的规划输入（重放时重新产 Δw）。
+    struct PlannerRun: Sendable, Codable, Hashable {
+        let portfolio: PortfolioSnapshot
+        let target: AllocationTarget?
+        let remediationTargets: [RemediationTargetInput]
+        let userDirectives: [UserDirectiveInput]
+        let actionDomain: ActionDomain
+        let plannerParameters: TargetRebalancePlanner.Parameters
     }
 
-    /// 完整重放：同 IDs 取齐的 inputs → 同决策（确定性链）。
-    func replay(inputs: ReplayInputs) -> PartialDecision {
+    /// 重放的确定性输入快照。
+    struct ReplayInputs: Sendable, Codable, Hashable {
+        /// 每 plan 的规划输入（Planner 链）
+        let plannerRuns: [String: PlannerRun]
+        /// 每 plan 的 criterion 分数（Compare 链；由 criterion evaluator 按
+        /// 引用取齐的 cardinal 输入重算——同样是确定性重放的一部分）
+        let scores: [String: [CriterionScore]]
+        let band: IndifferenceBand
+        let higherIsBetter: [String: Bool]
+    }
+
+    /// 重放结论（审查 P1-1：含行动计划本身）。
+    struct ReplayOutcome: Sendable, Codable, Hashable {
+        let plans: [String: PortfolioActionPlan]
+        let comparison: PlanComparisonResult
+        let decision: PartialDecision
+    }
+
+    /// 完整重放：Planner → Compare → Decide 全链确定性重跑。
+    func replay(inputs: ReplayInputs, now: Date) -> ReplayOutcome {
+        var plans: [String: PortfolioActionPlan] = [:]
+        for (key, run) in inputs.plannerRuns {
+            plans[key] = TargetRebalancePlanner(parameters: run.plannerParameters).plan(
+                portfolio: run.portfolio,
+                target: run.target,
+                remediationTargets: run.remediationTargets,
+                userDirectives: run.userDirectives,
+                actionDomain: run.actionDomain,
+                now: now
+            )
+        }
         let comparison = CriterionComparator().compare(
-            plans: inputs.plans,
+            plans: inputs.scores,
             band: inputs.band,
             higherIsBetter: inputs.higherIsBetter
         )
-        return PartialDecisionPolicy().decide(comparison, allPlanKeys: inputs.allPlanKeys)
+        let decision = PartialDecisionPolicy().decide(
+            comparison, allPlanKeys: inputs.scores.keys.sorted()
+        )
+        return ReplayOutcome(plans: plans, comparison: comparison, decision: decision)
     }
 
-    /// Partial 重放（what-if）：替换部分引用（如换 plans 的 scores）后重跑。
-    /// 结果是新决策,不影响原 artifact（D004 §5）。
-    func replayWhatIf(base: ReplayInputs, replacing plans: [String: [CriterionScore]]) -> PartialDecision {
+    /// Partial 重放（what-if）：替换部分引用（如换 scores / 换规划输入）后
+    /// 重跑。结果是新决策,不影响原 artifact（D004 §5）。
+    func replayWhatIf(
+        base: ReplayInputs,
+        replacingScores scores: [String: [CriterionScore]],
+        now: Date
+    ) -> ReplayOutcome {
         replay(inputs: ReplayInputs(
-            plans: base.plans.merging(plans) { _, new in new },
+            plannerRuns: base.plannerRuns,
+            scores: base.scores.merging(scores) { _, new in new },
             band: base.band,
-            higherIsBetter: base.higherIsBetter,
-            allPlanKeys: base.allPlanKeys
-        ))
+            higherIsBetter: base.higherIsBetter
+        ), now: now)
     }
 }
 
 // MARK: - 决策组装器（artifact 构造的便捷入口）
 
 extension PortfolioDecisionArtifact {
-    /// 从比较结论组装 artifact（id 确定性派生：引用层 + 结果层内容）。
+    /// 从比较结论组装 artifact（id 确定性派生：引用层 + 结果层完整语义——
+    /// decision + plans + 上下文，审查 P1-3 修复；只排除 producedAt）。
     static func assemble(
         signalIDs: [SignalID],
         criterionVersions: [String],
@@ -142,13 +215,22 @@ extension PortfolioDecisionArtifact {
         plans: [String: PortfolioActionPlan],
         producedAt: Date
     ) -> PortfolioDecisionArtifact {
-        let canonical = "decision|\(signalIDs.map(\.rawValue).sorted().joined(separator: ","))|\(criterionVersions.sorted().joined(separator: ","))|\(factorSnapshotIDs.map(\.rawValue).sorted().joined(separator: ","))|\(target?.id.rawValue ?? "-")|\(bandVersion)|\(decision.admissiblePlans.sorted().joined(separator: ","))"
+        let payload = StableDigest.jsonPayload(IdentityPayload(
+            signalIDs: signalIDs.map(\.rawValue).sorted(),
+            criterionVersions: criterionVersions.sorted(),
+            factorSnapshotIDs: factorSnapshotIDs.map(\.rawValue).sorted(),
+            targetID: target?.id.rawValue,
+            bandVersion: bandVersion,
+            knowledgeContextSummary: knowledgeContextSummary,
+            decision: decision,
+            plans: plans
+        ))
         let deps: [ArtifactDependency] =
             signalIDs.map { ArtifactDependency(kind: .signal, referenceID: $0.rawValue) }
             + factorSnapshotIDs.map { ArtifactDependency(kind: .factorSnapshot, referenceID: $0.rawValue) }
             + (target.map { [ArtifactDependency(kind: .target, referenceID: $0.id.rawValue, version: nil)] } ?? [])
         return PortfolioDecisionArtifact(
-            id: ArtifactID(rawValue: "dec_\(Self.digest(canonical))"),
+            id: ArtifactID(rawValue: "dec_\(StableDigest.digest(payload))"),
             producedAt: producedAt,
             validityPolicy: .immutableHistorical,
             dependencies: deps,
@@ -163,15 +245,15 @@ extension PortfolioDecisionArtifact {
         )
     }
 
-    /// 双 FNV-1a 确定性摘要（与同模块其他 id 派生同算法）。
-    private static func digest(_ input: String) -> String {
-        let data = Data(input.utf8)
-        var h1: UInt64 = 0xcbf29ce484222325
-        var h2: UInt64 = 0x9e3779b97f4a7c15
-        for byte in data {
-            h1 = (h1 ^ UInt64(byte)) &* 0x100000001b3
-            h2 = (h2 &+ UInt64(byte)) &* 0xbf58476d1ce4e5b9
-        }
-        return String(format: "%016lx%016lx", h1, h2)
+    /// ID 身份 payload（语义完备；审查 P1-3）。
+    private struct IdentityPayload: Encodable {
+        let signalIDs: [String]
+        let criterionVersions: [String]
+        let factorSnapshotIDs: [String]
+        let targetID: String?
+        let bandVersion: String
+        let knowledgeContextSummary: String
+        let decision: PartialDecision
+        let plans: [String: PortfolioActionPlan]
     }
 }

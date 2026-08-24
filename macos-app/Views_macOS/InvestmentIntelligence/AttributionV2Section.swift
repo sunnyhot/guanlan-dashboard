@@ -7,13 +7,15 @@ struct AttributionV2Section: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
+        // 审查 P2-9：单次读取（避免同一次 body 内重复跑 workflow）
+        let outcome = model.dailyAttributionV2
         SectionCard(
             title: "当日归因（V2 引擎）",
             subtitle: "纯计算归因：持仓收益拆解到成分，与上方复盘双轨对照",
             icon: "chart.bar.doc.horizontal",
             trailing: {
                 Spacer()
-                if let outcome = model.dailyAttributionV2, let rendered = outcome.rendered {
+                if let rendered = outcome?.rendered {
                     InvestmentStateBadge(
                         text: badgeText(rendered.grade),
                         tint: badgeTint(rendered.grade)
@@ -22,7 +24,7 @@ struct AttributionV2Section: View {
             }
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-                switch model.dailyAttributionV2 {
+                switch outcome {
                 case .none:
                     Label(
                         "暂无持仓快照：刷新个人持仓后这里展示当日收益归因。",
@@ -93,7 +95,8 @@ struct AttributionV2Section: View {
             .font(AppPalette.appFont(.caption))
             .foregroundStyle(AppPalette.muted)
 
-        Text("数据基础：覆盖 \(pct(outcome.artifact?.result.coverage.value)) · 未覆盖 \(pct(outcome.artifact?.result.unattributedWeight.value)) · V2 确定性引擎（无 LLM）")
+        // 审查 P1-8：估值/涨跌覆盖显式展示;未全覆盖时 residual 不产
+        Text(dataBasisText(outcome: outcome) + " · V2 确定性引擎（无 LLM）")
             .font(AppPalette.appFont(.caption2))
             .foregroundStyle(AppPalette.muted)
     }
@@ -121,6 +124,21 @@ struct AttributionV2Section: View {
         case .partial: return AppPalette.warning
         case .low: return AppPalette.danger
         }
+    }
+
+    /// 数据基础行：归因覆盖 + 估值/涨跌覆盖 + residual 口径说明。
+    private func dataBasisText(outcome: DailyAttributionWorkflow.RunOutcome?) -> String {
+        var parts = [
+            "覆盖 \(pct(outcome?.artifact?.result.coverage.value))",
+            "未覆盖 \(pct(outcome?.artifact?.result.unattributedWeight.value))",
+        ]
+        if let coverage = model.attributionV2Coverage {
+            parts.append(coverage.summaryText)
+            if !coverage.supportsResidual {
+                parts.append("覆盖不完整，不计算残差")
+            }
+        }
+        return "数据基础：" + parts.joined(separator: " · ")
     }
 
     private func pct(_ value: Decimal?) -> String {

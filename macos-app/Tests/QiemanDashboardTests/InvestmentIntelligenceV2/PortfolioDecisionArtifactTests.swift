@@ -86,62 +86,123 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
     // MARK: - Replay(D004 §3:same IDs → same decision;不重跑 Research)
 
-    func testReplayDeterministic_sameInputsSameDecision() {
-        func score(_ id: String, _ v: Decimal) -> CriterionScore {
-            CriterionScore(
-                definition: CriterionDefinition(
-                    id: id, version: "v1", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .signalCardinal, referenceID: "\(id)-in", weight: 1)],
-                    unit: .ratio),
-                value: v, missingInputs: [], computation: "t")
-        }
-        // 两方案各有优势 → unresolvedTradeoff(mock signals 已按 ID 引用,
-        // 重放不重跑 Research——inputs 由调用方按 artifact 引用取齐)
+    private func score(_ id: String, _ v: Decimal, channel: CriterionDefinition.InputReference.Kind = .signalCardinal) -> CriterionScore {
+        CriterionScore(
+            definition: CriterionDefinition(
+                id: id, version: "v1", evaluatorKind: .weightedSum,
+                inputReferences: [CriterionDefinition.InputReference(
+                    kind: channel, referenceID: "\(id)-in", weight: 1)],
+                unit: .ratio),
+            value: v, missingInputs: [], computation: "t")
+    }
+
+    /// 规划输入(审查 P1-1:重放覆盖 Planner→Compare→Decide 全链)。
+    private func plannerRun(delta: String) -> DecisionReplayer.PlannerRun {
+        DecisionReplayer.PlannerRun(
+            portfolio: PortfolioSnapshot(asOf: day, positions: [
+                PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
+            ]),
+            target: nil, remediationTargets: [],
+            userDirectives: [
+                UserDirectiveInput(subjectKey: "listing|A", deltaWeight: Ratio(value: d(delta)),
+                                   directiveID: "u-replay", note: nil)
+            ],
+            actionDomain: ActionDomain(
+                perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
+                eligibleNewSubjects: [:], builderVersion: "test",
+                newSubjectBuyUpper: Ratio(value: d("1"))
+            ),
+            plannerParameters: TargetRebalancePlanner.Parameters()
+        )
+    }
+
+    func testReplayDeterministic_sameInputsSamePlansAndDecision() {
+        // 审查 P1-1 回归:完整重放覆盖 Planner——同 inputs 产出**相同行动计划**
+        // (Δw 与 provenance),不只是相同方案键
         let inputs = DecisionReplayer.ReplayInputs(
-            plans: [
+            plannerRuns: ["A": plannerRun(delta: "0.05"), "B": plannerRun(delta: "-0.05")],
+            scores: [
                 "A": [score("momentum", d("0.05")), score("costScore", d("0.005"))],
                 "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
             ],
-            band: band, higherIsBetter: [:], allPlanKeys: ["A", "B"]
+            band: band, higherIsBetter: [:]
         )
         let replayer = DecisionReplayer()
-        let first = replayer.replay(inputs: inputs)
-        let second = replayer.replay(inputs: inputs)
-        XCTAssertEqual(first, second, "same mock inputs → same decision(M7 验收)")
-        XCTAssertEqual(first.status, .unresolvedTradeoff)
-        XCTAssertEqual(first.admissiblePlans, ["A", "B"])
+        let first = replayer.replay(inputs: inputs, now: day)
+        let second = replayer.replay(inputs: inputs, now: day)
+        XCTAssertEqual(first, second, "same mock inputs → same decision + same plans(M7/D004)")
+        XCTAssertEqual(first.decision.status, .unresolvedTradeoff)
+        XCTAssertEqual(first.decision.admissiblePlans, ["A", "B"])
+        // plans 是 Planner 重放的产物:动作与 provenance 完整
+        XCTAssertEqual(first.plans["A"]?.actions.first?.action.deltaWeight.value, d("0.05"))
+        XCTAssertEqual(first.plans["B"]?.actions.first?.action.deltaWeight.value, d("-0.05"))
+        guard case .userDirective = first.plans["A"]?.actions.first?.provenance else {
+            return XCTFail("重放的 plan 保留 provenance")
+        }
     }
 
     func testWhatIfReplayProducesNewDecisionWithoutTouchingBase() {
-        func score(_ id: String, _ v: Decimal) -> CriterionScore {
-            CriterionScore(
-                definition: CriterionDefinition(
-                    id: id, version: "v1", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .factorMetric, referenceID: "\(id)-in", weight: 1)],
-                    unit: .ratio),
-                value: v, missingInputs: [], computation: "t")
-        }
         let base = DecisionReplayer.ReplayInputs(
-            plans: [
+            plannerRuns: ["A": plannerRun(delta: "0.05"), "B": plannerRun(delta: "-0.05")],
+            scores: [
                 "A": [score("momentum", d("0.05")), score("costScore", d("0.005"))],
                 "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
             ],
-            band: band, higherIsBetter: [:], allPlanKeys: ["A", "B"]
+            band: band, higherIsBetter: [:]
         )
         let replayer = DecisionReplayer()
-        let originalDecision = replayer.replay(inputs: base)
+        let original = replayer.replay(inputs: base, now: day)
 
         // what-if:B 的 momentum 换成碾压值 → singlePreferred B
-        let whatIf = replayer.replayWhatIf(base: base, replacing: [
+        let whatIf = replayer.replayWhatIf(base: base, replacingScores: [
             "B": [score("momentum", d("0.09")), score("costScore", d("0.03"))],
-        ])
-        XCTAssertEqual(whatIf.status, .singlePreferred)
-        XCTAssertEqual(whatIf.admissiblePlans, ["B"])
+        ], now: day)
+        XCTAssertEqual(whatIf.decision.status, .singlePreferred)
+        XCTAssertEqual(whatIf.decision.admissiblePlans, ["B"])
 
         // 原决策不受影响(partial 重放是新 artifact 的素材,D004 §5)
-        XCTAssertEqual(replayer.replay(inputs: base), originalDecision)
+        XCTAssertEqual(replayer.replay(inputs: base, now: day), original)
+    }
+
+    func testValidatorFailsClosedOnUnresolvableReferences() {
+        // 审查 P1-1 回归:任一类引用无法解析 → 抛错,不静默放行
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05")])
+
+        // Signal 不可解析
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: artifact,
+            resolvers: .init(signal: { _ in false })
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .unresolvableReference(kind: "signal", id: "sig-1"))
+        }
+        // FactorSnapshot 不可解析
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: artifact,
+            resolvers: .init(factorSnapshot: { id in id.rawValue != "fs_abc" })
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .unresolvableReference(kind: "factorSnapshot", id: "fs_abc"))
+        }
+        // Criterion 不可解析
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: artifact,
+            resolvers: .init(criterion: { _ in false })
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .unresolvableReference(kind: "criterion", id: "portfolio-momentum@v1"))
+        }
+        // Band 不可解析
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: artifact,
+            resolvers: .init(indifferenceBand: { _ in false })
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .unresolvableReference(kind: "indifferenceBand", id: "b@v1"))
+        }
+        // 全部可解析 → 通过
+        XCTAssertNoThrow(try DecisionValidator().validate(artifact: artifact))
     }
 
     // MARK: - Artifact 形态

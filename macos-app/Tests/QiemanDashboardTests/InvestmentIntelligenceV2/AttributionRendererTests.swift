@@ -42,7 +42,7 @@ final class AttributionRendererTests: XCTestCase {
             knownWeights: [("A", "0.8", "0.01")], unknownWeights: [], portfolioReturn: nil
         ))
         XCTAssertEqual(high.grade, .high)
-        XCTAssertTrue(high.caveat.contains("可直接引用"))
+        XCTAssertTrue(high.caveat.contains("结果可引用"), "审查 P1-8:high 措辞不再声称「全部持仓」")
 
         let partial = AttributionRenderer().render(artifact(
             knownWeights: [("A", "0.5", "0.01")], unknownWeights: [("B", "0.5")], portfolioReturn: nil
@@ -93,7 +93,7 @@ final class AttributionRendererTests: XCTestCase {
         let text = AttributionRenderer().deterministicNarrative(artifact)
         XCTAssertTrue(text.contains("基金 A +1%"), "正贡献在前")
         XCTAssertTrue(text.contains("差 +1%"), "residual 0.01 − 0 = +1%")
-        XCTAssertTrue(text.contains("可直接引用"), "coverage=100% → high 措辞")
+        XCTAssertTrue(text.contains("结果可引用"), "coverage=100% → high 措辞")
     }
 
     // MARK: - LLM Narrative 契约(只补叙述不改数字)

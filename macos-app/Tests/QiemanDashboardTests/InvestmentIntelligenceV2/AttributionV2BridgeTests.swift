@@ -99,6 +99,36 @@ final class AttributionV2BridgeTests: XCTestCase {
         XCTAssertNotNil(outcome.errorDetail)
     }
 
+    // MARK: - residual 口径(审查 P1-8)
+
+    func testResidualWithheldWhenCoverageIncomplete() throws {
+        // 涨跌未全覆盖:B 行无 changePct → portfolioReturn 不提供 → residual nil
+        let outcome = run(snapshot(rows: [
+            row(code: "A", assetType: .fund, marketValue: 600, changePct: 10),
+            row(code: "B", assetType: .fund, marketValue: 400, changePct: nil),
+        ]))
+        let result = try XCTUnwrap(outcome.artifact).result
+        XCTAssertNil(result.residual, "涨跌覆盖不完整时 dailyChangeSummary 只是子集收益,不能当全组合 residual 基准")
+        XCTAssertEqual(result.coverage.value, Decimal(string: "0.6"))
+
+        // 估值缺失(无市值行)同样阻断
+        let noValuation = run(snapshot(rows: [
+            row(code: "A", assetType: .fund, marketValue: 600, changePct: 10),
+            row(code: "B", assetType: .fund, marketValue: nil, changePct: 5),
+        ]))
+        XCTAssertNil(try XCTUnwrap(noValuation.artifact).result.residual)
+    }
+
+    func testResidualProvidedOnlyAtFullCoverage() throws {
+        // 全覆盖(全部有市值 + 全部有涨跌)→ residual 产出
+        let outcome = run(snapshot(rows: [
+            row(code: "A", assetType: .fund, marketValue: 600, changePct: 10),
+            row(code: "B", assetType: .fund, marketValue: 400, changePct: -5),
+        ]))
+        let result = try XCTUnwrap(outcome.artifact).result
+        XCTAssertNotNil(result.residual, "全覆盖时 residual 正常产出")
+    }
+
     // MARK: - 渲染端到端
 
     func testRenderedOutputForDisplay() throws {

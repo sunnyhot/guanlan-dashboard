@@ -30,7 +30,9 @@ enum AttributionCoverageGrade: String, Sendable, Codable, Hashable {
     var caveat: String {
         switch self {
         case .high:
-            return "归因覆盖全部持仓收益来源，结果可直接引用。"
+            // 审查 P1-8：权重经归一化，coverage=100% 只说明「参与归一的
+            // 持仓收益已知」，不代表全组合估值完备——措辞不声称「全部持仓」
+            return "归因覆盖已知估值持仓的收益来源，结果可引用；未估值持仓不计入上述拆解。"
         case .partial:
             return "归因覆盖了主要收益来源，但部分持仓当日数据缺失，未覆盖部分不计入上述贡献。"
         case .low:
