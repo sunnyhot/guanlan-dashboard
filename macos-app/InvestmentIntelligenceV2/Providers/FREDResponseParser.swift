@@ -277,9 +277,26 @@ struct FREDProviderAdapter: ProviderAdapter {
                 offset: offset
             ))
             let metadata = try parser.parsePageMetadata(body)
+            // P1 修复（三轮）：响应对应**当前请求**才能累计——请求 offset=0 却
+            // 收到 offset=2 时直接 break 会静默漏掉前两页；offset 后退同理。
+            guard metadata.offset == offset else {
+                throw ProviderError.schemaMismatch(
+                    providerID: .fred,
+                    detail: "FRED 分页响应 offset \(metadata.offset) ≠ 请求 offset \(offset)"
+                        + "（count \(metadata.count)，received \(metadata.received)）"
+                )
+            }
             let history = try parser.parse(body, seriesID: config.seriesID)
             entries.append(contentsOf: history.entries)
             droppedTotal += history.droppedMalformedCount
+            // count 一致性：offset + received 超过 count 说明响应自相矛盾
+            guard metadata.count >= metadata.nextOffset else {
+                throw ProviderError.schemaMismatch(
+                    providerID: .fred,
+                    detail: "FRED 分页 count 不一致（offset \(metadata.offset) + received "
+                        + "\(metadata.received) > count \(metadata.count)）"
+                )
+            }
             guard metadata.hasMorePages else { break }
             guard metadata.nextOffset > offset else {
                 throw ProviderError.schemaMismatch(

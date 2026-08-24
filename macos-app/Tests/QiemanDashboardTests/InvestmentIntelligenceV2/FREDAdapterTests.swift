@@ -303,6 +303,152 @@ final class FREDAdapterTests: XCTestCase {
         XCTAssertTrue(URLSessionResponseFetcher.redactedDescription(of: plain).contains("stooq.com"))
     }
 
+    // MARK: - 三轮 P1 修复
+
+    func testTransportErrorRedactsAPIKey() async {
+        // P1 修复（三轮）锁定：URLSession 传输失败（URLError userInfo 含
+        // NSErrorFailingURLStringKey = 带 api_key 的完整 URL）时，错误文本
+        // 仍不得泄露凭据——整体插值底层错误会把它带出来。
+        let fullURL = "https://api.stlouisfed.org/fred/series/observations"
+            + "?series_id=GDP&api_key=SECRET_TRANSPORT_KEY&offset=0"
+        let failure = URLError(
+            .cannotConnectToHost,
+            userInfo: [NSURLErrorFailingURLStringErrorKey: fullURL]
+        )
+        LeakingTransportURLProtocol.failure = failure
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [LeakingTransportURLProtocol.self]
+        let fetcher = URLSessionResponseFetcher(session: URLSession(configuration: config))
+
+        do {
+            _ = try await fetcher.fetch(.fredObservations(
+                seriesID: "GDP", realtimeStart: "1776-07-04", realtimeEnd: nil,
+                apiKey: "SECRET_TRANSPORT_KEY", offset: 0
+            ))
+            XCTFail("传输失败应抛错")
+        } catch let error as ProviderError {
+            guard case .unavailable(_, let underlying) = error else {
+                return XCTFail("期望 unavailable：\(error)")
+            }
+            XCTAssertFalse(underlying.contains("SECRET_TRANSPORT_KEY"),
+                           "传输错误不得泄露 api_key：\(underlying)")
+            XCTAssertFalse(underlying.contains("series_id"), "不得泄露任何查询参数：\(underlying)")
+            XCTAssertTrue(underlying.contains("transport error"), "保留错误域信息：\(underlying)")
+            XCTAssertTrue(underlying.contains("api.stlouisfed.org"), "保留脱敏 host/path：\(underlying)")
+        } catch {
+            XCTFail("期望 ProviderError：\(error)")
+        }
+        LeakingTransportURLProtocol.failure = nil
+    }
+
+    func testPaginationResponseOffsetForwardJumpRejected() async throws {
+        // P1 修复（三轮）：请求 offset=0、响应却自称 offset=2 且「已到末页」
+        // ——必须拒收（旧行为直接 break，静默漏掉前两条）
+        let jumped = """
+        {"count":4,"offset":2,"limit":2,"observations":[
+          {"date":"2023-07-01","value":"2.2","realtime_start":"2023-10-26"},
+          {"date":"2023-04-01","value":"2.0","realtime_start":"2023-07-27"}
+        ]}
+        """
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: jumped]),
+            ingestedAt: { self.date(2024, 8, 1) }, apiKey: "test-key"
+        )
+        do {
+            _ = try await adapter.fetch(
+                code: ProviderCode(scheme: "fred_series", value: "GDP"),
+                from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+            )
+            XCTFail("响应 offset 前跳应拒收")
+        } catch let error as ProviderError {
+            guard case .schemaMismatch(_, let detail) = error else {
+                return XCTFail("期望 schemaMismatch：\(error)")
+            }
+            XCTAssertTrue(detail.contains("offset"), "拒收原因指向 offset 错配：\(detail)")
+        }
+    }
+
+    func testPaginationResponseOffsetBackwardJumpRejected() async throws {
+        // 第二页请求 offset=2、响应却回退到 offset=0 —— 拒收
+        let page1 = """
+        {"count":4,"offset":0,"limit":2,"observations":[
+          {"date":"2024-01-01","value":"2.5","realtime_start":"2024-04-25"},
+          {"date":"2023-10-01","value":"2.9","realtime_start":"2024-01-25"}
+        ]}
+        """
+        let regressed = """
+        {"count":4,"offset":0,"limit":2,"observations":[
+          {"date":"2024-01-01","value":"2.5","realtime_start":"2024-04-25"},
+          {"date":"2023-10-01","value":"2.9","realtime_start":"2024-01-25"}
+        ]}
+        """
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([
+                Self.gdpEndpoint: page1,
+                .fredObservations(
+                    seriesID: "GDP", realtimeStart: "1776-07-04", realtimeEnd: nil,
+                    apiKey: "test-key", offset: 2
+                ): regressed,
+            ]),
+            ingestedAt: { self.date(2024, 8, 1) }, apiKey: "test-key"
+        )
+        do {
+            _ = try await adapter.fetch(
+                code: ProviderCode(scheme: "fred_series", value: "GDP"),
+                from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+            )
+            XCTFail("响应 offset 后退应拒收")
+        } catch let error as ProviderError {
+            guard case .schemaMismatch = error else {
+                return XCTFail("期望 schemaMismatch：\(error)")
+            }
+        }
+    }
+
+    func testPaginationInconsistentCountRejected() async throws {
+        // offset + received > count（响应自相矛盾）—— 拒收
+        let inconsistent = """
+        {"count":2,"offset":0,"limit":2,"observations":[
+          {"date":"2024-01-01","value":"2.5","realtime_start":"2024-04-25"},
+          {"date":"2023-10-01","value":"2.9","realtime_start":"2024-01-25"},
+          {"date":"2023-07-01","value":"2.2","realtime_start":"2023-10-26"}
+        ]}
+        """
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: inconsistent]),
+            ingestedAt: { self.date(2024, 8, 1) }, apiKey: "test-key"
+        )
+        do {
+            _ = try await adapter.fetch(
+                code: ProviderCode(scheme: "fred_series", value: "GDP"),
+                from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+            )
+            XCTFail("count 不一致应拒收")
+        } catch let error as ProviderError {
+            guard case .schemaMismatch(_, let detail) = error else {
+                return XCTFail("期望 schemaMismatch：\(error)")
+            }
+            XCTAssertTrue(detail.contains("count"), "拒收原因指向 count：\(detail)")
+        }
+    }
+
+    /// 注入传输失败的 URLProtocol（测试用）。
+    private final class LeakingTransportURLProtocol: URLProtocol {
+        nonisolated(unsafe) static var failure: Error?
+
+        override class func canInit(with request: URLRequest) -> Bool { true }
+        override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+        override func startLoading() {
+            client?.urlProtocol(self, didFailWithError: Self.failure ?? URLError(.badServerResponse))
+        }
+
+        override func stopLoading() {}
+    }
+
     /// 计数 fetcher（验证分页循环的请求次数）。
     private final class CountingFetcher: ResponseFetcher, @unchecked Sendable {
         private let base: any ResponseFetcher

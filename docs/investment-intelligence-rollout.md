@@ -1230,6 +1230,21 @@ macos-app/
 >   改为 **1776-07-04**（FRED 官方定义的完整实时区间下界），默认参数
 >   endpoint 精确匹配锁定有测试。
 > - 修复后 swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **Epic 6 三轮审查修复（2026-08-24，2×P1 边界缺口）**：
+> - **P1 传输层错误仍泄露 api_key**：非 2xx 分支已脱敏，但 catch-all 分支
+>   `\(error)` 整体插值底层错误——URLError/NSError 的 userInfo 携带
+>   NSErrorFailingURLStringKey（带 api_key 的完整 URL），同样会流进
+>   ProviderError → sync 结果 → 降级诊断。修复：只记录 domain/code +
+>   脱敏 URL（不插值错误对象）；URLProtocol 注入含凭据 userInfo 的
+>   URLError 传输失败，断言错误文本无 api_key / 无任何查询参数。
+> - **P1 分页响应 offset 可前跳漏页**：只查 `nextOffset > requested` 且
+>   `hasMorePages == false` 直接退出——请求 offset=0、响应自称 offset=2
+>   且「已到末页」时会静默漏掉前两页。修复：累计本页前先
+>   `guard metadata.offset == offset`（前跳/后退都拒收 schemaMismatch），
+>   另加 `count >= offset + received` 一致性校验。前跳 / 后退 /
+>   count 不一致三个形态都有测试。
+> - 修复后 swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 

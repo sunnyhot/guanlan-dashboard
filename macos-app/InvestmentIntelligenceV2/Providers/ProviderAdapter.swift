@@ -498,7 +498,16 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         } catch let e as ProviderError {
             throw e
         } catch {
-            throw ProviderError.unavailable(providerID: providerID, underlying: "\(error)")
+            // P1 修复（三轮）：不得整体插值底层错误——URLError/NSError 的
+            // userInfo 携带 NSErrorFailingURLStringKey（带 api_key 的完整
+            // URL），"\(error)" 会把凭据带进 ProviderError → sync 结果 →
+            // 降级诊断。只记录 domain/code + 脱敏 URL。
+            let nsError = error as NSError
+            throw ProviderError.unavailable(
+                providerID: providerID,
+                underlying: "transport error \(nsError.domain)(\(nsError.code)) "
+                    + "for \(Self.redactedDescription(of: url))"
+            )
         }
     }
 
