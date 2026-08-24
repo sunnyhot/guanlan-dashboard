@@ -274,6 +274,40 @@ final class FundNAVSyncTests: XCTestCase {
         XCTAssertNil(state?.lastIngestedEffectiveDates["110022"], "上游丢行时游标不推进")
     }
 
+    func testMergeDropAndUnsupportedDiagnosticsHoldCursor() async throws {
+        // 二轮 P1 修复回归 a：droppedOnMerge > 0（merge 阶段丢行）→ 游标不动
+        let mergeDrop = StubNAVAdapter(records: [
+            Self.navRecord(effectiveAt: cst(2026, 8, 17)),
+            Self.navRecord(effectiveAt: cst(2026, 8, 18)),
+        ], droppedOnMerge: 1)
+        let sync = FundNAVSync(adapter: mergeDrop, pipeline: pipeline, now: { self.cst(2026, 8, 19, hour: 20) })
+        _ = try await sync.syncOnce(
+            funds: [ProviderCode(scheme: "fund_code", value: "110022")],
+            spoolURL: spoolURL, stateURL: stateURL
+        )
+        let stateAfterMerge = try SyncStateStore<FundNAVSyncState>().load(from: stateURL)
+        XCTAssertNil(stateAfterMerge?.lastIngestedEffectiveDates["110022"], "merge 丢行游标不推进")
+
+        // 二轮 P1 修复回归 b：completeness == .unsupported（零丢行不可信）→ 游标不动
+        try? FileManager.default.removeItem(at: stateURL)
+        let unsupported = StubNAVAdapter(records: [
+            Self.navRecord(effectiveAt: cst(2026, 8, 17)),
+            Self.navRecord(effectiveAt: cst(2026, 8, 18)),
+        ], unsupportedDiagnostics: true)
+        let sync2 = FundNAVSync(adapter: unsupported, pipeline: pipeline, now: { self.cst(2026, 8, 19, hour: 20) })
+        let result = try await sync2.syncOnce(
+            funds: [ProviderCode(scheme: "fund_code", value: "110022")],
+            spoolURL: spoolURL, stateURL: stateURL
+        )
+        guard case let .rejectedCursorHeld(committed, _, dropped) = result.outcomes["110022"] else {
+            return XCTFail("期望 rejectedCursorHeld（unsupported），实际 \(String(describing: result.outcomes))")
+        }
+        XCTAssertEqual(committed, 2, "返回的合法行照常入库")
+        XCTAssertEqual(dropped, 0, "unsupported 时 totalDropped 可为 0，但不可信")
+        let stateAfterUnsupported = try SyncStateStore<FundNAVSyncState>().load(from: stateURL)
+        XCTAssertNil(stateAfterUnsupported?.lastIngestedEffectiveDates["110022"], "unsupported 诊断游标不推进")
+    }
+
     // MARK: - 失败隔离与健康降级
 
     func testPerFundFailureIsolation() async throws {
@@ -389,6 +423,8 @@ final class FundNAVSyncTests: XCTestCase {
         private let records: [ProviderRecord]
         private let failureForFundCodes: Set<String>
         private let droppedMalformed: Int
+        private let droppedOnMerge: Int
+        private let unsupportedDiagnostics: Bool
         private let lock = NSLock()
         private(set) var fetchCount: Int = 0
         private(set) var lastWindowFrom: Date?
@@ -397,11 +433,15 @@ final class FundNAVSyncTests: XCTestCase {
         init(
             records: [ProviderRecord],
             failureForFundCodes: Set<String> = [],
-            droppedMalformed: Int = 0
+            droppedMalformed: Int = 0,
+            droppedOnMerge: Int = 0,
+            unsupportedDiagnostics: Bool = false
         ) {
             self.records = records
             self.failureForFundCodes = failureForFundCodes
             self.droppedMalformed = droppedMalformed
+            self.droppedOnMerge = droppedOnMerge
+            self.unsupportedDiagnostics = unsupportedDiagnostics
         }
 
         func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
@@ -423,8 +463,9 @@ final class FundNAVSyncTests: XCTestCase {
             return ProviderFetchResult(
                 records: inWindow,
                 diagnostics: ProviderFetchDiagnostics(
-                    completeness: .complete,
-                    droppedMalformedBySource: droppedMalformed > 0 ? ["stub": droppedMalformed] : [:]
+                    completeness: unsupportedDiagnostics ? .unsupported : .complete,
+                    droppedMalformedBySource: droppedMalformed > 0 ? ["stub": droppedMalformed] : [:],
+                    droppedOnMerge: droppedOnMerge
                 )
             )
         }

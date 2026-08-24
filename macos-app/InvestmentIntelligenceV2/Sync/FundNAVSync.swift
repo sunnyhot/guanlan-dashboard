@@ -165,7 +165,12 @@ struct FundNAVSync: Sendable {
             return .failed(reason: "\(mapped)")
         }
         let navRecords = fetched.records.filter { $0.kind == .navObservation }
-        let droppedMalformed = fetched.diagnostics.droppedMalformedBySource.values.reduce(0, +)
+        // P1 修复（二轮）：上游干净 = completeness == .complete 且 totalDropped == 0。
+        // 只看 malformed 分桶会漏 droppedOnMerge；unsupported 的零丢行不可信
+        //（adapter 未实现诊断出口，「没报」≠「没有」）。
+        let diagnostics = fetched.diagnostics
+        let upstreamClean = diagnostics.completeness == .complete && diagnostics.totalDropped == 0
+        let droppedMalformed = diagnostics.totalDropped
 
         // 结构闸门分桶（与 fetchAndStage 同款语义：非法记录不污染 spool）
         let validator = ProviderRecordSchemaValidator()
@@ -205,11 +210,12 @@ struct FundNAVSync: Sendable {
 
         let committed = commitResult.committedCount
         let rejectionCount = fundRejections.count + partition.invalid.count
-        // 保守推进条件（P1 修复）：窗口内本轮必须**完整**——
-        // ① 管道零拒收；② 无结构非法记录；③ 上游零丢行（droppedMalformed）。
+        // 保守推进条件（P1 修复，二轮收紧）：窗口内本轮必须**完整**——
+        // ① 管道零拒收；② 无结构非法记录；③ 上游诊断 complete 且零丢行
+        //（malformed 分桶 + merge 丢行 + unsupported 全覆盖）。
         // 任一不满足 → 游标不动：T/T+2 合法而 T+1 被丢时推进到 T+2 会永久
         // 跳过 T+1。已提交的合法行保留（确定性 ID 幂等），下轮重抓不翻倍。
-        if rejectionCount > 0 || droppedMalformed > 0 {
+        if rejectionCount > 0 || !upstreamClean {
             await healthMonitor?.recordSuccess(providerID)
             return .rejectedCursorHeld(
                 committedCount: committed,

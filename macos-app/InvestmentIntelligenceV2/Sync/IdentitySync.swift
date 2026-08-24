@@ -392,18 +392,20 @@ struct IdentitySync: Sendable {
         decision: IdentityVerificationDecision
     ) throws -> Bool {
         guard decision == .accept else { return false }
-        if let registered = repository.allProviderIdentifiers().first(where: {
+        // P1 修复（二轮）：登记行不存在时**不得**落入 upsert——否则调用方可
+        // 绕过 fuzzy candidate 流程直接提交任意 canonical 映射。直接人工登记
+        // 有独立入口 registerManualVerified()（带自己的冲突语义）。
+        guard let registered = repository.allProviderIdentifiers().first(where: {
             $0.providerID == providerID
                 && $0.identifierScheme == scheme
                 && $0.identifierValue == value
-        }) {
-            if registered.resolutionMethod.isAuthoritative {
-                // 已有权威映射：一致视为幂等成功，不同 = 过期提案，拒收
-                return registered.canonical == canonical
-            }
-            // 仍是 fuzzy 行：只允许升级与登记候选一致的提案
-            guard registered.canonical == canonical else { return false }
+        }) else { return false }
+        if registered.resolutionMethod.isAuthoritative {
+            // 已有权威映射：一致视为幂等成功，不同 = 过期提案，拒收
+            return registered.canonical == canonical
         }
+        // 仍是 fuzzy 行：只允许升级与登记候选一致的提案
+        guard registered.canonical == canonical else { return false }
         try repository.upsert(ProviderIdentifier(
             providerID: providerID,
             identifierScheme: scheme,

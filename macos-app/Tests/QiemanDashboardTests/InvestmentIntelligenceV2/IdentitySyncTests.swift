@@ -429,6 +429,25 @@ final class IdentitySyncTests: XCTestCase {
         )
     }
 
+    func testVerifyOnUnregisteredCodeIsRejected() throws {
+        // 二轮 P1 修复回归：登记行不存在的代码上 verify 不得创建权威映射
+        //（否则可绕过 fuzzy candidate 流程直提任意 canonical）
+        let accepted = try sync.verify(
+            providerID: .eastmoney, scheme: "stock_symbol", value: "NEVER_REGISTERED",
+            canonical: .listing(ListingID(rawValue: "lst_600519")), decision: .accept
+        )
+        XCTAssertFalse(accepted, "无登记行的 verify 必须拒收")
+        XCTAssertNil(repository.resolve(
+            providerID: .eastmoney, scheme: "stock_symbol", value: "NEVER_REGISTERED"
+        ), "不得借 verify 创建映射")
+        // 直接人工登记走独立入口 registerManualVerified（带冲突语义）
+        let manual = try sync.registerManualVerified(
+            providerID: .eastmoney, scheme: "stock_symbol", value: "NEVER_REGISTERED",
+            canonical: .listing(ListingID(rawValue: "lst_600519"))
+        )
+        XCTAssertTrue(manual)
+    }
+
     // MARK: - 测试基础设施
 
     private func seedMaster() throws {

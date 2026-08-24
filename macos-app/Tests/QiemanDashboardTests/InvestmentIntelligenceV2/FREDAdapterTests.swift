@@ -9,11 +9,13 @@ import XCTest
 final class FREDAdapterTests: XCTestCase {
 
     /// 与 FREDProviderAdapter 默认参数一致的 endpoint（realtime 全窗口 + key）。
+    /// 默认 realtimeStart = 1776-07-04（FRED 官方完整实时区间下界，P2 修复）。
     private static let gdpEndpoint = ProviderEndpoint.fredObservations(
         seriesID: "GDP",
-        realtimeStart: "1900-01-01",
+        realtimeStart: "1776-07-04",
         realtimeEnd: nil,
-        apiKey: "test-key"
+        apiKey: "test-key",
+        offset: 0
     )
 
     private struct WeekdayCalendar: TradingCalendar {
@@ -200,7 +202,8 @@ final class FREDAdapterTests: XCTestCase {
             seriesID: "GDP",
             realtimeStart: "2020-01-01",
             realtimeEnd: "2024-12-31",
-            apiKey: "test-key"
+            apiKey: "test-key",
+            offset: 0
         )
         let adapter = FREDProviderAdapter(
             config: gdpConfig,
@@ -215,6 +218,101 @@ final class FREDAdapterTests: XCTestCase {
             from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
         )
         XCTAssertEqual(records.count, 3, "自定义 realtime 窗口的 endpoint 被命中")
+    }
+
+    // MARK: - 二轮 P1/P2 修复
+
+    func testPaginationFetchesAllPages() async throws {
+        // 两页响应（count=4、每页 2 条）：adapter 必须循环抓完
+        let page1 = """
+        {"count":4,"offset":0,"limit":2,"observations":[
+          {"date":"2024-01-01","value":"2.5","realtime_start":"2024-04-25"},
+          {"date":"2023-10-01","value":"2.9","realtime_start":"2024-01-25"}
+        ]}
+        """
+        let page2 = """
+        {"count":4,"offset":2,"limit":2,"observations":[
+          {"date":"2023-07-01","value":"2.2","realtime_start":"2023-10-26"},
+          {"date":"2023-04-01","value":"2.0","realtime_start":"2023-07-27"}
+        ]}
+        """
+        let fetcher = StaticResponseFetcher([
+            Self.gdpEndpoint: page1,
+            .fredObservations(
+                seriesID: "GDP", realtimeStart: "1776-07-04", realtimeEnd: nil,
+                apiKey: "test-key", offset: 2
+            ): page2,
+        ])
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig, fetcher: fetcher,
+            ingestedAt: { self.date(2024, 8, 1) }, apiKey: "test-key"
+        )
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fred_series", value: "GDP"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(records.count, 4, "两页共 4 条全部取回（单页截断会只剩 2）")
+    }
+
+    func testSinglePageResponseWithoutPaginationFieldsStops() async throws {
+        // 旧 fixture 形态（无 count/offset）：按单页处理，不额外请求
+        let single = """
+        {"observations":[
+          {"date":"2024-01-01","value":"2.5","realtime_start":"2024-04-25"}
+        ]}
+        """
+        let counting = CountingFetcher(base: StaticResponseFetcher([Self.gdpEndpoint: single]))
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig, fetcher: counting,
+            ingestedAt: { self.date(2024, 8, 1) }, apiKey: "test-key"
+        )
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fred_series", value: "GDP"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(counting.fetchCount, 1, "无分页字段不追页")
+    }
+
+    func testDefaultRealtimeStartUsesOfficialLowerBound() async throws {
+        // P2 修复锁定：默认起点必须是 FRED 官方完整实时区间下界 1776-07-04
+        //（endpoint 精确匹配 = 参数逐字节一致，1900-01-01 的 key 不会命中）
+        let adapter = FREDProviderAdapter(
+            config: gdpConfig,
+            fetcher: StaticResponseFetcher([Self.gdpEndpoint: sampleJSON]),
+            ingestedAt: { self.date(2024, 8, 1) },
+            apiKey: "test-key"
+            // 不传 realtimeStart → 默认
+        )
+        let records = try await adapter.fetch(
+            code: ProviderCode(scheme: "fred_series", value: "GDP"),
+            from: Date(timeIntervalSince1970: 0), to: Date(timeIntervalSince1970: 2_000_000_000)
+        )
+        XCTAssertFalse(records.isEmpty, "默认 1776-07-04 的 endpoint 被命中")
+    }
+
+    func testErrorURLRedactionStripsAPIKey() {
+        // P1 修复锁定：错误文本用的 URL 描述剥离 query（api_key 在查询参数）
+        let url = URL(string: "https://api.stlouisfed.org/fred/series/observations?series_id=GDP&api_key=SECRET_KEY&offset=0")!
+        let redacted = URLSessionResponseFetcher.redactedDescription(of: url)
+        XCTAssertFalse(redacted.contains("SECRET_KEY"), "脱敏后不含 api_key：\(redacted)")
+        XCTAssertTrue(redacted.contains("api.stlouisfed.org/fred/series/observations"))
+        XCTAssertFalse(redacted.contains("series_id"), "查询参数整体剥离：\(redacted)")
+        // 无 query 的 URL 不受影响
+        let plain = URL(string: "https://stooq.com/q/d/l/?s=aapl")!
+        XCTAssertTrue(URLSessionResponseFetcher.redactedDescription(of: plain).contains("stooq.com"))
+    }
+
+    /// 计数 fetcher（验证分页循环的请求次数）。
+    private final class CountingFetcher: ResponseFetcher, @unchecked Sendable {
+        private let base: any ResponseFetcher
+        private let lock = NSLock()
+        private(set) var fetchCount = 0
+        init(base: any ResponseFetcher) { self.base = base }
+        func fetch(_ endpoint: ProviderEndpoint) async throws -> String {
+            lock.lock(); fetchCount += 1; lock.unlock()
+            return try await base.fetch(endpoint)
+        }
     }
 
     // MARK: - ProviderRecord → ObservationFactory → MacroObservation（PIT）

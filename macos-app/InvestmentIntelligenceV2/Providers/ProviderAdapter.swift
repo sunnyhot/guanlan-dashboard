@@ -367,7 +367,8 @@ enum ProviderEndpoint: Sendable, Hashable {
         seriesID: String,
         realtimeStart: String?,
         realtimeEnd: String?,
-        apiKey: String
+        apiKey: String,
+        offset: Int
     )
 }
 
@@ -394,6 +395,18 @@ struct URLSessionResponseFetcher: ResponseFetcher {
 
     init(session: URLSession = .shared) {
         self.session = session
+    }
+
+    /// URL 的脱敏描述（错误文本用）：只保留 scheme/host/path，剥离 query——
+    /// FRED api_key 等凭据位于查询参数，进错误文本即凭据泄露
+    ///（P1 修复，错误会流入 ProviderError → sync 结果 → 降级诊断）。
+    static func redactedDescription(of url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url.host ?? "unknown-host"
+        }
+        components.query = nil
+        components.fragment = nil
+        return components.url?.absoluteString ?? (url.host ?? "unknown-host")
     }
 
     func fetch(_ endpoint: ProviderEndpoint) async throws -> String {
@@ -425,7 +438,7 @@ struct URLSessionResponseFetcher: ResponseFetcher {
         case .stooqHistory(let symbol):
             // Stooq 日线 CSV 下载端点（personal-use，FREE001 合规：免费、无 key）
             urlString = "https://stooq.com/q/d/l/?s=\(symbol)&i=d"
-        case .fredObservations(let seriesID, let realtimeStart, let realtimeEnd, let apiKey):
+        case .fredObservations(let seriesID, let realtimeStart, let realtimeEnd, let apiKey, let offset):
             // FRED 观测序列（免费 API）：realtime_start/end 显式传宽窗口取全部
             // vintage（缺省会退化成当天快照——P1 修复）；api_key 由调用方注入
             var components = URLComponents(
@@ -436,6 +449,9 @@ struct URLSessionResponseFetcher: ResponseFetcher {
                 URLQueryItem(name: "file_type", value: "json"),
                 URLQueryItem(name: "api_key", value: apiKey),
                 URLQueryItem(name: "output_type", value: "1"),
+                // 分页（P1 修复）：全量 vintage 可超过单页上限，offset 逐页推进
+                URLQueryItem(name: "offset", value: String(offset)),
+                URLQueryItem(name: "sort_order", value: "asc"),
             ]
             if let realtimeStart {
                 items.append(URLQueryItem(name: "realtime_start", value: realtimeStart))
@@ -464,9 +480,11 @@ struct URLSessionResponseFetcher: ResponseFetcher {
                 throw ProviderError.unavailable(providerID: providerID, underlying: "non-HTTP response")
             }
             guard (200..<300).contains(http.statusCode) else {
+                // P1 修复：URL query 含 api_key 等凭据，错误文本只保留
+                // scheme/host/path——完整 URL 会流进 sync 失败原因与降级诊断
                 throw ProviderError.unavailable(
                     providerID: providerID,
-                    underlying: "http status \(http.statusCode) for \(url.absoluteString)"
+                    underlying: "http status \(http.statusCode) for \(Self.redactedDescription(of: url))"
                 )
             }
             let body = String(data: data, encoding: .utf8) ?? ""

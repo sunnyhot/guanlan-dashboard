@@ -83,6 +83,45 @@ struct FREDResponseParser: Sendable {
     }()
 
     /// 解析 FRED observations JSON。
+    /// FRED 分页元数据（响应顶层 count/offset/limit；缺省时按单页处理——
+    /// 兼容不含分页字段的旧 fixture）。
+    struct FREDPageMetadata: Sendable, Equatable {
+        /// 全量观测数（跨页）
+        let count: Int
+        /// 本页起始偏移
+        let offset: Int
+        /// 本页实际返回的 observations 数
+        let received: Int
+
+        var hasMorePages: Bool { offset + received < count }
+        /// 下一页 offset（调用方校验推进后使用）
+        var nextOffset: Int { offset + received }
+    }
+
+    /// 解析分页元数据（P1 修复：只解码 observations 会漏 count/offset/limit，
+    /// 全量 vintage 超过单页上限后后续页永远缺失）。
+    func parsePageMetadata(_ body: String) throws -> FREDPageMetadata {
+        guard let data = body.data(using: .utf8) else {
+            throw FREDParseError.malformedJSON(detail: "body not utf8")
+        }
+        struct Meta: Decodable {
+            let count: Int?
+            let offset: Int?
+            let observations: [DecodableDummy]
+        }
+        struct DecodableDummy: Decodable {}
+        let meta: Meta
+        do {
+            meta = try JSONDecoder().decode(Meta.self, from: data)
+        } catch {
+            throw FREDParseError.malformedJSON(detail: "\(error)")
+        }
+        let received = meta.observations.count
+        let offset = meta.offset ?? 0
+        let count = meta.count ?? (offset + received)
+        return FREDPageMetadata(count: count, offset: offset, received: received)
+    }
+
     func parse(_ body: String, seriesID: String) throws -> FREDObservationHistory {
         guard !body.isEmpty else { throw FREDParseError.emptyBody }
         guard let data = body.data(using: .utf8) else {
@@ -182,8 +221,9 @@ struct FREDProviderAdapter: ProviderAdapter {
     /// FRED API key（免费申请）。**必填**——缺失直接拒绝抓取（fail-closed，
     /// 不再用 PLACEHOLDER 静默发出注定失败的请求）
     private let apiKey: String
-    /// real-time 窗口起点（默认 1900-01-01，早于一切 FRED 序列——请求全量
-    /// vintage 历史；FRED 缺省=当天快照会伪造 publishedAt，P1 修复）
+    /// real-time 窗口起点（默认 1776-07-04——FRED 官方定义的完整实时区间
+    /// 下界，早于一切序列；P2 修复：1900-01-01 不足以声称「全部可用历史」。
+    /// FRED 缺省=当天快照会伪造 publishedAt，P1 修复）
     private let realtimeStart: String
     /// real-time 窗口终点（nil = 今天，FRED 缺省）
     private let realtimeEnd: String?
@@ -193,7 +233,7 @@ struct FREDProviderAdapter: ProviderAdapter {
         fetcher: any ResponseFetcher,
         ingestedAt: @escaping @Sendable () -> Date = { .now },
         apiKey: String = "",
-        realtimeStart: String = "1900-01-01",
+        realtimeStart: String = "1776-07-04",
         realtimeEnd: String? = nil
     ) {
         self.config = config
@@ -221,13 +261,45 @@ struct FREDProviderAdapter: ProviderAdapter {
                 underlying: "缺少 FRED API key（fred.stlouisfed.org 免费申请，注入 FREDProviderAdapter apiKey）"
             )
         }
-        let body = try await fetcher.fetch(.fredObservations(
+        // 分页循环（P1 修复）：全量 vintage 可超过 FRED 单页上限
+        //（observations 单页最多 100,000 行），只抓第一页会让后续 vintage
+        // 永久缺失。按响应的 count/offset 推进，直到取满或确认单页。
+        var offset = 0
+        var entries: [FREDObservationHistory.Entry] = []
+        var droppedTotal = 0
+        let pageLimit = 200   // 防病态响应（offset 不推进/超长序列）的硬上界
+        for pageIndex in 0..<pageLimit {
+            let body = try await fetcher.fetch(.fredObservations(
+                seriesID: config.seriesID,
+                realtimeStart: realtimeStart,
+                realtimeEnd: realtimeEnd,
+                apiKey: apiKey,
+                offset: offset
+            ))
+            let metadata = try parser.parsePageMetadata(body)
+            let history = try parser.parse(body, seriesID: config.seriesID)
+            entries.append(contentsOf: history.entries)
+            droppedTotal += history.droppedMalformedCount
+            guard metadata.hasMorePages else { break }
+            guard metadata.nextOffset > offset else {
+                throw ProviderError.schemaMismatch(
+                    providerID: .fred,
+                    detail: "FRED 分页未推进（offset \(metadata.offset)，count \(metadata.count)）"
+                )
+            }
+            guard pageIndex < pageLimit - 1 else {
+                throw ProviderError.schemaMismatch(
+                    providerID: .fred,
+                    detail: "FRED 分页超过 \(pageLimit) 页上限（count \(metadata.count)）"
+                )
+            }
+            offset = metadata.nextOffset
+        }
+        let history = FREDObservationHistory(
             seriesID: config.seriesID,
-            realtimeStart: realtimeStart,
-            realtimeEnd: realtimeEnd,
-            apiKey: apiKey
-        ))
-        let history = try parser.parse(body, seriesID: config.seriesID)
+            entries: entries,
+            droppedMalformedCount: droppedTotal
+        )
         let allRecords = parser.toProviderRecords(
             history, config: config, reliabilityClass: reliabilityClass, ingestedAt: ingestedAt()
         )

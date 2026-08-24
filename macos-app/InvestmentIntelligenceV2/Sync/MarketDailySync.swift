@@ -161,8 +161,12 @@ struct MarketDailySync: Sendable {
             return .allProvidersFailed(summary: fallback.localFallbackSummary)
         }
 
-        // 上游丢行诊断（P1 修复：未消费会让被丢的中间日期被游标跨过）
-        let droppedMalformed = success.diagnostics.droppedMalformedBySource.values.reduce(0, +)
+        // 上游干净判定（P1 修复二轮收紧）：completeness == .complete 且
+        // totalDropped == 0——只看 malformed 分桶会漏 droppedOnMerge，
+        // unsupported 的零丢行不可信（adapter 未实现诊断出口）
+        let diagnostics = success.diagnostics
+        let upstreamClean = diagnostics.completeness == .complete && diagnostics.totalDropped == 0
+        let droppedMalformed = diagnostics.totalDropped
 
         let barRecords = success.records.filter { $0.kind == .dailyBar }
         guard barRecords.isEmpty == false else {
@@ -196,8 +200,9 @@ struct MarketDailySync: Sendable {
         }
         result.rejections.append(contentsOf: commitResult.rejections)
         let rejectionCount = targetRejections.count + partition.invalid.count
-        // 保守推进条件（P1 修复）：管道零拒收 + 无结构非法 + 上游零丢行
-        if rejectionCount > 0 || droppedMalformed > 0 {
+        // 保守推进条件（P1 修复，二轮收紧）：管道零拒收 + 无结构非法 +
+        // 上游诊断 complete 且零丢行
+        if rejectionCount > 0 || !upstreamClean {
             return .rejectedCursorHeld(
                 committedCount: commitResult.committedCount,
                 rejectionCount: rejectionCount,

@@ -1203,6 +1203,33 @@ macos-app/
 >   不再尝试更晚的期）；「确认不适用」的显式持久化跳过状态留作后续
 >   story（不能用跳过去代替）。空期立即 hold 有测试。
 > - 修复后 swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **Epic 6 二轮审查修复（2026-08-24，4×P1 + 1×P2）**：
+> - **P1 FRED 全量 vintage 被单页上限截断**：parser 只解码 observations、
+>   忽略响应顶层 count/offset/limit，且 endpoint 无分页参数——全量 vintage
+>   超过单页上限（100,000）后每轮重复抓第一页，后续 vintage 永久缺失。
+>   修复：endpoint 增加 `offset`（+sort_order=asc），`parsePageMetadata`
+>   解码分页元数据（缺省字段按单页处理，兼容旧 fixture），adapter 循环
+>   抓取至 `offset + received >= count`（offset 不推进/超 200 页 fail-closed
+>   schemaMismatch）。两页拼接（4 条全回）与无分页字段单页停止都有测试。
+> - **P1 FRED API key 泄露进错误文本**：非 2xx 错误携带完整 absoluteString
+>   （query 含 api_key），会流进 ProviderError → sync 失败原因 → 降级诊断。
+>   修复：`redactedDescription(of:)` 剥离 query/fragment 只留 scheme/host/path，
+>   错误构造统一走脱敏；纯函数测试锁定「不含 api_key、不含任何查询参数」。
+> - **P1 游标闸门漏 merge 丢行与 unsupported**：只统计
+>   droppedMalformedBySource 会漏 droppedOnMerge，并把
+>   completeness == .unsupported 的零丢行当真（「没报」≠「没有」）。
+>   修复：FundNAVSync / MarketDailySync 的上游干净条件统一收紧为
+>   `completeness == .complete && totalDropped == 0`；merge 丢行 +
+>   unsupported 两形态（NAV 与行情各一组）都有回归测试。
+> - **P1 verify() 绕过 fuzzy candidate**：登记行不存在时 `if let` 落空仍会
+>   upsert manualVerified——调用方可借 verify 直提任意 canonical 映射。
+>   修复：`guard let registered else { return false }`；无登记行的 verify
+>   拒收且零写入（有测试）；直接人工登记走独立入口 registerManualVerified。
+> - **P2 完整 realtime 起点用官方下界**：默认 realtimeStart 从 1900-01-01
+>   改为 **1776-07-04**（FRED 官方定义的完整实时区间下界），默认参数
+>   endpoint 精确匹配锁定有测试。
+> - 修复后 swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 

@@ -243,6 +243,34 @@ final class MarketDailySyncTests: XCTestCase {
         XCTAssertNil(state2?.lastIngestedEffectiveDates["stock_symbol|AAPL"], "上游丢行游标不推进")
     }
 
+    func testMergeDropAndUnsupportedDiagnosticsHoldCursor() async throws {
+        // 二轮 P1 修复回归：merge 丢行 / unsupported 诊断 → 游标不动
+        for scenario in ["merge", "unsupported"] {
+            try? FileManager.default.removeItem(at: stateURL)
+            let stub = StubBarAdapter(
+                providerID: .stooq,
+                records: [Self.usBarRecord(day: est(2026, 8, 18))],
+                droppedOnMerge: scenario == "merge" ? 1 : 0,
+                unsupportedDiagnostics: scenario == "unsupported"
+            )
+            let chain = ProviderFallbackChain(adapters: [stub])
+            let sync = MarketDailySync(pipeline: pipeline, now: { self.est(2026, 8, 19, hour: 20) })
+            let result = try await sync.syncOnce(
+                targets: [MarketDailyTarget(
+                    code: ProviderCode(scheme: "stock_symbol", value: "AAPL"),
+                    jurisdiction: .unitedStates, chain: chain
+                )],
+                spoolURL: spoolURL, stateURL: stateURL, remoteSpoolURL: nil
+            )
+            guard case .rejectedCursorHeld = result.outcomes["stock_symbol|AAPL"] else {
+                return XCTFail("[\(scenario)] 期望 rejectedCursorHeld，实际 \(String(describing: result.outcomes))")
+            }
+            let state = try SyncStateStore<MarketDailySyncState>().load(from: stateURL)
+            XCTAssertNil(state?.lastIngestedEffectiveDates["stock_symbol|AAPL"],
+                         "[\(scenario)] 游标不推进")
+        }
+    }
+
     // MARK: - 远程 staging 提交通道（A 股）
 
     func testRemoteSpoolCommitsIntoCanonical() async throws {
@@ -297,6 +325,8 @@ final class MarketDailySyncTests: XCTestCase {
         private let records: [ProviderRecord]
         private let error: Error?
         private let droppedMalformed: Int
+        private let droppedOnMerge: Int
+        private let unsupportedDiagnostics: Bool
         private let lock = NSLock()
         private(set) var fetchCount = 0
         private(set) var lastWindowFrom: Date?
@@ -306,12 +336,16 @@ final class MarketDailySyncTests: XCTestCase {
             providerID: DataProviderID,
             records: [ProviderRecord],
             error: Error? = nil,
-            droppedMalformed: Int = 0
+            droppedMalformed: Int = 0,
+            droppedOnMerge: Int = 0,
+            unsupportedDiagnostics: Bool = false
         ) {
             self.providerID = providerID
             self.records = records
             self.error = error
             self.droppedMalformed = droppedMalformed
+            self.droppedOnMerge = droppedOnMerge
+            self.unsupportedDiagnostics = unsupportedDiagnostics
         }
 
         func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
@@ -333,8 +367,9 @@ final class MarketDailySyncTests: XCTestCase {
             return ProviderFetchResult(
                 records: inWindow,
                 diagnostics: ProviderFetchDiagnostics(
-                    completeness: .complete,
-                    droppedMalformedBySource: droppedMalformed > 0 ? ["stub": droppedMalformed] : [:]
+                    completeness: unsupportedDiagnostics ? .unsupported : .complete,
+                    droppedMalformedBySource: droppedMalformed > 0 ? ["stub": droppedMalformed] : [:],
+                    droppedOnMerge: droppedOnMerge
                 )
             )
         }
