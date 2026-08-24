@@ -346,4 +346,21 @@ extension Decimal {
         NSDecimalRound(&result, &raw, scale, .plain)
         return result
     }
+
+    /// 平方根（牛顿迭代；Foundation Decimal 无 squareRoot）。
+    ///
+    /// Double 初值（IEEE 754 sqrt 正确舍入，确定性）+ Decimal 牛顿精化
+    /// 到全精度——二次收敛下 5 次迭代从 1e-16 相对误差到 38 位精度上限。
+    /// 输入 ≤ 0（方差非负，负数属上游 bug）返回 0。
+    func decimalSquareRoot() -> Decimal {
+        guard self > 0 else { return .zero }
+        let initial = (self as NSDecimalNumber).doubleValue.squareRoot()
+        var y = Decimal(initial)
+        for _ in 0..<5 {
+            let next = (y + self / y) / 2
+            if next == y { break }
+            y = next
+        }
+        return y
+    }
 }
