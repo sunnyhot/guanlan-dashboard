@@ -1509,6 +1509,26 @@ macos-app/
 >   完整」（warning），不再单凭引擎 grade 声称覆盖完整。
 > - 修复后 swift test 全量绿（1767 passed，环境性排除同前）；iOS
 >   Simulator 构建通过；每个修复点有回归测试。
+>
+> **三轮审查修复（2026-08-24，5×P1 + 2×P2 + 1×P1 提交缺口，全部闭环）**：
+> - **P1 HEAD 编译缺口**：二轮的 DailyAttribution try! 适配漏提交（干净
+>   HEAD 编译失败）——已补提交；本轮以干净 HEAD 克隆复验构建通过。
+> - **P1 重算伪冲突**：幂等比较剥离 producedAt（语义指纹），首次产出
+>   时间保留——同语义稍后重算幂等通过。
+> - **P1 Replayer 引用绑定**：ReplayInputs.resolvedReferences 与 artifact
+>   引用层逐项核对（referenceMismatch fail-closed）。
+> - **P1 Lookthrough 输入封闭**：基金/直接持股 XOR precondition +
+>   校验式 Codable（双设双计暴露 / 双空权重消失均拒）。
+> - **P1 冲突相关性保守合并**：取 |ρ| 较大者（fail-closed），不再字典序
+>   取小降风险。
+> - **P1 Validator 结果层闭环**：comparison plan 域 + decision 可推导
+>   校验；PartialDecision 语义相等只看 (status, admissible)。
+> - **P2 badge 三重口径**：仅 coverage==100% 且估值完整才「覆盖完整」；
+>   80–99.9% 用「覆盖较高」。
+> - **P2 Job 身份闭环**：派生 ID / 幂等键 / 事件归属 / 首事件时间 /
+>   started-completed 列五重一致性校验。
+> - 修复后 swift test 全量绿（1771 passed，环境性排除同前）；干净 HEAD
+>   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
