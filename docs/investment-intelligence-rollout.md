@@ -1001,6 +1001,29 @@ macos-app/
 >   交易日）的 availableAt = 02-24（无休市表会错算成 02-16）；MarketClose
 >   policy 美股跨耶稣受难日 04-17→04-21。25 个测试（TradingCalendarTests）。
 >   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-3 已签收（2 点，2026-08-24）**——`Sync/FundNAVSync.swift` +
+> `Sync/SyncKit.swift`（SYNC-2..5 共享的直接抓取基础设施）：
+> - **SyncKit**：`DirectSyncPaths`（spool/state 目录布局，与 canonical.sqlite3
+>   同住 V2 工作目录——spool 事实源、库派生物，ADR-DATA004）+
+>   `SyncStateStore<State>`（游标状态 JSON 原子持久化：ISO8601 毫秒、
+>   tmp + replaceItemAt 安全替换、读取 fail-closed——只有明确的文件不存在
+>   才算首轮，坏状态抛 `SyncStateError` 不静默当空重抓）。
+> - **FundNAVSync 引擎**（fund 粒度隔离，单只失败不影响他者）：
+>   锚点 = `FundNAVPublicationCalendar.latestGuaranteedPublishedNAVDate`
+>   （T+1 保守语义）→ 游标 ≥ 锚点直接跳过；增量窗口 [游标+1 天, 锚点]
+>   （首轮回看 400 日历天，深度回填走 SYNC-6a）；fetch → SchemaValidator
+>   分桶（非法不落 spool）→ **先 append spool 再 commit**（库可删重放）→
+>   CanonicalPipeline 四防火墙。
+> - **游标保守推进规则**：干净轮（无拒收、commit 成功）→ 推进到本轮最大
+>   effectiveAt；无新数据（QDII T+2 滞后）/ 有拒收 / commit 失败 → 一律
+>   不推进。重试靠确定性 ObservationID 幂等去重（不翻倍，有测试），不跳过
+>   被拒收的日期（静默数据洞比重复抓取更贵）。
+> - **ProviderHealth 集成**（PROV-8）：isCallable == false 跳过抓取（零网络）；
+>   成功/失败按 ProviderError 语义上报；结构分桶拒收记 schema 漂移。
+> - App 接线遵守 B.3 时点（Epic 9 集成时参照 RemoteStagingSyncLoop 模式）。
+>   12 个测试（FundNAVSyncTests）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
 
 ---
 
