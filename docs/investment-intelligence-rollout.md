@@ -767,6 +767,42 @@ macos-app/
 > - 3 个 CanonicalStorePathsTests（落点约定 + 与 spool 共存 / openDatabase
 >   建目录幂等 + 重开迁移不重跑）。
 >
+> **GRDB-7 已签收（8 点，2026-08-24）**——`Repositories/GRDBRepository.swift`
+> （八域 Repository 协议的 GRDB 实现）+ **前置 migration `v7_provider_unique`**
+>（`Persistence/ProviderUniqueMigration.swift`）+ **查询语义单一权威抽取**
+>（`Repositories/ObservationQuerySemantics.swift`）：
+> - **v7 修正唯一索引漏 provider 维度**：GRDB-3/4/5 的
+>   (维度, effectiveAt, vintage) 唯一索引与 REPO-2b「跨 Provider 各存一行、
+>   查询择优」冲突（第二家 Provider 的行会被拒收，跨源去重退化为丢弃）。
+>   v7 把唯一键改为 (维度, effectiveAt, vintage, **source_provider_id**)：
+>   同 Provider 幂等拒重、跨 Provider 共存。v3/v4 的内联 UNIQUE 走标准表重建
+>   （`PRAGMA defer_foreign_keys` + rename 改写 holding_positions 的 FK），
+>   v5 显式索引直接换。**v6 存量库升级数据存活有专项测试**（行情 + 持仓 +
+>   positions 子表）。
+> - **行为等价的结构保证（M4「golden test 同样过」的落地）**：
+>   `ObservationQuerySemantics`——filterByContext / isPreferred /
+>   reliabilityPreferenceRank / providerSortKey / contextIncludes 从
+>   InMemoryRepository 抽出为两套实现共用的纯函数单一权威（InMemory 保留
+>   同名 static 薄转发）。GRDBRepository 的 SQL 只做维度键取行，PIT 语义
+>   全部走共享函数。`GRDBRepositoryParityTests`：同一 fixture 灌两套实现，
+>   全部查询 API（含单点 dailyBar/navObservation/latestHolding）在 10 种
+>   context（economic×4 时点 / operational×2 / exact×2 / vintageFilter×2）
+>   下输出逐一相等；fuzzy resolve 双双拒收。
+> - **exactSnapshot 确定性补强**（共享语义层，两套实现同时受益）：等值
+>   vintage 的排序 tie-break 补 effectiveAt→id（GRDB 侧 SQL 索引扫描顺序与
+>   内存侧插入顺序不同，排序键必须与输入顺序无关；InMemory 时代测试只断言
+>   count / vintage 序，无顺序断言被破坏——全量绿佐证）。
+> - **单点查询逐字对齐**：dailyBar/navObservation 不走 filterByContext
+>   （黄金行为 = 同日 + 可见性过滤取 vintage 最大，不经分组/vintageFilter——
+>   parity 测试抓出的真实分歧点，以 InMemory 为准修复）。
+> - **写入语义**：INSERT OR REPLACE（同 id 或同 (维度, vintage, provider)
+>   幂等替换）；持仓快照重摄入 = 快照行 + positions 整组替换（测试守护
+>   不累积）；写入方法保留 throws（FK 违例 = identity 未登记，管道要暴露）。
+> - **读取错误策略**（协议非 throwing）：失败 → 该查询返回空（缺口语义，
+>   DATA006）+ `lastQueryError` 线程安全诊断面（NSLock，与 InMemory 同款
+>   约定），不静默不伪造。
+> - 9 个 GRDBRepositoryParityTests。
+>
 > **GRDB-6 已签收（5 点，2026-08-24）**——migration `v6_intelligence` +
 > `Persistence/IntelligenceSchema.swift`（10 表 DDL + row codec）：
 > - **10 表**：evidence / evidence_facts / signals / theses / artifacts /

@@ -18,9 +18,10 @@ final class IntelligenceSchemaTests: XCTestCase {
     func testV6Migration_RegistersLast() throws {
         let migrations = CanonicalDatabase.makeMigrations().migrations
         XCTAssertEqual(migrations.prefix(5).last, "v5_fundamental_macro")
-        XCTAssertEqual(migrations.suffix(1), ["v6_intelligence"])
+        XCTAssertEqual(migrations.dropFirst(5).first, "v6_intelligence",
+                       "v6_intelligence 固定排在第 6 位（不可变清单）")
         XCTAssertEqual(CanonicalDatabase.schemaVersion, migrations.count)
-        XCTAssertEqual(try db.appliedMigrations().suffix(1), ["v6_intelligence"])
+        XCTAssertEqual(try db.appliedMigrations(), Array(migrations))
     }
 
     func testAllTenTablesExist() throws {

@@ -1,0 +1,441 @@
+import Foundation
+import GRDB
+
+// MARK: - GRDBRepository（GRDB-7，Canonical Store 的 Repository 实现）
+//
+// 八域 Repository 协议的 GRDB 实现，替代 InMemoryRepository 进入生产
+//（M4 验收：Repository 契约不变；InMemory 时代的 golden test 同样过）。
+//
+// **行为等价的结构保证**：PIT 过滤 / multi-vintage 择优 / 跨源去重不经手写
+// SQL 重实现——SQL 只做「维度键取行」（WHERE listing_id = ? 这类索引点查），
+// 读回 domain 后统一走 `ObservationQuerySemantics`（与 InMemoryRepository
+// 共用的单一权威）。golden test 以 parity 形式守护（GRDBRepositoryParityTests：
+// 同一 fixture 灌进两套实现，所有查询 API 在多种 context 下输出必须相等）。
+//
+// **写入语义**：INSERT OR REPLACE——同 id 或同 (维度, effectiveAt, vintage,
+// provider) 的重摄入幂等替换（v7 唯一键）。与 InMemory「按 id 替换、查询期
+// 跨源择优」的差异：同 Provider 同键换 id 重摄入，InMemory 保留两行、查询
+// 按 id tie-break 择一，GRDB 直接替换为最新——查询结果在该病态输入下才可能
+// 不同（合法摄入流不会为同一 Provider 同 vintage 生成新 id，GRDB-8 Pipeline
+// 的 ObservationID 稳定性是前置契约）。
+//
+// **错误策略**（协议方法非 throwing，读取失败不能上抛）：
+// - 打不开库 / 查询抛错 / 行解码 fail-closed（枚举列被外部改坏等）：
+//   该次查询返回空，错误记入 `lastQueryError`（线程安全诊断面，App 接线后
+//   对齐 RemoteStagingSyncStatus 的诊断模式）。空 = 缺口语义（ADR-DATA006），
+//   不伪造数据；诊断可查，不静默。
+// - 写入方法保留 throws（Builder 风格调用方必须处理；FK 违例 = identity
+//   未登记，正是要暴露的管道错误）。
+
+/// Canonical Store 的八域 Repository 实现。
+///
+/// 线程安全：`CanonicalDatabase` 的 `DatabaseQueue` 串行化所有读写；
+/// 唯一可变状态 `_lastQueryError` 经 `lock` 保护（与 InMemoryRepository
+/// 同款 NSLock 约定：新增可变存储必须走 lock）。
+final class GRDBRepository: @unchecked Sendable, Repository {
+
+    private let database: CanonicalDatabase
+    private let calendarBackend: TradingCalendar
+    private let lock = NSLock()
+    private var _lastQueryError: String?
+
+    init(database: CanonicalDatabase, calendarBackend: TradingCalendar) {
+        self.database = database
+        self.calendarBackend = calendarBackend
+    }
+
+    /// 最近一次查询失败的人类可读诊断（nil = 无失败）。
+    /// 诊断面：读取失败按缺口语义返回空，这里留下可查的痕迹（不静默）。
+    var lastQueryError: String? {
+        lock.lock(); defer { lock.unlock() }
+        return _lastQueryError
+    }
+
+    private func recordQueryFailure(_ operation: String, _ error: Error) {
+        lock.lock(); defer { lock.unlock() }
+        _lastQueryError = "\(operation): \(error)"
+    }
+
+    /// 读 helper：包一层错误策略（失败 → 诊断 + nil）。
+    private func read<T>(_ operation: String, _ body: (Database) throws -> T) -> T? {
+        do {
+            return try database.queue.read(body)
+        } catch {
+            recordQueryFailure(operation, error)
+            return nil
+        }
+    }
+
+    /// 点查 helper：body 本身可返回 nil（未命中）的版本——避免 T 绑定到
+    /// Optional 产生双重 Optional。
+    private func readOptional<T>(_ operation: String, _ body: (Database) throws -> T?) -> T? {
+        do {
+            return try database.queue.read(body)
+        } catch {
+            recordQueryFailure(operation, error)
+            return nil
+        }
+    }
+
+    // MARK: - 写入（Builder 风格，与 InMemoryRepository 对齐；Fixture loader /
+    // GRDB-8 Pipeline / 测试灌数据用）
+
+    @discardableResult
+    func upsert(_ entity: LegalEntity) throws -> Self {
+        try database.queue.write { db in
+            try LegalEntityRow.from(entity).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ instrument: Instrument) throws -> Self {
+        try database.queue.write { db in
+            try InstrumentRow.from(instrument).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ listing: Listing) throws -> Self {
+        try database.queue.write { db in
+            try ListingRow.from(listing).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ product: FundProduct) throws -> Self {
+        try database.queue.write { db in
+            try FundProductRow.from(product).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ shareClass: FundShareClass) throws -> Self {
+        try database.queue.write { db in
+            try FundShareClassRow.from(shareClass).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ pid: ProviderIdentifier) throws -> Self {
+        try database.queue.write { db in
+            try ProviderIdentifierRow.from(pid).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func add(_ relationship: InstrumentRelationship) throws -> Self {
+        try database.queue.write { db in
+            try InstrumentRelationshipRow.from(relationship).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ bar: DailyBar) throws -> Self {
+        try database.queue.write { db in
+            try DailyBarRow.from(bar).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ nav: NAVObservation) throws -> Self {
+        try database.queue.write { db in
+            try NAVObservationRow.from(nav).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ snapshot: FundHoldingSnapshot) throws -> Self {
+        try database.queue.write { db in
+            try FundHoldingSnapshotRow.from(snapshot).insert(db, onConflict: .replace)
+            // positions 整组替换（快照 + positions 是一个聚合：重摄入 = 全量覆盖）
+            try db.execute(
+                sql: "DELETE FROM holding_positions WHERE snapshot_id = ?",
+                arguments: [snapshot.id.rawValue]
+            )
+            for (index, position) in snapshot.positions.enumerated() {
+                try FundHoldingPositionRow.from(position, snapshotID: snapshot.id, index: index).insert(db)
+            }
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ macro: MacroObservation) throws -> Self {
+        try database.queue.write { db in
+            try MacroObservationRow.from(macro).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ action: CorporateAction) throws -> Self {
+        try database.queue.write { db in
+            try CorporateActionRow.from(action).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    @discardableResult
+    func upsert(_ fundamental: FundamentalObservation) throws -> Self {
+        try database.queue.write { db in
+            try FundamentalObservationRow.from(fundamental).insert(db, onConflict: .replace)
+        }
+        return self
+    }
+
+    // MARK: - InstrumentRepository
+
+    func instrument(_ id: InstrumentID) -> Instrument? {
+        readOptional("instrument(\(id.rawValue))") { db in
+            try InstrumentRow.fetchOne(db, key: id.rawValue)?.toDomain()
+        }
+    }
+
+    func listing(_ id: ListingID) -> Listing? {
+        readOptional("listing(\(id.rawValue))") { db in
+            try ListingRow.fetchOne(db, key: id.rawValue)?.toDomain()
+        }
+    }
+
+    func listings(forInstrument id: InstrumentID) -> [Listing] {
+        read("listings(forInstrument: \(id.rawValue))") { db in
+            try ListingRow
+                .fetchAll(db, sql: "SELECT * FROM listings WHERE instrument_id = ?", arguments: [id.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+    }
+
+    func legalEntity(_ id: LegalEntityID) -> LegalEntity? {
+        readOptional("legalEntity(\(id.rawValue))") { db in
+            try LegalEntityRow.fetchOne(db, key: id.rawValue)?.toDomain()
+        }
+    }
+
+    func fundProduct(_ id: FundProductID) -> FundProduct? {
+        readOptional("fundProduct(\(id.rawValue))") { db in
+            try FundProductRow.fetchOne(db, key: id.rawValue)?.toDomain()
+        }
+    }
+
+    func fundShareClass(_ id: FundShareClassID) -> FundShareClass? {
+        readOptional("fundShareClass(\(id.rawValue))") { db in
+            try FundShareClassRow.fetchOne(db, key: id.rawValue)?.toDomain()
+        }
+    }
+
+    func resolve(providerID: DataProviderID, scheme: String, value: String) -> CanonicalRef? {
+        // 防火墙 1 入口：fuzzyCandidate 不能直接返回 canonical
+        //（ADR-DATA001 §Decision 3，与 InMemoryRepository 同语义）
+        readOptional("resolve(\(providerID.rawValue),\(scheme),\(value))") { db in
+            guard let row = try ProviderIdentifierRow.fetchOne(
+                db,
+                sql: """
+                SELECT * FROM provider_identifiers
+                WHERE provider_id = ? AND identifier_scheme = ? AND identifier_value = ?
+                """,
+                arguments: [providerID.rawValue, scheme, value]
+            ) else { return nil }
+            let pid = try row.toDomain()
+            return pid.resolutionMethod.isAuthoritative ? pid.canonical : nil
+        }
+    }
+
+    func relationships(for instrument: InstrumentID) -> [InstrumentRelationship] {
+        // 按关系的 from 端 Instrument 索引（tracksIndex.etf / issuedBy.instrument /
+        // adrUnderlying.adr 的源端；shareClassOf 的源是 ShareClass，不在此列）
+        read("relationships(for: \(instrument.rawValue))") { db in
+            try InstrumentRelationshipRow
+                .fetchAll(
+                    db,
+                    sql: """
+                    SELECT * FROM instrument_relationships
+                    WHERE source_type = 'instrument' AND source_id = ?
+                    ORDER BY id
+                    """,
+                    arguments: [instrument.rawValue]
+                )
+                .map { try $0.toDomain() }
+        } ?? []
+    }
+
+    /// 导出所有已登记的 ProviderIdentifier（供 IdentityResolver 构造）。
+    func allProviderIdentifiers() -> [ProviderIdentifier] {
+        read("allProviderIdentifiers") { db in
+            try ProviderIdentifierRow
+                .fetchAll(db, sql: "SELECT * FROM provider_identifiers ORDER BY provider_id, identifier_scheme, identifier_value")
+                .map { try $0.toDomain() }
+        } ?? []
+    }
+
+    // MARK: - MarketTimeSeriesRepository
+
+    func dailyBars(listingID: ListingID, context: KnowledgeContext) -> [DailyBar] {
+        let all: [DailyBar] = read("dailyBars(\(listingID.rawValue))") { db in
+            try DailyBarRow
+                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(all, context: context)
+    }
+
+    func dailyBar(listingID: ListingID, on day: Date, context: KnowledgeContext) -> DailyBar? {
+        // 与 InMemoryRepository 逐字对齐：单点查询不走 filterByContext（不经
+        // 分组 / vintageFilter——黄金行为是「同日 + 可见性过滤，取 vintage 最大」）
+        let all: [DailyBar] = read("dailyBars(\(listingID.rawValue))") { db in
+            try DailyBarRow
+                .fetchAll(db, sql: "SELECT * FROM daily_bars WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        let candidates = all.filter { bar in
+            Calendar(identifier: .gregorian).isDate(bar.temporalEnvelope.effectiveAt, inSameDayAs: day)
+                && ObservationQuerySemantics.contextIncludes(context, envelope: bar.temporalEnvelope)
+        }
+        return candidates.max { $0.vintage < $1.vintage }
+    }
+
+    // MARK: - NAVTimeSeriesRepository
+
+    func navObservations(shareClassID: FundShareClassID, context: KnowledgeContext) -> [NAVObservation] {
+        let all: [NAVObservation] = read("navObservations(\(shareClassID.rawValue))") { db in
+            try NAVObservationRow
+                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ?", arguments: [shareClassID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(all, context: context)
+    }
+
+    func navObservation(shareClassID: FundShareClassID, on day: Date, context: KnowledgeContext) -> NAVObservation? {
+        // 与 InMemoryRepository 逐字对齐（见 dailyBar 注释）
+        let all: [NAVObservation] = read("navObservations(\(shareClassID.rawValue))") { db in
+            try NAVObservationRow
+                .fetchAll(db, sql: "SELECT * FROM nav_observations WHERE share_class_id = ?", arguments: [shareClassID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        let candidates = all.filter { nav in
+            Calendar(identifier: .gregorian).isDate(nav.temporalEnvelope.effectiveAt, inSameDayAs: day)
+                && ObservationQuerySemantics.contextIncludes(context, envelope: nav.temporalEnvelope)
+        }
+        return candidates.max { $0.vintage < $1.vintage }
+    }
+
+    // MARK: - FundHoldingRepository
+
+    func holdingSnapshots(productID: FundProductID, context: KnowledgeContext) -> [FundHoldingSnapshot] {
+        let assembled: [FundHoldingSnapshot] = read("holdingSnapshots(\(productID.rawValue))") { db in
+            try FundHoldingSnapshotRow
+                .fetchAll(db, sql: "SELECT * FROM holding_snapshots WHERE product_id = ?", arguments: [productID.rawValue])
+                .map { row -> FundHoldingSnapshot in
+                    let skeleton = try row.toDomain()
+                    let positions = try FundHoldingPositionRow
+                        .fetchAll(
+                            db,
+                            sql: "SELECT * FROM holding_positions WHERE snapshot_id = ? ORDER BY position_index",
+                            arguments: [row.id]
+                        )
+                        .map { try $0.toDomain() }
+                    return FundHoldingSnapshot(
+                        id: skeleton.id,
+                        productID: skeleton.productID,
+                        temporalEnvelope: skeleton.temporalEnvelope,
+                        availabilityProvenance: skeleton.availabilityProvenance,
+                        dataQuality: skeleton.dataQuality,
+                        vintage: skeleton.vintage,
+                        reportPeriod: skeleton.reportPeriod,
+                        positions: positions,
+                        disclosedWeightTotal: skeleton.disclosedWeightTotal
+                    )
+                }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(assembled, context: context)
+    }
+
+    func latestHoldingSnapshot(productID: FundProductID, context: KnowledgeContext) -> FundHoldingSnapshot? {
+        let snaps = holdingSnapshots(productID: productID, context: context)
+        return snaps.max {
+            if $0.temporalEnvelope.effectiveAt != $1.temporalEnvelope.effectiveAt {
+                return $0.temporalEnvelope.effectiveAt < $1.temporalEnvelope.effectiveAt
+            }
+            return $0.vintage < $1.vintage
+        }
+    }
+
+    // MARK: - FundamentalRepository
+
+    func fundamentalObservations(
+        entityID: LegalEntityID,
+        metricKey: String?,
+        context: KnowledgeContext
+    ) -> [FundamentalObservation] {
+        let all: [FundamentalObservation] = read("fundamentalObservations(\(entityID.rawValue))") { db in
+            let sql = """
+                SELECT * FROM fundamental_observations
+                WHERE entity_id = ?\(metricKey != nil ? " AND metric_key = ?" : "")
+                """
+            let args: [DatabaseValueConvertible] = metricKey.map { [entityID.rawValue, $0] } ?? [entityID.rawValue]
+            return try FundamentalObservationRow
+                .fetchAll(db, sql: sql, arguments: StatementArguments(args))
+                .map { try $0.toDomain() }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(all, context: context) { obs in
+            FundamentalPeriodKey(
+                metricKey: obs.metricKey,
+                unit: obs.unit,
+                periodStart: obs.periodStart,
+                periodEnd: obs.periodEnd
+            )
+        }
+    }
+
+    /// 基本面事实的期间身份（economic 查询的分组键，REPO-1b；与 InMemory 同键）。
+    private struct FundamentalPeriodKey: Hashable {
+        let metricKey: String
+        let unit: String
+        let periodStart: Date?
+        let periodEnd: Date
+    }
+
+    // MARK: - MacroRepository
+
+    func macroObservations(indicatorID: InstrumentID, context: KnowledgeContext) -> [MacroObservation] {
+        let all: [MacroObservation] = read("macroObservations(\(indicatorID.rawValue))") { db in
+            try MacroObservationRow
+                .fetchAll(db, sql: "SELECT * FROM macro_observations WHERE indicator_id = ?", arguments: [indicatorID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(all, context: context)
+    }
+
+    // MARK: - CorporateActionRepository
+
+    func corporateActions(listingID: ListingID, context: KnowledgeContext) -> [CorporateAction] {
+        let all: [CorporateAction] = read("corporateActions(\(listingID.rawValue))") { db in
+            try CorporateActionRow
+                .fetchAll(db, sql: "SELECT * FROM corporate_actions WHERE listing_id = ?", arguments: [listingID.rawValue])
+                .map { try $0.toDomain() }
+        } ?? []
+        return ObservationQuerySemantics.filterByContext(all, context: context)
+    }
+
+    // MARK: - CalendarRepository
+
+    func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
+        calendarBackend.isTradingDay(date, jurisdiction: jurisdiction)
+    }
+
+    func tradingDay(after date: Date, offset: Int, jurisdiction: Jurisdiction) -> Date {
+        calendarBackend.tradingDay(after: date, offset: offset, jurisdiction: jurisdiction)
+    }
+
+    func tradingDayStart(_ date: Date, jurisdiction: Jurisdiction) -> Date {
+        calendarBackend.tradingDayStart(date, jurisdiction: jurisdiction)
+    }
+}
