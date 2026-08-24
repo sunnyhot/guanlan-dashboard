@@ -43,7 +43,7 @@ final class CanonicalDatabase: @unchecked Sendable {
 
     /// 当前代码认识的 schema 版本（= 已登记的最高 migration 序号）。
     /// GRDB-2..6 每加一个域的建表 migration 就 +1；**已发布的序号永不复用**。
-    static let schemaVersion = 1
+    static let schemaVersion = 2
 
     /// 全部迁移（按序登记，只追加不改写）。
     ///
@@ -54,6 +54,10 @@ final class CanonicalDatabase: @unchecked Sendable {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1_baseline") { _ in
             // 故意空：见上。GRDB-2 起在此追加建表 migration。
+        }
+        // v2（GRDB-2）：Identity 域 7 表（ADR-DATA001 §7-14）。
+        migrator.registerMigration("v2_identity") { db in
+            try IdentitySchema.create(in: db)
         }
         return migrator
     }

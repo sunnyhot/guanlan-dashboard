@@ -665,6 +665,35 @@ macos-app/
 >   `init()`（文件库走 `init(path:)`，意图不可混）。+3 测试
 >   （裸库 pending / superseded 拒开 / 未知项清单），共 10 个。
 >
+> **GRDB-2 已签收（5 点，2026-08-24）**——migration `v2_identity` +
+> `Persistence/IdentitySchema.swift`（7 表 DDL + row codec）+
+> `Persistence/CanonicalColumnCodec.swift`（跨表列编解码约定）：
+> - **7 表**：legal_entities / instruments / listings / fund_products /
+>   fund_share_classes / provider_identifiers / instrument_relationships，
+>   主键全为 Canonical ID（TEXT）。schemaVersion → 2；迁移只追加
+>   （v1_baseline 首位不变，升级路径测试守护 v1-only 旧库自动补 v2）。
+> - **schema 层防火墙**：外键（instruments.issuer → legal_entities、
+>   listings/fund_products/fund_share_classes → instruments 等，GRDB 默认启用
+>   FK，悬空引用拒收）；provider_identifiers 复合主键
+>   (provider_id, scheme, value) = 「一个 Provider 代码至多一条映射」的
+>   库级保证（IdentityResolver lookup 语义）；active 挂牌 (exchange, symbol)
+>   **部分唯一索引**（退市 Listing 保留、同码重挂是新行不冲突）；
+>   fund_share_classes UNIQUE (product_id, share_class_code)。
+> - **列编解码约定（CanonicalColumnCodec，GRDB-3..6 复用）**：时间戳
+>   ISO8601 UTC 毫秒（字典序 = 时间序，PIT 比较可直接在 SQL 做）；Decimal
+>   走 TEXT（NSDecimalNumber description，不走 Double）；JSON 子文档
+>   （regulatoryIDs / feeStructure）TEXT + sortedKeys 确定性编码。
+> - **fail-closed 解码**：枚举列未知 rawValue 拒收（不 `?? 默认值` 静默
+>   换壳——Identity 是一切计算的锚点）；关系行端点类型按
+>   relationship_type 契约校验（TRACKS_INDEX 两端必须 instrument、
+>   SHARE_CLASS_OF 是 fundShareClass→fundProduct 等），错配行拒收；
+>   时间戳非法格式拒收。
+> - 15 个测试（IdentitySchemaTests）：迁移追加语义 / 升级路径 / 全表列
+>   清单 / 完整 identity 图 domain↔row 往返 / 毫秒精度 / FK·复合主键·
+>   部分唯一·产品+份额唯一约束 / 未知枚举·端点错配·非法时间戳 fail-closed /
+>   三元组查询命中与 miss。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通
