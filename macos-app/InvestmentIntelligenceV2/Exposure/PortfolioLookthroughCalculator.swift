@@ -108,6 +108,8 @@ struct LookthroughSnapshot: Artifact {
     let fundSummaries: [FundSummary]
     /// 结构化警告
     let warnings: [Warning]
+    /// 参与计算的 observation IDs（holding + allocation，排序；EXP-2 溯源透传）
+    let sourceObservationIDs: [ObservationID]
 
     /// 单个穿透标的。
     struct UnderlyingPosition: Sendable, Codable, Hashable {
@@ -418,7 +420,8 @@ struct PortfolioLookthroughCalculator: Sendable {
             assetClassExposures: assetClassExposures,
             industryExposures: industryExposures,
             fundSummaries: fundSummaries,
-            warnings: warnings
+            warnings: warnings,
+            sourceObservationIDs: sourceIDs
         )
     }
 
