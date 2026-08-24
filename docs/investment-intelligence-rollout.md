@@ -966,7 +966,7 @@ macos-app/
 
 **里程碑 M5：数据自给**。Factor Engine 才有可信输入。
 
-> **状态（2026-08-24，Epic 6 全部收口）**：**SYNC-1..8（含 6a/6b，21 点）全部签收**，
+> **状态（2026-08-24，Epic 6 全部收口）**：**SYNC-1..8（含 6a/6b，26 点）全部签收**，
 > M5 验收能力全部落地（引擎层离线验证；生产数据积累随 App 接线[Epic 9/B.3]
 > 与真实 Provider 持续运行达成——见 §4.3 逐项对应：SYNC-6a 覆盖率验收 /
 > SYNC-6b 分批增量补全 / SYNC-7 local 兜底降级 / SYNC-1 节假日日历 /
@@ -1004,8 +1004,9 @@ macos-app/
 >   QDII T+2 不建模：保守 +1 只影响「这轮抓不到下轮补」，不伪造数据。
 > - **与 policy 的集成验证**：FundNAV policy + 真日历 → 2026-02-13（节前最后
 >   交易日）的 availableAt = 02-24（无休市表会错算成 02-16）；MarketClose
->   policy 美股跨耶稣受难日 04-17→04-21。25 个测试（TradingCalendarTests）。
->   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>   policy 美股跨耶稣受难日 04-17→04-21。测试（TradingCalendarTests，
+>   以套件通过为准）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
 >
 > **SYNC-3 已签收（2 点，2026-08-24）**——`Sync/FundNAVSync.swift` +
 > `Sync/SyncKit.swift`（SYNC-2..5 共享的直接抓取基础设施）：
@@ -1048,7 +1049,7 @@ macos-app/
 > - **适配器 scheme 扩展**：`EastmoneyHistoricalHoldingProviderAdapter`
 >   接受/透传 `fund_product_code`（持仓快照的 canonical 维度是 FundProduct，
 >   ObservationFactory 要求 fundProduct 目标；fund_code 兼容保留）。
-> - 11 个测试（FundHoldingSyncTests）：报告期导航/编解码、时限数学
+> - 测试（FundHoldingSyncTests，以套件通过为准）：报告期导航/编解码、时限数学
 >   （含清明/年报 3 个月）、首轮 7 期回补、upToDate、新季度检测只补缺失期、
 >   公告未出游标保持、拒收游标保持、失败隔离、健康降级。swift test
 >   全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
@@ -1139,7 +1140,7 @@ macos-app/
 >      保留既有（identity 单点，改映射污染下游）。
 > - Repository 增补 `allInstruments/allListings/allLegalEntities` 枚举 API
 >      （协议 + InMemory + GRDB 同步实现，扫描匹配用）。
-> - 12 个测试（IdentitySyncTests）。swift test 全量绿（跳过环境性
+> - 测试（IdentitySyncTests，以套件通过为准）。swift test 全量绿（跳过环境性
 >   AppLaunchPresentationPolicyTests）。
 >
 > **SYNC-6b 已签收（5 点，2026-08-24）**——`Sync/MarketUniverseBackfill.swift`
@@ -1162,8 +1163,8 @@ macos-app/
 >
 > **✅ Epic 6 完全收口（2026-08-24）**：SYNC-1（3）/ SYNC-2（2）/ SYNC-3（2）/
 > SYNC-4（2）/ SYNC-5（1）/ SYNC-6a（3）/ SYNC-6b（5）/ SYNC-7（3）/
-> SYNC-8（5）= 21 点全部签收，M5 能力落地（引擎层离线验证 + 86 个新增测试，
-> 以套件通过为准）。Epic 7（Factor Engine）解锁。
+> SYNC-8（5）= 26 点全部签收，M5 能力落地（引擎层离线验证，新增 9 个测试
+> 套件、以套件通过为准）。Epic 7（Factor Engine）解锁。
 
 ---
 
