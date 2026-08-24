@@ -1047,6 +1047,21 @@ macos-app/
 >   （含清明/年报 3 个月）、首轮 7 期回补、upToDate、新季度检测只补缺失期、
 >   公告未出游标保持、拒收游标保持、失败隔离、健康降级。swift test
 >   全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-5 已签收（1 点，2026-08-24）**——`Sync/MacroSync.swift`
+> （FRED 宏观同步，daily/weekly 节奏）：
+> - **修订优先的窗口语义**：宏观序列会再发布（FRED real-time vintage，
+>   ADR-DATA008）——抓取不做 effectiveAt 截断（修订可能落在任何历史期），
+>   幂等与修订分工由确定性派生保证：同 ID 同内容幂等归并、新 realtime_start
+>   = 新 vintage 行（economic 取最新修订、exactSnapshot 保留历史版本，
+>   测试覆盖 2.5→3.1 修订场景）。
+> - **节奏 gate**：per-series `refreshInterval`（日频序列配日检、季频配周检，
+>   调用方声明），未到期 .skippedCadence 零网络。
+> - **游标只用于报告**（lastIngestedEffectiveAt 驱动新观测计数与 upToDate
+>   判断），不约束抓取窗口——与 SYNC-3 的本质差异。
+> - 失败语义同 SYNC-3/4：series 粒度隔离、ProviderHealth 上报、
+>   isCallable 跳过、坏状态 fail-closed。7 个测试（MacroSyncTests）。
+>   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 
