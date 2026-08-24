@@ -1483,6 +1483,32 @@ macos-app/
 >   macOS section 单次读取 outcome。
 > - 修复后 swift test 全量绿（跳过环境性同前）；iOS Simulator 构建验证
 >   通过；新增回归测试覆盖每个修复点。
+>
+> **二轮审查修复（2026-08-24，7×P1 + 2×P2，全部落地）**：
+> - **P1 跨进程 ID 稳定**：sortedKeys 不排序 Hashable 键字典的交替数组
+>   编码（[ListingID: SectorClassification] 顺序随进程漂移）——Lookthrough
+>   IdentityPayload 全部规范化（positions 规范串排序数组 + 行业
+>   sortedKeyEntries）；jsonPayload 编码失败显式抛错。
+> - **P1 Exposure/Risk ID 补全**：Exposure 纳入参与计算的 observation
+>   IDs + overlapTopN；RiskProfile 纳入 correlationTopN/窗口/最小样本。
+> - **P1 Target 解码 ID 自洽**：解码后重算派生 ID 与 JSON id 核对，
+>   换内容保旧 ID 的伪造 Target 在解码点拒绝。
+> - **P1 Validator 默认 fail-closed**：ReferenceResolvers 默认全 false
+>   （缺 resolver = 无法证明可解析 = 拒绝），.everythingResolvable 为
+>   显式声明形态。
+> - **P1 Replayer 绑定 artifact**：artifact 补存 comparison（D004 §1
+>   结果层）；replay(artifact:) 三重键域校验；verify 做 decision/
+>   comparison/plans 三层全等验证。
+> - **P1 幂等持久化**：write 同 ID 同内容 no-op / 异内容 conflict
+>   （重放不主键冲突）；补齐第 6 类 LookthroughSnapshot codec。
+> - **P1 AgentJob 双向 codec**：toAgentJob 事件时间线重放 + 终态一致
+>   校验；idempotency_key 含 workflow 前缀；event payload JSON 编码
+>   （nil/空串语义保留，特殊字符安全）。
+> - **P2 pair 确定性合并**：反序重复对不再 trap（一致幂等 / 矛盾取
+>   规范序列化小者）；**P2 badge 估值覆盖**：估值不全时「已知估值内
+>   完整」（warning），不再单凭引擎 grade 声称覆盖完整。
+> - 修复后 swift test 全量绿（1767 passed，环境性排除同前）；iOS
+>   Simulator 构建通过；每个修复点有回归测试。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
