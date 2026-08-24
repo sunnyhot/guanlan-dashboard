@@ -1303,6 +1303,40 @@ macos-app/
 
 ### Epic 8 — Exposure / Risk
 
+> **状态（2026-08-24，Epic 8 全部收口）**：**EXP-1（8）/ EXP-2（5）/
+> RISK-1（3）/ RISK-2（3）/ RISK-3（2）= 21 点全部签收**，代码在
+> `InvestmentIntelligenceV2/Exposure/`（PortfolioLookthroughCalculator /
+> ExposureEngine）与 `InvestmentIntelligenceV2/Risk/`（ConcentrationCalculator /
+> CorrelationCalculator / PortfolioRiskProfiler），测试以套件通过为准：
+> PortfolioLookthroughCalculatorTests / ExposureEngineTests /
+> ConcentrationCalculatorTests / CorrelationCalculatorTests /
+> PortfolioRiskProfilerTests（5 套件）。swift test 全量绿（跳过环境性
+> AppLaunchPresentationPolicyTests）。
+>
+> 实现要点（与 Story 表述的对齐）：
+> - **EXP-1 分层**：V2 抓取已由 Epic 4/6 Provider 链进 Canonical
+>   Observation，计算器只做旧实现的「make 层」等价物（纯计算、不做 IO）。
+>   能力等价旧 944 行计算面（跨基金合并 / coverage 三级 / 资产大类 /
+>   missing+stale 警告 / 每基金摘要），旧实现的抓取 / 缓存 / 重试场景
+>   属 Provider 层、不在计算器范围。**超越**：全部 Decimal Ratio +
+>   上下界（最坏情况归因：upper = point + 维度 unknown；证券维与资产
+>   大类维缺口分开记录）+ 行业聚合走显式分类输入（不内置行业字典）+
+>   Artifact conformance。类型名 LookthroughSnapshot 避开同 target 的
+>   旧 Core PortfolioLookThroughSnapshot。
+> - **EXP-2**：三维规范化为统一 ExposureEstimate（bounds 从 EXP-1 原样
+>   保持，unknownWeight 进入上下界）+ fund overlap 新维度
+>   （Σ min(wA,wB) + unknown 上界）。
+> - **RISK-1**：三层集中度 + HHI 上下界（凸性最坏：Σw² + 2·wmax·u + u²）；
+>   重复持股经穿透层识别（基金层的分散假象被穿透合并暴露）。
+> - **RISK-2**：Pearson（Decimal）按 effectiveAt 严格同日配对；不足三态
+>   （insufficientSamples / noOverlappingDates / zeroVariance）一律
+>   unknown 不猜，绝不用 0 或均值填充。
+> - **RISK-3**：多维聚合 Artifact，**类型层无单一分数字段**（Mirror 白名单
+>   测试锁定）；数据基础维度透明呈现覆盖情况。
+>
+> Epic 9（Daily Attribution Workflow，M6）解锁——这是 macos-app 首次
+> import V2 代码进入双轨期的 Epic。
+
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | EXP-1 | `PortfolioLookthroughCalculator` v2（**全新实现**，不复用现有 `FundLookThrough.swift`；含 coverage/interval/unknownWeight/上下界，等价或超过现有 944 行的能力）| M5 | 8 | 不动现有 FundLookThrough（Epic 12 才下线）；现有测试场景在新实现上等价通过 |
