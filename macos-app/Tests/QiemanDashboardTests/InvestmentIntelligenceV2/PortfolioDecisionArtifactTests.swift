@@ -34,14 +34,24 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         )
     }
 
+    /// 自洽 comparison(三轮 P1-6:validator 要求 decision 由 comparison 推导):
+    /// 前沿 = admissible plans → PartialDecisionPolicy 推回同 decision。
+    private static func consistentComparison(
+        for decision: PartialDecision, allPlans: [String]
+    ) -> PlanComparisonResult {
+        let front = decision.admissiblePlans.sorted()
+        return PlanComparisonResult(pairwise: [:], paretoFront: front, blockingUnknowns: [])
+    }
+
     private func makeArtifact(
         decision: PartialDecision,
         plans: [String: PortfolioActionPlan],
-        comparison: PlanComparisonResult = PlanComparisonResult(
-            pairwise: [:], paretoFront: [], blockingUnknowns: []
-        )
+        comparison: PlanComparisonResult? = nil
     ) -> PortfolioDecisionArtifact {
-        .assemble(
+        let resolvedComparison = comparison ?? Self.consistentComparison(
+            for: decision, allPlans: plans.keys.sorted()
+        )
+        return PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
             criterionVersions: ["portfolio-momentum@v1"],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
@@ -49,7 +59,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             bandVersion: "b@v1",
             knowledgeContextSummary: "economicKnowledge(2024-07-20)",
             decision: decision,
-            comparison: comparison,
+            comparison: resolvedComparison,
             plans: plans,
             producedAt: day
         )
@@ -169,6 +179,41 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         XCTAssertEqual(replayer.replay(inputs: base, now: day), original)
     }
 
+    func testValidatorRejectsInternallyContradictoryResults() throws {
+        // 三轮 P1-6 回归:结果层内部矛盾拒收
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let plans = ["A": makePlan("A", delta: "0.05")]
+
+        // ① comparison 前沿含 plans 外的 GHOST → comparisonPlanDomainViolation
+        let ghostFront = makeArtifact(
+            decision: decision, plans: plans,
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["GHOST"], blockingUnknowns: [])
+        )
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: ghostFront, resolvers: .everythingResolvable
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .comparisonPlanDomainViolation(keys: ["GHOST"]))
+        }
+
+        // ② decision 与 comparison 推导结果矛盾(前沿两个却声称 singlePreferred)
+        let contradictory = makeArtifact(
+            decision: decision, plans: ["A": plans["A"]!, "B": makePlan("B", delta: "-0.05")],
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A", "B"], blockingUnknowns: [])
+        )
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: contradictory, resolvers: .everythingResolvable
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError, .decisionNotDerivedFromComparison)
+        }
+
+        // 自洽对照(同 decision,前沿恰一)→ 通过
+        XCTAssertNoThrow(try DecisionValidator().validate(
+            artifact: makeArtifact(decision: decision, plans: plans),
+            resolvers: .everythingResolvable
+        ))
+    }
+
     func testArtifactBoundReplayVerifiesEndToEnd() throws {
         // 二轮审查 P1-2 回归:以 artifact 为入口的完整重放——键域校验 +
         /// decision/comparison/plans 三层全等验证(同 IDs → 同决策)
@@ -187,7 +232,15 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
                 "A": [score("momentum", d("0.05")), score("costScore", d("0.005"))],
                 "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
             ],
-            band: band, higherIsBetter: [:]
+            band: band, higherIsBetter: [:],
+            // 三轮 P1-3:取数来源的引用身份声明(必须与 artifact 引用层一致)
+            resolvedReferences: .init(
+                signalIDs: ["sig-1"],
+                factorSnapshotIDs: ["fs_abc"],
+                criterionVersions: ["portfolio-momentum@v1"],
+                targetID: nil,
+                bandVersion: "b@v1"
+            )
         )
         // 先重放产 outcome,用其结果组装 artifact(与重放一致)
         let outcome = DecisionReplayer().replay(inputs: inputs, now: day)
@@ -196,8 +249,27 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             plans: outcome.plans,
             comparison: outcome.comparison
         )
-        // verify 通过(decision/comparison/plans 全等)
+        // verify 通过(引用一致 + decision/comparison/plans 全等)
         XCTAssertNoThrow(try DecisionReplayer().verify(artifact: artifact, inputs: inputs, now: day))
+
+        // 三轮 P1-3 回归:inputs 的引用声明与 artifact 不一致(取数来源
+        // 不是被重放 artifact 的引用)→ referenceMismatch,即使碰巧能重放
+        var wrongRefsInputs = inputs
+        wrongRefsInputs = DecisionReplayer.ReplayInputs(
+            plannerRuns: inputs.plannerRuns, scores: inputs.scores,
+            band: inputs.band, higherIsBetter: inputs.higherIsBetter,
+            resolvedReferences: .init(
+                signalIDs: ["sig-OTHER"],
+                factorSnapshotIDs: inputs.resolvedReferences.factorSnapshotIDs,
+                criterionVersions: inputs.resolvedReferences.criterionVersions,
+                targetID: nil, bandVersion: inputs.resolvedReferences.bandVersion
+            )
+        )
+        XCTAssertThrowsError(try DecisionReplayer().verify(artifact: artifact, inputs: wrongRefsInputs, now: day)) { error in
+            guard case DecisionReplayer.ReplayError.referenceMismatch = error else {
+                return XCTFail("应为 referenceMismatch,实际 \(error)")
+            }
+        }
 
         // 键域不一致(plannerRuns 多了 C)→ planKeyDomainMismatch
         var badPlanner = inputs.plannerRuns

@@ -16,13 +16,22 @@ struct AttributionV2Section: View {
             trailing: {
                 Spacer()
                 if let rendered = outcome?.rendered {
-                    // 二轮审查 P2-9:badge 综合估值覆盖——大量持仓无估值时
-                    // 引擎 coverage 只反映参与归一的部分,不再单凭 grade
-                    // 声称「覆盖完整」
+                    // badge 三重口径(二轮 P2-9 + 三轮 P2-7):engine grade 只分
+                    // 三档(≥80% 即 high),「完整」必须 coverage==100% 且估值
+                    // 完整;估值不全限定「已知估值内」;80–99.9% 用「较高」
                     let coverage = model.attributionV2Coverage
+                    let engineCoverageComplete = (outcome?.artifact?.result.coverage.value ?? 0) == 1
                     InvestmentStateBadge(
-                        text: badgeText(rendered.grade, valuationComplete: coverage?.hasFullValuation ?? true),
-                        tint: badgeTint(rendered.grade, valuationComplete: coverage?.hasFullValuation ?? true)
+                        text: badgeText(
+                            rendered.grade,
+                            engineCoverageComplete: engineCoverageComplete,
+                            valuationComplete: coverage?.hasFullValuation ?? true
+                        ),
+                        tint: badgeTint(
+                            rendered.grade,
+                            engineCoverageComplete: engineCoverageComplete,
+                            valuationComplete: coverage?.hasFullValuation ?? true
+                        )
                     )
                 }
             }
@@ -114,22 +123,33 @@ struct AttributionV2Section: View {
         return AppPalette.ink
     }
 
-    /// badge 文案：估值覆盖不完整时明确限定「已知估值持仓」域（二轮 P2-9）。
-    private func badgeText(_ grade: AttributionCoverageGrade, valuationComplete: Bool) -> String {
-        switch (grade, valuationComplete) {
-        case (.high, true): return "覆盖完整"
-        case (.high, false): return "已知估值内完整"
-        case (.partial, _): return "部分覆盖"
-        case (.low, _): return "覆盖不足"
+    /// badge 文案（三轮 P2-7:high = ≥80%,仅 coverage==100% 才称「完整」;
+    /// 估值不全时限定「已知估值内」域）。
+    private func badgeText(
+        _ grade: AttributionCoverageGrade,
+        engineCoverageComplete: Bool,
+        valuationComplete: Bool
+    ) -> String {
+        switch (grade, engineCoverageComplete, valuationComplete) {
+        case (.high, true, true): return "覆盖完整"
+        case (.high, true, false): return "已知估值内完整"
+        case (_, false, _): return "覆盖较高"
+        case (.partial, _, _): return "部分覆盖"
+        case (.low, _, _): return "覆盖不足"
         }
     }
 
-    private func badgeTint(_ grade: AttributionCoverageGrade, valuationComplete: Bool) -> Color {
-        switch (grade, valuationComplete) {
-        case (.high, true): return AppPalette.positive
-        case (.high, false): return AppPalette.warning
-        case (.partial, _): return AppPalette.warning
-        case (.low, _): return AppPalette.danger
+    private func badgeTint(
+        _ grade: AttributionCoverageGrade,
+        engineCoverageComplete: Bool,
+        valuationComplete: Bool
+    ) -> Color {
+        switch (grade, engineCoverageComplete, valuationComplete) {
+        case (.high, true, true): return AppPalette.positive
+        case (.high, true, false): return AppPalette.warning
+        case (_, false, _): return AppPalette.warning
+        case (.partial, _, _): return AppPalette.warning
+        case (.low, _, _): return AppPalette.danger
         }
     }
 

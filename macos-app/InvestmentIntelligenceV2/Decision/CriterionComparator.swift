@@ -150,7 +150,20 @@ struct CriterionComparator: Sendable {
 }
 
 /// 部分决策（D003 §4：不强制 total order）。
+///
+/// 语义相等只看 (status, admissiblePlans)——explanation 是 Presentation
+/// 文案,重放推导的措辞与历史措辞可能不同但不构成语义漂移（三轮 P1-6
+/// 校验依赖此语义相等）。
 struct PartialDecision: Sendable, Codable, Hashable {
+    static func == (lhs: PartialDecision, rhs: PartialDecision) -> Bool {
+        lhs.status == rhs.status && lhs.admissiblePlans == rhs.admissiblePlans
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(status)
+        hasher.combine(admissiblePlans)
+    }
+
     enum Status: String, Sendable, Codable, Hashable {
         /// 前沿恰一个：有明确偏好
         case singlePreferred

@@ -55,6 +55,10 @@ struct DecisionValidator: Sendable {
         case emptyCriterionVersions
         /// 引用无法解析到具体实例（审查 P1-1：fail-closed，不静默放行）
         case unresolvableReference(kind: String, id: String)
+        /// comparison 的 plan 域越界（pairwise 键或前沿含 plans 外的 plan）
+        case comparisonPlanDomainViolation(keys: [String])
+        /// decision 不是从 comparison 推导的结果（结果层内部矛盾——三轮 P1-6）
+        case decisionNotDerivedFromComparison
     }
 
     /// 各类引用的可解析性检查（D004 §2「所有引用 ID 都能解析到具体实例」）。
@@ -121,6 +125,23 @@ struct DecisionValidator: Sendable {
                 throw ValidationError.admissiblePlanNotFound(admissible)
             }
         }
+        // 三轮 P1-6:结果层内部一致——
+        // ① comparison 的 plan 域(pairwise 键 + 前沿)必须 ⊆ plans
+        let planKeys = Set(artifact.plans.keys)
+        let comparisonKeys = artifact.comparison.paretoFront
+            + artifact.comparison.pairwise.keys.flatMap { $0.split(separator: "|").map(String.init) }
+        let violations = Set(comparisonKeys).subtracting(planKeys).sorted()
+        if !violations.isEmpty {
+            throw ValidationError.comparisonPlanDomainViolation(keys: violations)
+        }
+        // ② decision 必须由 comparison 经 PartialDecisionPolicy 推导
+        // (伪造的前沿 / pairwise 或与之矛盾的 decision 在此拒绝)
+        let derived = PartialDecisionPolicy().decide(
+            artifact.comparison, allPlanKeys: artifact.plans.keys.sorted()
+        )
+        guard derived == artifact.decision else {
+            throw ValidationError.decisionNotDerivedFromComparison
+        }
         // 引用可解析（fail-closed）
         for signalID in artifact.signalIDs where !resolvers.signal(signalID) {
             throw ValidationError.unresolvableReference(kind: "signal", id: signalID.rawValue)
@@ -163,6 +184,45 @@ struct DecisionReplayer: Sendable {
         let scores: [String: [CriterionScore]]
         let band: IndifferenceBand
         let higherIsBetter: [String: Bool]
+        /// **已解析引用的身份声明（三轮 P1-3）**：inputs 的取数来源必须与
+        /// artifact 引用层逐项一致——verify 核对，防止「任意输入碰巧重放出
+        /// 相同结果」冒充「同 IDs → 同决策」。
+        let resolvedReferences: ResolvedReferences
+
+        init(
+            plannerRuns: [String: PlannerRun],
+            scores: [String: [CriterionScore]],
+            band: IndifferenceBand,
+            higherIsBetter: [String: Bool],
+            resolvedReferences: ResolvedReferences = ResolvedReferences()
+        ) {
+            self.plannerRuns = plannerRuns
+            self.scores = scores
+            self.band = band
+            self.higherIsBetter = higherIsBetter
+            self.resolvedReferences = resolvedReferences
+        }
+    }
+
+    /// 重放取数时实际解析到的引用身份（按 artifact 引用层结构）。
+    struct ResolvedReferences: Sendable, Codable, Hashable {
+        let signalIDs: [String]
+        let factorSnapshotIDs: [String]
+        let criterionVersions: [String]
+        let targetID: String?
+        let bandVersion: String
+
+        init(
+            signalIDs: [String] = [], factorSnapshotIDs: [String] = [],
+            criterionVersions: [String] = [], targetID: String? = nil,
+            bandVersion: String = ""
+        ) {
+            self.signalIDs = signalIDs
+            self.factorSnapshotIDs = factorSnapshotIDs
+            self.criterionVersions = criterionVersions
+            self.targetID = targetID
+            self.bandVersion = bandVersion
+        }
     }
 
     /// 重放结论（审查 P1-1：含行动计划本身）。
@@ -220,6 +280,8 @@ struct DecisionReplayer: Sendable {
         case artifactPlanDomainMismatch(artifact: [String], inputs: [String])
         /// 重放结果与 artifact 不一致（完整重放的「同 IDs → 同决策」被破坏）
         case replayMismatch(detail: String)
+        /// inputs 的已解析引用与 artifact 引用层不一致（三轮 P1-3）
+        case referenceMismatch(declared: String, artifact: String)
     }
 
     /// 以 artifact 为入口的完整重放：校验 inputs 键域（plannerRuns ==
@@ -243,13 +305,29 @@ struct DecisionReplayer: Sendable {
     }
 
     /// 完整重放一致性验证（D004 §3「同 IDs → 同决策」的运行时形态）：
-    /// 重放 outcome 必须与 artifact 的 decision / comparison / plans 全等，
-    /// 任一不一致抛错（fail-closed，不静默容忍漂移）。
+    /// ① inputs 的已解析引用必须与 artifact 引用层逐项一致（三轮 P1-3）；
+    /// ② 重放 outcome 必须与 artifact 的 decision / comparison / plans
+    /// 全等。任一不一致抛错（fail-closed，不静默容忍漂移）。
     func verify(
         artifact: PortfolioDecisionArtifact,
         inputs: ReplayInputs,
         now: Date
     ) throws(ReplayError) -> ReplayOutcome {
+        // 三轮 P1-3:引用身份逐项核对(取数来源必须是被重放 artifact 的引用)
+        let declared = inputs.resolvedReferences
+        let referenced = ResolvedReferences(
+            signalIDs: artifact.signalIDs.map(\.rawValue).sorted(),
+            factorSnapshotIDs: artifact.factorSnapshotIDs.map(\.rawValue).sorted(),
+            criterionVersions: artifact.criterionVersions.sorted(),
+            targetID: artifact.target?.id.rawValue,
+            bandVersion: artifact.indifferenceBandVersion
+        )
+        guard declared == referenced else {
+            throw .referenceMismatch(
+                declared: "signal=\(declared.signalIDs) factor=\(declared.factorSnapshotIDs) criterion=\(declared.criterionVersions) target=\(declared.targetID ?? "-") band=\(declared.bandVersion)",
+                artifact: "signal=\(referenced.signalIDs) factor=\(referenced.factorSnapshotIDs) criterion=\(referenced.criterionVersions) target=\(referenced.targetID ?? "-") band=\(referenced.bandVersion)"
+            )
+        }
         let outcome = try replay(artifact: artifact, inputs: inputs, now: now)
         guard outcome.decision == artifact.decision else {
             throw .replayMismatch(detail: "decision 不一致：\(outcome.decision) vs \(artifact.decision)")

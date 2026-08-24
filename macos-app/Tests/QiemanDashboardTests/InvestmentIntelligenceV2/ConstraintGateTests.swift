@@ -239,13 +239,14 @@ final class ConstraintGateTests: XCTestCase {
         XCTAssertTrue(consistent.passed)
         XCTAssertEqual(consistent.correlationSkippedPairs, 0)
 
-        // 矛盾对(0.9 vs 0.5):确定性合并(序列化字典序小者:0.5),不崩溃
+        // 三轮 P1-5 回归:矛盾对(0.9 vs 0.5)保守取 |0.9|(最坏情况),
+        // 字典序取小 0.5 曾让上限 0.8 fail-open 错误通过
         let conflicting = gate.evaluate(
             projected: projected, actions: [],
             rules: [.maxAverageCorrelation(cap: d("0.8"))],
             correlations: [correlationPair("A", "B", "0.9"), correlationPair("B", "A", "0.5")]
         )
-        XCTAssertTrue(conflicting.passed, "合并选择 |0.5|(字典序较小)→ 0.5 ≤ 0.8 通过")
+        XCTAssertFalse(conflicting.passed, "保守合并 |0.9| > 0.8 → 违规(fail-closed)")
         // 输入顺序无关:反转输入顺序结果一致(确定性)
         let reversed = gate.evaluate(
             projected: projected, actions: [],

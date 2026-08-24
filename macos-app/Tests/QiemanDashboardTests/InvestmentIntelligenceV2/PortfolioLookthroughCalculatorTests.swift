@@ -366,6 +366,45 @@ final class PortfolioLookthroughCalculatorTests: XCTestCase {
         XCTAssertEqual(decoded, snap)
     }
 
+    func testPositionDecodingEnforcesExclusiveFundOrDirect() throws {
+        // 三轮 P1-4 回归:基金/直接持股必须恰好其一——
+        // 双设(暴露双计)与双空(权重消失)都在解码点拒绝
+        struct RawPosition: Codable {
+            let weight: Ratio
+            let fundProductID: FundProductID?
+            let directListingID: ListingID?
+            let directAssetClass: AssetClass?
+        }
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+
+        // 双设
+        let both = RawPosition(
+            weight: Ratio(value: 1),
+            fundProductID: FundProductID(rawValue: "A"),
+            directListingID: ListingID(rawValue: "L1"), directAssetClass: nil
+        )
+        XCTAssertThrowsError(try decoder.decode(
+            LookthroughPositionInput.self, from: encoder.encode(both)
+        )) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("双设应为 dataCorrupted,实际 \(error)")
+            }
+        }
+        // 双空
+        let neither = RawPosition(weight: Ratio(value: 1), fundProductID: nil,
+                                  directListingID: nil, directAssetClass: nil)
+        XCTAssertThrowsError(try decoder.decode(
+            LookthroughPositionInput.self, from: encoder.encode(neither)
+        ))
+        // 合法单设
+        let fundOnly = RawPosition(weight: Ratio(value: 1), fundProductID: FundProductID(rawValue: "A"),
+                                   directListingID: nil, directAssetClass: nil)
+        XCTAssertNoThrow(try decoder.decode(
+            LookthroughPositionInput.self, from: encoder.encode(fundOnly)
+        ))
+    }
+
     func testEmptyOrZeroWeightPortfolioReturnsNil() {
         let calc = PortfolioLookthroughCalculator()
         XCTAssertNil(calc.compute(positions: [], disclosures: [], asOf: asOf, producedAt: producedAt()))

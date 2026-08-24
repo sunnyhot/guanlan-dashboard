@@ -76,8 +76,10 @@ extension ArtifactRow {
         return try CanonicalColumnCodec.decodeJSON(A.self, from: payloadJSON)
     }
 
-    /// 幂等写入（二轮审查 P1-5）：不存在 → 插入 row + 依赖行；已存在且
-    /// 内容完全一致（含依赖行）→ no-op；不一致 → conflict 抛错。
+    /// 幂等写入（二轮 P1-5 + 三轮 P1-2）：不存在 → 插入 row + 依赖行；
+    /// 已存在且**语义内容**一致（kind / validity / payload 语义字段 /
+    /// 依赖行）→ no-op（保留首次 producedAt——ID 不含它，稍后重算同语义
+    /// 不应触发冲突）；语义不一致 → conflict 抛错。
     /// 原子性由调用方事务保证（DatabaseQueue.write 已包事务；GRDB 不支持
     /// 嵌套事务，本方法不自开）。
     static func write(
@@ -88,7 +90,7 @@ extension ArtifactRow {
             db, sql: "SELECT * FROM artifacts WHERE id = ?", arguments: [pair.row.id]
         ) {
             try ensureIdentical(existing: existing, incoming: pair, into: db)
-            return  // 幂等 no-op
+            return  // 幂等 no-op（existing 的 producedAt 即首次产出时间）
         }
         try pair.row.insert(db)
         for dep in pair.dependencies {
@@ -104,14 +106,14 @@ extension ArtifactRow {
         if existing.artifactKind != incoming.row.artifactKind {
             throw ArtifactWriteError.conflict(artifactID: existing.id, field: "artifact_kind")
         }
-        if existing.producedAt != incoming.row.producedAt {
-            throw ArtifactWriteError.conflict(artifactID: existing.id, field: "produced_at")
-        }
         if existing.validityPolicyJSON != incoming.row.validityPolicyJSON {
             throw ArtifactWriteError.conflict(artifactID: existing.id, field: "validity_policy_json")
         }
-        if existing.payloadJSON != incoming.row.payloadJSON {
-            throw ArtifactWriteError.conflict(artifactID: existing.id, field: "payload_json")
+        // 三轮 P1-2:payload 比较剥离 producedAt 字段——ID 的语义域不含产出
+        // 时间,同语义稍后重算(producedAt 不同)必须幂等通过
+        if Self.semanticPayloadFingerprint(existing.payloadJSON)
+            != Self.semanticPayloadFingerprint(incoming.row.payloadJSON) {
+            throw ArtifactWriteError.conflict(artifactID: existing.id, field: "payload_json(semantic)")
         }
         let existingDeps = try ArtifactDependencyRow
             .filter(Column("artifact_id") == existing.id)
@@ -126,6 +128,28 @@ extension ArtifactRow {
                 throw ArtifactWriteError.conflict(artifactID: existing.id, field: "dependencies[\(a.depIndex)]")
             }
         }
+    }
+}
+
+// MARK: - 语义 payload 指纹（三轮 P1-2）
+
+extension ArtifactRow {
+    /// payload JSON → 剥离 producedAt 后的语义指纹（JSONSerialization
+    /// 确定性重序列化；解析失败回退原文——保持 fail-closed 的比较语义）。
+    fileprivate static func semanticPayloadFingerprint(_ payloadJSON: String) -> String {
+        guard let data = payloadJSON.data(using: .utf8),
+              let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else {
+            return "raw|\(payloadJSON)"
+        }
+        var semantic = object
+        semantic.removeValue(forKey: "producedAt")
+        if let sorted = (try? JSONSerialization.data(
+            withJSONObject: semantic, options: [.sortedKeys]
+        )) {
+            return String(decoding: sorted, as: UTF8.self)
+        }
+        return "raw|\(payloadJSON)"
     }
 }
 
@@ -185,6 +209,8 @@ extension AgentJobRow {
         case nonContiguousSeq([Int])
         /// input_json 缺 fingerprint
         case malformedInputJSON(String)
+        /// 身份闭环失败（三轮 P2-8）：派生 ID / 幂等键 / 事件归属 / 首事件时间
+        case identityMismatch(field: String)
     }
 
     /// 事件 payload（JSON 编码，nil vs 空串语义保留——二轮审查 P1-6）。
@@ -259,6 +285,15 @@ extension AgentJobRow {
         } catch {
             throw CanonicalColumnCodecError.malformedTimestamp(createdAt)
         }
+        // 三轮 P2-8:身份闭环——事件必须归属本 job、首事件时间 == 行 createdAt
+        for event in ordered where event.jobID != id {
+            throw JobCodecError.identityMismatch(field: "event.jobID \(event.jobID) ≠ 行 id \(id)")
+        }
+        if let firstEvent = ordered.first,
+           firstEvent.occurredAt != CanonicalColumnCodec.encodeTimestamp(createdAtDate) {
+            throw JobCodecError.identityMismatch(field: "首事件 occurredAt ≠ 行 created_at")
+        }
+
         var job = AgentJob(
             workflowKind: workflow,
             inputFingerprint: fingerprint,
@@ -288,6 +323,24 @@ extension AgentJobRow {
         let rebuiltStatus = Self.statusColumn(for: job.state)
         guard rebuiltStatus == status else {
             throw JobCodecError.statusMismatch(rebuilt: rebuiltStatus, row: status)
+        }
+        // 三轮 P2-8:派生 ID 与幂等键闭环(混入他作业的事件 / 篡改身份列在此拒收)
+        guard job.id == id else {
+            throw JobCodecError.identityMismatch(field: "派生 job.id \(job.id) ≠ 行 id \(id)")
+        }
+        guard idempotencyKey == "\(workflow)|\(fingerprint)" else {
+            throw JobCodecError.identityMismatch(field: "idempotency_key 与 workflow|fingerprint 不一致")
+        }
+        // 行 started/completed 列与事件时间线一致(混入他作业的 started/
+        // completed 事件时间不同,在此暴露)
+        if let started = startedAt,
+           started != ordered.first(where: { $0.kind == AgentEvent.Kind.started.rawValue })?.occurredAt {
+            throw JobCodecError.identityMismatch(field: "started_at 列与 STARTED 事件时间不一致")
+        }
+        if let completed = completedAt,
+           completed != ordered.last(where: { [AgentEvent.Kind.completed, .failed, .cancelled]
+               .map(\.rawValue).contains($0.kind) })?.occurredAt {
+            throw JobCodecError.identityMismatch(field: "completed_at 列与终态事件时间不一致")
         }
         return job
     }

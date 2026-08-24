@@ -184,6 +184,83 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testRecomputedArtifactWithLaterProducedAtIsIdempotent() throws {
+        // 三轮 P1-2 回归:ID 不含 producedAt——稍后重算同语义(不同 producedAt)
+        // 必须幂等通过,且库里保留首次产出时间
+        let queue = try dbQueue
+        let first = makeAttribution()   // producedAt = date(1_700_000_000_000)
+        let laterResult = AttributionEngine().compute(
+            positions: [
+                AttributionPositionInput(
+                    subject: .fund(FundProductID(rawValue: "A")),
+                    weight: Ratio(value: d("0.6")), periodReturn: Ratio(value: d("0.1")),
+                    sourceObservationID: ObservationID(rawValue: "nav_a")
+                ),
+                AttributionPositionInput(
+                    subject: .listing(ListingID(rawValue: "L1")),
+                    weight: Ratio(value: d("0.4")), periodReturn: Ratio(value: d("-0.05")),
+                    sourceObservationID: ObservationID(rawValue: "bar_l1")
+                ),
+            ],
+            portfolioReturn: Ratio(value: d("0.045"))
+        )!
+        let recomputed = DailyAttribution(
+            attributionDate: first.attributionDate, portfolioKey: first.portfolioKey,
+            result: laterResult,
+            producedAt: date(1_700_086_400_000)   // 更晚的重算时间
+        )
+        XCTAssertEqual(first.id, recomputed.id, "同语义同 ID(producedAt 排除)")
+
+        let firstPair = try ArtifactRow.from(first, kind: ArtifactRow.dailyAttributionKind)
+        let recomputedPair = try ArtifactRow.from(recomputed, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try ArtifactRow.write(firstPair, into: db)
+        }
+        // 稍后重算写入 → no-op(不再伪冲突)
+        XCTAssertNoThrow(try queue.write { db in
+            try ArtifactRow.write(recomputedPair, into: db)
+        })
+        // 库里保留首次 producedAt
+        let stored = try queue.read({ db in
+            try ArtifactRow.fetchOne(db, sql: "SELECT * FROM artifacts WHERE id = ?", arguments: [first.id.rawValue])
+        })
+        XCTAssertEqual(stored?.producedAt, CanonicalColumnCodec.encodeTimestamp(date(1_700_000_000_000)),
+                       "首次产出时间保留")
+    }
+
+    func testAgentJobRebuildRejectsForeignEvents() throws {
+        // 三轮 P2-8 回归:混入其他作业的事件(状态相同)→ 身份闭环拒收
+        var job = AgentJob(workflowKind: "k", inputFingerprint: "f", createdAt: date(1_700_000_000_000))
+        try job.transition(to: .running, at: date(1_700_000_000_100))
+        try job.transition(to: .completed, at: date(1_700_000_000_300))
+        // 另一作业(同 workflow/状态,不同指纹与事件时间——可区分)
+        var other = AgentJob(workflowKind: "k", inputFingerprint: "FOREIGN", createdAt: date(1_700_000_000_000))
+        try other.transition(to: .running, at: date(1_700_000_000_999))
+        try other.transition(to: .completed, at: date(1_700_000_000_888))
+
+        let queue = try dbQueue
+        let row = try AgentJobRow.from(job: job)
+        try queue.write { db in
+            try row.insert(db)
+            // 混入 foreign 作业的事件(job_id 却指向本 job)
+            for (index, event) in try AgentJobRow.eventRows(for: other).enumerated() {
+                let foreign = AgentJobEventRow(
+                    jobID: job.id, seq: index,
+                    occurredAt: event.occurredAt, kind: event.kind, payloadJSON: event.payloadJSON
+                )
+                try foreign.insert(db)
+            }
+        }
+        let events = try queue.read({ db in
+            try AgentJobEventRow.filter(Column("job_id") == job.id).order(Column("seq")).fetchAll(db)
+        })
+        XCTAssertThrowsError(try row.toAgentJob(events: events)) { error in
+            guard case AgentJobRow.JobCodecError.identityMismatch = error else {
+                return XCTFail("应为身份闭环失败,实际 \(error)")
+            }
+        }
+    }
+
     func testWriteConflictsOnDivergedContent() throws {
         // 二轮审查 P1-5:同 ID 内容不一致 → conflict(不静默覆盖)
         let queue = try dbQueue
@@ -219,7 +296,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             try ArtifactRow.write(forged, into: db)
         }) { error in
             XCTAssertEqual(error as? ArtifactWriteError,
-                           .conflict(artifactID: original.id.rawValue, field: "payload_json"))
+                           .conflict(artifactID: original.id.rawValue, field: "payload_json(semantic)"))
         }
     }
 

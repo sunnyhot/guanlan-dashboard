@@ -35,10 +35,39 @@ struct LookthroughPositionInput: Sendable, Codable, Hashable {
         directAssetClass: AssetClass? = nil
     ) {
         precondition(weight.value >= 0, "组合权重非负")
+        // 三轮 P1-4:基金 / 直接持股**恰好二选一**——同时存在会让同一权重
+        // 在基金与直接两个循环各计一次(暴露翻倍),都为空则权重归一化后
+        // 消失(不进任何暴露也不进 unknown)
+        precondition((fundProductID != nil) != (directListingID != nil),
+                     "持仓必须是基金或直接持股(恰好其一)")
+        precondition(directAssetClass == nil || directListingID != nil,
+                     "directAssetClass 只对直接持股有意义")
         self.weight = weight
         self.fundProductID = fundProductID
         self.directListingID = directListingID
         self.directAssetClass = directAssetClass
+    }
+
+    /// 校验式解码（三轮 P1-4）：绕过构造器的脏 JSON 在解码点拒绝。
+    enum CodingKeys: String, CodingKey {
+        case weight, fundProductID, directListingID, directAssetClass
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        weight = try container.decode(Ratio.self, forKey: .weight)
+        fundProductID = try container.decodeIfPresent(FundProductID.self, forKey: .fundProductID)
+        directListingID = try container.decodeIfPresent(ListingID.self, forKey: .directListingID)
+        directAssetClass = try container.decodeIfPresent(AssetClass.self, forKey: .directAssetClass)
+        guard weight.value >= 0 else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "持仓权重为负"))
+        }
+        guard (fundProductID != nil) != (directListingID != nil) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "持仓必须是基金或直接持股(恰好其一)——同时存在会双计暴露,都为空则权重消失"))
+        }
     }
 }
 

@@ -224,11 +224,18 @@ struct ConstraintGate: Sendable {
         return (numerator / denominator, skipped)
     }
 
-    /// 冲突对的确定性选择：pearson/sampleCount 一致 → 任取（幂等）；
-    /// 否则取序列化字典序较小者（稳定的合并规则）。
+    /// 冲突对的确定性选择（三轮 P1-5：保守）。安全约束禁止字典序取小者
+    /// 降风险（0.9 vs 0.5 冲突取 0.5 会让上限 0.8 错误通过）——
+    /// 取 **|ρ| 绝对值较大者**（最坏情况评估）；同 |ρ| 时取序列化较小者
+    /// 保稳定（方向无关）。
     private static func deterministicPick(_ a: CorrelationPair, _ b: CorrelationPair) -> CorrelationPair {
         if a.pearson == b.pearson && a.sampleCount == b.sampleCount {
             return a
+        }
+        let magnitudeA = a.pearson.map { abs($0.value) } ?? -1
+        let magnitudeB = b.pearson.map { abs($0.value) } ?? -1
+        if magnitudeA != magnitudeB {
+            return magnitudeA > magnitudeB ? a : b
         }
         return serialize(a) <= serialize(b) ? a : b
     }
