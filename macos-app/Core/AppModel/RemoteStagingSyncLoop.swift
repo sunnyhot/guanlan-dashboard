@@ -15,9 +15,37 @@ enum RemoteStagingSyncStatus: Equatable {
     case notConfigured(String)
     case misconfigured(String)
     case idle
-    case synced(filesDownloaded: Int, recordsAppended: Int, at: Date)
+    /// 一轮 sync 完成。**拒收计数必须保留**（审查 P1）：sha256 不符 /
+    /// schema 非法的文件被 Provider 拒收时 sync 仍算完成（其余文件照常入库），
+    /// 但诊断面不能因此显示「干净成功」——非零 tampered 是完整性事件
+    ///（DATA010 防注入信号），非零 invalidSchema 是服务端版本漂移信号。
+    case synced(
+        filesDownloaded: Int,
+        recordsAppended: Int,
+        filesRejectedTampered: Int,
+        recordsRejectedInvalidSchema: Int,
+        at: Date
+    )
     case skippedUntil(Date)
     case failed(String)
+
+    /// Provider outcome → 诊断状态的唯一映射（纯函数，测试直接覆盖）。
+    static func make(from outcome: RemoteStagingSyncOutcome) -> RemoteStagingSyncStatus {
+        switch outcome {
+        case .synced(let summary):
+            return .synced(
+                filesDownloaded: summary.filesDownloaded,
+                recordsAppended: summary.recordsAppended,
+                filesRejectedTampered: summary.filesRejectedTampered,
+                recordsRejectedInvalidSchema: summary.recordsRejectedInvalidSchema,
+                at: summary.syncedAt
+            )
+        case .skipped(let openUntil):
+            return .skippedUntil(openUntil)
+        case .failed(let error):
+            return .failed("\(error)")
+        }
+    }
 }
 
 extension AppModel {
@@ -79,28 +107,12 @@ extension AppModel {
             )
             let outcome = await provider.sync(to: spoolURL, state: stateURL)
             if Task.isCancelled { return }
-            updateRemoteStagingSyncStatus(outcome)
+            remoteStagingSyncStatus = RemoteStagingSyncStatus.make(from: outcome)
             do {
                 try await Task.sleep(nanoseconds: interval)
             } catch {
                 return   // 任务被取消
             }
-        }
-    }
-
-    @MainActor
-    private func updateRemoteStagingSyncStatus(_ outcome: RemoteStagingSyncOutcome) {
-        switch outcome {
-        case .synced(let summary):
-            remoteStagingSyncStatus = .synced(
-                filesDownloaded: summary.filesDownloaded,
-                recordsAppended: summary.recordsAppended,
-                at: summary.syncedAt
-            )
-        case .skipped(let openUntil):
-            remoteStagingSyncStatus = .skippedUntil(openUntil)
-        case .failed(let error):
-            remoteStagingSyncStatus = .failed("\(error)")
         }
     }
 }

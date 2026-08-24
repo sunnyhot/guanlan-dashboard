@@ -10,6 +10,10 @@ BUNDLE_ID="${BUNDLE_ID:-com.sunnyhot.qieman.manager.dashboard}"
 MIN_MACOS_VERSION="${MIN_MACOS_VERSION:-14.0}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 TARGET_ARCH="${TARGET_ARCH:-$(uname -m)}"
+# 最低系统版本**不是可覆盖参数**：主程序由 SPM 按 macos-app/Package.swift 的
+# platforms（macOS 14）编译，此处常量只喂给 Info.plist 与内嵌 CLI 的 target，
+# 改这里而不改 Package.swift 会造成「声明的门槛 ≠ 实际编译门槛」。
+MIN_MACOS_VERSION="14.0"
 UPDATE_REPOSITORY="${UPDATE_REPOSITORY:-sunnyhot/qieman-manager-dashboard}"
 UPDATE_FEED_URL="${UPDATE_FEED_URL:-https://github.com/${UPDATE_REPOSITORY}/releases/latest/download/latest.json}"
 DIST_DIR="$ROOT_DIR/dist/macos-app"
@@ -36,6 +40,8 @@ echo "[3/8] 编译原生 macOS 应用"
 # Epic 5（GRDB-1）起 App 依赖 SPM 包（GRDB），裸 swiftc 无法解析外部模块；
 # 改由 SPM 构建可执行产物再拷入 .app。源文件排除规则与最低系统版本以
 # macos-app/Package.swift 为单一事实源（Platforms macOS 14 + 目录 exclude）。
+# 注意：SwiftPM 可执行产物名固定为 target 名 QiemanDashboard，与可覆盖的
+# APP_NAME 无关——从固定名拷贝后重命名，设置 APP_NAME 不再破坏产物拷贝。
 # BUILD_CONFIG=debug 跳过优化加速编译（开发调试用）；TARGET_ARCH 交叉构建
 # （如 arm64 主机上出 x86_64 包）经 --arch 传递，产物目录由 --show-bin-path 探测。
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
@@ -44,11 +50,10 @@ swift build \
   -c "$BUILD_CONFIG" \
   --arch "$TARGET_ARCH"
 SPM_BIN_PATH="$(swift build --package-path "$ROOT_DIR/macos-app" -c "$BUILD_CONFIG" --arch "$TARGET_ARCH" --show-bin-path)"
-cp "$SPM_BIN_PATH/$APP_NAME" "$MACOS_DIR/$APP_NAME"
+cp "$SPM_BIN_PATH/QiemanDashboard" "$MACOS_DIR/$APP_NAME"
 
 QIEMAN_CLI_OUTPUT="$MACOS_DIR/qieman-cli" \
   TARGET_ARCH="$TARGET_ARCH" \
-  MIN_MACOS_VERSION="$MIN_MACOS_VERSION" \
   bash "$ROOT_DIR/scripts/build_qieman_cli.sh" >/dev/null
 
 echo "[4/8] 写入 Bundle 元数据"

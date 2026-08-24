@@ -114,15 +114,27 @@ final class RemoteStagingSyncWiringTests: XCTestCase {
         }
     }
 
-    func testSetup_enabledButInvalidURL_notConfiguredWithReason() {
+    func testSetup_enabledButInvalidURL_misconfiguredNotSilentlyDisabled() {
+        // 分档契约（审查 P2 修正）：enabled=true 是部署意图，URL 配错属于
+        // 「以为开着实际配错」→ misconfigured 显式上报，不是 notConfigured
         let config = RemoteStagingSyncConfig(
             enabled: true, baseURL: "://bad", collectorKey: nil, signaturePublicKeyBase64: nil
         )
-        guard case .notConfigured(let reason) = RemoteStagingSyncSetup.make(config: config) else {
-            XCTFail("enabled + 非法 baseURL 应为 notConfigured")
+        guard case .misconfigured(let detail) = RemoteStagingSyncSetup.make(config: config) else {
+            XCTFail("enabled + 非法 baseURL 应为 misconfigured（显式配错），不是 notConfigured")
             return
         }
-        XCTAssertTrue(reason.contains("baseURL"), "原因应指明 baseURL 问题：\(reason)")
+        XCTAssertTrue(detail.contains("baseURL"), "原因应指明 baseURL 问题：\(detail)")
+    }
+
+    func testSetup_enabledButEmptyURL_misconfigured() {
+        let config = RemoteStagingSyncConfig(
+            enabled: true, baseURL: "  ", collectorKey: nil, signaturePublicKeyBase64: nil
+        )
+        guard case .misconfigured = RemoteStagingSyncSetup.make(config: config) else {
+            XCTFail("enabled + 空 baseURL 应为 misconfigured")
+            return
+        }
     }
 
     func testSetup_invalidBase64PublicKey_misconfigured_notSilentlyUnsigned() {
@@ -303,5 +315,73 @@ final class RemoteStagingSyncWiringTests: XCTestCase {
             }
             return data
         }
+    }
+}
+
+// MARK: - 状态映射（审查 P1：拒收计数必须保留，不能显示成干净成功）
+
+extension RemoteStagingSyncWiringTests {
+
+    func testStatusMapping_syncedWithRejections_preservesCounts() {
+        // sha256 不符 2 个文件 + schema 非法 5 条记录：sync 仍完成（其余文件
+        // 照常入库），但诊断状态必须带上拒收计数——非零 tampered 是完整性
+        // 事件（DATA010 防注入信号），不能丢成普通 synced
+        let at = Date(timeIntervalSince1970: 1_780_000_100)
+        let outcome = RemoteStagingSyncOutcome.synced(RemoteStagingSyncSummary(
+            manifestGeneratedAt: at,
+            collectorVersion: "1.0.0",
+            filesDownloaded: 3,
+            filesUnchanged: 1,
+            filesRejectedTampered: 2,
+            recordsAppended: 40,
+            recordsRejectedInvalidSchema: 5,
+            syncedAt: at
+        ))
+        XCTAssertEqual(
+            RemoteStagingSyncStatus.make(from: outcome),
+            .synced(
+                filesDownloaded: 3,
+                recordsAppended: 40,
+                filesRejectedTampered: 2,
+                recordsRejectedInvalidSchema: 5,
+                at: at
+            )
+        )
+    }
+
+    func testStatusMapping_cleanSync_zeroRejections() {
+        let at = Date(timeIntervalSince1970: 1_780_000_100)
+        let outcome = RemoteStagingSyncOutcome.synced(RemoteStagingSyncSummary(
+            manifestGeneratedAt: at,
+            collectorVersion: "1.0.0",
+            filesDownloaded: 1,
+            filesUnchanged: 4,
+            filesRejectedTampered: 0,
+            recordsAppended: 12,
+            recordsRejectedInvalidSchema: 0,
+            syncedAt: at
+        ))
+        XCTAssertEqual(
+            RemoteStagingSyncStatus.make(from: outcome),
+            .synced(
+                filesDownloaded: 1,
+                recordsAppended: 12,
+                filesRejectedTampered: 0,
+                recordsRejectedInvalidSchema: 0,
+                at: at
+            )
+        )
+    }
+
+    func testStatusMapping_skippedAndFailed() {
+        let until = Date(timeIntervalSince1970: 1_780_000_200)
+        XCTAssertEqual(
+            RemoteStagingSyncStatus.make(from: .skipped(openUntil: until)),
+            .skippedUntil(until)
+        )
+        XCTAssertEqual(
+            RemoteStagingSyncStatus.make(from: .failed(.rejectedByServer(statusCode: 403))),
+            .failed("rejectedByServer(statusCode: 403)")
+        )
     }
 }

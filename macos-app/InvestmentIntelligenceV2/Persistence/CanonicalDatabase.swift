@@ -58,13 +58,18 @@ final class CanonicalDatabase: @unchecked Sendable {
     }
 
     /// 跑全部待执行 migration（幂等：GRDB 按名登记，已跑的跳过）。
+    ///
+    /// 失败语义（GRDB 的实际行为，如实记录，不另造重建流程——审查 P2 修正）：
+    /// - 每个 migration 运行在**独立事务**里：失败的那个原子回滚（磁盘满 /
+    ///   中断不会留下半套表），此前已成功的 migration 保留；
+    /// - 下次打开按名重试失败项（不重跑已成功项）；
+    /// - `eraseDatabaseOnSchemaChange` 是 GRDB 的**开发期**便利开关（migration
+    ///   内容被改写时擦库重来），生产开启等于允许毁数据，保持默认关闭；
+    /// - 「库可由 staging spool 重放重建」（ADR-DATA004：spool 是事实源，
+    ///   库是派生物）是**运维恢复路径**，不在代码里自动执行——瞬时 IO 故障
+    ///   不应被自动升级为整库擦除。
     private static func migrate(queue: DatabaseQueue) throws {
-        var migrator = makeMigrations()
-        // 迁移失败不得留下半套 schema（如磁盘满写到一半）——eraseDatabaseOnMigrationFailure
-        // 让失败库在下次打开时从零重建（Canonical 数据可由 staging spool 重放，
-        // ADR-DATA004 Local Accumulation：spool 是事实源，库是派生物）
-        migrator.eraseDatabaseOnSchemaChange = false
-        try migrator.migrate(queue)
+        try makeMigrations().migrate(queue)
     }
 
     /// 是否还有未执行的 migration（诊断用：代码更新后首次打开为 true）。

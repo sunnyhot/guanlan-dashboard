@@ -416,6 +416,18 @@ macos-app/
 >   config→provider→生产路径 sync + 增量轮不重复追加）。客户端配置文档见
 >   remote-collector/README「客户端配置」。**这是 App 层首次引用 V2 代码**
 >   （B.3 例外，PROV-3b 剩余项明示的接线工作；无 UI，纯配置文件 gate）。
+>
+>   **App 接线审查修复（2026-08-24，1×P1 + 1×P2）**：
+>   - P1——`RemoteStagingSyncStatus` 的 synced 分档**补齐拒收计数**
+>     （filesRejectedTampered / recordsRejectedInvalidSchema 此前被丢弃，
+>     部分文件 sha256 不符或 schema 非法时诊断面显示成干净成功；非零
+>     tampered 是 DATA010 防注入完整性事件）。映射抽成纯函数
+>     `RemoteStagingSyncStatus.make(from:)`，+3 状态映射测试。
+>   - P2——Setup 分档修正：**enabled=true 但 baseURL 缺失/非法 →
+>     misconfigured**（原经 isRunnable 合并判断落进 notConfigured，与
+>     「配错显式上报」契约相反）；enabled=false 才是 notConfigured。
+>     测试反向断言同步修正（notConfigured → misconfigured + 空 URL 用例）。
+>
 >   **剩余（PROV-3b 未整点签收）**：真实 VPS 部署与 HTTP 端到端连通验收。
 >   服务端产出物已完成（2026-08-21，仓库根 `remote-collector/remote_publish.py`，
 >   **服务端组件与 macos-app 包分离**，不进 App/SPM/Xcode 工程；定位
@@ -624,8 +636,20 @@ macos-app/
 >（`Package.resolved` 锁 6.29.3）+ `InvestmentIntelligenceV2/Persistence/CanonicalDatabase.swift`
 >（DB lifecycle：打开/创建/迁移幂等/内存库；`schemaVersion` 常量与迁移清单
 > 数量一致性有测试守护；迁移**只追加不改写**——已发布 id 改名 = 老库全量
-> 重跑，测试冻结 v1_baseline 首位；迁移失败语义：spool 是事实源（ADR-DATA004），
-> 库是派生物）。7 个测试（CanonicalDatabaseTests）。
+> 重跑，测试冻结 v1_baseline 首位）。7 个测试（CanonicalDatabaseTests）。
+>
+> **GRDB-1 审查修复（2026-08-24，2×P2）**：
+> - 迁移失败语义**删除虚假擦库承诺**：原注释声称「失败库下次打开从零重建」
+>   但实现只是把 `eraseDatabaseOnSchemaChange` 显式置 false（默认值，且与
+>   迁移失败无关）。改为如实记录 GRDB 事务语义——每 migration 独立事务原子
+>   回滚、下次打开按名重试失败项；spool 重放重建是运维路径不自动执行
+>   （瞬时 IO 故障不应升级为整库擦除）。
+> - 构建脚本**产物名与版本参数契约**：SPM 产物名固定为 target 名
+>   QiemanDashboard，拷贝从固定名取再重命名为可覆盖的 APP_NAME（原按
+>   `$APP_NAME` 找源文件，设置即 cp 失败——APP_NAME 覆盖端到端验证通过）；
+>   MIN_MACOS_VERSION 从可覆盖环境变量改为固定常量 14.0（主程序实际按
+>   Package.swift 编译，可覆盖的声明门槛是谎言），注释指向单一事实源。
+>
 > **构建链同步迁移（GRDB-1 的隐藏工作量）**：`scripts/build_macos_app.sh` 从
 > 裸 swiftc 改为 `swift build -c release --arch` + 拷贝产物（源排除/最低系统
 > 版本以 Package.swift 为单一事实源；debug 档保留加速路径；debug 端到端跑通
@@ -636,7 +660,7 @@ macos-app/
 > 劫持推断（TrendLiveLogPanel.copyLogs 显式 `: String` 修复，AGENTS.md 坑点 17）。
 > **AGENTS.md 第 6 条已随 Epic 5 开始更新**（原「无 SQLite」约定废止，
 > GRDB 限 V2 Canonical Store 范围内使用；GRDB-9 剩余：iOS framework 链接细节
-> 与数据目录规划的最终验收）。swift test 全量绿（1142 过，排除环境性崩溃的
+> 与数据目录规划的最终验收）。swift test 全量绿（1146 过含审查修复轮，排除环境性崩溃的
 > AppLaunchPresentationPolicyTests，见下）。
 > **已知环境问题（与 Epic 5 无关）**：`AppLaunchPresentationPolicyTests` 在
 > 本机确定性 signal 11（干净 HEAD 复现），全量跑需 `--skip`；待单独排查。

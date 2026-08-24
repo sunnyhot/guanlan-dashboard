@@ -158,6 +158,10 @@ enum RemoteStagingSyncSetup {
     /// 由配置装配 provider。默认经 `URLSessionRemoteStagingFetcher` 走生产
     /// HTTP；测试注入 `fetcher`（连同 session 参数一并被忽略）做离线验证。
     ///
+    /// 分档契约（审查 P2 修正）：`enabled=false` 才是 notConfigured（合法的
+    /// 未启用）；**enabled=true 但配置非法（URL 缺失/非 http(s)、公钥字节
+    /// 非法）一律 misconfigured**——部署方以为开着实际配错，必须显式暴露。
+    ///
     /// 验签开关语义（DATA010 §5 + RemoteStagingProvider.init 的 fail-loud）：
     /// 配了公钥但字节非法 → `.misconfigured`，**不**回退未验签模式。
     static func make(
@@ -165,11 +169,13 @@ enum RemoteStagingSyncSetup {
         fetcher: (any RemoteStagingFetcher)? = nil,
         now: @escaping @Sendable () -> Date = { .now }
     ) -> RemoteStagingSyncSetup {
-        guard config.isRunnable, let baseURL = config.normalizedBaseURL else {
-            let reason = config.enabled
-                ? "baseURL 缺失或非法（需要 http/https 绝对地址）"
-                : "未启用（enabled=false）"
-            return .notConfigured(reason: reason)
+        guard config.enabled else {
+            return .notConfigured(reason: "未启用（enabled=false）")
+        }
+        guard let baseURL = config.normalizedBaseURL else {
+            return .misconfigured(
+                "baseURL 缺失或非法（需要 http/https 绝对地址，当前：\"\(config.trimmedBaseURL)\"）"
+            )
         }
         // 公钥配置存在但 base64 解不出 → 显式配置错误（不静默忽略）
         if let keyText = config.trimmedSignaturePublicKeyBase64,

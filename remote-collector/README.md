@@ -170,9 +170,11 @@ App 侧接收面已生产接线（`InvestmentIntelligenceV2/Sync/RemoteStagingSy
 - `collectorKey` 可空（服务端未开鉴权时省略）
 - `signaturePublicKeyBase64` 可空 = 该部署不验签（仅 sha256 完整性，仅限
   测试/受信网络——生产必须启用签名，见上方「威胁模型与验签分档」）
-- **配错不静默**：`enabled=true` 但公钥非法时 App 不会带着错误配置偷偷降级
-  运行，而是把配置错误写进诊断状态（`AppModel.remoteStagingSyncStatus`），
-  修好配置重启 App 即可
+- **配错不静默**：`enabled=true` 但 baseURL 缺失/非法或公钥非法时，App 不会
+  带着错误配置偷偷降级运行（也不会当成「未配置」），而是把配置错误写进
+  诊断状态（`AppModel.remoteStagingSyncStatus` → misconfigured），修好配置
+  重启 App 即可。sync 完成但个别文件被拒收（sha256 不符 / schema 非法）时，
+  诊断状态保留拒收计数，不显示为干净成功
 
 同步产物落 `数据目录/investment-intelligence-v2/remote-staging/`（spool.jsonl
 + state.json），供后续 Data Pipeline（GRDB-8）消费；spool 只追加合法记录，
