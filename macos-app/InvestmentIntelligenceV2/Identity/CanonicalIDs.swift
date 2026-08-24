@@ -92,10 +92,11 @@ struct SignalID: Sendable, Codable, Hashable, RawRepresentable {
 }
 
 /// FactorSnapshot ID（因子在某 asOf 的快照，见 Epic 7 FAC-1）。
-struct FactorSnapshotID: Sendable, Codable, Hashable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
-}
+///
+/// FactorSnapshot 是 Artifact（ValidityPolicy + dependencies 语义），其身份
+/// 统一走 ArtifactID（Artifact 协议要求 `id: ArtifactID`，ArtifactDependency
+/// 也以字符串引用 artifact）；本别名保留 factor 域的语义化称呼。
+typealias FactorSnapshotID = ArtifactID
 
 /// Artifact ID（决策 / 归因等产物，含 ValidityPolicy，见 ADR-DOM-10）。
 struct ArtifactID: Sendable, Codable, Hashable, RawRepresentable {
