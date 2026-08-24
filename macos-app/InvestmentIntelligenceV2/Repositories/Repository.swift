@@ -34,6 +34,12 @@ protocol InstrumentRepository: Sendable {
     func listing(_ id: ListingID) -> Listing?
     func listings(forInstrument id: InstrumentID) -> [Listing]
     func legalEntity(_ id: LegalEntityID) -> LegalEntity?
+    /// 全量 Instruments（SYNC-8 建立路径 3 的 ISIN 匹配扫描用）。
+    func allInstruments() -> [Instrument]
+    /// 全量 Listings（路径 2 的 exchange+symbol 精确匹配扫描用）。
+    func allListings() -> [Listing]
+    /// 全量 LegalEntities（路径 3 的 CIK 匹配扫描用）。
+    func allLegalEntities() -> [LegalEntity]
     func fundProduct(_ id: FundProductID) -> FundProduct?
     func fundShareClass(_ id: FundShareClassID) -> FundShareClass?
     /// 通过 Provider 代码查 Canonical（IdentityResolver 的便捷入口）。

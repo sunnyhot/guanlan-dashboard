@@ -1112,6 +1112,30 @@ macos-app/
 > - universe（用户当前持仓）是 App 侧装配（B.3 时点），本类型收显式清单。
 >   5 个测试（HistoricalBackfillTests）。swift test 全量绿（跳过环境性
 >   AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-8 已签收（5 点，2026-08-24）**——`Sync/IdentitySync.swift`
+> （非持仓标的的 identity 增量建立，ADR-DATA001 §Decision 3 的建立时算法）：
+> - **4 条正式路径按优先级**（命中即停，各有测试）：
+>   1. providerAuthoritative——hint 携带的官方 cross-ref 指向已登记代码时
+>      继承其 canonical；
+>   2. exchangeSymbolExact——(exchange, symbol) 与已有 Listing 精确匹配
+>      （无 exchange 证据不猜；深市同码不误映射到沪市 listing，各自权威）；
+>   3. isinOrCik——ISIN 匹配 Instrument（唯一挂牌升到 Listing 层）、CIK
+>      补零归一后匹配 LegalEntity.regulatoryIDs（SEC 事实的 canonical 目标）；
+>   4. manualVerified——`registerManualVerified` 增量入口（REPO-4b 形态）。
+> - **创建模式**（新标的进 Instrument Master）：exchange+symbol 或 ISIN
+>      权威证据齐备时创建 LegalEntity→Instrument→Listing 实体链并登记；
+>      **基金类不自动创建**（份额/Product 语义不能猜，走 manualVerified）。
+>      ID 从稳定输入 SHA256 派生——重复建立幂等（同 ID upsert 不翻倍）。
+> - **fuzzy 只产 candidate**：无权威证据时按字符 bigram Dice 相似度对已有
+>      Instruments 产候选（防火墙 1：fuzzy 登记行 lookup 不可解析），
+>      `verify(accept:)` 升级 manualVerified 后才可解析、reject 保持拒绝。
+> - **冲突不覆盖**：已有权威映射 + 新提案指向不同 canonical → 报 conflict
+>      保留既有（identity 单点，改映射污染下游）。
+> - Repository 增补 `allInstruments/allListings/allLegalEntities` 枚举 API
+>      （协议 + InMemory + GRDB 同步实现，扫描匹配用）。
+> - 12 个测试（IdentitySyncTests）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
 
 ---
 

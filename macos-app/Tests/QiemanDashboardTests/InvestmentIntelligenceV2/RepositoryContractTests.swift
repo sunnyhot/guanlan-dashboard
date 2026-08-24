@@ -105,6 +105,9 @@ final class RepositoryContractTests: XCTestCase {
         func fundShareClass(_ id: FundShareClassID) -> FundShareClass? { nil }
         func resolve(providerID: DataProviderID, scheme: String, value: String) -> CanonicalRef? { nil }
         func relationships(for instrument: InstrumentID) -> [InstrumentRelationship] { [] }
+        func allInstruments() -> [Instrument] { [] }
+        func allListings() -> [Listing] { [] }
+        func allLegalEntities() -> [LegalEntity] { [] }
     }
 
     func testInstrumentRepo_returnsCanonicalTypes() {

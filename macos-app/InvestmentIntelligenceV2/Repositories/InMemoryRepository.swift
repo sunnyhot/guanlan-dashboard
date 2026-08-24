@@ -204,6 +204,21 @@ final class InMemoryRepository: @unchecked Sendable, Repository {
         return legalEntities[id]
     }
 
+    func allInstruments() -> [Instrument] {
+        lock.lock(); defer { lock.unlock() }
+        return instruments.values.sorted { $0.id.rawValue < $1.id.rawValue }
+    }
+
+    func allListings() -> [Listing] {
+        lock.lock(); defer { lock.unlock() }
+        return listings.values.sorted { $0.id.rawValue < $1.id.rawValue }
+    }
+
+    func allLegalEntities() -> [LegalEntity] {
+        lock.lock(); defer { lock.unlock() }
+        return legalEntities.values.sorted { $0.id.rawValue < $1.id.rawValue }
+    }
+
     func fundProduct(_ id: FundProductID) -> FundProduct? {
         lock.lock(); defer { lock.unlock() }
         return fundProducts[id]

@@ -449,6 +449,24 @@ final class GRDBRepository: @unchecked Sendable, Repository {
         }
     }
 
+    func allInstruments() -> [Instrument] {
+        read("allInstruments") { db in
+            try InstrumentRow.fetchAll(db).map { try $0.toDomain() }
+        } ?? []
+    }
+
+    func allListings() -> [Listing] {
+        read("allListings") { db in
+            try ListingRow.fetchAll(db).map { try $0.toDomain() }
+        } ?? []
+    }
+
+    func allLegalEntities() -> [LegalEntity] {
+        read("allLegalEntities") { db in
+            try LegalEntityRow.fetchAll(db).map { try $0.toDomain() }
+        } ?? []
+    }
+
     func fundProduct(_ id: FundProductID) -> FundProduct? {
         readOptional("fundProduct(\(id.rawValue))") { db in
             try FundProductRow.fetchOne(db, key: id.rawValue)?.toDomain()
