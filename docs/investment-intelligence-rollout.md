@@ -1077,8 +1077,24 @@ macos-app/
 > - 与 PROV-8 的分工：monitor 管状态（谁健康/冷却/额度），链管一次抓取的
 >   编排；未注册 Provider 的 isCallable=false（未声明即拒绝）语义保持。
 > - SYNC-2 Market Daily Sync（Stooq primary → Alpha Vantage secondary，
->   M2 已验证的候选链）将消费本链。8 个测试（ProviderFallbackChainTests）。
->   swift test 全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
+>   M2 已验证的候选链）消费本链（已落地，见下）。8 个测试
+>   （ProviderFallbackChainTests）。swift test 全量绿（跳过环境性
+>   AppLaunchPresentationPolicyTests）。
+>
+> **SYNC-2 已签收（2 点，2026-08-24）**——`Sync/MarketDailySync.swift`
+> （收盘后增量：stocks/ETF/indexes，两通道合一轮）：
+> - **直接抓取通道**（美股日线 Stooq→AV 候选链，经 SYNC-7 降级链）：
+>   锚点 = 法域感知的「保证已公布」最新 bar 日期（MarketClose T+1 语义 ×
+>   NYSE/SSE 日历——感恩节跨休市锚点有测试）；窗口 [游标+1, 锚点] →
+>   降级链抓取 → 结构分桶 → 直接抓取 spool → 四防火墙 commit。
+>   全 Provider 失败 = .allProvidersFailed（local 兜底，游标不动）；
+>   usedRole 记录本轮实际使用的候选（primary/secondary 可观测）。
+> - **远程 staging 提交通道**（A 股行情经 AKShare collector）：
+>   `commitRecords(fromSpool:)` 把 RemoteStagingSyncLoop 维护的 remote
+>   spool 提交进 canonical（幂等重放不翻倍有测试；spool 不存在 = 通道
+>   未启用，正常跳过；文件级读取失败上抛不静默）。本引擎不直接抓 A 股。
+> - 游标保守推进同 SYNC-3；7 个测试（MarketDailySyncTests）。swift test
+>   全量绿（跳过环境性 AppLaunchPresentationPolicyTests）。
 
 ---
 
