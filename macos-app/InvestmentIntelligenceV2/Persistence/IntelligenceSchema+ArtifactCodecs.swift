@@ -64,18 +64,6 @@ extension ArtifactRow {
         return (row, deps)
     }
 
-    /// row + 依赖行 → 领域对象（payload 自包含 decode；kind 校验 fail-closed）。
-    func toDomain<A: Artifact & Decodable>(
-        _ type: A.Type, expectedKind: String
-    ) throws -> A {
-        guard artifactKind == expectedKind else {
-            throw CanonicalColumnCodecError.unknownEnumValue(
-                column: "artifact_kind", rawValue: artifactKind
-            )
-        }
-        return try CanonicalColumnCodec.decodeJSON(A.self, from: payloadJSON)
-    }
-
     /// 幂等写入（二轮 P1-5 + 三轮 P1-2）：不存在 → 插入 row + 依赖行；
     /// 已存在且**语义内容**一致（kind / validity / payload 语义字段 /
     /// 依赖行）→ no-op（保留首次 producedAt——ID 不含它，稍后重算同语义
@@ -153,7 +141,7 @@ extension ArtifactRow {
     }
 }
 
-// MARK: - fail-closed 读回入口（五轮 P1-4）
+// MARK: - fail-closed 读回入口（五轮 P1-4 + 六轮 P1 收紧）
 
 enum ArtifactReadError: Error, Equatable, Sendable {
     case notFound(id: String)
@@ -167,10 +155,14 @@ enum ArtifactReadError: Error, Equatable, Sendable {
 
 extension ArtifactRow {
     /// fail-closed 读回：行 + 依赖表行 + payload 三方一致才返回领域对象。
+    /// **唯一公开的读回入口**（六轮 P1：payload-only 便捷解码已隐藏——
+    /// 依赖表被篡改后，任何绕过依赖行校验的解码路径都不存在）。
     /// 校验：① kind；② payload 解出的 domain.id == 行 id；③ validity
-    /// JSON == 行列；④ producedAt 列与 payload 时间毫秒一致（列是毫秒精度,
-    /// 容差 2ms）；⑤ 依赖行（按 dep_index 排序）逐字段（kind/referenceID/
-    /// version）与 domain.dependencies 相等——依赖表缺失 / 多余 / 错行
+    /// JSON == 行列；④ producedAt 列与 payload 时间的毫秒编码**逐字相等**
+    /// （重编码比较，不再容差 2ms——同毫秒内不可区分是列精度上限，
+    /// 跨毫秒漂移一律拒）；⑤ 依赖行（按 dep_index 排序且从 0 连续）
+    /// 与 domain.dependencies 逐字段（kind/referenceID/version）相等
+    /// ——结构化比较，不做分隔符拼接；依赖表缺失 / 多余 / 错行 / 断号
     /// 都抛 dependencyDivergence。
     static func fetchDomain<A: Artifact & Decodable>(
         _ type: A.Type,
@@ -193,30 +185,58 @@ extension ArtifactRow {
         guard row.validityPolicyJSON == (try CanonicalColumnCodec.encodeJSON(domain.validityPolicy)) else {
             throw ArtifactReadError.identityMismatch(field: "validity_policy_json 与 payload 分歧")
         }
-        // producedAt 毫秒一致(列毫秒精度,payload 亚毫秒——容差 2ms)
-        let columnTime = try CanonicalColumnCodec.decodeTimestamp(row.producedAt)
-        guard abs(columnTime.timeIntervalSince(domain.producedAt)) < 0.002 else {
+        // producedAt：域时间重新毫秒编码后与列**逐字相等**（编码确定性，
+        // 同一时刻必同串；列只到毫秒精度，同毫秒内为精度上限）
+        guard row.producedAt == CanonicalColumnCodec.encodeTimestamp(domain.producedAt) else {
             throw ArtifactReadError.identityMismatch(field: "produced_at 与 payload 分歧")
         }
-        // 依赖行完整一致
+        // 依赖行：dep_index 从 0 连续 + 与 domain.dependencies 逐字段相等
         let depRows = try ArtifactDependencyRow
             .filter(Column("artifact_id") == row.id)
             .order(Column("dep_index"))
             .fetchAll(db)
-        let depFromTable = depRows.map { row in
-            "\(row.kind)|\(row.referenceID)|\(row.version ?? "-")"
-        }
-        let depFromDomain = domain.dependencies.map {
-            "\($0.kind.rawValue)|\($0.referenceID)|\($0.version ?? "-")"
-        }
-        guard depFromTable == depFromDomain else {
+        guard depRows.count == domain.dependencies.count,
+              zip(depRows, domain.dependencies).enumerated()
+                .allSatisfy({ index, pair in pair.0.depIndex == index })
+        else {
             throw ArtifactReadError.dependencyDivergence(artifactID: row.id)
+        }
+        for (depRow, dep) in zip(depRows, domain.dependencies) {
+            guard depRow.kind == dep.kind.rawValue,
+                  depRow.referenceID == dep.referenceID,
+                  depRow.version == dep.version
+            else {
+                throw ArtifactReadError.dependencyDivergence(artifactID: row.id)
+            }
         }
         return domain
     }
 }
 
-// MARK: - 六类便捷入口
+// MARK: - 六类 typed fetch（DB-backed，唯一公开读回形态）
+
+extension ArtifactRow {
+    static func fetchFactorSnapshot(id: String, from db: Database) throws -> FactorSnapshot {
+        try fetchDomain(FactorSnapshot.self, id: id, expectedKind: factorSnapshotKind, from: db)
+    }
+    static func fetchLookthroughSnapshot(id: String, from db: Database) throws -> LookthroughSnapshot {
+        try fetchDomain(LookthroughSnapshot.self, id: id, expectedKind: lookthroughSnapshotKind, from: db)
+    }
+    static func fetchExposureReport(id: String, from db: Database) throws -> ExposureReport {
+        try fetchDomain(ExposureReport.self, id: id, expectedKind: exposureReportKind, from: db)
+    }
+    static func fetchRiskProfile(id: String, from db: Database) throws -> PortfolioRiskProfile {
+        try fetchDomain(PortfolioRiskProfile.self, id: id, expectedKind: riskProfileKind, from: db)
+    }
+    static func fetchDailyAttribution(id: String, from db: Database) throws -> DailyAttribution {
+        try fetchDomain(DailyAttribution.self, id: id, expectedKind: dailyAttributionKind, from: db)
+    }
+    static func fetchPortfolioDecision(id: String, from db: Database) throws -> PortfolioDecisionArtifact {
+        try fetchDomain(PortfolioDecisionArtifact.self, id: id, expectedKind: portfolioDecisionKind, from: db)
+    }
+}
+
+// MARK: - 六类写入入口
 
 extension ArtifactRow {
     static func from(_ domain: FactorSnapshot) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
@@ -238,23 +258,17 @@ extension ArtifactRow {
         try from(domain, kind: portfolioDecisionKind)
     }
 
-    func toFactorSnapshot() throws -> FactorSnapshot {
-        try toDomain(FactorSnapshot.self, expectedKind: Self.factorSnapshotKind)
-    }
-    func toLookthroughSnapshot() throws -> LookthroughSnapshot {
-        try toDomain(LookthroughSnapshot.self, expectedKind: Self.lookthroughSnapshotKind)
-    }
-    func toExposureReport() throws -> ExposureReport {
-        try toDomain(ExposureReport.self, expectedKind: Self.exposureReportKind)
-    }
-    func toRiskProfile() throws -> PortfolioRiskProfile {
-        try toDomain(PortfolioRiskProfile.self, expectedKind: Self.riskProfileKind)
-    }
-    func toDailyAttribution() throws -> DailyAttribution {
-        try toDomain(DailyAttribution.self, expectedKind: Self.dailyAttributionKind)
-    }
-    func toPortfolioDecision() throws -> PortfolioDecisionArtifact {
-        try toDomain(PortfolioDecisionArtifact.self, expectedKind: Self.portfolioDecisionKind)
+    /// payload-only 解码（六轮 P1：**私有**——不读依赖表即返回领域对象，
+    /// 会绕过 fetchDomain 的三方一致校验；外部读回一律走 typed fetch）。
+    private func toDomain<A: Artifact & Decodable>(
+        _ type: A.Type, expectedKind: String
+    ) throws -> A {
+        guard artifactKind == expectedKind else {
+            throw CanonicalColumnCodecError.unknownEnumValue(
+                column: "artifact_kind", rawValue: artifactKind
+            )
+        }
+        return try CanonicalColumnCodec.decodeJSON(A.self, from: payloadJSON)
     }
 }
 

@@ -191,3 +191,58 @@ extension SignalPolicy {
         )
     }
 }
+
+// MARK: - SignalCardinalPolicy（ordinal → cardinal 的 versioned 回流口，六轮 P1-1）
+//
+// D002：criterion 只吃 cardinal；ordinal signal 需经 versioned policy 转换。
+// 映射值是人为选定的 policy parameter（不是事实），必须 versioned 且带
+// rationale（与 SignalPolicy / IndifferenceBand 同一纪律）；决策 artifact
+// 引用其版本，重放时按版本取转换，不受后续调参影响。
+
+/// versioned ordinal→cardinal 转换 policy。
+struct SignalCardinalPolicy: Sendable, Codable, Hashable {
+    let policyID: String
+    let version: String
+    /// direction × strength → Decimal 映射（uncertain 不入映射——恒 unknown）
+    let mapping: [SignalDirection: [SignalStrength: Decimal]]
+    /// heuristic 理由（必填语义：空串视为未标注，init 拒绝）
+    let rationale: String
+
+    init(
+        policyID: String,
+        version: String,
+        mapping: [SignalDirection: [SignalStrength: Decimal]],
+        rationale: String
+    ) {
+        precondition(!rationale.trimmingCharacters(in: .whitespaces).isEmpty,
+                     "signal cardinal 转换必须标注 rationale（D002 不允许静默）")
+        self.policyID = policyID
+        self.version = version
+        self.mapping = mapping
+        self.rationale = rationale
+    }
+
+    var versionedID: String { "\(policyID)@\(version)" }
+
+    /// ordinal signal → cardinal。uncertain / 映射缺失 → nil（unknown，不猜）。
+    func cardinal(for signal: InvestmentSignal) -> Decimal? {
+        guard signal.direction.isDeterministic else { return nil }
+        return mapping[signal.direction]?[signal.strength]
+    }
+
+    /// 预置 v1：对称三档（bullish 正 / bearish 负 / neutral 0）。
+    /// heuristic 依据：strength 三档按 1 / 0.6 / 0.2 线性衰减，中性恒 0；
+    /// 映射值调整必须 bump version（历史决策按旧版重放）。
+    static func symmetricV1() -> SignalCardinalPolicy {
+        SignalCardinalPolicy(
+            policyID: "signal-cardinal-symmetric",
+            version: "v1",
+            mapping: [
+                .bullish: [.strong: Decimal(string: "1")!, .moderate: Decimal(string: "0.6")!, .weak: Decimal(string: "0.2")!],
+                .bearish: [.strong: Decimal(string: "-1")!, .moderate: Decimal(string: "-0.6")!, .weak: Decimal(string: "-0.2")!],
+                .neutral: [.strong: .zero, .moderate: .zero, .weak: .zero],
+            ],
+            rationale: "对称三档经验映射（±1/±0.6/±0.2，neutral=0）；仅作 criterion 加权通道的量纲约定"
+        )
+    }
+}

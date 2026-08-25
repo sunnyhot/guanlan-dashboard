@@ -82,7 +82,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
     }
 
     private func makeDecision() -> PortfolioDecisionArtifact {
-        let plan = TargetRebalancePlanner().plan(
+        let run = DecisionReplayer.PlannerRun(
             portfolio: PortfolioSnapshot(asOf: date(1_700_000_000_000), positions: [
                 PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
             ]),
@@ -93,25 +93,32 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             actionDomain: ActionDomain(
                 perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
                 eligibleNewSubjects: [:], builderVersion: "t", newSubjectBuyUpper: Ratio(value: 1)),
-            now: date(1_700_000_000_000)
+            plannerParameters: TargetRebalancePlanner.Parameters()
+        )
+        let plan = TargetRebalancePlanner(parameters: run.plannerParameters).plan(
+            portfolio: run.portfolio, target: run.target,
+            remediationTargets: run.remediationTargets, userDirectives: run.userDirectives,
+            actionDomain: run.actionDomain, now: date(1_700_000_000_000)
         )
         return .assemble(
             signalIDs: [SignalID(rawValue: "s1")],
             criterionVersions: ["c@v1"],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_x")],
             target: nil, bandVersion: "b@v1",
+            signalPolicyVersion: SignalCardinalPolicy.symmetricV1().versionedID,
             knowledgeContextSummary: "economicKnowledge(2024)",
             decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A"], blockingUnknowns: []),
             plans: ["A": plan],
+            plannerRuns: ["A": run],
             producedAt: date(1_700_000_000_000)
         )
     }
 
-    // MARK: - 往返测试
+    // MARK: - 往返测试（六轮 P1：一律走 DB-backed strict 入口 fetchDomain）
 
     private func roundTrip<A: Artifact & Encodable & Decodable>(
-        _ domain: A, kind: String, decode: (ArtifactRow) throws -> A,
+        _ domain: A, kind: String,
         file: StaticString = #filePath, line: UInt = #line
     ) throws {
         let queue = try dbQueue
@@ -120,13 +127,11 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             try ArtifactRow.write(pair, into: db)
         }
 
-        let fetched = try queue.read({ db in
-            try ArtifactRow.fetchOne(
-                db, sql: "SELECT * FROM artifacts WHERE id = ?", arguments: [domain.id.rawValue]
-            )
+        // strict 读回（行 + 依赖表 + payload 三方一致才返回）
+        let decoded = try queue.read({ db in
+            try ArtifactRow.fetchDomain(A.self, id: domain.id.rawValue,
+                                        expectedKind: kind, from: db)
         })
-        XCTAssertNotNil(fetched, file: file, line: line)
-        let decoded = try decode(fetched!)
         XCTAssertEqual(decoded.id, domain.id, file: file, line: line)
         XCTAssertEqual(decoded, domain, file: file, line: line)
 
@@ -141,28 +146,42 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
     }
 
     func testFactorSnapshotRoundTrip() throws {
-        try roundTrip(makeFactorSnapshot(), kind: ArtifactRow.factorSnapshotKind) { try $0.toFactorSnapshot() }
+        try roundTrip(makeFactorSnapshot(), kind: ArtifactRow.factorSnapshotKind)
     }
 
     func testExposureReportRoundTrip() throws {
-        try roundTrip(makeExposure(), kind: ArtifactRow.exposureReportKind) { try $0.toExposureReport() }
+        try roundTrip(makeExposure(), kind: ArtifactRow.exposureReportKind)
     }
 
     func testRiskProfileRoundTrip() throws {
-        try roundTrip(makeRiskProfile(), kind: ArtifactRow.riskProfileKind) { try $0.toRiskProfile() }
+        try roundTrip(makeRiskProfile(), kind: ArtifactRow.riskProfileKind)
     }
 
     func testDailyAttributionRoundTrip() throws {
-        try roundTrip(makeAttribution(), kind: ArtifactRow.dailyAttributionKind) { try $0.toDailyAttribution() }
+        try roundTrip(makeAttribution(), kind: ArtifactRow.dailyAttributionKind)
     }
 
     func testPortfolioDecisionRoundTrip() throws {
-        try roundTrip(makeDecision(), kind: ArtifactRow.portfolioDecisionKind) { try $0.toPortfolioDecision() }
+        try roundTrip(makeDecision(), kind: ArtifactRow.portfolioDecisionKind)
     }
 
     func testLookthroughSnapshotRoundTrip() throws {
         // 二轮审查 P1-5:LookthroughSnapshot(第 6 类)codec 补齐
-        try roundTrip(makeLookthrough(), kind: ArtifactRow.lookthroughSnapshotKind) { try $0.toLookthroughSnapshot() }
+        try roundTrip(makeLookthrough(), kind: ArtifactRow.lookthroughSnapshotKind)
+    }
+
+    /// 六类 typed fetch 与 fetchDomain 等价(同一 strict 通道的便捷形态)。
+    func testTypedFetchHelpersRouteThroughStrictReader() throws {
+        let queue = try dbQueue
+        let decision = makeDecision()
+        let pair = try ArtifactRow.from(decision)
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+        }
+        let fetched = try queue.read({ db in
+            try ArtifactRow.fetchPortfolioDecision(id: decision.id.rawValue, from: db)
+        })
+        XCTAssertEqual(fetched, decision)
     }
 
     func testWriteIsIdempotentOnIdenticalReplay() throws {
@@ -338,17 +357,108 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
     }
 
     func testKindMismatchRejected() throws {
+        // 六轮 P1:读回一律走 typed fetch(strict 入口),kind 不匹配抛
+        // ArtifactReadError.kindMismatch——payload-only 便捷解码已不存在
         let queue = try dbQueue
         let pair = try ArtifactRow.from(makeAttribution(), kind: ArtifactRow.dailyAttributionKind)
         try queue.write { db in
             try ArtifactRow.write(pair, into: db)
         }
-        let fetched = try queue.read({ db in
-            try ArtifactRow.fetchOne(db, sql: "SELECT * FROM artifacts WHERE id = ?", arguments: [pair.row.id])
-        })
-        XCTAssertThrowsError(try fetched?.toFactorSnapshot()) { error in
-            guard case CanonicalColumnCodecError.unknownEnumValue = error else {
-                return XCTFail("应为 kind 不匹配错误,实际 \(error)")
+        XCTAssertThrowsError(try queue.read({ db in
+            try ArtifactRow.fetchFactorSnapshot(id: pair.row.id, from: db)
+        })) { error in
+            XCTAssertEqual(error as? ArtifactReadError,
+                           .kindMismatch(expected: ArtifactRow.factorSnapshotKind,
+                                         actual: ArtifactRow.dailyAttributionKind))
+        }
+    }
+
+    // MARK: - strict reader 加密回归（六轮 P1）
+
+    func testFetchDomainRejectsDependencyFieldCollision() throws {
+        // 六轮 P1 回归:依赖行字段被篡改成「分隔符拼接后同串」的形态
+        // (referenceID="a|b",version=nil ↔ referenceID="a",version="b|-")
+        // ——旧字符串拼接比较判相等,字段级比较必须拒
+        let queue = try dbQueue
+        let domain = PlaceholderArtifact(
+            id: ArtifactID(rawValue: "ph_collision"),
+            producedAt: date(1_700_000_000_000),
+            validityPolicy: .immutableHistorical,
+            dependencies: [ArtifactDependency(kind: .signal, referenceID: "a|b")],
+            payload: "x"
+        )
+        let pair = try ArtifactRow.from(domain, kind: "PLACEHOLDER")
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+            // 篡改依赖行:拼串后与原行相同("SIGNAL|a|b|-" == "SIGNAL|a|b|-")
+            try db.execute(
+                sql: "UPDATE artifact_dependencies SET reference_id = ?, version = ? WHERE artifact_id = ?",
+                arguments: ["a", "b|-", domain.id.rawValue]
+            )
+        }
+        XCTAssertThrowsError(try queue.read({ db in
+            try ArtifactRow.fetchDomain(PlaceholderArtifact.self, id: domain.id.rawValue,
+                                        expectedKind: "PLACEHOLDER", from: db)
+        })) { error in
+            guard case ArtifactReadError.dependencyDivergence = error else {
+                return XCTFail("应为字段级依赖分歧,实际 \(error)")
+            }
+        }
+    }
+
+    func testFetchDomainRejectsNonContiguousDepIndex() throws {
+        // 六轮 P1 回归:dep_index 不从 0 连续(0 号被删,1..n 保留)→ 拒
+        let queue = try dbQueue
+        let domain = makeAttribution()
+        let pair = try ArtifactRow.from(domain, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+            try db.execute(
+                sql: "DELETE FROM artifact_dependencies WHERE artifact_id = ? AND dep_index = 0",
+                arguments: [domain.id.rawValue]
+            )
+            // 行数已少一条——补一条尾行保持数量但 index 断号
+            if let last = pair.dependencies.last {
+                let ghost = ArtifactDependencyRow(
+                    artifactID: domain.id.rawValue,
+                    depIndex: pair.dependencies.count,
+                    kind: last.kind, referenceID: last.referenceID, version: last.version
+                )
+                try ghost.insert(db)
+            }
+        }
+        XCTAssertThrowsError(try queue.read({ db in
+            try ArtifactRow.fetchDomain(DailyAttribution.self, id: domain.id.rawValue,
+                                        expectedKind: ArtifactRow.dailyAttributionKind, from: db)
+        })) { error in
+            guard case ArtifactReadError.dependencyDivergence = error else {
+                return XCTFail("应为 dep_index 断号,实际 \(error)")
+            }
+        }
+    }
+
+    func testFetchDomainRejectsSubTwoMsProducedAtDrift() throws {
+        // 六轮 P1 回归:produced_at 列与 payload 漂移 1ms(旧 2ms 容差放行)
+        // ——重编码逐字比较后拒收
+        let queue = try dbQueue
+        let domain = makeAttribution()
+        let pair = try ArtifactRow.from(domain, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+            try db.execute(
+                sql: "UPDATE artifacts SET produced_at = ? WHERE id = ?",
+                arguments: [
+                    CanonicalColumnCodec.encodeTimestamp(date(1_700_000_000_001)),
+                    domain.id.rawValue,
+                ]
+            )
+        }
+        XCTAssertThrowsError(try queue.read({ db in
+            try ArtifactRow.fetchDomain(DailyAttribution.self, id: domain.id.rawValue,
+                                        expectedKind: ArtifactRow.dailyAttributionKind, from: db)
+        })) { error in
+            guard case ArtifactReadError.identityMismatch = error else {
+                return XCTFail("应为 produced_at 分歧(1ms 漂移不再放行),实际 \(error)")
             }
         }
     }

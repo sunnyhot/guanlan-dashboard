@@ -7,14 +7,15 @@ final class CriterionComparatorTests: XCTestCase {
 
     private func d(_ s: String) -> Decimal { Decimal(string: s)! }
 
-    private func score(_ id: String, _ value: Decimal?) -> CriterionScore {
+    private func score(_ id: String, _ value: Decimal?, higherIsBetter: Bool = true) -> CriterionScore {
         CriterionScore(
             definition: CriterionDefinition(
                 id: id, version: "v1", evaluatorKind: .weightedSum,
                 inputReferences: [
                     CriterionDefinition.InputReference(kind: .factorMetric, referenceID: "\(id)-in", weight: 1)
                 ],
-                unit: .ratio
+                unit: .ratio,
+                higherIsBetter: higherIsBetter
             ),
             value: value,
             missingInputs: value == nil ? ["\(id)-in"] : [],
@@ -30,15 +31,15 @@ final class CriterionComparatorTests: XCTestCase {
         )
     }
 
-    private func compare(_ plans: [String: [CriterionScore]]) -> PlanComparisonResult {
-        CriterionComparator().compare(plans: plans, band: band)
+    private func compare(_ plans: [String: [CriterionScore]]) throws -> PlanComparisonResult {
+        try CriterionComparator().compare(plans: plans, band: band)
     }
 
     // MARK: - Effective Dominance
 
-    func testClearDominance_singlePreferred() {
+    func testClearDominance_singlePreferred() throws {
         // A 两项全优且超带 → dominate B;前沿 = [A]
-        let result = compare([
+        let result = try compare([
             "A": [score("momentum", d("0.05")), score("cost", d("-0.001"))],
             "B": [score("momentum", d("0.02")), score("cost", d("-0.005"))],
         ])
@@ -49,9 +50,9 @@ final class CriterionComparatorTests: XCTestCase {
         XCTAssertEqual(decision.admissiblePlans, ["A"])
     }
 
-    func testIncomparable_yieldsUnresolvedTradeoffWithTwoAdmissible() {
+    func testIncomparable_yieldsUnresolvedTradeoffWithTwoAdmissible() throws {
         // A momentum 优(0.04 > 带)、B costScore 优(0.025 > 带)→ 各有优势 incomparable
-        let result = compare([
+        let result = try compare([
             "A": [score("momentum", d("0.05")), score("costScore", d("0.005"))],
             "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
         ])
@@ -65,10 +66,10 @@ final class CriterionComparatorTests: XCTestCase {
 
     // MARK: - IndifferenceBand
 
-    func testIndifferenceBandIgnoresSmallDifferences() {
+    func testIndifferenceBandIgnoresSmallDifferences() throws {
         // A momentum 0.052 vs B 0.05(差 0.002 ≤ 0.01 带)→ indifferent;
         // cost 相等 → 无严格优 → incomparable(不因带内微差判优)
-        let result = compare([
+        let result = try compare([
             "A": [score("momentum", d("0.052")), score("cost", d("-0.005"))],
             "B": [score("momentum", d("0.05")), score("cost", d("-0.005"))],
         ])
@@ -91,9 +92,9 @@ final class CriterionComparatorTests: XCTestCase {
 
     // MARK: - unknown 阻断
 
-    func testUnknownCriterionBlocksDominance() {
+    func testUnknownCriterionBlocksDominance() throws {
         // A 两项全优但 momentum unknown → 不判 dominance(DATA006:不假装 0)
-        let result = compare([
+        let result = try compare([
             "A": [score("momentum", nil), score("cost", d("-0.009"))],
             "B": [score("momentum", d("0.02")), score("cost", d("-0.005"))],
         ])
@@ -127,16 +128,34 @@ final class CriterionComparatorTests: XCTestCase {
 
     // MARK: - 方向参数与确定性
 
-    func testHigherIsBetterDirection() {
-        // cost 类 criterion:值小者优(higherIsBetter false)
+    func testHigherIsBetterDirectionFromDefinition() throws {
+        // 六轮 P1-3:方向读 CriterionScore.definition.higherIsBetter——
+        // cost 类 criterion:值小者优(定义显式 higherIsBetter: false)
         let comparator = CriterionComparator()
         let plans = [
-            "A": [score("cost", d("-0.001"))],
-            "B": [score("cost", d("-0.02"))],   // 差 0.019 > 带,cost 小者优
+            "A": [score("cost", d("-0.001"), higherIsBetter: false)],
+            "B": [score("cost", d("-0.02"), higherIsBetter: false)],   // 差 0.019 > 带,cost 小者优
         ]
-        let result = comparator.compare(plans: plans, band: band, higherIsBetter: ["cost": false])
-        // −0.001 > −0.009 但 cost 越小越好 → B 优
+        let result = try comparator.compare(plans: plans, band: band)
+        // −0.001 > −0.02 但 cost 越小越好 → B 优
         XCTAssertEqual(result.pairwise["A|B"], .bDominatesA)
+    }
+
+    func testMalformedPlanKeyThrowsInsteadOfCrashing() throws {
+        // 六轮 P2 回归:plan key 含 "|" / 为空 → 抛 CompareError.malformedPlanKey,
+        // 不再 precondition 崩进程(比较器位于持久化 artifact 的重放路径)
+        let comparator = CriterionComparator()
+        let plans = [
+            "A|B": [score("cost", d("0.01"))],   // 键含分隔符:pair 键拆分会失效
+        ]
+        XCTAssertThrowsError(try comparator.compare(plans: plans, band: band)) { error in
+            XCTAssertEqual(error as? CriterionComparator.CompareError,
+                           .malformedPlanKey("A|B"))
+        }
+        XCTAssertThrowsError(try comparator.compare(plans: ["": [score("cost", d("0.01"))]], band: band)) { error in
+            XCTAssertEqual(error as? CriterionComparator.CompareError,
+                           .malformedPlanKey(""))
+        }
     }
 
     func testDeterministicAndCodable() throws {
@@ -145,8 +164,8 @@ final class CriterionComparatorTests: XCTestCase {
             "B": [score("momentum", d("0.01")), score("costScore", d("0.03"))],
         ]
         let comparator = CriterionComparator()
-        let a = comparator.compare(plans: plans, band: band)
-        let b = comparator.compare(plans: plans, band: band)
+        let a = try comparator.compare(plans: plans, band: band)
+        let b = try comparator.compare(plans: plans, band: band)
         XCTAssertEqual(a, b)
 
         let data = try JSONEncoder().encode(a)

@@ -63,21 +63,28 @@ struct PlanComparisonResult: Sendable, Codable, Hashable {
 struct CriterionComparator: Sendable {
     static let comparatorVersion = "v1"
 
+    enum CompareError: Error, Equatable, Sendable {
+        /// plan key 为空或含分隔符 "|"（六轮 P2：非法持久化数据是可恢复的
+        /// 校验错误，throw 而非 precondition——比较器位于 artifact 重放路径，
+        /// 非法 key 不得崩进程）
+        case malformedPlanKey(String)
+    }
+
     /// 比较多方案的 scores。
     ///
     /// - plans：plan key → 该 plan 的全部 CriterionScore（按 criterion id 索引）
     /// - band：无差异带（heuristic，显式 provenance）
-    /// - higherIsBetter：criterion 方向（缺省 true；cost 类 criterion 显式 false）
+    ///
+    /// 比较方向读各 CriterionScore.definition.higherIsBetter（六轮 P1-3：
+    /// 方向是 versioned 定义的一部分，不再由调用方按 id 注入）。
     func compare(
         plans: [String: [CriterionScore]],
-        band: IndifferenceBand,
-        higherIsBetter: [String: Bool] = [:]
-    ) -> PlanComparisonResult {
+        band: IndifferenceBand
+    ) throws(CompareError) -> PlanComparisonResult {
         // 五轮 P2-5:pair 键用 "a|b" 拼接——plan key 含 "|" 会破坏拆分与
-        // Pareto 推导,入口 fail-fast(编程错误,不可恢复数据)
-        for key in plans.keys {
-            precondition(!key.isEmpty && !key.contains("|"),
-                         "plan key 非法(空或含分隔符 |): \(key)")
+        // Pareto 推导;六轮 P2:改为 throw(重放路径上的数据校验错误)
+        for key in plans.keys where key.isEmpty || key.contains("|") {
+            throw .malformedPlanKey(key)
         }
         let planKeys = plans.keys.sorted()
         // 汇总全部 criterion id（确定性顺序）
@@ -92,7 +99,7 @@ struct CriterionComparator: Sendable {
                 let dominance = comparePair(
                     scoresA: indexed(plans[a]), scoresB: indexed(plans[b]),
                     criteria: allCriteria, band: band,
-                    higherIsBetter: higherIsBetter, blockingUnknowns: &blockingUnknowns
+                    blockingUnknowns: &blockingUnknowns
                 )
                 pairwise["\(a)|\(b)"] = dominance
             }
@@ -128,7 +135,6 @@ struct CriterionComparator: Sendable {
         scoresB: [String: CriterionScore],
         criteria: [String],
         band: IndifferenceBand,
-        higherIsBetter: [String: Bool],
         blockingUnknowns: inout Set<String>
     ) -> PairwiseDominance {
         var aBetterCount = 0
@@ -142,7 +148,9 @@ struct CriterionComparator: Sendable {
                 blockingUnknowns.insert(criterion)
                 return .incomparable
             }
-            let diff = higherIsBetter[criterion] ?? true ? av - bv : bv - av
+            // 方向取自 versioned 定义（六轮 P1-3）——同一 criterion 版本下
+            // 两侧定义相同（artifact 引用层锁定），取 A 侧即代表比较方向
+            let diff = (aScore?.definition.higherIsBetter ?? true) ? av - bv : bv - av
             if abs(diff) <= band.band(for: criterion) {
                 continue  // indifferent：忽略
             }
