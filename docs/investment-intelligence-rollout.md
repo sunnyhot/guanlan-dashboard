@@ -1559,6 +1559,38 @@ macos-app/
 >   badge/贡献行/residual/覆盖/失败态同步。
 > - 修复后 swift test 全量绿（1777 passed，环境性排除同前）；干净 HEAD
 >   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
+>
+> **六轮审查修复（2026-08-25，5×P1 + 1×P2，全部闭环）**：
+> - **P1 resolver 注入数值**：criterion 输入值只能经 `CriterionInputExtractor`
+>   从强类型实例提取——signal 经 versioned `SignalCardinalPolicy` 转 cardinal
+>   （artifact 新增 `signalCardinalPolicyVersion` 引用 + policy 依赖）、factor 按
+>   「`<snapshotID>#<metricKey>`」从 snapshot 提取、observation 取实例值
+>   （`CardinalObservation`）；`ReplayMaterials` 删除 `criterionInputs`，
+>   同一引用 ID 锁定唯一数值（提取源决策级共享，per-plan 数值分叉通道不存在）。
+> - **P1 实例身份绑定**：材料字典 key 必须就是实例自身 ID
+>   （`definition.fingerprint` / snapshot/signal/observation id），factor/signal/
+>   observation 引用域与实例域**精确相等**（superset 也拒），
+>   `materialIdentityMismatch` fail-closed。
+> - **P1 重放自包含**：Planner 全部输入按确定性指纹锚定
+>   （`PlannerRun.fingerprint()` → `artifact.plannerInputFingerprints`，参与
+>   确定性 ID 派生，绑定校验逐 plan 比对）；`higherIsBetter` 移入 versioned
+>   `CriterionDefinition`（比较方向不再由调用方注入）；完整重放删除外部
+>   `now`——各 plan 时间从 `artifact.plans[key].asOf` 冻结（plan id 含时间，
+>   漂移在 verify 的 plans 全等中暴露）。
+> - **P1 依赖比较碰撞**：DecisionValidator 改 `ArtifactDependency` 多重集合
+>   结构化计数比较（不再拼接 kind|refID|version 字符串，`|` 碰撞不再可能）；
+>   codec strict reader 同步字段级比较 + `dep_index` 从 0 连续校验 +
+>   producedAt 重编码逐字比较（取消 2ms 容差，1ms 漂移拒收）。
+> - **P1 strict reader 绕过**：payload-only `toDomain`/六类 `toX()` 隐藏删除，
+>   唯一公开读回入口为 DB-backed `fetchDomain` + 六类 typed fetch
+>   （`fetchFactorSnapshot` 等），round-trip 测试全部改走 strict 入口。
+> - **P2 comparator 崩溃**：`precondition` 改 `throws(CompareError)`，非法
+>   plan key 在重放路径上转为 `ReplayError.malformedPlanKey`（不再崩进程）。
+> - 修复后 swift test 全量绿（1606 passed，环境性排除同前——AppLaunch
+>   PresentationPolicyTests 在无窗口服务器环境 signal 11 为既有问题，干净
+>   HEAD 同样复现）；干净 HEAD macOS release + iOS Simulator 构建均通过；
+>   每个修复点有回归测试（实例身份/指纹漂移/冻结时间/依赖碰撞样例/
+>   dep_index 断号/1ms 时间漂移/非法 plan key）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
