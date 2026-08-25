@@ -59,7 +59,21 @@ struct FactorDefinition: Sendable, Codable, Hashable {
     }
 
     /// 定义指纹（进引擎 factorVersion 与 snapshot id）。
-    var fingerprint: String { "\(key)@\(version)" }
+    ///
+    /// 十一轮 P2-2：参数纳入指纹——「参数变更必须 bump version」不再只是
+    /// 纪律：同 key@version 不同参数（window / benchmark / horizon）在指纹
+    /// 层即分裂，同快照 ID 下混入不同数学的通道关闭（对照八轮 P1-4
+    /// criterion 的 contentDigest——同一类缺口）。无参数定义保持纯
+    /// `key@version`（与既有形态兼容）。
+    var fingerprint: String {
+        guard !parameters.isEmpty else { return "\(key)@\(version)" }
+        // 参数规范化：按 (name, value) 排序后 JSON 摘要（确定性类型的
+        // 编码失败 = 编程错误，fail-fast）
+        let canonical = try! StableDigest.jsonPayload(
+            parameters.sorted { ($0.name, $0.value) < ($1.name, $1.value) }
+        )
+        return "\(key)@\(version)@\(StableDigest.digest(canonical))"
+    }
 }
 
 /// 单个因子的计算产出（metric = Decimal + unit，不是分数）。
@@ -241,8 +255,12 @@ struct FactorEngine: Sendable {
         self.calculators = calculators
     }
 
-    /// 引擎版本指纹：全部 definition 的 key@version 排序拼接后的确定性摘要。
-    /// 新增因子 / version bump / 参数变更都会改变指纹（参数在 definition 内）。
+    /// 引擎版本指纹：全部 definition 的 fingerprint（key@version[@参数摘要]，
+    /// 十一轮 P2-2）排序拼接后的确定性摘要。新增因子 / version bump /
+    /// **参数值变更**都会改变指纹——参数已纳入 definition.fingerprint
+    /// （修正原「参数在 definition 内即改变指纹」的注释与实现矛盾：
+    /// fingerprint 原本只有 key@version，参数变更若不 bump version 则
+    /// 指纹不变）。
     var factorVersion: String {
         let joined = calculators
             .flatMap { $0.definitions.map(\.fingerprint) }
@@ -281,7 +299,8 @@ struct FactorEngine: Sendable {
                 listingID: listingID,
                 asOf: asOf,
                 benchmarkListingID: benchmarkListingID,
-                factorVersion: factorVersion
+                factorVersion: factorVersion,
+                sourceObservationIDs: sourceIDs
             ),
             producedAt: producedAt,
             listingID: listingID,
@@ -309,16 +328,23 @@ struct FactorEngine: Sendable {
             .map(\.2)
     }
 
-    /// snapshot id 确定性派生：listing + asOf + benchmark + 引擎指纹 → 摘要前 24 hex。
-    /// 同输入同 id（重算幂等覆盖）；asOf / benchmark / 引擎任一变化 → 新 id。
+    /// snapshot id 确定性派生：listing + asOf + benchmark + 引擎指纹 +
+    /// **参与计算的 observation 身份**（十一轮 P2-1：修订场景下同 asOf 重算
+    /// 的快照内容不同（metrics / sourceObservationIDs 变化），ID 必须分裂
+    /// ——否则 ArtifactRow.write 幂等比对对语义应为 untilDependencyChanges
+    /// supersede 的修订误报 conflict；与 ExposureReport 二轮 P1-7 同款收口）
+    /// → 摘要前 24 hex。同输入同 id（重算幂等覆盖）；asOf / benchmark /
+    /// 引擎 / 源 observation 任一变化 → 新 id。
     static func deterministicID(
         listingID: ListingID,
         asOf: Date,
         benchmarkListingID: ListingID?,
-        factorVersion: String
+        factorVersion: String,
+        sourceObservationIDs: [ObservationID] = []
     ) -> FactorSnapshotID {
         let millis = Int(asOf.timeIntervalSince1970 * 1000)
-        let canonical = "factor-snapshot|\(listingID.rawValue)|\(millis)|\(benchmarkListingID?.rawValue ?? "-")|\(factorVersion)"
+        let sources = sourceObservationIDs.map(\.rawValue).sorted().joined(separator: ",")
+        let canonical = "factor-snapshot|\(listingID.rawValue)|\(millis)|\(benchmarkListingID?.rawValue ?? "-")|\(factorVersion)|\(sources)"
         return FactorSnapshotID(rawValue: "fs_\(shortDigest(canonical))")
     }
 

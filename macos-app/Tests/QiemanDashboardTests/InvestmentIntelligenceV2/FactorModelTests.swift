@@ -234,6 +234,61 @@ final class FactorModelTests: XCTestCase {
         XCTAssertNotEqual(id1, idWithBenchmark)
     }
 
+    func testFactorEngine_deterministicID_bindsSourceObservations() {
+        // 十一轮 P2-1 回归:同 (listing/asOf/benchmark/factorVersion) 四元组
+        // 下,参与计算的 observation 身份不同(修订场景)→ ID 必须分裂——
+        // 否则 ArtifactRow.write 幂等比对把语义应为 untilDependencyChanges
+        // supersede 的修订误报 conflict;源 ID 顺序无关(规范化排序)
+        let version = FactorEngine(calculators: [LastCloseCalculator(multiplier: 2)]).factorVersion
+        let base = FactorEngine.deterministicID(
+            listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
+            benchmarkListingID: nil, factorVersion: version,
+            sourceObservationIDs: [ObservationID(rawValue: "a1"), ObservationID(rawValue: "a2_v1")]
+        )
+        let sameSources = FactorEngine.deterministicID(
+            listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
+            benchmarkListingID: nil, factorVersion: version,
+            sourceObservationIDs: [ObservationID(rawValue: "a2_v1"), ObservationID(rawValue: "a1")]
+        )
+        XCTAssertEqual(base, sameSources, "源 ID 集合相同(顺序不同)→ 同 ID")
+        let revised = FactorEngine.deterministicID(
+            listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
+            benchmarkListingID: nil, factorVersion: version,
+            sourceObservationIDs: [ObservationID(rawValue: "a1"), ObservationID(rawValue: "a2_v2")]
+        )
+        XCTAssertNotEqual(base, revised, "修订(a2_v1 → a2_v2)后重算 → 新 ID(supersede 而非 conflict)")
+    }
+
+    func testFactorDefinition_fingerprintBindsParameters() {
+        // 十一轮 P2-2 回归:同 key@version 不同参数值 → 指纹分裂;
+        /// 无参数定义保持纯 key@version(既有形态兼容)
+        let noParams = FactorDefinition(key: "test.lastClose", version: "v1", unit: .ratio)
+        XCTAssertEqual(noParams.fingerprint, "test.lastClose@v1")
+
+        let window20 = FactorDefinition(
+            key: "momentum.return", version: "v1", unit: .ratio,
+            parameters: [.init(name: "window", intValue: 20)]
+        )
+        let window60 = FactorDefinition(
+            key: "momentum.return", version: "v1", unit: .ratio,
+            parameters: [.init(name: "window", intValue: 60)]
+        )
+        XCTAssertNotEqual(window20.fingerprint, window60.fingerprint,
+                          "参数值变更(不 bump version)→ 指纹变化——同 ID 下不同数学的通道关闭")
+        XCTAssertEqual(window20.fingerprint, window20.fingerprint,
+                       "同定义 → 指纹稳定")
+        // 参数顺序无关(规范化排序)
+        let reordered = FactorDefinition(
+            key: "momentum.return", version: "v1", unit: .ratio,
+            parameters: [.init(name: "window", intValue: 20), .init(name: "benchmark", value: "L")]
+        )
+        let original = FactorDefinition(
+            key: "momentum.return", version: "v1", unit: .ratio,
+            parameters: [.init(name: "benchmark", value: "L"), .init(name: "window", intValue: 20)]
+        )
+        XCTAssertEqual(reordered.fingerprint, original.fingerprint)
+    }
+
     func testFactorEngine_factorVersionChangesWithDefinitions() {
         let v1 = FactorEngine(calculators: [LastCloseCalculator(multiplier: 1)]).factorVersion
         // 参数 / 版本变更（不同 definition 集合）→ 指纹变化

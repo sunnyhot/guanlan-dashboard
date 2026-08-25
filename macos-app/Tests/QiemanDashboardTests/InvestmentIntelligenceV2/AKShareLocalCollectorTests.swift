@@ -296,6 +296,25 @@ final class AKShareLocalCollectorTests: XCTestCase {
 
     // MARK: - Launcher（替身 Process，不真跑 Python）
 
+    func testLauncher_emptyPythonCandidatesThrowsInsteadOfCrashing() async throws {
+        // 十一轮 P3 回归:pythonCandidates 注入空数组 → pythonNotFound
+        // (可恢复错误),不再 pythonCandidates.last! 崩进程
+        let launcher = AKShareLocalCollectorLauncher(processFactory: { StubProcess() })
+        let script = workDir.appendingPathComponent("dummy.py")
+        try "# placeholder\n".write(to: script, atomically: true, encoding: .utf8)
+        var emptyCandidates = launcher
+        emptyCandidates.pythonCandidates = []
+        do {
+            try await emptyCandidates.run(scriptURL: script, outDir: workDir.appendingPathComponent("out"))
+            XCTFail("空候选应抛 pythonNotFound")
+        } catch let error as AKShareCollectorError {
+            guard case .pythonNotFound = error else {
+                XCTFail("应为 pythonNotFound,实际 \(error)")
+                return
+            }
+        }
+    }
+
     func testLauncher_scriptNotFound() async {
         let launcher = AKShareLocalCollectorLauncher(processFactory: { StubProcess() })
         do {

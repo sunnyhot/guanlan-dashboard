@@ -315,8 +315,15 @@ struct AKShareLocalCollectorLauncher: Sendable {
         guard FileManager.default.fileExists(atPath: scriptURL.path) else {
             throw AKShareCollectorError.scriptNotFound(path: scriptURL.path)
         }
+        // 十一轮 P3:pythonCandidates 可注入空数组(测试/配置构造)——
+        // fallback 缺失时抛 pythonNotFound(可恢复的数据校验错误),
+        // 不崩进程(原 pythonCandidates.last! 强解包)
+        guard let fallback = pythonCandidates.last else {
+            throw AKShareCollectorError.pythonNotFound(
+                detail: "pythonCandidates 为空——没有可用的 Python 解释器候选")
+        }
         let python = pythonCandidates.first { FileManager.default.fileExists(atPath: $0) }
-            ?? pythonCandidates.last!
+            ?? fallback
 
         var arguments = [scriptURL.path, "--out-dir", outDir.path]
         if let configURL { arguments += ["--config", configURL.path] }
