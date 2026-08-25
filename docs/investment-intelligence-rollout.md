@@ -1761,6 +1761,64 @@ macos-app/
 
 **里程碑 M8：LLM Research 子系统可用（产真实 signals）**。
 
+> **状态（2026-08-25，Epic 11 全部收口，M8 达成——引擎层完整、
+> 离线验证全绿）**：**RES-1（3）/ RES-2（8）/ RES-3（5）/ RES-4（5）/
+> RES-5（3）/ RES-6（2）/ RES-7（2）/ RES-8（3）/ RES-9（3）= 34 点
+> 全部签收**，代码在 `InvestmentIntelligenceV2/Research/`（10 源文件），
+> 测试 9 个套件（ModelGateway / StructuredGeneration / ResearchHarness /
+> ResearchToolRegistry / SignalExtraction / ResearchValidation / SignalStore /
+> EvidenceMatcher / ResearchGolden），swift test 全量 1711 passed
+> （AppLaunch 环境性排除同前——干净 HEAD 同样复现的既有问题）。
+>
+> 实现要点（与 Story 表述的对齐）：
+> - **RES-1**：`ModelGateway.swift` + `OpenAICompatibleModelProvider`（桥接
+>   Core client，B.3 封装切断依赖）。selection（优先级序 + failover）/
+>   retry（可重试错误有限重试，sleeper 注入）/ token budget fail-closed
+>   （请求前拒绝）/ tracing（ModelCallTrace，sink 注入）/ usage（actor
+>   ledger，未上报如实记 unreported）。Core 传输层向后兼容增强：请求体
+>   可选 `max_tokens` + 响应/流式尾包 usage 解析（`AgentTokenUsage`）。
+> - **RES-2**：`ResearchWorkspace.swift`（ResearchTask 冻结输入 + 确定性
+>   指纹 / ResearchNotes 结构化产出）+ `ResearchHarness.swift`（多轮循环 /
+>   轮次·工具·纯文本·提交重试·总超时预算 / 确定性上下文裁剪 / 截断响应
+>   不执行 / 取消 rethrow）。模型不产身份字段（task/producedBy/producedAt
+>   由 Harness 注入）。
+> - **RES-3**：`ResearchToolRegistry.swift` 等四文件——V2 新建工具集
+>   （web_search / official_sec_research / alpha_vantage_research /
+>   get_local_data），复用 Core/Clients 传输与缓存；evidence ID 内容寻址；
+>   `ResearchDataAccess` 白名单（LLM 不直接读 Repository，KnowledgeContext
+>   固定 economicKnowledge(now)）；A 股 symbol 映射对齐旧工具规则。
+> - **RES-4**：`SignalExtraction.swift`——notes→InvestmentSignal 确定性
+>   转换。direction 是模型的 ordinal 研究判断（铁律允许的结论形态），
+>   落地必须过 versioned `SignalExtractionPolicy` 证据门槛：无证据方向
+>   强制 uncertain / 证据数门槛 / LOW 充分度降级 / 同维度方向冲突
+>   fail-closed；strength 仅由 confidenceLabel 确定性映射；policy 版本
+>   参与 SignalID（同 notes 不同版本策略 → 不同 ID，历史可审计）。
+> - **RES-5**：`ResearchValidation.swift`——Schema（结构不变量，error）/
+>   EvidenceBinding（未知引用 error + 点名 ID；无证据默认 warning 可配置
+>   严格）/ Freshness（notes 超龄 error、evidence 陈旧 warning、时间缺失
+>   不猜）/ 统一管道（errors 非空拒绝进 Signal Store）。
+> - **RES-6**：`SignalStore.swift`——SignalStore 协议（write 幂等 /
+>   signal(id) / signals(subject) / signals(derivedFromEvidence)），GRDB +
+>   InMemory 双实现 parity；幂等纪律同 ArtifactRow.write（同 ID 同语义
+>   no-op 保留首条 effectiveAt、异内容 conflict 定位分歧字段、evidence
+>   引用集合语义）；溯源查询用 SQLite JSON1 json_each 精确匹配。
+> - **RES-7**：`StructuredGeneration.swift`——LLM 输出只经「提交工具参数
+>   schema + tool_choice 强制」的 tool call arguments Codable 解码，纯文本
+>   响应类型化拒绝（无文本抠 JSON 路径）；错误四分类；snake_case 命名
+>   约定钉入注释（evidence_ids → evidenceIds）。
+> - **RES-8**：`EvidenceMatcher.swift`——ID 引用核对（编造 ID 拦截，M8
+>   验收）+ 内容匹配（字符 bigram Jaccard，确定性、无分词依赖）+ rebind
+>   （空引用 claim 经内容匹配补绑；非空引用不越权改写）。
+> - **RES-9**：`ResearchGoldenTests.swift`——固定 mock 输出 → 固定 Signal：
+>   golden 值字面量固化（notes 指纹 / SignalID），三层校验失败路径与
+>   提取降级路径的 error code 序列/详情文本固定。
+>
+> 遗留（诚实记录）：真实 VPS / 真实 LLM 的端到端联调未做（引擎层以
+> ScriptedModelProvider / FakeClient 离线验证；App 生产接线属 Epic 12
+> WF-1/2/3 的接线工作）；evidence 本体（EvidenceObservation）落库与
+> theses 表消费未接（RES-6 只落 signals；evidence 落库在 WF-1 接线时
+> 补）。Epic 12（Workflows + Presentation + 旧链路下线）解锁。
+
 ---
 
 ### Epic 12 — Workflows + Presentation + 现有 AI 链路 + Slice 0-7 下线
