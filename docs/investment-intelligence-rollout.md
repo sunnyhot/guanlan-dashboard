@@ -1723,6 +1723,19 @@ macos-app/
 >   macOS release + iOS Simulator 构建均通过；三项各有回归测试
 >   （修订前后同四元组 ID 分裂 + 源序无关 / 参数值变更指纹分裂 + 无参数
 >   兼容 / 空候选抛 pythonNotFound）。
+>
+> **十二轮审查修复（2026-08-25，1×P3，闭环——引擎层审查饱和收尾）**：
+> - **P3 deterministicID 默认参数重开语义缺口**：删除
+>   `sourceObservationIDs` 的默认值 `[]`——省略该关键身份参数会让 ID
+>   静默退回四元组形态（修订不分裂 ID、写入 conflict 而非 supersede，
+>   即十一轮刚修复问题的调用方陷阱形态）；旧测试 4 个调用点改为显式
+>   传参（无源调用 = 显式空数组）。
+> - 同轮全模块扫描（Attribution / Risk / Temporal / Persistence）无新
+>   发现；残余风险集中在尚未接线的生产路径（App 接线、Epic 11 Research
+>   上线时的 DEC-9 写库门禁、resolver 真实实现——已钉入 AGENTS.md 第
+>   11 条）。
+> - 修复后 swift test 全量绿（1623 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
