@@ -112,7 +112,10 @@ extension ArtifactRow {
             throw ArtifactWriteError.conflict(artifactID: existing.id, field: "dependencies.count")
         }
         for (a, b) in zip(existingDeps, incomingDeps) {
-            if a.kind != b.kind || a.referenceID != b.referenceID || a.version != b.version {
+            // 七轮 P2:dep_index 一并比较——索引整体偏移/断号但字段相同时
+            // 不再误判幂等 no-op（否则随后 strict reader 会拒绝该 artifact）
+            if a.depIndex != b.depIndex || a.kind != b.kind
+                || a.referenceID != b.referenceID || a.version != b.version {
                 throw ArtifactWriteError.conflict(artifactID: existing.id, field: "dependencies[\(a.depIndex)]")
             }
         }

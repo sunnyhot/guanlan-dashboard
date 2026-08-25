@@ -105,7 +105,6 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             criterionVersions: ["c@v1"],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_x")],
             target: nil, bandVersion: "b@v1",
-            signalPolicyVersion: SignalCardinalPolicy.symmetricV1().versionedID,
             knowledgeContextSummary: "economicKnowledge(2024)",
             decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A"], blockingUnknowns: []),
@@ -370,6 +369,35 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             XCTAssertEqual(error as? ArtifactReadError,
                            .kindMismatch(expected: ArtifactRow.factorSnapshotKind,
                                          actual: ArtifactRow.dailyAttributionKind))
+        }
+    }
+
+    func testWriteConflictsOnShiftedDepIndex() throws {
+        // 七轮 P2 回归:已有依赖行 dep_index 整体偏移(+100 再 −99 → [1,2...])
+        // 但三个业务字段相同 → 重写同内容必须 conflict(不再误判幂等 no-op,
+        // 否则同一数据随后又被 strict reader 以断号拒绝)
+        let queue = try dbQueue
+        let domain = makeAttribution()
+        let pair = try ArtifactRow.from(domain, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+        }
+        try queue.write { db in
+            try db.execute(
+                sql: "UPDATE artifact_dependencies SET dep_index = dep_index + 100 WHERE artifact_id = ?",
+                arguments: [domain.id.rawValue]
+            )
+            try db.execute(
+                sql: "UPDATE artifact_dependencies SET dep_index = dep_index - 99 WHERE artifact_id = ?",
+                arguments: [domain.id.rawValue]
+            )
+        }
+        XCTAssertThrowsError(try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+        }) { error in
+            guard case ArtifactWriteError.conflict = error else {
+                return XCTFail("应为 dep_index 偏移冲突,实际 \(error)")
+            }
         }
     }
 

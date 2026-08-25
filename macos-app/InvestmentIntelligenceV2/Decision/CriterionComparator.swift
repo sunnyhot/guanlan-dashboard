@@ -68,6 +68,12 @@ struct CriterionComparator: Sendable {
         /// 校验错误，throw 而非 precondition——比较器位于 artifact 重放路径，
         /// 非法 key 不得崩进程）
         case malformedPlanKey(String)
+        /// 同一 plan 内 criterion ID 重复（七轮 P2：不静默取首个——
+        /// 重复意味着 scores 构造方出错，顺序相关结果不可接受）
+        case duplicateCriterion(planKey: String, criterionID: String)
+        /// 各 plan 同 ID criterion 的定义不一致（version/unit/方向任一
+        /// 不同——七轮 P2：同 ID 必须同定义，否则结果取决于遍历顺序）
+        case criterionDefinitionMismatch(criterionID: String)
     }
 
     /// 比较多方案的 scores。
@@ -76,7 +82,9 @@ struct CriterionComparator: Sendable {
     /// - band：无差异带（heuristic，显式 provenance）
     ///
     /// 比较方向读各 CriterionScore.definition.higherIsBetter（六轮 P1-3：
-    /// 方向是 versioned 定义的一部分，不再由调用方按 id 注入）。
+    /// 方向是 versioned 定义的一部分，不再由调用方按 id 注入）。七轮 P2：
+    /// 比较前校验各 plan 的 criterion schema——同 plan 内 ID 唯一、跨 plan
+    /// 同 ID 定义完全一致（version/unit/权重引用/方向），违者 throw。
     func compare(
         plans: [String: [CriterionScore]],
         band: IndifferenceBand
@@ -87,6 +95,29 @@ struct CriterionComparator: Sendable {
             throw .malformedPlanKey(key)
         }
         let planKeys = plans.keys.sorted()
+        // 七轮 P2:索引化 + 同 plan 内重复 criterion ID 拒绝 + 跨 plan
+        // 同 ID 定义一致(以字典序首 plan 为 canonical,其余必须全等)
+        var indexedByPlan: [String: [String: CriterionScore]] = [:]
+        var canonicalDefinitions: [String: CriterionDefinition] = [:]
+        for planKey in planKeys {
+            var byID: [String: CriterionScore] = [:]
+            for score in plans[planKey] ?? [] {
+                guard byID[score.definition.id] == nil else {
+                    throw .duplicateCriterion(planKey: planKey, criterionID: score.definition.id)
+                }
+                byID[score.definition.id] = score
+            }
+            if canonicalDefinitions.isEmpty {
+                canonicalDefinitions = byID.mapValues(\.definition)
+            } else {
+                for (criterionID, definition) in canonicalDefinitions {
+                    if let other = byID[criterionID]?.definition, other != definition {
+                        throw .criterionDefinitionMismatch(criterionID: criterionID)
+                    }
+                }
+            }
+            indexedByPlan[planKey] = byID
+        }
         // 汇总全部 criterion id（确定性顺序）
         let allCriteria = Set(plans.values.flatMap { $0.map { $0.definition.id } }).sorted()
 
@@ -97,7 +128,8 @@ struct CriterionComparator: Sendable {
             for j in (i + 1)..<planKeys.count {
                 let a = planKeys[i], b = planKeys[j]
                 let dominance = comparePair(
-                    scoresA: indexed(plans[a]), scoresB: indexed(plans[b]),
+                    scoresA: indexedByPlan[a] ?? [:], scoresB: indexedByPlan[b] ?? [:],
+                    definitions: canonicalDefinitions,
                     criteria: allCriteria, band: band,
                     blockingUnknowns: &blockingUnknowns
                 )
@@ -126,13 +158,10 @@ struct CriterionComparator: Sendable {
 
     // MARK: - 单对判定
 
-    private func indexed(_ scores: [CriterionScore]?) -> [String: CriterionScore] {
-        Dictionary((scores ?? []).map { ($0.definition.id, $0) }, uniquingKeysWith: { first, _ in first })
-    }
-
     private func comparePair(
         scoresA: [String: CriterionScore],
         scoresB: [String: CriterionScore],
+        definitions: [String: CriterionDefinition],
         criteria: [String],
         band: IndifferenceBand,
         blockingUnknowns: inout Set<String>
@@ -148,9 +177,9 @@ struct CriterionComparator: Sendable {
                 blockingUnknowns.insert(criterion)
                 return .incomparable
             }
-            // 方向取自 versioned 定义（六轮 P1-3）——同一 criterion 版本下
-            // 两侧定义相同（artifact 引用层锁定），取 A 侧即代表比较方向
-            let diff = (aScore?.definition.higherIsBetter ?? true) ? av - bv : bv - av
+            // 方向取自 canonical 定义（六轮 P1-3 + 七轮 P2：跨 plan 同 ID
+            // 定义已在入口校验全等,不存在 A/B 侧方向分歧)
+            let diff = (definitions[criterion]?.higherIsBetter ?? true) ? av - bv : bv - av
             if abs(diff) <= band.band(for: criterion) {
                 continue  // indifferent：忽略
             }

@@ -7,10 +7,13 @@ final class CriterionComparatorTests: XCTestCase {
 
     private func d(_ s: String) -> Decimal { Decimal(string: s)! }
 
-    private func score(_ id: String, _ value: Decimal?, higherIsBetter: Bool = true) -> CriterionScore {
+    private func score(
+        _ id: String, _ value: Decimal?,
+        version: String = "v1", higherIsBetter: Bool = true
+    ) -> CriterionScore {
         CriterionScore(
             definition: CriterionDefinition(
-                id: id, version: "v1", evaluatorKind: .weightedSum,
+                id: id, version: version, evaluatorKind: .weightedSum,
                 inputReferences: [
                     CriterionDefinition.InputReference(kind: .factorMetric, referenceID: "\(id)-in", weight: 1)
                 ],
@@ -139,6 +142,41 @@ final class CriterionComparatorTests: XCTestCase {
         let result = try comparator.compare(plans: plans, band: band)
         // −0.001 > −0.02 但 cost 越小越好 → B 优
         XCTAssertEqual(result.pairwise["A|B"], .bDominatesA)
+    }
+
+    func testDuplicateCriterionIDRejected() throws {
+        // 七轮 P2 回归:同一 plan 内 criterion ID 重复 → throw,不再静默
+        // 保留首项(uniquingKeysWith 的顺序相关结果不可接受)
+        let plans = [
+            "A": [score("cost", d("0.01")), score("cost", d("0.02"))],
+            "B": [score("cost", d("0.03"))],
+        ]
+        XCTAssertThrowsError(try CriterionComparator().compare(plans: plans, band: band)) { error in
+            XCTAssertEqual(error as? CriterionComparator.CompareError,
+                           .duplicateCriterion(planKey: "A", criterionID: "cost"))
+        }
+    }
+
+    func testCriterionDefinitionMismatchAcrossPlansRejected() throws {
+        // 七轮 P2 回归:各 plan 同 ID criterion 的定义不一致(version/单位/
+        // 方向任一不同)→ throw,结果不再取决于 plan 字典序
+        let plans = [
+            "A": [score("cost", d("0.01"), version: "v1")],
+            "B": [score("cost", d("0.03"), version: "v2")],
+        ]
+        XCTAssertThrowsError(try CriterionComparator().compare(plans: plans, band: band)) { error in
+            XCTAssertEqual(error as? CriterionComparator.CompareError,
+                           .criterionDefinitionMismatch(criterionID: "cost"))
+        }
+        // 方向不同(同 version)同样拒
+        let directionConflict = [
+            "A": [score("cost", d("0.01"), higherIsBetter: true)],
+            "B": [score("cost", d("0.03"), higherIsBetter: false)],
+        ]
+        XCTAssertThrowsError(try CriterionComparator().compare(plans: directionConflict, band: band)) { error in
+            XCTAssertEqual(error as? CriterionComparator.CompareError,
+                           .criterionDefinitionMismatch(criterionID: "cost"))
+        }
     }
 
     func testMalformedPlanKeyThrowsInsteadOfCrashing() throws {

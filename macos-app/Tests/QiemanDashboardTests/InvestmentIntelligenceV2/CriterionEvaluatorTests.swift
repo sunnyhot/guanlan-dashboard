@@ -85,8 +85,8 @@ final class CriterionEvaluatorTests: XCTestCase {
 
     func testInputsAreCardinalOnly_noOrdinalSurface() {
         // CriterionInput 的字段类型是 Decimal?(cardinal)——不存在
-        // SignalDirection / ordinal 通道;signal 影响必须先经 SignalPolicy
-        // 转换为 cardinal(signalCardinal 引用 kind 只是标注来源)
+        // SignalDirection / ordinal 通道;signal 无 cardinal 转换路径
+        // (七轮 P1:ordinal 编码是伪 cardinal,LLM signal 保持 narrative)
         let labels = Mirror(reflecting: CriterionInput(referenceID: "x", value: d("1"))).children.compactMap(\.label)
         XCTAssertEqual(Set(labels), ["referenceID", "value"])
 
@@ -100,20 +100,52 @@ final class CriterionEvaluatorTests: XCTestCase {
         XCTAssertEqual(Set(scoreLabels), ["definition", "value", "missingInputs", "computation"])
     }
 
-    func testSignalCardinalChannelIsExplicitlyLabeled() {
-        // signal 影响的唯一合法路径:signalCardinal 引用(标注来源是转换后
-        // 的 cardinal,不是 ordinal 直通)
+    func testPlanMetricChannelIsExplicitlyLabeled() throws {
+        // plan-scoped 通道(七轮 P1):plan.turnover 从 plan+portfolio 强类型
+        // 推导——封闭命名空间外的 refID fail-closed 拒绝
         let definition = CriterionDefinition(
             id: "c", version: "v1", evaluatorKind: .weightedSum,
-            inputReferences: [ref("signal-momentum-converted", "1", kind: .signalCardinal)],
+            inputReferences: [ref(PlanMetrics.turnover, "1", kind: .planMetric)],
             unit: .ratio
         )
-        XCTAssertEqual(definition.inputReferences[0].kind, .signalCardinal)
-        let score = CriterionEvaluator().evaluate(
-            definition: definition,
-            inputs: [CriterionInput(referenceID: "signal-momentum-converted", value: d("-0.023"))]
+        XCTAssertEqual(definition.inputReferences[0].kind, .planMetric)
+
+        let plan = TargetRebalancePlanner().plan(
+            portfolio: PortfolioSnapshot(
+                asOf: Date(timeIntervalSince1970: 0), positions: []),
+            target: nil, remediationTargets: [],
+            userDirectives: [UserDirectiveInput(
+                subjectKey: "listing|A", deltaWeight: Ratio(value: d("-0.12")),
+                directiveID: "u", note: nil)],
+            actionDomain: ActionDomain(
+                perSubjectBounds: ["listing|A": .init(
+                    lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
+                eligibleNewSubjects: [:],
+                builderVersion: "t", newSubjectBuyUpper: Ratio(value: 1)),
+            now: Date(timeIntervalSince1970: 0)
         )
-        XCTAssertEqual(score.value, d("-0.023"))
+        let portfolio = PortfolioSnapshot(
+            asOf: Date(timeIntervalSince1970: 0), positions: [])
+        let inputs = try CriterionInputExtractor.inputs(
+            definition: definition, plan: plan, portfolio: portfolio,
+            factorSnapshots: [:], observations: [:])
+        XCTAssertEqual(inputs, [CriterionInput(referenceID: PlanMetrics.turnover, value: d("0.12"))])
+        let score = CriterionEvaluator().evaluate(definition: definition, inputs: inputs)
+        XCTAssertEqual(score.value, d("0.12"))
+
+        // 命名空间外的 planMetric refID → fail-closed
+        let bad = CriterionDefinition(
+            id: "c", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [ref("plan.opaqueScore", "1", kind: .planMetric)],
+            unit: .ratio
+        )
+        XCTAssertThrowsError(try CriterionInputExtractor.inputs(
+            definition: bad, plan: plan, portfolio: portfolio,
+            factorSnapshots: [:], observations: [:]
+        )) { error in
+            XCTAssertEqual(error as? CriterionInputExtractor.ExtractionError,
+                           .malformedPlanMetricReference("plan.opaqueScore"))
+        }
     }
 
     // MARK: - 确定性 / Codable
