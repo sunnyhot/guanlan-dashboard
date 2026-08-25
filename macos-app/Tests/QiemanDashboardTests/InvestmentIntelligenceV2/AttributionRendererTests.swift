@@ -96,6 +96,24 @@ final class AttributionRendererTests: XCTestCase {
         XCTAssertTrue(text.contains("结果可引用"), "coverage=100% → high 措辞")
     }
 
+    func testBadgeLabelCoversAllGradeAndCoverageCombinations() {
+        // 四轮 P1-4 回归:partial/low 不再被「不完整→较高」通配分支吞掉
+        // high×完整×估值全 → 完整/positive
+        XCTAssertEqual(AttributionCoverageGrade.high.badgeLabel(engineCoverageComplete: true, valuationComplete: true).text, "覆盖完整")
+        XCTAssertEqual(AttributionCoverageGrade.high.badgeLabel(engineCoverageComplete: true, valuationComplete: true).level, .positive)
+        // high×完整×估值缺 → 已知估值内完整/warning
+        XCTAssertEqual(AttributionCoverageGrade.high.badgeLabel(engineCoverageComplete: true, valuationComplete: false).text, "已知估值内完整")
+        // high×80-99.9% → 覆盖较高/warning
+        XCTAssertEqual(AttributionCoverageGrade.high.badgeLabel(engineCoverageComplete: false, valuationComplete: true).text, "覆盖较高")
+        XCTAssertEqual(AttributionCoverageGrade.high.badgeLabel(engineCoverageComplete: false, valuationComplete: false).text, "覆盖较高")
+        // partial 永远专属文案(coverage 不可能 100%)
+        XCTAssertEqual(AttributionCoverageGrade.partial.badgeLabel(engineCoverageComplete: false, valuationComplete: true).text, "部分覆盖")
+        XCTAssertEqual(AttributionCoverageGrade.partial.badgeLabel(engineCoverageComplete: false, valuationComplete: false).text, "部分覆盖")
+        // low 永远覆盖不足/critical
+        XCTAssertEqual(AttributionCoverageGrade.low.badgeLabel(engineCoverageComplete: false, valuationComplete: true).text, "覆盖不足")
+        XCTAssertEqual(AttributionCoverageGrade.low.badgeLabel(engineCoverageComplete: false, valuationComplete: true).level, .critical)
+    }
+
     // MARK: - LLM Narrative 契约(只补叙述不改数字)
 
     func testLLMNarrativeIsAppendOnlyAndNumbersUntouched() async {

@@ -448,6 +448,39 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
         }
     }
 
+    func testAgentJobRebuildRejectsStrippedRedundantColumns() throws {
+        // 四轮 P2-6 回归:删掉 startedAt 列但保留 STARTED 事件 → 不再静默通过
+        var job = AgentJob(workflowKind: "k", inputFingerprint: "f", createdAt: date(1_700_000_000_000))
+        try job.transition(to: .running, at: date(1_700_000_000_100))
+        try job.transition(to: .completed, at: date(1_700_000_000_300))
+
+        let queue = try dbQueue
+        var row = try AgentJobRow.from(job: job)
+        // 篡改:startedAt 置 nil(事件保留)
+        row = AgentJobRow(
+            id: row.id, workflow: row.workflow, idempotencyKey: row.idempotencyKey,
+            status: row.status, inputJSON: row.inputJSON, createdAt: row.createdAt,
+            startedAt: nil, completedAt: row.completedAt, errorMessage: row.errorMessage
+        )
+        try queue.write { db in
+            try row.insert(db)
+            for eventRow in try AgentJobRow.eventRows(for: job) {
+                try eventRow.insert(db)
+            }
+        }
+        let fetched = try queue.read({ db in
+            try AgentJobRow.fetchOne(db, sql: "SELECT * FROM agent_jobs WHERE id = ?", arguments: [job.id])
+        })
+        let events = try queue.read({ db in
+            try AgentJobEventRow.filter(Column("job_id") == job.id).order(Column("seq")).fetchAll(db)
+        })
+        XCTAssertThrowsError(try fetched?.toAgentJob(events: events)) { error in
+            guard case AgentJobRow.JobCodecError.identityMismatch = error else {
+                return XCTFail("应冗余列不一致,实际 \(error)")
+            }
+        }
+    }
+
     func testAgentJobFailedRowCarriesError() throws {
         var job = AgentJob(workflowKind: "k", inputFingerprint: "f", createdAt: date(1_700_000_000_000))
         try job.transition(to: .running, at: date(1_700_000_000_100))

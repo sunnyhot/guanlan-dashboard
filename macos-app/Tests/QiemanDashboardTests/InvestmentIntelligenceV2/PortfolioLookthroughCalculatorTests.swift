@@ -403,6 +403,19 @@ final class PortfolioLookthroughCalculatorTests: XCTestCase {
         XCTAssertNoThrow(try decoder.decode(
             LookthroughPositionInput.self, from: encoder.encode(fundOnly)
         ))
+        // 四轮 P2-5 回归:基金持仓携带 directAssetClass(构造器拒绝的形态,
+        // 解码同样拒绝)
+        let fundWithClass = RawPosition(
+            weight: Ratio(value: 1), fundProductID: FundProductID(rawValue: "A"),
+            directListingID: nil, directAssetClass: .equity
+        )
+        XCTAssertThrowsError(try decoder.decode(
+            LookthroughPositionInput.self, from: encoder.encode(fundWithClass)
+        )) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("应为 dataCorrupted,实际 \(error)")
+            }
+        }
     }
 
     func testEmptyOrZeroWeightPortfolioReturnsNil() {

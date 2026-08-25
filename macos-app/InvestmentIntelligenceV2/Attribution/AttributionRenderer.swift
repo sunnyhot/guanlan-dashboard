@@ -26,6 +26,39 @@ enum AttributionCoverageGrade: String, Sendable, Codable, Hashable {
         return .low
     }
 
+    /// badge 展示规格（四轮 P1-4：抽成纯函数可测——`(_, false, _)` 通配
+    /// 分支曾吞掉 partial/low 的专属文案）。
+    ///
+    /// 三重口径：engine grade 只分三档（≥80% 即 high）；「完整」必须
+    /// engineCoverageComplete（coverage == 100%）且估值完整；估值不全时
+    /// 限定「已知估值内」；partial/low 永远用各自专属文案（不可能 100%）。
+    func badgeLabel(
+        engineCoverageComplete: Bool,
+        valuationComplete: Bool
+    ) -> (text: String, level: BadgeLevel) {
+        switch self {
+        case .high:
+            if engineCoverageComplete && valuationComplete {
+                return ("覆盖完整", .positive)
+            }
+            if engineCoverageComplete {
+                return ("已知估值内完整", .warning)
+            }
+            return ("覆盖较高", .warning)
+        case .partial:
+            return ("部分覆盖", .warning)
+        case .low:
+            return ("覆盖不足", .critical)
+        }
+    }
+
+    /// badge 语义级别（View 层映射颜色，不进 V2）。
+    enum BadgeLevel: String, Sendable, Codable, Hashable {
+        case positive
+        case warning
+        case critical
+    }
+
     /// 分级 caveat 措辞（确定性）。
     var caveat: String {
         switch self {

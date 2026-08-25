@@ -331,16 +331,25 @@ extension AgentJobRow {
         guard idempotencyKey == "\(workflow)|\(fingerprint)" else {
             throw JobCodecError.identityMismatch(field: "idempotency_key 与 workflow|fingerprint 不一致")
         }
-        // 行 started/completed 列与事件时间线一致(混入他作业的 started/
-        // completed 事件时间不同,在此暴露)
-        if let started = startedAt,
-           started != ordered.first(where: { $0.kind == AgentEvent.Kind.started.rawValue })?.occurredAt {
-            throw JobCodecError.identityMismatch(field: "started_at 列与 STARTED 事件时间不一致")
+        // 行 started/completed/errorMessage 冗余列与事件时间线**完整相等**
+        // (四轮 P2-6:Optional 两侧都必须一致——删掉列值保留事件、或反之,
+        // 都不再静默通过;FAILED 的 errorMessage 与事件 detail 核对)
+        let expectedStarted = ordered
+            .first(where: { $0.kind == AgentEvent.Kind.started.rawValue })?.occurredAt
+        guard startedAt == expectedStarted else {
+            throw JobCodecError.identityMismatch(field: "started_at 列(\(startedAt ?? "nil"))与 STARTED 事件时间(\(expectedStarted ?? "nil"))不一致")
         }
-        if let completed = completedAt,
-           completed != ordered.last(where: { [AgentEvent.Kind.completed, .failed, .cancelled]
-               .map(\.rawValue).contains($0.kind) })?.occurredAt {
-            throw JobCodecError.identityMismatch(field: "completed_at 列与终态事件时间不一致")
+        let expectedCompleted = ordered
+            .last(where: { [AgentEvent.Kind.completed, .failed, .cancelled]
+                .map(\.rawValue).contains($0.kind) })?.occurredAt
+        guard completedAt == expectedCompleted else {
+            throw JobCodecError.identityMismatch(field: "completed_at 列(\(completedAt ?? "nil"))与终态事件时间(\(expectedCompleted ?? "nil"))不一致")
+        }
+        let expectedError = ordered
+            .first(where: { $0.kind == AgentEvent.Kind.failed.rawValue })
+            .flatMap { try? CanonicalColumnCodec.decodeJSON(EventPayload.self, from: $0.payloadJSON) }?.detail
+        guard errorMessage == expectedError else {
+            throw JobCodecError.identityMismatch(field: "error_message 列与 FAILED 事件 detail 不一致")
         }
         return job
     }

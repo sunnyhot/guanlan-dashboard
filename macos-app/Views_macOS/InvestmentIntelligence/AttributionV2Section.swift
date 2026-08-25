@@ -16,23 +16,15 @@ struct AttributionV2Section: View {
             trailing: {
                 Spacer()
                 if let rendered = outcome?.rendered {
-                    // badge 三重口径(二轮 P2-9 + 三轮 P2-7):engine grade 只分
-                    // 三档(≥80% 即 high),「完整」必须 coverage==100% 且估值
-                    // 完整;估值不全限定「已知估值内」;80–99.9% 用「较高」
+                    // badge 走 V2 纯 formatter(四轮 P1-4:分支收窄,partial/low
+                    // 不再被通配分支吞掉)
                     let coverage = model.attributionV2Coverage
                     let engineCoverageComplete = (outcome?.artifact?.result.coverage.value ?? 0) == 1
-                    InvestmentStateBadge(
-                        text: badgeText(
-                            rendered.grade,
-                            engineCoverageComplete: engineCoverageComplete,
-                            valuationComplete: coverage?.hasFullValuation ?? true
-                        ),
-                        tint: badgeTint(
-                            rendered.grade,
-                            engineCoverageComplete: engineCoverageComplete,
-                            valuationComplete: coverage?.hasFullValuation ?? true
-                        )
+                    let badge = rendered.grade.badgeLabel(
+                        engineCoverageComplete: engineCoverageComplete,
+                        valuationComplete: coverage?.hasFullValuation ?? true
                     )
+                    InvestmentStateBadge(text: badge.text, tint: tint(for: badge.level))
                 }
             }
         ) {
@@ -123,33 +115,12 @@ struct AttributionV2Section: View {
         return AppPalette.ink
     }
 
-    /// badge 文案（三轮 P2-7:high = ≥80%,仅 coverage==100% 才称「完整」;
-    /// 估值不全时限定「已知估值内」域）。
-    private func badgeText(
-        _ grade: AttributionCoverageGrade,
-        engineCoverageComplete: Bool,
-        valuationComplete: Bool
-    ) -> String {
-        switch (grade, engineCoverageComplete, valuationComplete) {
-        case (.high, true, true): return "覆盖完整"
-        case (.high, true, false): return "已知估值内完整"
-        case (_, false, _): return "覆盖较高"
-        case (.partial, _, _): return "部分覆盖"
-        case (.low, _, _): return "覆盖不足"
-        }
-    }
-
-    private func badgeTint(
-        _ grade: AttributionCoverageGrade,
-        engineCoverageComplete: Bool,
-        valuationComplete: Bool
-    ) -> Color {
-        switch (grade, engineCoverageComplete, valuationComplete) {
-        case (.high, true, true): return AppPalette.positive
-        case (.high, true, false): return AppPalette.warning
-        case (_, false, _): return AppPalette.warning
-        case (.partial, _, _): return AppPalette.warning
-        case (.low, _, _): return AppPalette.danger
+    /// badge 级别 → 颜色（文案与级别判定在 V2 纯 formatter）。
+    private func tint(for level: AttributionCoverageGrade.BadgeLevel) -> Color {
+        switch level {
+        case .positive: return AppPalette.positive
+        case .warning: return AppPalette.warning
+        case .critical: return AppPalette.danger
         }
     }
 

@@ -68,6 +68,13 @@ struct LookthroughPositionInput: Sendable, Codable, Hashable {
                 codingPath: decoder.codingPath,
                 debugDescription: "持仓必须是基金或直接持股(恰好其一)——同时存在会双计暴露,都为空则权重消失"))
         }
+        // 四轮 P2-5:directAssetClass 只属于直接持股(构造器有此校验,
+        // 解码同样执行——基金持仓携带 directAssetClass 的脏 JSON 拒收)
+        guard directAssetClass == nil || directListingID != nil else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "directAssetClass 只对直接持股有意义——基金持仓携带该字段为脏数据"))
+        }
     }
 }
 
