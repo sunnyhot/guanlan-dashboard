@@ -1701,6 +1701,28 @@ macos-app/
 >   macOS release + iOS Simulator 构建均通过；三项各有回归测试
 >   （未知资产类 key → unknown 不崩 / 乱序 JSON 解码 == 构造产物 /
 >   双规则 skipped 累计）。
+>
+> **十一轮审查修复（2026-08-25，2×P2 + 1×P3，全部闭环——Decision 全链
+> 与上游通道实弹验证）**：
+> - **P2 FactorSnapshot ID 不含源 observation 身份**：
+>   `FactorEngine.deterministicID` 的 canonical 串纳入排序后的
+>   `sourceObservationIDs`——修订场景（同 asOf 下 a2_v1→a2_v2 修订 bar
+>   到达后重算）ID 随内容分裂，语义回归 `untilDependencyChanges` 的
+>   supersede 新快照，不再被 `ArtifactRow.write` 幂等比对误报 conflict
+>   （与 ExposureReport 二轮 P1-7 同款收口）；源 ID 顺序无关（规范化）。
+> - **P2 factorVersion 不绑定参数 + 注释矛盾**：
+>   `FactorDefinition.fingerprint` 纳入参数规范化摘要（按 (name,value)
+>   排序的 JSON digest；无参数保持纯 `key@version` 兼容既有形态）——
+>   「参数变更必须 bump version」从纪律升级为 ID 层保证（对照八轮 P1-4
+>   criterion contentDigest——同一类缺口）；引擎 factorVersion 注释同步
+>   更正（原注释声称参数变更会改变指纹而实现只有 key@version）。
+> - **P3 AKShareLocalCollector 空候选崩溃**：`pythonCandidates` 注入
+>   空数组时 guard 抛 `pythonNotFound`（可恢复错误），不再
+>   `pythonCandidates.last!` 强解包崩进程。
+> - 修复后 swift test 全量绿（1623 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过；三项各有回归测试
+>   （修订前后同四元组 ID 分裂 + 源序无关 / 参数值变更指纹分裂 + 无参数
+>   兼容 / 空候选抛 pythonNotFound）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
