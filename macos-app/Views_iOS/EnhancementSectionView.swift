@@ -213,25 +213,56 @@ struct EnhancementSectionView: View {
             Text("当日归因 · V2 引擎")
                 .font(.headline)
                 .foregroundStyle(IOSDesign.ink)
-            if let outcome = model.dailyAttributionV2,
-               let rendered = outcome.rendered {
-                Text(rendered.headline)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(IOSDesign.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(Array(rendered.contributionLines.prefix(3).enumerated()), id: \.offset) { _, line in
-                    Text(line)
-                        .font(.caption)
-                        .foregroundStyle(AppPalette.marketTint(
-                            for: line.contains("贡献 +") ? 1 : (line.contains("贡献 -") ? -1 : 0)
-                        ))
+            // 五轮 P2-6:与 macOS AttributionV2Section 同口径——coverage 徽标
+            // (V2 纯 formatter)/贡献行/残差说明/数据基础/失败态逐一同步
+            switch model.dailyAttributionV2 {
+            case .some(let outcome) where outcome.job.state == .failed:
+                Label(
+                    outcome.errorDetail ?? "归因计算失败",
+                    systemImage: "exclamationmark.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(AppPalette.warning)
+                .fixedSize(horizontal: false, vertical: true)
+            case .some(let outcome):
+                if let rendered = outcome.rendered {
+                    // badge 文案走 V2 纯 formatter(与 macOS 同一实现)
+                    let coverage = model.attributionV2Coverage
+                    let engineComplete = (outcome.artifact?.result.coverage.value ?? 0) == 1
+                    let badge = rendered.grade.badgeLabel(
+                        engineCoverageComplete: engineComplete,
+                        valuationComplete: coverage?.hasFullValuation ?? true
+                    )
+                    Text("\(rendered.headline)(\(badge.text))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(IOSDesign.ink)
                         .fixedSize(horizontal: false, vertical: true)
+                    ForEach(Array(rendered.contributionLines.prefix(3).enumerated()), id: \.offset) { _, line in
+                        Text(line)
+                            .font(.caption)
+                            .foregroundStyle(AppPalette.marketTint(
+                                for: line.contains("贡献 +") ? 1 : (line.contains("贡献 -") ? -1 : 0)
+                            ))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let note = rendered.residualNote {
+                        Text(note)
+                            .font(.caption2)
+                            .foregroundStyle(IOSDesign.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text(rendered.caveat)
+                        .font(.caption2)
+                        .foregroundStyle(IOSDesign.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let coverage {
+                        Text(coverage.summaryText + (coverage.supportsResidual ? "" : " · 覆盖不完整，不计算残差"))
+                            .font(.caption2)
+                            .foregroundStyle(IOSDesign.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                Text(rendered.caveat)
-                    .font(.caption2)
-                    .foregroundStyle(IOSDesign.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
+            case .none:
                 Text("刷新个人持仓后显示当日收益的确定性归因。")
                     .font(.caption)
                     .foregroundStyle(IOSDesign.muted)

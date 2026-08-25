@@ -122,12 +122,12 @@ struct DecisionValidator: Sendable {
         // plan 与 targetRebalance 动作引用的 Target 必须 == artifact.target；
         // remediation / userDirective 的标识非空
         for (planKey, plan) in artifact.plans {
-            if let artifactTarget = artifact.target {
-                guard plan.targetID == artifactTarget.id else {
-                    throw ValidationError.targetProvenanceMismatch(
-                        planID: plan.id,
-                        detail: "plan.targetID \(plan.targetID?.rawValue ?? "nil") ≠ artifact.target \(artifactTarget.id.rawValue)")
-                }
+            // 五轮 P1-2:无条件严格相等(含双 nil)——多 Target 冲突的方案
+            // 不再因「artifact.target 非 nil 才查」的旁路通过
+            guard plan.targetID == artifact.target?.id else {
+                throw ValidationError.targetProvenanceMismatch(
+                    planID: plan.id,
+                    detail: "plan.targetID \(plan.targetID?.rawValue ?? "nil") ≠ artifact.target \(artifact.target?.id.rawValue ?? "nil")")
             }
             for item in plan.actions {
                 switch item.provenance {
@@ -150,13 +150,19 @@ struct DecisionValidator: Sendable {
                 }
             }
         }
-        // dependencies 引用集合与引用层一致（四轮 P1-3）
-        var expectedRefs = Set(artifact.signalIDs.map(\.rawValue))
-        expectedRefs.formUnion(artifact.factorSnapshotIDs.map(\.rawValue))
-        if let target = artifact.target {
-            expectedRefs.insert(target.id.rawValue)
+        // dependencies 与引用层**完整规范化**比较（五轮 P1-3:kind/version/
+        // 重复都参与——交换 signal/factor kind 曾可通过;criterion/band 的
+        // policy 依赖也纳入）
+        let expectedDeps: [ArtifactDependency] =
+            artifact.signalIDs.map { ArtifactDependency(kind: .signal, referenceID: $0.rawValue) }
+            + artifact.factorSnapshotIDs.map { ArtifactDependency(kind: .factorSnapshot, referenceID: $0.rawValue) }
+            + (artifact.target.map { [ArtifactDependency(kind: .target, referenceID: $0.id.rawValue)] } ?? [])
+            + artifact.criterionVersions.map { ArtifactDependency(kind: .policy, referenceID: "criterion@\($0)") }
+            + [ArtifactDependency(kind: .policy, referenceID: "band@\(artifact.indifferenceBandVersion)")]
+        let canonical = { (deps: [ArtifactDependency]) -> [String] in
+            deps.map { "\($0.kind.rawValue)|\($0.referenceID)|\($0.version ?? "-")" }.sorted()
         }
-        guard Set(artifact.dependencies.map(\.referenceID)) == expectedRefs else {
+        guard canonical(artifact.dependencies) == canonical(expectedDeps) else {
             throw ValidationError.dependencySetInconsistent
         }
         // admissible ∈ plans
@@ -173,6 +179,11 @@ struct DecisionValidator: Sendable {
         let violations = Set(comparisonKeys).subtracting(planKeys).sorted()
         if !violations.isEmpty {
             throw ValidationError.comparisonPlanDomainViolation(keys: violations)
+        }
+        // 五轮 P2-5:plan key 含分隔符 "|" 会让 pair 键拆分失效——先拒
+        let separatorKeys = artifact.plans.keys.filter { $0.isEmpty || $0.contains("|") }.sorted()
+        if !separatorKeys.isEmpty {
+            throw ValidationError.comparisonPlanDomainViolation(keys: separatorKeys)
         }
         // ② pairwise 必须是完整无序对域（C(n,2)，键为字典序 a|b 形态）：
         // 缺失 pair / A|A / 反序重复都拒收
@@ -246,68 +257,40 @@ struct DecisionReplayer: Sendable {
         let plannerParameters: TargetRebalancePlanner.Parameters
     }
 
-    /// 重放的确定性输入快照。
-    struct ReplayInputs: Sendable, Codable, Hashable {
+    /// 重放的**原材料**（五轮 P1-1：resolver 按引用返回强类型实例 / cardinal
+    /// 输入——**不含分数**。CriterionScore 由 Replayer 内部用
+    /// CriterionEvaluator 从这些材料重算，resolver 无法提供任意或最新分数
+    /// 冒充引用实例的产出）。
+    struct ReplayMaterials: Sendable, Codable, Hashable {
         /// 每 plan 的规划输入（Planner 链）
         let plannerRuns: [String: PlannerRun]
-        /// 每 plan 的 criterion 分数（Compare 链；由 criterion evaluator 按
-        /// 引用取齐的 cardinal 输入重算——同样是确定性重放的一部分）
-        let scores: [String: [CriterionScore]]
+        /// criterion 定义（key = fingerprint「id@version」；必须恰好覆盖
+        /// artifact.criterionVersions——绑定校验强制，多一个少一个都拒）
+        let criterionDefinitions: [String: CriterionDefinition]
+        /// 每 plan 的 criterion 输入（key = plan key；值 = 该 plan 对引用
+        /// 实例提取的 cardinal——resolver 给**输入值**，分数由 Replayer
+        /// 内部 evaluator 计算）
+        let criterionInputs: [String: [CriterionInput]]
+        /// FactorSnapshot 强类型实例（key = snapshot ID）——factor 引用域
+        /// 从定义派生后实例必须齐备（无法「复制 ID 给别的实例」）
+        let factorSnapshots: [String: FactorSnapshot]
         let band: IndifferenceBand
         let higherIsBetter: [String: Bool]
-        /// resolver 声明的取数来源（signal / factor 两类无法从 inputs 内容
-        /// 派生——criterion/target/band 在 derivedReferences 里**从实际内容
-        /// 结构性派生**，调用方无法自报；四轮 P1-1）
-        let resolvedReferences: ResolvedReferences
 
         init(
             plannerRuns: [String: PlannerRun],
-            scores: [String: [CriterionScore]],
+            criterionDefinitions: [String: CriterionDefinition] = [:],
+            criterionInputs: [String: [CriterionInput]] = [:],
+            factorSnapshots: [String: FactorSnapshot] = [:],
             band: IndifferenceBand,
-            higherIsBetter: [String: Bool],
-            resolvedReferences: ResolvedReferences = ResolvedReferences()
+            higherIsBetter: [String: Bool] = [:]
         ) {
             self.plannerRuns = plannerRuns
-            self.scores = scores
+            self.criterionDefinitions = criterionDefinitions
+            self.criterionInputs = criterionInputs
+            self.factorSnapshots = factorSnapshots
             self.band = band
             self.higherIsBetter = higherIsBetter
-            self.resolvedReferences = resolvedReferences
-        }
-
-        /// **从实际内容结构性派生**的引用身份（四轮 P1-1：无法自报）——
-        /// criterion 来自 scores 的 definition fingerprint、band 来自
-        /// inputs.band 的 policyID@version、target 来自 plannerRuns。
-        var derivedReferences: ResolvedReferences {
-            let criteria = Set(scores.values.flatMap { $0.map { $0.definition.fingerprint } })
-            let targetIDs = Set(plannerRuns.values.compactMap { $0.target?.id.rawValue })
-            return ResolvedReferences(
-                signalIDs: resolvedReferences.signalIDs,
-                factorSnapshotIDs: resolvedReferences.factorSnapshotIDs,
-                criterionVersions: criteria.sorted(),
-                targetID: targetIDs.count == 1 ? targetIDs.first : nil,
-                bandVersion: "\(band.policyID)@\(band.version)"
-            )
-        }
-    }
-
-    /// 重放取数时实际解析到的引用身份（按 artifact 引用层结构）。
-    struct ResolvedReferences: Sendable, Codable, Hashable {
-        let signalIDs: [String]
-        let factorSnapshotIDs: [String]
-        let criterionVersions: [String]
-        let targetID: String?
-        let bandVersion: String
-
-        init(
-            signalIDs: [String] = [], factorSnapshotIDs: [String] = [],
-            criterionVersions: [String] = [], targetID: String? = nil,
-            bandVersion: String = ""
-        ) {
-            self.signalIDs = signalIDs
-            self.factorSnapshotIDs = factorSnapshotIDs
-            self.criterionVersions = criterionVersions
-            self.targetID = targetID
-            self.bandVersion = bandVersion
         }
     }
 
@@ -318,11 +301,12 @@ struct DecisionReplayer: Sendable {
         let decision: PartialDecision
     }
 
-    /// 纯计算 helper（四轮 P1-1 私有化：不做任何绑定校验——绑定是
-    /// artifact 入口的职责，裸输入不得绕过引用解析）。
-    private func compute(inputs: ReplayInputs, now: Date) -> ReplayOutcome {
+    /// 纯计算 helper（私有：不做绑定校验——绑定是 artifact 入口的职责）。
+    /// 五轮 P1-1：**scores 在此从材料重算**（criterion definition + cardinal
+    /// 原料 → CriterionEvaluator），resolver 提供的不是分数。
+    private func compute(materials: ReplayMaterials, now: Date) -> ReplayOutcome {
         var plans: [String: PortfolioActionPlan] = [:]
-        for (key, run) in inputs.plannerRuns {
+        for (key, run) in materials.plannerRuns {
             plans[key] = TargetRebalancePlanner(parameters: run.plannerParameters).plan(
                 portfolio: run.portfolio,
                 target: run.target,
@@ -332,119 +316,158 @@ struct DecisionReplayer: Sendable {
                 now: now
             )
         }
+        // criterion 分数重算（每个 plan 对每个引用 criterion 求值——
+        /// 输入值来自 resolver 对引用实例的提取,计算在 evaluator）
+        let evaluator = CriterionEvaluator()
+        var scores: [String: [CriterionScore]] = [:]
+        for key in materials.plannerRuns.keys {
+            let planInputs = Dictionary(
+                uniqueKeysWithValues: (materials.criterionInputs[key] ?? []).map { ($0.referenceID, $0) }
+            )
+            scores[key] = materials.criterionDefinitions.values
+                .sorted { $0.fingerprint < $1.fingerprint }
+                .map { definition in
+                    let inputs = definition.inputReferences.map { reference in
+                        planInputs[reference.referenceID] ??
+                            CriterionInput(referenceID: reference.referenceID, value: nil)
+                    }
+                    return evaluator.evaluate(definition: definition, inputs: inputs)
+                }
+        }
         let comparison = CriterionComparator().compare(
-            plans: inputs.scores,
-            band: inputs.band,
-            higherIsBetter: inputs.higherIsBetter
+            plans: scores,
+            band: materials.band,
+            higherIsBetter: materials.higherIsBetter
         )
         let decision = PartialDecisionPolicy().decide(
-            comparison, allPlanKeys: inputs.scores.keys.sorted()
+            comparison, allPlanKeys: scores.keys.sorted()
         )
         return ReplayOutcome(plans: plans, comparison: comparison, decision: decision)
     }
 
-    /// Partial 重放（what-if）：替换部分引用后重跑（D004 §5：产新决策的
-    /// 素材，不是完整重放——绑定校验不适用）。resolver 构造的 base 输入
-    /// 才是合法起点。
+    /// Partial 重放（what-if，五轮 P1-1）：替换某 plan 的 criterion 输入
+    /// 后重跑——分数仍由 Replayer 重算，what-if 也不接受注入分数。
+    /// 产新决策素材，不影响原 artifact（D004 §5）。
     func replayWhatIf(
-        base: ReplayInputs,
-        replacingScores scores: [String: [CriterionScore]],
+        base: ReplayMaterials,
+        replacingInputs inputs: [String: [CriterionInput]],
         now: Date
     ) -> ReplayOutcome {
-        compute(inputs: ReplayInputs(
+        let materials = ReplayMaterials(
             plannerRuns: base.plannerRuns,
-            scores: base.scores.merging(scores) { _, new in new },
+            criterionDefinitions: base.criterionDefinitions,
+            criterionInputs: base.criterionInputs.merging(inputs) { _, new in new },
+            factorSnapshots: base.factorSnapshots,
             band: base.band,
             higherIsBetter: base.higherIsBetter
-        ), now: now)
+        )
+        return compute(materials: materials, now: now)
     }
 
-    // MARK: - artifact 绑定重放（二轮审查 P1-2）
+    // MARK: - artifact 绑定重放
 
     enum ReplayError: Error, Equatable, Sendable {
-        /// plannerRuns 与 scores 的 plan key 域不一致
-        case planKeyDomainMismatch(plannerRuns: [String], scores: [String])
-        /// inputs 与 artifact 的 plan 域不一致（决策指向的 plan 不在重放输入中）
+        /// plannerRuns 与 artifact 的 plan 域不一致
         case artifactPlanDomainMismatch(artifact: [String], inputs: [String])
         /// 重放结果与 artifact 不一致（完整重放的「同 IDs → 同决策」被破坏）
         case replayMismatch(detail: String)
-        /// inputs 的已解析引用与 artifact 引用层不一致（三轮 P1-3）
+        /// 材料与 artifact 引用层不一致（五轮 P1-1）
         case referenceMismatch(declared: String, artifact: String)
     }
 
-    /// 引用解析器（四轮 P1-1）：**inputs 的唯一合法来源**——按 artifact
-    /// 引用层真实取数（planner 输入 / criterion scores 从 factor 与 signal
-    /// cardinal 重算 / band 实例）。实现方对 signal/factor 声明负责
-    /// （这两类无法从 inputs 内容派生）；criterion/target/band 由
-    /// derivedReferences 从实际内容结构性派生，实现方无法自报。
+    /// 引用解析器（五轮 P1-1）：**材料的唯一合法来源**——按 artifact 引用
+    /// 层逐 ID 解析强类型实例（FactorSnapshot）/ cardinal（signal 经
+    /// SignalPolicy 的转换值 / observation 提取值）/ criterion 定义 / band
+    /// 实例 / 规划输入。**不返回分数**——分数由 Replayer 从材料重算。
     protocol InputResolving: Sendable {
-        func resolveInputs(for artifact: PortfolioDecisionArtifact) throws -> ReplayInputs
+        func resolveMaterials(for artifact: PortfolioDecisionArtifact) throws -> ReplayMaterials
     }
 
-    enum ResolverError: Error, Equatable, Sendable {
-        case resolutionFailed(reason: String)
-    }
-
-    /// 以 artifact 为入口的完整重放（四轮 P1-1）：resolver 解析输入 →
-    /// 绑定校验（键域 + 结构性派生引用 + resolver 声明引用）→ 全链重跑。
+    /// 以 artifact 为入口的完整重放（五轮 P1-1）：resolver 解析材料 →
+    /// 绑定校验 → 材料重算分数 → 全链重跑。
     func replay(
         artifact: PortfolioDecisionArtifact,
         resolver: any InputResolving,
         now: Date
     ) throws(ReplayError) -> ReplayOutcome {
-        let inputs: ReplayInputs
+        let materials: ReplayMaterials
         do {
-            inputs = try resolver.resolveInputs(for: artifact)
+            materials = try resolver.resolveMaterials(for: artifact)
         } catch {
             throw .referenceMismatch(declared: "resolver 解析失败: \(error)", artifact: "artifact 引用不可解析")
         }
-        try validateBinding(inputs: inputs, against: artifact)
-        return compute(inputs: inputs, now: now)
+        try validateBinding(materials: materials, against: artifact)
+        return compute(materials: materials, now: now)
     }
 
-    /// 绑定校验：①键域（plannerRuns == scores == artifact.plans）；
-    /// ②结构性派生引用（criterion 来自 scores 实际 definition、band 来自
-    /// 实际实例、target 来自 plannerRuns 实际引用）必须与 artifact 引用层
-    /// 一致；③resolver 声明的 signal/factor 引用一致。
+    /// 绑定校验（五轮 P1-1/P1-2）：
+    /// ① 键域（plannerRuns == artifact.plans）；
+    /// ② criterion 定义域**恰好覆盖** artifact.criterionVersions（结构绑定，
+    /// resolver 多给少给都拒）；band 实例版本一致；
+    /// ③ 逐 plannerRun 的 target 与 artifact.target **无条件严格相等**
+    /// （双 nil 或同 ID——多个冲突 Target 不再折叠通过）；
+    /// ④ factor 实例域与 artifact.factorSnapshotIDs 一致（强类型实例的
+    /// key 域即声明，无法「复制 ID 给别的实例」）。
     private func validateBinding(
-        inputs: ReplayInputs, against artifact: PortfolioDecisionArtifact
+        materials: ReplayMaterials, against artifact: PortfolioDecisionArtifact
     ) throws(ReplayError) {
-        let plannerKeys = inputs.plannerRuns.keys.sorted()
-        let scoreKeys = inputs.scores.keys.sorted()
-        guard plannerKeys == scoreKeys else {
-            throw .planKeyDomainMismatch(plannerRuns: plannerKeys, scores: scoreKeys)
-        }
+        let plannerKeys = materials.plannerRuns.keys.sorted()
         let artifactKeys = artifact.plans.keys.sorted()
         guard plannerKeys == artifactKeys else {
             throw .artifactPlanDomainMismatch(artifact: artifactKeys, inputs: plannerKeys)
         }
-        // 结构性派生(criterion/band/target)+ resolver 声明(signal/factor)
-        let derived = inputs.derivedReferences
-        let referenced = ResolvedReferences(
-            signalIDs: artifact.signalIDs.map(\.rawValue).sorted(),
-            factorSnapshotIDs: artifact.factorSnapshotIDs.map(\.rawValue).sorted(),
-            criterionVersions: artifact.criterionVersions.sorted(),
-            targetID: artifact.target?.id.rawValue,
-            bandVersion: artifact.indifferenceBandVersion
-        )
-        // 派生项必须一致(criterion/target/band——从实际内容算出,不可自报)
-        guard derived.criterionVersions == referenced.criterionVersions,
-              derived.targetID == referenced.targetID,
-              derived.bandVersion == referenced.bandVersion
-        else {
+        // criterion 定义域恰好覆盖
+        let definitionFingerprints = Set(materials.criterionDefinitions.keys)
+        guard definitionFingerprints == Set(artifact.criterionVersions) else {
             throw .referenceMismatch(
-                declared: "derived criterion=\(derived.criterionVersions) target=\(derived.targetID ?? "-") band=\(derived.bandVersion)",
-                artifact: "criterion=\(referenced.criterionVersions) target=\(referenced.targetID ?? "-") band=\(referenced.bandVersion)"
-            )
+                declared: "definitions=\(definitionFingerprints.sorted())",
+                artifact: "criterionVersions=\(artifact.criterionVersions.sorted())")
         }
-        // resolver 声明项必须一致(signal/factor)
-        guard derived.signalIDs == referenced.signalIDs,
-              derived.factorSnapshotIDs == referenced.factorSnapshotIDs
+        // band 版本
+        let bandVersion = "\(materials.band.policyID)@\(materials.band.version)"
+        guard bandVersion == artifact.indifferenceBandVersion else {
+            throw .referenceMismatch(
+                declared: "band=\(bandVersion)", artifact: "band=\(artifact.indifferenceBandVersion)")
+        }
+        // 逐 run Target 严格相等(含双 nil;多 Target 冲突在此拒)
+        for (key, run) in materials.plannerRuns {
+            guard run.target?.id == artifact.target?.id else {
+                throw .referenceMismatch(
+                    declared: "plan[\(key)].target=\(run.target?.id.rawValue ?? "nil")",
+                    artifact: "target=\(artifact.target?.id.rawValue ?? "nil")")
+            }
+        }
+        // factor 引用域从**定义实例**派生(factorMetric refID 约定
+        // 「<snapshotID>#<metricKey>」),实例必须齐备——复制 ID 给别的
+        // 实例无法通过
+        let referencedFactorIDs = Set(
+            materials.criterionDefinitions.values.flatMap { definition in
+                definition.inputReferences.compactMap { reference -> String? in
+                    guard reference.kind == .factorMetric else { return nil }
+                    let parts = reference.referenceID.split(separator: "#", maxSplits: 1)
+                    return parts.count == 2 ? String(parts[0]) : nil
+                }
+            }
+        )
+        guard referencedFactorIDs == Set(artifact.factorSnapshotIDs.map(\.rawValue)),
+              Set(materials.factorSnapshots.keys).isSuperset(of: referencedFactorIDs)
         else {
             throw .referenceMismatch(
-                declared: "resolver signal=\(derived.signalIDs) factor=\(derived.factorSnapshotIDs)",
-                artifact: "signal=\(referenced.signalIDs) factor=\(referenced.factorSnapshotIDs)"
-            )
+                declared: "factorRefs=\(referencedFactorIDs.sorted()) instances=\(materials.factorSnapshots.keys.sorted())",
+                artifact: "factorSnapshots=\(artifact.factorSnapshotIDs.map(\.rawValue).sorted())")
+        }
+        // signal 引用域同样从定义派生(signalCardinal refID 即 signalID)
+        let referencedSignalIDs = Set(
+            materials.criterionDefinitions.values.flatMap { definition in
+                definition.inputReferences
+                    .filter { $0.kind == .signalCardinal }
+                    .map(\.referenceID)
+            }
+        )
+        guard referencedSignalIDs == Set(artifact.signalIDs.map(\.rawValue)) else {
+            throw .referenceMismatch(
+                declared: "signalRefs=\(referencedSignalIDs.sorted())",
+                artifact: "signalIDs=\(artifact.signalIDs.map(\.rawValue).sorted())")
         }
     }
 
@@ -500,10 +523,14 @@ extension PortfolioDecisionArtifact {
             comparison: comparison,
             plans: plans
         ))
+        // 五轮 P1-3:criterion / band 的 policy 依赖一并登记(失效传播:
+        // criterion 版本或 band 阈值变更 → 受影响决策可反查)
         let deps: [ArtifactDependency] =
             signalIDs.map { ArtifactDependency(kind: .signal, referenceID: $0.rawValue) }
             + factorSnapshotIDs.map { ArtifactDependency(kind: .factorSnapshot, referenceID: $0.rawValue) }
             + (target.map { [ArtifactDependency(kind: .target, referenceID: $0.id.rawValue, version: nil)] } ?? [])
+            + criterionVersions.map { ArtifactDependency(kind: .policy, referenceID: "criterion@\($0)") }
+            + [ArtifactDependency(kind: .policy, referenceID: "band@\(bandVersion)")]
         return PortfolioDecisionArtifact(
             id: ArtifactID(rawValue: "dec_\(StableDigest.digest(payload))"),
             producedAt: producedAt,

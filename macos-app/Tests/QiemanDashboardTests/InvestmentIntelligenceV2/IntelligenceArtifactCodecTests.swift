@@ -228,6 +228,43 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
                        "首次产出时间保留")
     }
 
+    func testFetchDomainRejectsDependencyDivergence() throws {
+        // 五轮 P1-4 回归:依赖表缺行 / 错行 → split-brain 拒收(fail-closed)
+        let queue = try dbQueue
+        let domain = makeAttribution()
+        let pair = try ArtifactRow.from(domain, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try pair.row.insert(db)
+            // 只写部分依赖行(漏一条)
+            for dep in pair.dependencies.dropLast() {
+                try dep.insert(db)
+            }
+        }
+        XCTAssertThrowsError(try queue.read({ db in
+            try ArtifactRow.fetchDomain(DailyAttribution.self, id: domain.id.rawValue,
+                                         expectedKind: ArtifactRow.dailyAttributionKind, from: db)
+        })) { error in
+            guard case ArtifactReadError.dependencyDivergence = error else {
+                return XCTFail("应为依赖分歧,实际 \(error)")
+            }
+        }
+    }
+
+    func testFetchDomainRoundTripWhenConsistent() throws {
+        // 依赖表完整时 → 领域对象相等读回
+        let queue = try dbQueue
+        let domain = makeAttribution()
+        let pair = try ArtifactRow.from(domain, kind: ArtifactRow.dailyAttributionKind)
+        try queue.write { db in
+            try ArtifactRow.write(pair, into: db)
+        }
+        let fetched = try queue.read({ db in
+            try ArtifactRow.fetchDomain(DailyAttribution.self, id: domain.id.rawValue,
+                                        expectedKind: ArtifactRow.dailyAttributionKind, from: db)
+        })
+        XCTAssertEqual(fetched, domain)
+    }
+
     func testAgentJobRebuildRejectsForeignEvents() throws {
         // 三轮 P2-8 回归:混入其他作业的事件(状态相同)→ 身份闭环拒收
         var job = AgentJob(workflowKind: "k", inputFingerprint: "f", createdAt: date(1_700_000_000_000))

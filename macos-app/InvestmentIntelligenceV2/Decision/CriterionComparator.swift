@@ -73,6 +73,12 @@ struct CriterionComparator: Sendable {
         band: IndifferenceBand,
         higherIsBetter: [String: Bool] = [:]
     ) -> PlanComparisonResult {
+        // 五轮 P2-5:pair 键用 "a|b" 拼接——plan key 含 "|" 会破坏拆分与
+        // Pareto 推导,入口 fail-fast(编程错误,不可恢复数据)
+        for key in plans.keys {
+            precondition(!key.isEmpty && !key.contains("|"),
+                         "plan key 非法(空或含分隔符 |): \(key)")
+        }
         let planKeys = plans.keys.sorted()
         // 汇总全部 criterion id（确定性顺序）
         let allCriteria = Set(plans.values.flatMap { $0.map { $0.definition.id } }).sorted()

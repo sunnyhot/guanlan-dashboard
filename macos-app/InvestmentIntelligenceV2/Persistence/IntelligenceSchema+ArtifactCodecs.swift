@@ -153,6 +153,69 @@ extension ArtifactRow {
     }
 }
 
+// MARK: - fail-closed 读回入口（五轮 P1-4）
+
+enum ArtifactReadError: Error, Equatable, Sendable {
+    case notFound(id: String)
+    case kindMismatch(expected: String, actual: String)
+    /// payload 的 id 与行 id 不一致（行被篡改或错行）
+    case identityMismatch(field: String)
+    /// 依赖行与 payload 内 dependencies 分歧（split-brain——失效索引
+    /// 与业务读回使用两套事实）
+    case dependencyDivergence(artifactID: String)
+}
+
+extension ArtifactRow {
+    /// fail-closed 读回：行 + 依赖表行 + payload 三方一致才返回领域对象。
+    /// 校验：① kind；② payload 解出的 domain.id == 行 id；③ validity
+    /// JSON == 行列；④ producedAt 列与 payload 时间毫秒一致（列是毫秒精度,
+    /// 容差 2ms）；⑤ 依赖行（按 dep_index 排序）逐字段（kind/referenceID/
+    /// version）与 domain.dependencies 相等——依赖表缺失 / 多余 / 错行
+    /// 都抛 dependencyDivergence。
+    static func fetchDomain<A: Artifact & Decodable>(
+        _ type: A.Type,
+        id: String,
+        expectedKind: String,
+        from db: Database
+    ) throws -> A {
+        guard let row = try ArtifactRow.fetchOne(
+            db, sql: "SELECT * FROM artifacts WHERE id = ?", arguments: [id]
+        ) else {
+            throw ArtifactReadError.notFound(id: id)
+        }
+        guard row.artifactKind == expectedKind else {
+            throw ArtifactReadError.kindMismatch(expected: expectedKind, actual: row.artifactKind)
+        }
+        let domain = try row.toDomain(A.self, expectedKind: expectedKind)
+        guard domain.id.rawValue == row.id else {
+            throw ArtifactReadError.identityMismatch(field: "payload.id ≠ row.id")
+        }
+        guard row.validityPolicyJSON == (try CanonicalColumnCodec.encodeJSON(domain.validityPolicy)) else {
+            throw ArtifactReadError.identityMismatch(field: "validity_policy_json 与 payload 分歧")
+        }
+        // producedAt 毫秒一致(列毫秒精度,payload 亚毫秒——容差 2ms)
+        let columnTime = try CanonicalColumnCodec.decodeTimestamp(row.producedAt)
+        guard abs(columnTime.timeIntervalSince(domain.producedAt)) < 0.002 else {
+            throw ArtifactReadError.identityMismatch(field: "produced_at 与 payload 分歧")
+        }
+        // 依赖行完整一致
+        let depRows = try ArtifactDependencyRow
+            .filter(Column("artifact_id") == row.id)
+            .order(Column("dep_index"))
+            .fetchAll(db)
+        let depFromTable = depRows.map { row in
+            "\(row.kind)|\(row.referenceID)|\(row.version ?? "-")"
+        }
+        let depFromDomain = domain.dependencies.map {
+            "\($0.kind.rawValue)|\($0.referenceID)|\($0.version ?? "-")"
+        }
+        guard depFromTable == depFromDomain else {
+            throw ArtifactReadError.dependencyDivergence(artifactID: row.id)
+        }
+        return domain
+    }
+}
+
 // MARK: - 六类便捷入口
 
 extension ArtifactRow {
