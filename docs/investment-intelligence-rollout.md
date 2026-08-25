@@ -1680,6 +1680,27 @@ macos-app/
 > - 修复后 swift test 全量绿（1617 passed，环境性排除同前）；干净 HEAD
 >   macOS release + iOS Simulator 构建均通过；P1 有回归测试
 >   （replay/what-if 空定义集双路径拒绝）。
+>
+> **十轮审查修复（2026-08-25，1×P2 + 2×P3，全部闭环——ConstraintGate /
+> StateConstraintEvaluator / StrategicAllocationPolicy 深审）**：
+> - **P2 StateConstraintEvaluator 崩溃（实测复现 signal 5）**：
+>   `maxAssetClassDeviation` 对 `estimate.key` 的 `AssetClass(rawValue:)!`
+>   强解包改为 fail-closed——`ExposureReport` 是持久化 Artifact，DB 读回
+>   不校验枚举值；损坏行 / 前向兼容新枚举值时整约束转 unknown（缺口
+>   说明透明记录非法 key），不崩进程（九轮 P1 同一纪律）。
+> - **P3 AllocationTarget 同 id 双形态**：`init(from:)` 解码后归一化
+>   entries 顺序（`normalized` 改 fileprivate 与构造路径共用）——乱序
+>   JSON 解出的 Target 与 Policy 产物同 id 必同 `==`（修复前 id 相同、
+>   entries 数组序不同导致结构不等）。
+> - **P3 ConstraintGate skipped 覆盖**：多 `maxAverageCorrelation` 规则
+>   （不同 cap）时 `correlationSkippedPairs` 由赋值改累加（此前只保留
+>   最后一个规则的计数）。
+> - 顺手清除 `PortfolioLookthroughCalculator` 未使用 `unknown` 变量
+>   warning（历轮验证记录点名的遗留项）。
+> - 修复后 swift test 全量绿（1620 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过；三项各有回归测试
+>   （未知资产类 key → unknown 不崩 / 乱序 JSON 解码 == 构造产物 /
+>   双规则 skipped 累计）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
