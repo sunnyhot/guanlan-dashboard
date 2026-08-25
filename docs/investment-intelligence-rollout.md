@@ -1591,6 +1591,42 @@ macos-app/
 >   HEAD 同样复现）；干净 HEAD macOS release + iOS Simulator 构建均通过；
 >   每个修复点有回归测试（实例身份/指纹漂移/冻结时间/依赖碰撞样例/
 >   dep_index 断号/1ms 时间漂移/非法 plan key）。
+>
+> **七轮审查修复（2026-08-25，4×P1 + 2×P2，全部闭环——六轮修复方案的
+> 重放比较语义收敛）**：
+> - **P1 方案分数共享退化**：criterion 输入恢复**逐 plan 求值**——新增
+>   plan-scoped `PLAN_METRIC` 输入通道（`PlanMetrics`：`plan.turnover`
+>   Σ|Δw| + `plan.projectedWeight#<AssetClass>` 投影资产类权重，从各自的
+>   plan+portfolio 强类型推导，封闭命名空间 fail-closed）；factorMetric /
+>   observation 保持决策级共享 cardinal。singlePreferred 可重现，测试锁定
+>   「同 IDs + 不同规划输入 → 不同决策」（D003 dominance 语义恢复）。
+> - **P1 what-if 同 ID 换内容**：`replayWhatIf` 重设计——以 base 冻结规划
+>   输入重算，**产出新 PortfolioDecisionArtifact 记录新引用**（新
+>   factorSnapshotIDs / criterionVersions / band 版本；引用变更按版本纪律
+>   bump）。替换实例携带自己的新 ID，「同 ID → 同实例」不再有 API 例外
+>   （D004 §5「替换引用 ID，产出新 artifact」）。
+> - **P1 新引用不可定位**：PlannerRun **冻结内嵌**进 artifact
+>   （`plannerInputs`，参与确定性 ID 派生；域完整性与逐 run Target 一致性
+>   fail-closed 校验）——完整重放从 artifact 本体取 Planner 输入，自包含，
+>   不依赖尚不存在的 PlannerRun Store；`ReplayMaterials` 收敛为 criterion
+>   定义 + factor/observation 实例 + band。
+> - **P1 ordinal 伪 cardinal**：删除 `SignalCardinalPolicy` 与
+>   `SIGNAL_CARDINAL` 输入通道（direction×strength→±1/±0.6/±0.2 只是序数
+>   编码，重新打开 D002 黑箱评分）；criterion 数值只来自可测量 cardinal
+>   （FactorMetric / CardinalObservation / PlanMetrics），无可测量来源的
+>   LLM Signal 保持 narrative，artifact.signalIDs 仅为 research provenance。
+> - **P2 Comparator 顺序相关**：比较前校验各 plan criterion schema——同
+>   plan 内 criterion ID 重复抛 `duplicateCriterion`（不再静默取首个），
+>   跨 plan 同 ID 定义不一致（version/unit/方向）抛
+>   `criterionDefinitionMismatch`，方向取 canonical 定义。
+> - **P2 幂等写忽略 depIndex**：`ensureIdentical` 补比对 `dep_index`——
+>   索引整体偏移/断号但字段相同时报 conflict，不再误判幂等 no-op 后又被
+>   strict reader 拒收。
+> - 修复后 swift test 全量绿（1608 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过；每个修复点有回归测试
+>   （per-plan 分歧 / what-if 新引用与身份违规 / 内嵌域与 Target 冲突 /
+>   命名空间外 planMetric / 重复与冲突 criterion schema / dep_index 偏移
+>   幂等冲突）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
