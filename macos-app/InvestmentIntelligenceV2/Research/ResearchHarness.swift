@@ -16,9 +16,21 @@ protocol ResearchTool: Sendable {
     func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult
 }
 
-/// 工具执行上下文（任务级只读）。
+/// 工具执行上下文（任务级只读 + 数据面注入：外部源配置与本地取数白名单）。
 struct ResearchToolContext: Sendable {
     let task: ResearchTask
+    var sources: ResearchSourcesConfiguration = .empty
+    var dataAccess: (any ResearchDataAccess)? = nil
+
+    init(
+        task: ResearchTask,
+        sources: ResearchSourcesConfiguration = .empty,
+        dataAccess: (any ResearchDataAccess)? = nil
+    ) {
+        self.task = task
+        self.sources = sources
+        self.dataAccess = dataAccess
+    }
 }
 
 /// 工具执行结果。
@@ -31,6 +43,11 @@ struct ResearchToolResult: Sendable, Hashable {
 
     static func content(_ json: ModelJSONValue, evidenceIDs: [EvidenceID] = []) -> ResearchToolResult {
         ResearchToolResult(contentJSON: json, isError: false, evidenceIDs: evidenceIDs)
+    }
+
+    /// 错误信封便利形态（信封内容 + isError 标记）。
+    static func content(_ json: ModelJSONValue, isError: Bool) -> ResearchToolResult {
+        ResearchToolResult(contentJSON: json, isError: isError, evidenceIDs: [])
     }
 
     static func error(code: String, message: String) -> ResearchToolResult {
@@ -90,17 +107,25 @@ struct ResearchHarness: Sendable {
     let gateway: ModelGateway
     let tools: [any ResearchTool]
     let policy: ResearchHarnessPolicy
+    /// 外部源配置（进工具 Context；RES-3）。
+    var sources: ResearchSourcesConfiguration = .empty
+    /// 本地取数白名单（进工具 Context；nil = 本地取数不可用）。
+    var dataAccess: (any ResearchDataAccess)? = nil
     private let clock: @Sendable () -> Date
 
     init(
         gateway: ModelGateway,
         tools: [any ResearchTool],
         policy: ResearchHarnessPolicy = ResearchHarnessPolicy(),
+        sources: ResearchSourcesConfiguration = .empty,
+        dataAccess: (any ResearchDataAccess)? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.gateway = gateway
         self.tools = tools
         self.policy = policy
+        self.sources = sources
+        self.dataAccess = dataAccess
         self.clock = clock
     }
 
@@ -260,7 +285,9 @@ struct ResearchHarness: Sendable {
 
                     let result = await tool.execute(
                         argumentsJSON: call.argumentsJSON,
-                        context: ResearchToolContext(task: task)
+                        context: ResearchToolContext(
+                            task: task, sources: sources, dataAccess: dataAccess
+                        )
                     )
                     for evidenceID in result.evidenceIDs {
                         registeredEvidence.insert(evidenceID.rawValue)
