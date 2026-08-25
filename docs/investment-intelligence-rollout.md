@@ -1662,6 +1662,24 @@ macos-app/
 >   （白名单新标的投影 + 缺席类别已知 0 / 同版本不同内容与 band 阈值 /
 >   不可重放 plan 与空 plans / 旧 kind fail-closed / union 方向 /
 >   what-if 拒损坏 base）。
+>
+> **九轮审查修复（2026-08-25，1×P1 + 1×P2 + 2×P3，全部闭环）**：
+> - **P1 what-if 空定义集崩溃（实测复现 signal 5）**：
+>   `validateMaterialsConsistency` 增加「criterion 定义集非空」守卫——
+>   criterion store 故障/维护返回空集时 replay/what-if fail-closed 抛
+>   `referenceMismatch`（与六轮 P2「重放路径不崩进程」同一纪律）；
+>   `assemble` 的 precondition 保留给直接调用方（pipeline 编程错误语义）。
+> - **P2 接线纪律钉入 AGENTS.md**：V2 决策 artifact `assemble` 产出后、
+>   `ArtifactRow.write` 落库前必须 `DecisionValidator.validate`（DEC-9/
+>   Epic 9 接线时执行——当前 validator 只有测试调用点，不闭环就是死代码）。
+> - **P3 CompareError 映射**：replay/whatIf 的 catch 改 `replayError(for:)`
+>   switch 逐 case 映射（比较器将来新增 case 不再被 String(describing:)
+>   静默误标为 malformedPlanKey）。
+> - **P3 assemble 指纹去重**：同 id@version 两份不同内容传入时
+>   precondition fail-fast（`criterionContentDigests` 不再静默塌缩为后者）。
+> - 修复后 swift test 全量绿（1617 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过；P1 有回归测试
+>   （replay/what-if 空定义集双路径拒绝）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
