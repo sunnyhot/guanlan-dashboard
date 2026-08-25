@@ -95,6 +95,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice = .auto,
         temperature: Double = 0.2,
+        maxOutputTokens: Int? = nil,
         settings: TrendAIProviderSettings,
         timeout: Double? = nil,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil
@@ -118,6 +119,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                 tools: tools.isEmpty ? nil : tools,
                 toolChoice: tools.isEmpty ? nil : toolChoice,
                 temperature: temperature,
+                maxTokens: maxOutputTokens,
                 stream: true
             )
         )
@@ -329,7 +331,8 @@ struct OpenAICompatibleAgentClient: Sendable {
             assistantMessage: message,
             toolCalls: toolCalls,
             stopReason: AgentStopReason(finishReason: choice.finishReason),
-            finishReason: choice.finishReason
+            finishReason: choice.finishReason,
+            usage: completion.usage
         )
     }
 
@@ -595,6 +598,7 @@ private struct AgentChatCompletionRequest: Encodable {
     let tools: [AgentToolDefinition]?
     let toolChoice: AgentToolChoice?
     let temperature: Double
+    let maxTokens: Int?
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -603,12 +607,14 @@ private struct AgentChatCompletionRequest: Encodable {
         case tools
         case toolChoice = "tool_choice"
         case temperature
+        case maxTokens = "max_tokens"
         case stream
     }
 }
 
 private struct AgentChatCompletionResponse: Decodable {
     let choices: [AgentChatChoice]
+    let usage: AgentTokenUsage?
 }
 
 private struct AgentChatChoice: Decodable {
@@ -623,6 +629,7 @@ private struct AgentChatChoice: Decodable {
 
 private struct AgentChatCompletionStreamChunk: Decodable {
     let choices: [Choice]
+    let usage: AgentTokenUsage?
 
     struct Choice: Decodable {
         let index: Int?
@@ -676,13 +683,18 @@ private struct AgentStreamingResponseAccumulator {
     private(set) var finishReason: String?
     private var receivedChoice = false
     private(set) var receivedChunkCount = 0
+    private var usage: AgentTokenUsage?
 
     var isFinished: Bool {
         finishReason != nil
     }
 
     mutating func append(_ chunk: AgentChatCompletionStreamChunk) {
-        // choices 为空通常是 include_usage 的尾包，直接忽略。
+        // usage 尾包（choices 为空、只带 usage 的块）也要收集，不能随 choices 一起丢。
+        if let chunkUsage = chunk.usage {
+            usage = chunkUsage
+        }
+        // choices 为空通常是 include_usage 的尾包，delta 部分直接忽略。
         guard let choice = chunk.choices.first(where: { $0.index == 0 }) ?? chunk.choices.first else {
             return
         }
@@ -754,7 +766,8 @@ private struct AgentStreamingResponseAccumulator {
             assistantMessage: message,
             toolCalls: toolCalls,
             stopReason: AgentStopReason(finishReason: resolvedFinishReason),
-            finishReason: resolvedFinishReason
+            finishReason: resolvedFinishReason,
+            usage: usage
         )
     }
 }

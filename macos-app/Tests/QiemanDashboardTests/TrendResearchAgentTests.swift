@@ -723,6 +723,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?

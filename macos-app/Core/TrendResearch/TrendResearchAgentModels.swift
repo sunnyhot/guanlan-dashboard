@@ -233,6 +233,37 @@ struct AgentCompletionResult: Sendable, Hashable {
     let toolCalls: [AgentToolCall]
     let stopReason: AgentStopReason
     let finishReason: String?
+    /// 供应商上报的 token 用量（流式尾包或 JSON 响应携带；未上报为 nil）。
+    let usage: AgentTokenUsage?
+
+    init(
+        assistantMessage: AgentChatMessage,
+        toolCalls: [AgentToolCall],
+        stopReason: AgentStopReason,
+        finishReason: String?,
+        usage: AgentTokenUsage? = nil
+    ) {
+        self.assistantMessage = assistantMessage
+        self.toolCalls = toolCalls
+        self.stopReason = stopReason
+        self.finishReason = finishReason
+        self.usage = usage
+    }
+}
+
+/// OpenAI-compatible 响应的 token 用量（choices 之外的可选字段）。
+///
+/// 部分兼容服务不回传 usage；所有字段可选，缺失不视为协议错误。
+struct AgentTokenUsage: Sendable, Hashable, Codable {
+    let promptTokens: Int?
+    let completionTokens: Int?
+    let totalTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case promptTokens = "prompt_tokens"
+        case completionTokens = "completion_tokens"
+        case totalTokens = "total_tokens"
+    }
 }
 
 /// OpenAI-compatible SSE 响应的传输进度。

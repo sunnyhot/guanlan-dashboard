@@ -891,6 +891,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 tools: tools,
                 toolChoice: .auto,
                 temperature: 0.1,
+                maxOutputTokens: nil,
                 settings: settings,
                 timeout: min(90, settings.timeoutSeconds, remainingTotal),
                 streamProgress: nil
@@ -1376,6 +1377,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 tools: tools,
                 toolChoice: .required,
                 temperature: 0.2,
+                maxOutputTokens: nil,
                 settings: settings,
                 timeout: min(90, settings.timeoutSeconds),
                 streamProgress: nil

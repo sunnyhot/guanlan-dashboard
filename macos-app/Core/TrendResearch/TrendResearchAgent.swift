@@ -31,6 +31,7 @@ protocol TrendResearchAgentClient: Sendable {
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
@@ -466,6 +467,7 @@ struct TrendResearchAgent: Sendable {
                         tools: toolsForRequest,
                         toolChoice: .auto,
                         temperature: policy.temperature,
+                        maxOutputTokens: nil,
                         settings: settings,
                         timeout: perRequestTimeout,
                         streamProgress: { progress in
@@ -1012,6 +1014,7 @@ struct TrendResearchAgent: Sendable {
                 tools: [submitDefinition],
                 toolChoice: .auto,
                 temperature: policy.temperature,
+                maxOutputTokens: nil,
                 settings: settings,
                 timeout: nil,
                 streamProgress: nil

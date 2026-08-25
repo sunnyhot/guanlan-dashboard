@@ -338,6 +338,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
                 tools: tools,
                 toolChoice: .auto,
                 temperature: temperature,
+                maxOutputTokens: nil,
                 settings: settings,
                 timeout: max(30, Self.perAgentTimeout - elapsed),
                 streamProgress: nil
