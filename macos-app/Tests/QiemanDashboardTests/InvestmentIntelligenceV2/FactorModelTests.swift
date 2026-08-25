@@ -209,27 +209,32 @@ final class FactorModelTests: XCTestCase {
     }
 
     func testFactorEngine_deterministicID_sameInputsSameID() {
-        let repo = makeRepoWithAscendingBars(count: 3)
+        // 十二轮 P3:sourceObservationIDs 无默认值——源身份必须显式传入
+        /// (无源调用 = 显式空数组,四元组形态不再是可静默省略的形态)
         let engine = FactorEngine(calculators: [LastCloseCalculator(multiplier: 2)])
         let id1 = FactorEngine.deterministicID(
             listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
-            benchmarkListingID: nil, factorVersion: engine.factorVersion
+            benchmarkListingID: nil, factorVersion: engine.factorVersion,
+            sourceObservationIDs: []
         )
         let id2 = FactorEngine.deterministicID(
             listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
-            benchmarkListingID: nil, factorVersion: engine.factorVersion
+            benchmarkListingID: nil, factorVersion: engine.factorVersion,
+            sourceObservationIDs: []
         )
         XCTAssertEqual(id1, id2)
 
         // asOf 不同 → id 不同；benchmark 不同 → id 不同
         let idLater = FactorEngine.deterministicID(
             listingID: ListingID(rawValue: "L"), asOf: date(2024, 2, 1),
-            benchmarkListingID: nil, factorVersion: engine.factorVersion
+            benchmarkListingID: nil, factorVersion: engine.factorVersion,
+            sourceObservationIDs: []
         )
         XCTAssertNotEqual(id1, idLater)
         let idWithBenchmark = FactorEngine.deterministicID(
             listingID: ListingID(rawValue: "L"), asOf: date(2024, 1, 31),
-            benchmarkListingID: ListingID(rawValue: "B"), factorVersion: engine.factorVersion
+            benchmarkListingID: ListingID(rawValue: "B"), factorVersion: engine.factorVersion,
+            sourceObservationIDs: []
         )
         XCTAssertNotEqual(id1, idWithBenchmark)
     }

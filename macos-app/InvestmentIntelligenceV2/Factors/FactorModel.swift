@@ -335,12 +335,16 @@ struct FactorEngine: Sendable {
     /// supersede 的修订误报 conflict；与 ExposureReport 二轮 P1-7 同款收口）
     /// → 摘要前 24 hex。同输入同 id（重算幂等覆盖）；asOf / benchmark /
     /// 引擎 / 源 observation 任一变化 → 新 id。
+    ///
+    /// 十二轮 P3：`sourceObservationIDs` **无默认值**——省略会让 ID 静默
+    /// 退回四元组形态（修订不分裂 ID、写入 conflict 而非 supersede），
+    /// 关键身份参数必须显式传入。
     static func deterministicID(
         listingID: ListingID,
         asOf: Date,
         benchmarkListingID: ListingID?,
         factorVersion: String,
-        sourceObservationIDs: [ObservationID] = []
+        sourceObservationIDs: [ObservationID]
     ) -> FactorSnapshotID {
         let millis = Int(asOf.timeIntervalSince1970 * 1000)
         let sources = sourceObservationIDs.map(\.rawValue).sorted().joined(separator: ",")
