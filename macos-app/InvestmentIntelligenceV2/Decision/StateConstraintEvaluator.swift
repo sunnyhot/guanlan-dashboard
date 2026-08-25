@@ -175,7 +175,16 @@ struct StateConstraintEvaluator: Sendable {
             var worstConfirmed: (key: String, lower: Decimal)?
             var worstUnknown: (key: String, lower: Decimal, upper: Decimal)?
             for estimate in classes {
-                let targetWeight = target.targetWeight(for: AssetClass(rawValue: estimate.key)!)?.value
+                // 十轮 P2:estimate.key 来自持久化 ExposureReport(DB 读回只
+                // 校验 kind/id/validity/依赖三方一致,不校验枚举值)——
+                // 未知资产类 key(损坏行 / 前向兼容新枚举值)fail-closed 转
+                // 整约束 unknown,不崩进程(与九轮 P1 同一纪律)
+                guard let assetClass = AssetClass(rawValue: estimate.key) else {
+                    return unknown(
+                        constraint,
+                        note: "暴露估计含未知资产类 key「\(estimate.key)」——数据非法，无法判定偏差")
+                }
+                let targetWeight = target.targetWeight(for: assetClass)?.value
                     ?? Decimal.zero  // Target 无该类 = 目标 0（显式：Target 定义域缺即 0 目标）
                 let interval = deviationInterval(estimate, target: targetWeight)
                 if interval.lower > threshold {

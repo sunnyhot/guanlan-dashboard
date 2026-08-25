@@ -352,8 +352,7 @@ struct PortfolioLookthroughCalculator: Sendable {
             disclosedSecurityCoverage += weight
         }
 
-        // 3) 标的暴露（合并降序 + 上下界）
-        let unknown = Ratio(value: unknownWeight)
+        // 3) 标的暴露（合并降序 + 上下界；上界直接用 unknownWeight）
         let underlyingPositions = positionWeight
             .map { listing, weight -> LookthroughSnapshot.UnderlyingPosition in
                 let contributors = (positionAccumulator[listing] ?? [])

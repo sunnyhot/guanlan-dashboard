@@ -142,7 +142,9 @@ struct ConstraintGate: Sendable {
                 let (average, skippedPairs) = Self.weightedAverageCorrelation(
                     projected: projected, correlations: correlations
                 )
-                skipped = skippedPairs
+                // 十轮 P3:多规则(不同 cap)逐次评估,跳过计数累加——
+                // 此前赋值会让早期规则的计数被最后一个规则覆盖
+                skipped += skippedPairs
                 if let average, average > cap {
                     violations.append("\(rule.label)：加权平均相关 = \(average)")
                 }

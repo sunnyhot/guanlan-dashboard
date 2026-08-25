@@ -72,11 +72,11 @@ struct AllocationTarget: Sendable, Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(InvestmentTargetID.self, forKey: .id)
-        entries = try container.decode([AllocationTargetEntry].self, forKey: .entries)
+        let decodedEntries = try container.decode([AllocationTargetEntry].self, forKey: .entries)
         provenance = try container.decode(TargetAllocationProvenance.self, forKey: .provenance)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         do {
-            try StrategicAllocationValidator().validate(entries: entries)
+            try StrategicAllocationValidator().validate(entries: decodedEntries)
         } catch {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
@@ -87,7 +87,7 @@ struct AllocationTarget: Sendable, Codable, Hashable {
         // createdAt 重算派生 ID，与 JSON 提供的 id 核对（换内容保旧 ID 的
         // 「伪造 Target」在解码点拒绝，Target 引用与 D000 防火墙成立）。
         let recomputed = StrategicAllocationPolicy.deriveID(
-            provenance: provenance, entries: entries, createdAt: createdAt
+            provenance: provenance, entries: decodedEntries, createdAt: createdAt
         )
         guard recomputed == id else {
             throw DecodingError.dataCorrupted(.init(
@@ -95,6 +95,11 @@ struct AllocationTarget: Sendable, Codable, Hashable {
                 debugDescription: "AllocationTarget ID 与内容不一致（应为 \(recomputed.rawValue)，实为 \(id.rawValue)）——拒绝伪造 ID"
             ))
         }
+        // 十轮 P3:解码归一化 entries 顺序(deriveID 内部按归一化派生,乱序
+        // JSON 本就能过 ID 核对)——否则同 ID 的 Target 会以乱序形态存在,
+        // 与构造路径产物「id 相同、== 不等」(同 ID 双形态);归一化收口后
+        // 同 id 必同形态
+        entries = StrategicAllocationPolicy.normalized(decodedEntries)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -236,7 +241,9 @@ struct StrategicAllocationPolicy: Sendable {
     // MARK: - helpers
 
     /// 条目按 AssetClass rawValue 排序（确定性存储形态；权重值保持原样）。
-    private static func normalized(_ entries: [AllocationTargetEntry]) -> [AllocationTargetEntry] {
+    /// fileprivate：同文件的 AllocationTarget.init(from:) 解码归一化共用
+    /// （十轮 P3：同 id 的 Target 必同形态）。
+    fileprivate static func normalized(_ entries: [AllocationTargetEntry]) -> [AllocationTargetEntry] {
         entries.sorted { $0.assetClass.rawValue < $1.assetClass.rawValue }
     }
 

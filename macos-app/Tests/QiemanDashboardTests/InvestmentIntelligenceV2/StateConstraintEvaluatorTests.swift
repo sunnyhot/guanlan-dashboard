@@ -50,6 +50,31 @@ final class StateConstraintEvaluatorTests: XCTestCase {
         parameters: [.init(name: "threshold", value: "0.1")]
     )
 
+    // MARK: - 十轮 P2 回归
+
+    func testAssetClassConstraintUnknownOnCorruptedEstimateKey() throws {
+        // estimate.key 来自持久化 ExposureReport,未知资产类 key(损坏行/
+        // 前向兼容新枚举)→ 整约束 unknown,不崩进程(原 AssetClass(rawValue:)!)
+        let target = try StrategicAllocationPolicy().applyUserAllocation(
+            entries: [AllocationTargetEntry(assetClass: .equity, targetWeight: Ratio(value: 1))],
+            note: nil, now: day
+        )
+        let constraint = StateConstraintDefinition(
+            id: "c-dev", version: "v1", kind: .maxAssetClassDeviation,
+            parameters: [.init(name: "threshold", value: "0.1")]
+        )
+        let finding = StateConstraintEvaluator().evaluate(
+            constraints: [constraint],
+            exposure: exposureReport(
+                securities: [],
+                assetClasses: [("CRYPTO", "0.2", "0.3")]),   // 未知资产类 key
+            target: target
+        ).first!
+        XCTAssertEqual(finding.status, .unknown, "未知 key fail-closed 转 unknown,不 SIGTRAP")
+        XCTAssertTrue(finding.insufficiencyNote?.contains("CRYPTO") == true,
+                      "缺口说明透明记录非法 key")
+    }
+
     // MARK: - 单标的暴露三态
 
     func testSingleSecurityViolated_whenConfirmedOverThreshold() {

@@ -179,6 +179,30 @@ final class ConstraintGateTests: XCTestCase {
         XCTAssertEqual(verdict.correlationSkippedPairs, 1)
     }
 
+    func testMultipleCorrelationRulesAccumulateSkippedPairs() {
+        // 十轮 P3 回归:多个 maxAverageCorrelation 规则(不同 cap)逐次评估,
+        // 跳过计数累加——此前赋值只保留最后一个规则的计数
+        let gate = ConstraintGate()
+        let fundPortfolio = PortfolioSnapshot(asOf: day, positions: [
+            PortfolioPosition(subjectKey: "fund|A", assetClass: .equity, weight: r("0.6")),
+            PortfolioPosition(subjectKey: "fund|B", assetClass: .equity, weight: r("0.4")),
+        ])
+        let projected = ProjectedPortfolio.project(base: fundPortfolio, applying: [])
+        let single = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8"))],
+            correlations: []
+        )
+        XCTAssertEqual(single.correlationSkippedPairs, 1)
+        let double = gate.evaluate(
+            projected: projected, actions: [],
+            rules: [.maxAverageCorrelation(cap: d("0.8")), .maxAverageCorrelation(cap: d("0.5"))],
+            correlations: []
+        )
+        XCTAssertEqual(double.correlationSkippedPairs, 2,
+                       "两条规则各评估一次,各跳过 1 对 → 累计 2(修复前会被覆盖为 1)")
+    }
+
     func testMaxAverageCorrelation() {
         let gate = ConstraintGate()
         // 组合 A 0.5 + B 0.3(正权重);ρ(A,B) = 0.9

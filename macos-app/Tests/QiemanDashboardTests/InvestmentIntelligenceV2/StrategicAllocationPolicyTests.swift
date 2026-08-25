@@ -151,6 +151,37 @@ final class StrategicAllocationPolicyTests: XCTestCase {
         XCTAssertNoThrow(try JSONDecoder().decode(AllocationTarget.self, from: data))
     }
 
+    func testDecodedTargetNormalizesEntryOrder() throws {
+        // 十轮 P3 回归:乱序 JSON(同 id、同内容,entries 顺序不同)解出
+        // 的 Target 必须与构造路径产物 ==(同 id 必同形态;修复前数组序
+        // 参与 Hashable → 同 id 双形态)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let target = try StrategicAllocationPolicy().applyUserAllocation(
+            entries: [
+                AllocationTargetEntry(assetClass: .equity, targetWeight: Ratio(value: Decimal(string: "0.6")!)),
+                AllocationTargetEntry(assetClass: .cash, targetWeight: Ratio(value: Decimal(string: "0.4")!)),
+            ],
+            note: nil, now: now
+        )
+        // 构造乱序 JSON:经中性 Codable 中转结构反转 entries 数组
+        struct Wire: Codable {
+            var id: InvestmentTargetID
+            var entries: [AllocationTargetEntry]
+            var provenance: TargetAllocationProvenance
+            var createdAt: Date
+        }
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        let wire = try decoder.decode(Wire.self, from: encoder.encode(target))
+        let shuffled = Wire(
+            id: wire.id, entries: wire.entries.reversed(),
+            provenance: wire.provenance, createdAt: wire.createdAt
+        )
+        let decoded = try decoder.decode(AllocationTarget.self, from: encoder.encode(shuffled))
+        XCTAssertEqual(decoded.id, target.id, "ID 派生内部归一化,乱序 JSON 本就通过核对")
+        XCTAssertEqual(decoded, target, "解码归一化后同 id 必同形态(修复前 != )")
+    }
+
     func testDecodingRejectsInvalidWeights() throws {
         // 审查 P1-7 回归:脏 JSON(权重和≠1)在解码点拒绝(fail-closed)
         let target = try policy.applyUserAllocation(
