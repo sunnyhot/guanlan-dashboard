@@ -126,8 +126,14 @@ final class CriterionEvaluatorTests: XCTestCase {
         )
         let portfolio = PortfolioSnapshot(
             asOf: Date(timeIntervalSince1970: 0), positions: [])
+        let actionDomain = ActionDomain(
+            perSubjectBounds: ["listing|A": .init(
+                lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
+            eligibleNewSubjects: [:],
+            builderVersion: "t", newSubjectBuyUpper: Ratio(value: 1))
         let inputs = try CriterionInputExtractor.inputs(
             definition: definition, plan: plan, portfolio: portfolio,
+            actionDomain: actionDomain,
             factorSnapshots: [:], observations: [:])
         XCTAssertEqual(inputs, [CriterionInput(referenceID: PlanMetrics.turnover, value: d("0.12"))])
         let score = CriterionEvaluator().evaluate(definition: definition, inputs: inputs)
@@ -141,6 +147,7 @@ final class CriterionEvaluatorTests: XCTestCase {
         )
         XCTAssertThrowsError(try CriterionInputExtractor.inputs(
             definition: bad, plan: plan, portfolio: portfolio,
+            actionDomain: actionDomain,
             factorSnapshots: [:], observations: [:]
         )) { error in
             XCTAssertEqual(error as? CriterionInputExtractor.ExtractionError,

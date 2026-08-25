@@ -179,6 +179,27 @@ final class CriterionComparatorTests: XCTestCase {
         }
     }
 
+    func testCanonicalDefinitionsUnionAcrossPlans() throws {
+        // 八轮 P2 回归:A 缺 cost,B/C 首次出现的 cost(lower-better)必须
+        // 登记 canonical——否则 B|C 回退默认 higherIsBetter=true,方向反转
+        let plans = [
+            "A": [score("momentum", d("0.05"))],   // A 无 cost → 其 pair 被 unknown 阻断
+            "B": [score("momentum", d("0.03")), score("cost", d("0.01"), higherIsBetter: false)],
+            "C": [score("momentum", d("0.03")), score("cost", d("0.05"), higherIsBetter: false)],
+        ]
+        let result = try CriterionComparator().compare(plans: plans, band: band)
+        // B|C:momentum 等值 indifferent;cost 小者优 → B dominates C。
+        // 若 union 漏登记 cost(canonical 只来自首个 plan A),cost 会落到
+        // 默认 higherIsBetter=true → C 反超(bDominatesA)——方向反转
+        XCTAssertEqual(result.pairwise["B|C"], .aDominatesB)
+        XCTAssertEqual(result.pairwise["A|B"], .incomparable)
+        XCTAssertEqual(result.pairwise["A|C"], .incomparable)
+        XCTAssertEqual(result.paretoFront, ["A", "B"],
+                       "A 因 cost 缺失被阻断留在前沿;C 被 B 支配出局")
+        XCTAssertEqual(result.blockingUnknowns, ["cost"],
+                       "A 缺 cost 的 pair 透明阻断(momentum 三方齐全不阻断)")
+    }
+
     func testMalformedPlanKeyThrowsInsteadOfCrashing() throws {
         // 六轮 P2 回归:plan key 含 "|" / 为空 → 抛 CompareError.malformedPlanKey,
         // 不再 precondition 崩进程(比较器位于持久化 artifact 的重放路径)

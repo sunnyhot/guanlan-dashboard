@@ -28,7 +28,13 @@ extension ArtifactRow {
     static let exposureReportKind = "EXPOSURE_REPORT"
     static let riskProfileKind = "RISK_PROFILE"
     static let dailyAttributionKind = "DAILY_ATTRIBUTION"
-    static let portfolioDecisionKind = "PORTFOLIO_DECISION"
+    /// 旧决策 kind（七轮前 payload：无 plannerInputs / 内容摘要字段）。
+    /// 八轮 P1-3：新 payload 结构不兼容——新写入/读取一律走
+    /// portfolioDecisionV2Kind；本 kind 的存量行对 decision typed fetch
+    /// 是 **fail-closed 的 legacy**（kindMismatch 拒绝，不伪造缺失的
+    /// PlannerRun、不静默按新结构解码崩溃）
+    static let legacyPortfolioDecisionKind = "PORTFOLIO_DECISION"
+    static let portfolioDecisionV2Kind = "PORTFOLIO_DECISION_V2"
 }
 
 // MARK: - 写入语义
@@ -235,7 +241,7 @@ extension ArtifactRow {
         try fetchDomain(DailyAttribution.self, id: id, expectedKind: dailyAttributionKind, from: db)
     }
     static func fetchPortfolioDecision(id: String, from db: Database) throws -> PortfolioDecisionArtifact {
-        try fetchDomain(PortfolioDecisionArtifact.self, id: id, expectedKind: portfolioDecisionKind, from: db)
+        try fetchDomain(PortfolioDecisionArtifact.self, id: id, expectedKind: portfolioDecisionV2Kind, from: db)
     }
 }
 
@@ -258,7 +264,7 @@ extension ArtifactRow {
         try from(domain, kind: dailyAttributionKind)
     }
     static func from(_ domain: PortfolioDecisionArtifact) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
-        try from(domain, kind: portfolioDecisionKind)
+        try from(domain, kind: portfolioDecisionV2Kind)
     }
 
     /// payload-only 解码（六轮 P1：**私有**——不读依赖表即返回领域对象，

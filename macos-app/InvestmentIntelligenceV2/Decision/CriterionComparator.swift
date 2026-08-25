@@ -40,6 +40,13 @@ struct IndifferenceBand: Sendable, Codable, Hashable {
     func band(for criterionID: String) -> Decimal {
         bandsByCriterion[criterionID] ?? defaultBand
     }
+
+    /// 内容摘要（八轮 P1-4）：同 policyID@version 下替换阈值仍是不同
+    /// 材料；摘要纳入 artifact 引用层后，绑定时同版本不同内容的 band
+    /// 被拒。确定性类型，编码失败即编程错误（调用方 fail-fast）。
+    func contentDigest() throws -> String {
+        StableDigest.digest(try StableDigest.jsonPayload(self))
+    }
 }
 
 /// 两两比较结论。
@@ -95,8 +102,10 @@ struct CriterionComparator: Sendable {
             throw .malformedPlanKey(key)
         }
         let planKeys = plans.keys.sorted()
-        // 七轮 P2:索引化 + 同 plan 内重复 criterion ID 拒绝 + 跨 plan
-        // 同 ID 定义一致(以字典序首 plan 为 canonical,其余必须全等)
+        // 七轮 P2 + 八轮 P2:索引化 + 同 plan 内重复 criterion ID 拒绝;
+        // canonical 定义取**全部 plan 的 union**(首个 plan 缺席的 criterion
+        // ——如只有 B/C 有的 cost——也必须登记,否则其 pair 会落到方向
+        // 默认值),逐实例冲突即拒
         var indexedByPlan: [String: [String: CriterionScore]] = [:]
         var canonicalDefinitions: [String: CriterionDefinition] = [:]
         for planKey in planKeys {
@@ -106,14 +115,12 @@ struct CriterionComparator: Sendable {
                     throw .duplicateCriterion(planKey: planKey, criterionID: score.definition.id)
                 }
                 byID[score.definition.id] = score
-            }
-            if canonicalDefinitions.isEmpty {
-                canonicalDefinitions = byID.mapValues(\.definition)
-            } else {
-                for (criterionID, definition) in canonicalDefinitions {
-                    if let other = byID[criterionID]?.definition, other != definition {
-                        throw .criterionDefinitionMismatch(criterionID: criterionID)
+                if let existing = canonicalDefinitions[score.definition.id] {
+                    guard existing == score.definition else {
+                        throw .criterionDefinitionMismatch(criterionID: score.definition.id)
                     }
+                } else {
+                    canonicalDefinitions[score.definition.id] = score.definition
                 }
             }
             indexedByPlan[planKey] = byID
@@ -127,7 +134,7 @@ struct CriterionComparator: Sendable {
         for i in 0..<planKeys.count {
             for j in (i + 1)..<planKeys.count {
                 let a = planKeys[i], b = planKeys[j]
-                let dominance = comparePair(
+                let dominance = try comparePair(
                     scoresA: indexedByPlan[a] ?? [:], scoresB: indexedByPlan[b] ?? [:],
                     definitions: canonicalDefinitions,
                     criteria: allCriteria, band: band,
@@ -165,7 +172,7 @@ struct CriterionComparator: Sendable {
         criteria: [String],
         band: IndifferenceBand,
         blockingUnknowns: inout Set<String>
-    ) -> PairwiseDominance {
+    ) throws(CompareError) -> PairwiseDominance {
         var aBetterCount = 0
         var bBetterCount = 0
 
@@ -177,9 +184,12 @@ struct CriterionComparator: Sendable {
                 blockingUnknowns.insert(criterion)
                 return .incomparable
             }
-            // 方向取自 canonical 定义（六轮 P1-3 + 七轮 P2：跨 plan 同 ID
-            // 定义已在入口校验全等,不存在 A/B 侧方向分歧)
-            let diff = (definitions[criterion]?.higherIsBetter ?? true) ? av - bv : bv - av
+            // 方向取自 canonical 定义(八轮 P2:union 已覆盖全部 criterion,
+            // 不存在默认值回退——定义缺失即上游构造错误,拒)
+            guard let definition = definitions[criterion] else {
+                throw .criterionDefinitionMismatch(criterionID: criterion)
+            }
+            let diff = definition.higherIsBetter ? av - bv : bv - av
             if abs(diff) <= band.band(for: criterion) {
                 continue  // indifferent：忽略
             }

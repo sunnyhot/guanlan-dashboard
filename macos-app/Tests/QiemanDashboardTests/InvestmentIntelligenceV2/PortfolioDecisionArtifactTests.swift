@@ -16,7 +16,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
     private var bandVersion: String { "b@v1" }
 
-    // MARK: - 强类型实例 fixture
+    // MARK: - 强类型实例 / 定义 fixture
 
     /// 手工 FactorSnapshot(cardinal metric value;nil → 输入不足形态)
     private func factorSnapshot(id: String, value: Decimal?) -> FactorSnapshot {
@@ -37,24 +37,32 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         )
     }
 
-    private func makePlan(_ key: String, delta: String) -> PortfolioActionPlan {
-        let planner = TargetRebalancePlanner()
-        return planner.plan(
-            portfolio: PortfolioSnapshot(asOf: day, positions: [
-                PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
-            ]),
-            target: nil, remediationTargets: [],
-            userDirectives: [
-                UserDirectiveInput(subjectKey: "listing|A", deltaWeight: Ratio(value: d(delta)),
-                                   directiveID: "u-\(key)", note: nil)
-            ],
-            actionDomain: ActionDomain(
-                perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
-                eligibleNewSubjects: [:], builderVersion: "test",
-                newSubjectBuyUpper: Ratio(value: d("1"))
-            ),
-            now: day
-        )
+    /// costIntensity(plan.turnover,低者优先——plan-scoped 指标)
+    private func costIntensityDefinition(weight: Decimal = 1) -> CriterionDefinition {
+        CriterionDefinition(
+            id: "costIntensity", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [CriterionDefinition.InputReference(
+                kind: .planMetric, referenceID: PlanMetrics.turnover, weight: weight)],
+            unit: .ratio,
+            higherIsBetter: false)
+    }
+
+    /// momentum(fs_m 的 factor metric,决策级共享 cardinal)
+    private func momentumDefinition(snapshotID: String = "fs_m", version: String = "v1") -> CriterionDefinition {
+        CriterionDefinition(
+            id: "momentum", version: version, evaluatorKind: .weightedSum,
+            inputReferences: [CriterionDefinition.InputReference(
+                kind: .factorMetric, referenceID: "\(snapshotID)#momentum.return60", weight: 1)],
+            unit: .ratio)
+    }
+
+    /// makeArtifact 用的 criterion(引用 fs_abc,与 fixture 声明域一致)
+    private var portfolioMomentumDefinition: CriterionDefinition {
+        CriterionDefinition(
+            id: "portfolio-momentum", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [CriterionDefinition.InputReference(
+                kind: .factorMetric, referenceID: "fs_abc#momentum.return60", weight: 1)],
+            unit: .ratio)
     }
 
     /// 自洽 comparison(三轮 P1-6 可推导 + 四轮 P1-2 完整 pairwise 域):
@@ -94,27 +102,30 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         return PlanComparisonResult(pairwise: pairwise, paretoFront: front, blockingUnknowns: [])
     }
 
+    /// makeArtifact 的 plans/plannerRuns 同源构造(八轮 P1-2:artifact 的
+    /// plan 必须可由内嵌规划输入以冻结 asOf 重放——validator 会重跑核对)。
     private func makeArtifact(
         decision: PartialDecision,
-        plans: [String: PortfolioActionPlan],
+        planDeltas: [String: String],
         comparison: PlanComparisonResult? = nil
     ) -> PortfolioDecisionArtifact {
-        let resolvedComparison = comparison ?? Self.consistentComparison(
-            for: decision, allPlans: plans.keys.sorted()
-        )
+        var plans: [String: PortfolioActionPlan] = [:]
         var plannerRuns: [String: DecisionReplayer.PlannerRun] = [:]
-        for key in plans.keys.sorted() {
-            plannerRuns[key] = plannerRun(delta: "0")
+        for (key, delta) in planDeltas.sorted(by: { $0.key < $1.key }) {
+            let run = plannerRun(delta: delta, directiveID: "u-\(key)")
+            plannerRuns[key] = run
+            plans[key] = planFrom(run)
         }
         return PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
-            criterionVersions: ["portfolio-momentum@v1"],
+            criterionDefinitions: [portfolioMomentumDefinition],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
             target: nil,
-            bandVersion: bandVersion,
+            band: band,
             knowledgeContextSummary: "economicKnowledge(2024-07-20)",
             decision: decision,
-            comparison: resolvedComparison,
+            comparison: comparison ?? Self.consistentComparison(
+                for: decision, allPlans: plans.keys.sorted()),
             plans: plans,
             plannerRuns: plannerRuns,
             producedAt: day
@@ -126,15 +137,14 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     func testValidatorPassesOnCompleteArtifact() throws {
         let decision = PartialDecision(status: .unresolvedTradeoff, admissiblePlans: ["A", "B"],
                                        explanation: "互不支配")
-        let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05"),
-                                                                "B": makePlan("B", delta: "-0.05")])
+        let artifact = makeArtifact(decision: decision, planDeltas: ["A": "0.05", "B": "-0.05"])
         try DecisionValidator().validate(artifact: artifact, resolvers: .everythingResolvable)
     }
 
     func testValidatorRejectsAdmissiblePlanNotInPlans() {
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["GHOST"],
                                        explanation: "x")
-        let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05")])
+        let artifact = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
         XCTAssertThrowsError(try DecisionValidator().validate(artifact: artifact)) { error in
             XCTAssertEqual(error as? DecisionValidator.ValidationError,
                            .admissiblePlanNotFound("GHOST"))
@@ -142,17 +152,39 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     }
 
     func testValidatorRejectsEmptyCriterionVersions() {
+        // assemble 拒绝空定义集,违规形态经 memberwise init 构造
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
-        let artifact = PortfolioDecisionArtifact.assemble(
-            signalIDs: [], criterionVersions: [],
-            factorSnapshotIDs: [], target: nil, bandVersion: bandVersion,
-            knowledgeContextSummary: "", decision: decision,
-            comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
-            plans: ["A": makePlan("A", delta: "0.05")],
-            plannerRuns: ["A": plannerRun(delta: "0")], producedAt: day
+        let complete = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
+        let emptyCriterion = PortfolioDecisionArtifact(
+            id: complete.id, producedAt: complete.producedAt,
+            validityPolicy: complete.validityPolicy,
+            dependencies: complete.dependencies,
+            signalIDs: complete.signalIDs,
+            criterionVersions: [],
+            criterionContentDigests: [:],
+            factorSnapshotIDs: complete.factorSnapshotIDs,
+            target: nil,
+            indifferenceBandVersion: complete.indifferenceBandVersion,
+            bandContentDigest: complete.bandContentDigest,
+            plannerInputs: complete.plannerInputs,
+            knowledgeContextSummary: complete.knowledgeContextSummary,
+            decision: complete.decision,
+            comparison: complete.comparison,
+            plans: complete.plans
         )
-        XCTAssertThrowsError(try DecisionValidator().validate(artifact: artifact)) { error in
+        XCTAssertThrowsError(try DecisionValidator().validate(artifact: emptyCriterion)) { error in
             XCTAssertEqual(error as? DecisionValidator.ValidationError, .emptyCriterionVersions)
+        }
+    }
+
+    func testValidatorRejectsEmptyPlans() {
+        // 八轮 P1-2 回归:空 plan 集是退化形态,validator 直接拒
+        let decision = PartialDecision(status: .unresolvedTradeoff, admissiblePlans: [], explanation: "x")
+        let emptyArtifact = makeArtifact(decision: decision, planDeltas: [:])
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: emptyArtifact, resolvers: .everythingResolvable
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError, .emptyPlans)
         }
     }
 
@@ -160,7 +192,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         // 七轮 P1-3 回归:内嵌规划输入必须恰好覆盖 plans 域(缺 A → 拒)。
         // assemble 强制键域一致,违规形态经 memberwise init 构造。
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
-        let complete = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05")])
+        let complete = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
         let violated = PortfolioDecisionArtifact(
             id: complete.id,
             producedAt: complete.producedAt,
@@ -168,9 +200,11 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             dependencies: complete.dependencies,
             signalIDs: complete.signalIDs,
             criterionVersions: complete.criterionVersions,
+            criterionContentDigests: complete.criterionContentDigests,
             factorSnapshotIDs: complete.factorSnapshotIDs,
             target: complete.target,
             indifferenceBandVersion: complete.indifferenceBandVersion,
+            bandContentDigest: complete.bandContentDigest,
             plannerInputs: [:],   // 缺 A 的规划输入
             knowledgeContextSummary: complete.knowledgeContextSummary,
             decision: complete.decision,
@@ -185,10 +219,72 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         }
     }
 
+    func testValidatorRejectsNonReproduciblePlans() {
+        // 八轮 P1-2 回归:已存 plan 与内嵌规划输入不同源(重跑 Planner 不
+        // 等于已存 plan)→ 拒——「Validator 放行而 Replayer 拒绝」分裂关闭
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let complete = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
+        // 篡改内嵌输入(Δw 指令漂移)但保留原 plans
+        let tampered = PortfolioDecisionArtifact(
+            id: complete.id,
+            producedAt: complete.producedAt,
+            validityPolicy: complete.validityPolicy,
+            dependencies: complete.dependencies,
+            signalIDs: complete.signalIDs,
+            criterionVersions: complete.criterionVersions,
+            criterionContentDigests: complete.criterionContentDigests,
+            factorSnapshotIDs: complete.factorSnapshotIDs,
+            target: complete.target,
+            indifferenceBandVersion: complete.indifferenceBandVersion,
+            bandContentDigest: complete.bandContentDigest,
+            plannerInputs: ["A": plannerRun(delta: "0.07", directiveID: "u-A")],
+            knowledgeContextSummary: complete.knowledgeContextSummary,
+            decision: complete.decision,
+            comparison: complete.comparison,
+            plans: complete.plans
+        )
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: tampered, resolvers: .everythingResolvable
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .frozenPlanMismatch(planKey: "A"))
+        }
+    }
+
+    func testValidatorRejectsContentDigestDomainGap() {
+        // 八轮 P1-4 回归:摘要未覆盖全部 criterion 版本 → 拒
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let complete = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
+        let noDigest = PortfolioDecisionArtifact(
+            id: complete.id,
+            producedAt: complete.producedAt,
+            validityPolicy: complete.validityPolicy,
+            dependencies: complete.dependencies,
+            signalIDs: complete.signalIDs,
+            criterionVersions: complete.criterionVersions,
+            criterionContentDigests: [:],   // 摘要缺失
+            factorSnapshotIDs: complete.factorSnapshotIDs,
+            target: complete.target,
+            indifferenceBandVersion: complete.indifferenceBandVersion,
+            bandContentDigest: complete.bandContentDigest,
+            plannerInputs: complete.plannerInputs,
+            knowledgeContextSummary: complete.knowledgeContextSummary,
+            decision: complete.decision,
+            comparison: complete.comparison,
+            plans: complete.plans
+        )
+        XCTAssertThrowsError(try DecisionValidator().validate(
+            artifact: noDigest, resolvers: .everythingResolvable
+        )) { error in
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .contentDigestIncomplete(keys: complete.criterionVersions))
+        }
+    }
+
     // MARK: - Replay(D004 §3:same IDs → same decision;不重跑 Research)
 
     /// 规划输入(冻结内嵌进 artifact,重放重新产 Δw)。
-    private func plannerRun(delta: String) -> DecisionReplayer.PlannerRun {
+    private func plannerRun(delta: String, directiveID: String = "u-replay") -> DecisionReplayer.PlannerRun {
         DecisionReplayer.PlannerRun(
             portfolio: PortfolioSnapshot(asOf: day, positions: [
                 PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
@@ -196,7 +292,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             target: nil, remediationTargets: [],
             userDirectives: [
                 UserDirectiveInput(subjectKey: "listing|A", deltaWeight: Ratio(value: d(delta)),
-                                   directiveID: "u-replay", note: nil)
+                                   directiveID: directiveID, note: nil)
             ],
             actionDomain: ActionDomain(
                 perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
@@ -217,25 +313,15 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         }
     }
 
-    /// 标准材料:costIntensity(plan.turnover,低者优先——plan-scoped 指标)
-    /// + momentum(fs_m 的 factor metric,决策级共享 cardinal)。
-    /// A Δw=0.05 → turnover 0.05;B Δw=−0.15 → turnover 0.15:cost 差 0.1
-    /// 超带,A 优;momentum 两 plan 同值 indifferent → A dominates B →
-    /// singlePreferred A(七轮 P1-1:方案分数不再共享)。
+    /// 标准材料:costIntensity(plan.turnover,低者优先)+ momentum(fs_m 的
+    /// factor metric,共享)。A Δw=0.05 → turnover 0.05;B Δw=−0.15 →
+    /// turnover 0.15:cost 差 0.1 超带,A 优;momentum 同值 indifferent →
+    /// A dominates B → singlePreferred A(七轮 P1-1:逐 plan 求值)。
     private func standardMaterials() -> DecisionReplayer.ReplayMaterials {
         DecisionReplayer.ReplayMaterials(
             criterionDefinitions: [
-                "costIntensity@v1": CriterionDefinition(
-                    id: "costIntensity", version: "v1", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .planMetric, referenceID: PlanMetrics.turnover, weight: 1)],
-                    unit: .ratio,
-                    higherIsBetter: false),
-                "momentum@v1": CriterionDefinition(
-                    id: "momentum", version: "v1", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .factorMetric, referenceID: "fs_m#momentum.return60", weight: 1)],
-                    unit: .ratio),
+                costIntensityDefinition().fingerprint: costIntensityDefinition(),
+                momentumDefinition().fingerprint: momentumDefinition(),
             ],
             factorSnapshots: ["fs_m": factorSnapshot(id: "fs_m", value: d("0.05"))],
             observations: [:],
@@ -252,9 +338,10 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     ) -> PortfolioDecisionArtifact {
         PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
-            criterionVersions: ["costIntensity@v1", "momentum@v1"],
+            criterionDefinitions: [costIntensityDefinition(), momentumDefinition()],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_m")],
-            target: nil, bandVersion: bandVersion,
+            target: nil,
+            band: band,
             knowledgeContextSummary: "test",
             decision: decision,
             comparison: Self.consistentComparison(for: decision, allPlans: ["A", "B"]),
@@ -341,6 +428,48 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         }
     }
 
+    func testReplayRejectsSameVersionDifferentContent() throws {
+        // 八轮 P1-4 回归:同 id@version 但权重不同(或 band 同版本不同阈值)
+        // 的材料 → 内容摘要不符 → 拒——版本字符串不绑定语义的通道关闭
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let artifact = materialsConsistentArtifact(decision: decision)
+        let replayer = DecisionReplayer()
+
+        // criterion:同版本,weight 2(原 1)
+        let tamperedWeight = DecisionReplayer.ReplayMaterials(
+            criterionDefinitions: [
+                costIntensityDefinition(weight: 2).fingerprint: costIntensityDefinition(weight: 2),
+                momentumDefinition().fingerprint: momentumDefinition(),
+            ],
+            factorSnapshots: standardMaterials().factorSnapshots,
+            observations: [:],
+            band: band
+        )
+        XCTAssertThrowsError(try replayer.replay(
+            artifact: artifact, resolver: TestResolver(materials: tamperedWeight)
+        )) { error in
+            guard case DecisionReplayer.ReplayError.referenceMismatch = error else {
+                return XCTFail("应为同版本不同内容拒绝,实际 \(error)")
+            }
+        }
+
+        // band:同 policyID@version,defaultBand 收紧
+        let tamperedBand = DecisionReplayer.ReplayMaterials(
+            criterionDefinitions: standardMaterials().criterionDefinitions,
+            factorSnapshots: standardMaterials().factorSnapshots,
+            observations: [:],
+            band: IndifferenceBand(policyID: "b", version: "v1", defaultBand: d("0.001"),
+                                   rationale: "tampered")
+        )
+        XCTAssertThrowsError(try replayer.replay(
+            artifact: artifact, resolver: TestResolver(materials: tamperedBand)
+        )) { error in
+            guard case DecisionReplayer.ReplayError.referenceMismatch = error else {
+                return XCTFail("应为 band 内容摘要不符拒绝,实际 \(error)")
+            }
+        }
+    }
+
     func testPerPlanScoresDivergeViaPlanMetrics() throws {
         // 七轮 P1-1 回归:方案分数来自各自的 plan-scoped 指标——同引用 IDs
         // + 不同规划输入 → 不同决策;不再全 plan 共享一组分数
@@ -365,34 +494,68 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         XCTAssertEqual(preferred.decision.status, .singlePreferred)
         XCTAssertEqual(preferred.decision.admissiblePlans, ["A"])
         XCTAssertEqual(preferred.comparison.pairwise["A|B"], .aDominatesB)
+    }
 
-        // 投影资产类权重指标( EQUITY:0.5+Δw )也可作为 criterion 输入——
-        // 低 Equity 暴露优先,A(0.55) 优于 B(0.65)
-        let projected = CriterionDefinition(
-            id: "equityExposure", version: "v1", evaluatorKind: .weightedSum,
-            inputReferences: [CriterionDefinition.InputReference(
-                kind: .planMetric,
-                referenceID: "\(PlanMetrics.projectedWeightPrefix)#EQUITY", weight: 1)],
-            unit: .ratio,
-            higherIsBetter: false)
-        let materials = DecisionReplayer.ReplayMaterials(
-            criterionDefinitions: ["equityExposure@v1": projected],
-            factorSnapshots: [:], observations: [:], band: band)
-        let projectedArtifact = PortfolioDecisionArtifact.assemble(
-            signalIDs: [], criterionVersions: ["equityExposure@v1"],
-            factorSnapshotIDs: [], target: nil, bandVersion: bandVersion,
+    func testProjectedWeightsIncludeWhitelistedNewSubjects() throws {
+        // 八轮 P1-1 回归:白名单新标的(eligibleNewSubjects 声明资产类)进入
+        /// 投影资产类权重;合法但缺席的类别 = 已知 0(不是 unknown)
+        let run = DecisionReplayer.PlannerRun(
+            portfolio: PortfolioSnapshot(asOf: day, positions: [
+                PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
+            ]),
+            target: nil, remediationTargets: [],
+            userDirectives: [
+                UserDirectiveInput(subjectKey: "listing|NEW", deltaWeight: Ratio(value: d("0.1")),
+                                   directiveID: "u-new", note: nil),
+                UserDirectiveInput(subjectKey: "listing|A", deltaWeight: Ratio(value: d("-0.05")),
+                                   directiveID: "u-trim", note: nil),
+            ],
+            actionDomain: ActionDomain(
+                perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
+                eligibleNewSubjects: ["listing|NEW": .commodity],
+                builderVersion: "test",
+                newSubjectBuyUpper: Ratio(value: d("1"))
+            ),
+            plannerParameters: TargetRebalancePlanner.Parameters()
+        )
+        let plan = planFrom(run)
+        let exposure = CriterionDefinition(
+            id: "exposure", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [
+                CriterionDefinition.InputReference(
+                    kind: .planMetric,
+                    referenceID: "\(PlanMetrics.projectedWeightPrefix)#COMMODITY", weight: 1),
+                CriterionDefinition.InputReference(
+                    kind: .planMetric,
+                    referenceID: "\(PlanMetrics.projectedWeightPrefix)#FIXED_INCOME", weight: 1),
+            ],
+            unit: .ratio)
+        let artifact = PortfolioDecisionArtifact.assemble(
+            signalIDs: [],
+            criterionDefinitions: [exposure],
+            factorSnapshotIDs: [],
+            target: nil,
+            band: band,
             knowledgeContextSummary: "",
             decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-            comparison: Self.consistentComparison(
-                for: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-                allPlans: ["A", "B"]),
-            plans: ["A": planFrom(plannerRun(delta: "0.05")), "B": planFrom(plannerRun(delta: "0.15"))],
-            plannerRuns: ["A": plannerRun(delta: "0.05"), "B": plannerRun(delta: "0.15")],
-            producedAt: day)
-        let projectedOutcome = try replayer.replay(
-            artifact: projectedArtifact, resolver: TestResolver(materials: materials))
-        XCTAssertEqual(projectedOutcome.decision.admissiblePlans, ["A"],
-                       "投影 Equity 0.55 < 0.65,低暴露优先 → A")
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A"], blockingUnknowns: []),
+            plans: ["A": plan],
+            plannerRuns: ["A": run],
+            producedAt: day
+        )
+        // 材料:同一 run 的副本(可重放),无 factor/observation
+        let materials = DecisionReplayer.ReplayMaterials(
+            criterionDefinitions: [exposure.fingerprint: exposure],
+            factorSnapshots: [:], observations: [:], band: band)
+        let outcome = try DecisionReplayer().replay(
+            artifact: artifact, resolver: TestResolver(materials: materials))
+        // COMMODITY = 新标的买入 0.1(白名单声明类别进入投影)
+        // FIXED_INCOME = 合法但缺席 → 已知 0,非 unknown(决策不被阻断)
+        XCTAssertEqual(outcome.decision.admissiblePlans, ["A"])
+        let scores = outcome.comparison.pairwise   // 单 plan:pairwise 空,无阻断即证明两输入已知
+        XCTAssertTrue(scores.isEmpty)
+        XCTAssertTrue(outcome.comparison.blockingUnknowns.isEmpty,
+                      "缺席类别返回已知 0,不产生 unknown 阻断")
     }
 
     func testReplayRejectsInstanceIdentityMismatch() throws {
@@ -418,11 +581,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
         // criterionDefinitions:key=momentum@v1 挂 v2 定义的指纹
         var forgedDefinitions = standardMaterials().criterionDefinitions
-        forgedDefinitions["momentum@v1"] = CriterionDefinition(
-            id: "momentum", version: "v2", evaluatorKind: .weightedSum,
-            inputReferences: [CriterionDefinition.InputReference(
-                kind: .factorMetric, referenceID: "fs_m#momentum.return60", weight: 1)],
-            unit: .ratio)
+        forgedDefinitions["momentum@v1"] = momentumDefinition(version: "v2")
         let forgedDefinition = DecisionReplayer.ReplayMaterials(
             criterionDefinitions: forgedDefinitions,
             factorSnapshots: standardMaterials().factorSnapshots,
@@ -440,20 +599,22 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
     func testReplayWithoutPlansThrowsFrozenTimeUnavailable() throws {
         // 无 plans 的 artifact 无法取冻结时间 → 显式拒
+        let definition = CriterionDefinition(
+            id: "c", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [], unit: .ratio)
         let emptyArtifact = PortfolioDecisionArtifact.assemble(
-            signalIDs: [], criterionVersions: ["c@v1"],
-            factorSnapshotIDs: [], target: nil, bandVersion: bandVersion,
+            signalIDs: [],
+            criterionDefinitions: [definition],
+            factorSnapshotIDs: [],
+            target: nil,
+            band: band,
             knowledgeContextSummary: "",
             decision: PartialDecision(status: .unresolvedTradeoff, admissiblePlans: [], explanation: "x"),
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
             plans: [:], plannerRuns: [:], producedAt: day
         )
         let materials = DecisionReplayer.ReplayMaterials(
-            criterionDefinitions: [
-                "c@v1": CriterionDefinition(
-                    id: "c", version: "v1", evaluatorKind: .weightedSum,
-                    inputReferences: [], unit: .ratio)
-            ],
+            criterionDefinitions: [definition.fingerprint: definition],
             factorSnapshots: [:], observations: [:],
             band: band
         )
@@ -476,14 +637,11 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
         // 情景:momentum 引用切换到新 snapshot 实例 fs_alt(metric 输入不足
         // → unknown);引用变更 = 新定义,版本纪律 bump 到 momentum@v2
+        let scenarioDefinition = momentumDefinition(snapshotID: "fs_alt", version: "v2")
         let scenarioMaterials = DecisionReplayer.ReplayMaterials(
             criterionDefinitions: [
-                "costIntensity@v1": standardMaterials().criterionDefinitions["costIntensity@v1"]!,
-                "momentum@v2": CriterionDefinition(
-                    id: "momentum", version: "v2", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .factorMetric, referenceID: "fs_alt#momentum.return60", weight: 1)],
-                    unit: .ratio),
+                costIntensityDefinition().fingerprint: costIntensityDefinition(),
+                scenarioDefinition.fingerprint: scenarioDefinition,
             ],
             factorSnapshots: ["fs_alt": factorSnapshot(id: "fs_alt", value: nil)],
             observations: [:],
@@ -503,7 +661,8 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         // unknown 阻断(fs_alt metric 输入不足 → momentum unknown → 不判优)
         XCTAssertEqual(whatIf.comparison.blockingUnknowns, ["momentum"])
         XCTAssertEqual(whatIf.decision.status, .unresolvedTradeoff)
-        // 新 artifact 自身可过校验(决策由 comparison 推导、引用完备)
+        // 新 artifact 自身可过校验(决策由 comparison 推导、引用完备、
+        /// 内容摘要从定义实例派生)
         XCTAssertNoThrow(try DecisionValidator().validate(
             artifact: whatIf, resolvers: .everythingResolvable
         ))
@@ -524,14 +683,47 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         }
     }
 
+    func testWhatIfRejectsCorruptedBase() throws {
+        // 八轮 P2-6 回归:base 冻结规划输入损坏(域缺失/不可重放)→ what-if
+        // 先过共享校验拒绝,不把损坏材料「洗成」新 artifact
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let base = materialsConsistentArtifact(decision: decision)
+        let corrupted = PortfolioDecisionArtifact(
+            id: base.id,
+            producedAt: base.producedAt,
+            validityPolicy: base.validityPolicy,
+            dependencies: base.dependencies,
+            signalIDs: base.signalIDs,
+            criterionVersions: base.criterionVersions,
+            criterionContentDigests: base.criterionContentDigests,
+            factorSnapshotIDs: base.factorSnapshotIDs,
+            target: base.target,
+            indifferenceBandVersion: base.indifferenceBandVersion,
+            bandContentDigest: base.bandContentDigest,
+            plannerInputs: ["A": plannerRun(delta: "0.09")],   // B 缺 + A 与已存 plan 不同源
+            knowledgeContextSummary: base.knowledgeContextSummary,
+            decision: base.decision,
+            comparison: base.comparison,
+            plans: base.plans
+        )
+        XCTAssertThrowsError(try DecisionReplayer().replayWhatIf(
+            base: corrupted,
+            resolver: TestResolver(materials: standardMaterials()),
+            producedAt: day
+        )) { error in
+            guard case DecisionReplayer.ReplayError.artifactPlanDomainMismatch = error else {
+                return XCTFail("应为冻结规划一致性拒绝,实际 \(error)")
+            }
+        }
+    }
+
     func testValidatorRejectsInternallyContradictoryResults() throws {
         // 三轮 P1-6 回归:结果层内部矛盾拒收
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
-        let plans = ["A": makePlan("A", delta: "0.05")]
 
         // ① 四轮 P1-2 回归:pairwise 不完整(缺失 pair)→ pairwiseDomainIncomplete
         let incompletePairwise = makeArtifact(
-            decision: decision, plans: ["A": plans["A"]!, "B": makePlan("B", delta: "-0.05")],
+            decision: decision, planDeltas: ["A": "0.05", "B": "-0.05"],
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A", "B"], blockingUnknowns: [])
         )
         XCTAssertThrowsError(try DecisionValidator().validate(
@@ -544,7 +736,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
         // ② 前沿含 plans 外的 GHOST(域违规仍先拒)
         let ghostFront = makeArtifact(
-            decision: decision, plans: plans,
+            decision: decision, planDeltas: ["A": "0.05"],
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["GHOST"], blockingUnknowns: [])
         )
         XCTAssertThrowsError(try DecisionValidator().validate(
@@ -556,7 +748,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
         // ③ 完整 pairwise 但前沿与推导矛盾(A dom B 却声称前沿含 B)
         let frontLie = makeArtifact(
-            decision: decision, plans: ["A": plans["A"]!, "B": makePlan("B", delta: "-0.05")],
+            decision: decision, planDeltas: ["A": "0.05", "B": "-0.05"],
             comparison: PlanComparisonResult(
                 pairwise: ["A|B": .aDominatesB], paretoFront: ["A", "B"], blockingUnknowns: [])
         )
@@ -570,7 +762,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         // ④ decision 与 comparison 推导矛盾(完整 pairwise 全 incomparable,
         // 前沿 [A,B],却声称 singlePreferred A)
         let contradictory = makeArtifact(
-            decision: decision, plans: ["A": plans["A"]!, "B": makePlan("B", delta: "-0.05")],
+            decision: decision, planDeltas: ["A": "0.05", "B": "-0.05"],
             comparison: PlanComparisonResult(
                 pairwise: ["A|B": .incomparable], paretoFront: ["A", "B"], blockingUnknowns: [])
         )
@@ -582,19 +774,20 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
         // 自洽对照(makeArtifact 的 consistentComparison 生成完整域)→ 通过
         XCTAssertNoThrow(try DecisionValidator().validate(
-            artifact: makeArtifact(decision: decision, plans: plans),
+            artifact: makeArtifact(decision: decision, planDeltas: ["A": "0.05"]),
             resolvers: .everythingResolvable
         ))
     }
 
     func testValidatorRejectsTargetProvenanceMismatch() throws {
         // 四轮 P1-3 回归:plan/action 的 Target 引用与 artifact.target 不一致拒收
+        // (八轮 P1-2:plannerRun 与 plan 同源——run 带 target)
         let target = try StrategicAllocationPolicy().applyUserAllocation(
             entries: [AllocationTargetEntry(assetClass: .equity, targetWeight: Ratio(value: d("1.0")))],
             note: nil, now: day
         )
-        // planner 产自 target 的 plan
-        let plan = TargetRebalancePlanner().plan(
+        // planner 产自 target 的 plan(内嵌 run 同源,可重放)
+        let run = DecisionReplayer.PlannerRun(
             portfolio: PortfolioSnapshot(asOf: day, positions: [
                 PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
             ]),
@@ -602,19 +795,22 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             actionDomain: ActionDomain(
                 perSubjectBounds: ["listing|A": .init(lower: Ratio(value: d("-1")), upper: Ratio(value: d("1")))],
                 eligibleNewSubjects: [:], builderVersion: "t", newSubjectBuyUpper: Ratio(value: 1)),
-            now: day
+            plannerParameters: TargetRebalancePlanner.Parameters()
         )
+        let plan = planFrom(run)
+        let preferred = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
         // artifact.target 是 target → plan.targetID 一致,自洽通过
         let consistent = PortfolioDecisionArtifact.assemble(
-            signalIDs: [SignalID(rawValue: "s")], criterionVersions: ["c@v1"],
-            factorSnapshotIDs: [], target: target, bandVersion: bandVersion,
+            signalIDs: [SignalID(rawValue: "s")],
+            criterionDefinitions: [portfolioMomentumDefinition],
+            factorSnapshotIDs: [],
+            target: target,
+            band: band,
             knowledgeContextSummary: "",
-            decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-            comparison: Self.consistentComparison(
-                for: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-                allPlans: ["A"]),
+            decision: preferred,
+            comparison: Self.consistentComparison(for: preferred, allPlans: ["A"]),
             plans: ["A": plan],
-            plannerRuns: ["A": plannerRun(delta: "0")],
+            plannerRuns: ["A": run],
             producedAt: day
         )
         XCTAssertNoThrow(try DecisionValidator().validate(
@@ -627,30 +823,32 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             note: nil, now: day.addingTimeInterval(3600)
         )
         let mismatched = PortfolioDecisionArtifact.assemble(
-            signalIDs: [SignalID(rawValue: "s")], criterionVersions: ["c@v1"],
-            factorSnapshotIDs: [], target: otherTarget, bandVersion: bandVersion,
+            signalIDs: [SignalID(rawValue: "s")],
+            criterionDefinitions: [portfolioMomentumDefinition],
+            factorSnapshotIDs: [],
+            target: otherTarget,
+            band: band,
             knowledgeContextSummary: "",
-            decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-            comparison: Self.consistentComparison(
-                for: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
-                allPlans: ["A"]),
+            decision: preferred,
+            comparison: Self.consistentComparison(for: preferred, allPlans: ["A"]),
             plans: ["A": plan],
-            plannerRuns: ["A": plannerRun(delta: "0")],
+            plannerRuns: ["A": run],
             producedAt: day
         )
+        // 八轮 P1-2:run.target(target)与 artifact.target(otherTarget)的冲突
+        // 在冻结规划一致性校验中先于 plan 级 provenance 检查命中(更早更精确)
         XCTAssertThrowsError(try DecisionValidator().validate(
             artifact: mismatched, resolvers: .everythingResolvable
         )) { error in
-            guard case DecisionValidator.ValidationError.targetProvenanceMismatch = error else {
-                return XCTFail("应为 target provenance 不一致,实际 \(error)")
-            }
+            XCTAssertEqual(error as? DecisionValidator.ValidationError,
+                           .plannerTargetConflict(planKey: "A"))
         }
     }
 
     func testArtifactBoundReplayVerifiesEndToEnd() throws {
-        // 以 artifact + resolver(材料)为入口:绑定校验(定义域/factor 实例/
-        // band/内嵌规划输入 Target)→ 冻结时间重放 → decision/comparison/
-        // plans 三层全等验证(同 IDs → 同决策)
+        // 以 artifact + resolver(材料)为入口:绑定校验(定义域+内容摘要/
+        // factor 实例/band/冻结规划一致性)→ 冻结时间重放 → decision/
+        // comparison/plans 三层全等验证(同 IDs → 同决策)
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
         let artifact = materialsConsistentArtifact(decision: decision)
         let resolver = TestResolver(materials: standardMaterials())
@@ -679,12 +877,9 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         // factor 引用域不符(情景定义引用 fs_alt,artifact 声明 fs_m)→ 拒
         let scenarioRefs = TestResolver(materials: DecisionReplayer.ReplayMaterials(
             criterionDefinitions: [
-                "costIntensity@v1": standardMaterials().criterionDefinitions["costIntensity@v1"]!,
-                "momentum@v2": CriterionDefinition(
-                    id: "momentum", version: "v2", evaluatorKind: .weightedSum,
-                    inputReferences: [CriterionDefinition.InputReference(
-                        kind: .factorMetric, referenceID: "fs_alt#momentum.return60", weight: 1)],
-                    unit: .ratio),
+                costIntensityDefinition().fingerprint: costIntensityDefinition(),
+                momentumDefinition(snapshotID: "fs_alt", version: "v2").fingerprint:
+                    momentumDefinition(snapshotID: "fs_alt", version: "v2"),
             ],
             factorSnapshots: ["fs_alt": factorSnapshot(id: "fs_alt", value: d("0.05"))],
             observations: [:],
@@ -701,9 +896,10 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
                                               explanation: "漂移")
         let drifted = PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
-            criterionVersions: ["costIntensity@v1", "momentum@v1"],
+            criterionDefinitions: [costIntensityDefinition(), momentumDefinition()],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_m")],
-            target: nil, bandVersion: bandVersion,
+            target: nil,
+            band: band,
             knowledgeContextSummary: "test",
             decision: driftedDecision,
             comparison: Self.consistentComparison(for: driftedDecision, allPlans: ["A", "B"]),
@@ -725,8 +921,8 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     }
 
     func testReplayRejectsInternalPlannerTargetInconsistency() throws {
-        // 五轮 P1-2 回归(七轮内嵌形态):artifact 内嵌规划输入的 Target 与
-        // artifact.target 冲突(run 带 target 而 artifact.target=nil)→ 拒
+        // 五轮 P1-2 回归(七轮内嵌 + 八轮共享校验):artifact 内嵌规划输入的
+        // Target 与 artifact.target 冲突(run 带 target 而 artifact.target=nil)→ 拒
         let targetA = try StrategicAllocationPolicy().applyUserAllocation(
             entries: [AllocationTargetEntry(assetClass: .equity, targetWeight: Ratio(value: 1))],
             note: nil, now: day
@@ -747,9 +943,11 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
             dependencies: base.dependencies,
             signalIDs: base.signalIDs,
             criterionVersions: base.criterionVersions,
+            criterionContentDigests: base.criterionContentDigests,
             factorSnapshotIDs: base.factorSnapshotIDs,
             target: nil,   // artifact.target = nil
             indifferenceBandVersion: base.indifferenceBandVersion,
+            bandContentDigest: base.bandContentDigest,
             plannerInputs: ["A": run, "B": plannerRun(delta: "-0.15")],   // A 的 run 带 target
             knowledgeContextSummary: base.knowledgeContextSummary,
             decision: base.decision,
@@ -768,7 +966,7 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     func testValidatorFailsClosedOnUnresolvableReferences() {
         // 审查 P1-1 回归:任一类引用无法解析 → 抛错,不静默放行
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
-        let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05")])
+        let artifact = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
 
         // Signal 不可解析
         XCTAssertThrowsError(try DecisionValidator().validate(
@@ -832,46 +1030,57 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
 
     func testArtifactImmutableHistoricalAndDeterministicId() {
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
-        let plans = ["A": makePlan("A", delta: "0.05")]
-        let a = makeArtifact(decision: decision, plans: plans)
-        let b = makeArtifact(decision: decision, plans: plans)
+        let a = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
+        let b = makeArtifact(decision: decision, planDeltas: ["A": "0.05"])
         XCTAssertEqual(a.validityPolicy, .immutableHistorical)
-        XCTAssertEqual(a.id, b.id, "引用层+冻结规划输入+结果层相同 → 同 id(producedAt 不参与)")
+        XCTAssertEqual(a.id, b.id, "引用层+内容摘要+冻结规划输入+结果层相同 → 同 id(producedAt 不参与)")
         // dependencies 覆盖 signal/factor/target + criterion/band 的 policy
-        // 依赖(五轮 P1-3:失效传播索引完整)
+        // 依赖(五轮 P1-3;八轮 P1-4:policy 依赖携带内容摘要为 version)
         XCTAssertEqual(Set(a.dependencies.map(\.referenceID)),
                        ["sig-1", "fs_abc", "criterion@portfolio-momentum@v1", "band@b@v1"])
         XCTAssertTrue(a.dependencies.contains { $0.kind == .signal })
         XCTAssertTrue(a.dependencies.contains { $0.kind == .factorSnapshot })
-        XCTAssertTrue(a.dependencies.contains { $0.kind == .policy && $0.referenceID.hasPrefix("criterion@") })
-        XCTAssertTrue(a.dependencies.contains { $0.kind == .policy && $0.referenceID.hasPrefix("band@") })
+        XCTAssertTrue(a.dependencies.contains {
+            $0.kind == .policy && $0.referenceID.hasPrefix("criterion@") && $0.version != nil
+        }, "criterion 依赖携带内容摘要")
+        XCTAssertTrue(a.dependencies.contains {
+            $0.kind == .policy && $0.referenceID.hasPrefix("band@") && $0.version != nil
+        }, "band 依赖携带内容摘要")
 
-        // 引用层变化 → id 变化
-        let differentSignals = PortfolioDecisionArtifact.assemble(
-            signalIDs: [SignalID(rawValue: "sig-2")],
-            criterionVersions: ["portfolio-momentum@v1"],
-            factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
-            target: nil, bandVersion: bandVersion,
-            knowledgeContextSummary: "",
-            decision: decision,
-            comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
-            plans: plans,
-            plannerRuns: ["A": plannerRun(delta: "0")],
-            producedAt: day
-        )
-        XCTAssertNotEqual(a.id, differentSignals.id)
-
-        // 七轮 P1-3:冻结规划输入参与 id——Planner 输入漂移 → id 变化
-        let differentPlannerInputs = PortfolioDecisionArtifact.assemble(
+        // 引用层变化 → id 变化(同 id@version 但权重不同 → 摘要不同 → id 不同)
+        let tamperedDefinition = CriterionDefinition(
+            id: "portfolio-momentum", version: "v1", evaluatorKind: .weightedSum,
+            inputReferences: [CriterionDefinition.InputReference(
+                kind: .factorMetric, referenceID: "fs_abc#momentum.return60", weight: 2)],
+            unit: .ratio)
+        let differentContent = PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig-1")],
-            criterionVersions: ["portfolio-momentum@v1"],
+            criterionDefinitions: [tamperedDefinition],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
-            target: nil, bandVersion: bandVersion,
+            target: nil,
+            band: band,
             knowledgeContextSummary: "economicKnowledge(2024-07-20)",
             decision: decision,
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
-            plans: plans,
-            plannerRuns: ["A": plannerRun(delta: "0.07")],   // 规划输入与 a 不同
+            plans: a.plans,
+            plannerRuns: a.plannerInputs,
+            producedAt: day
+        )
+        XCTAssertNotEqual(a.id, differentContent.id,
+                          "同版本不同内容(权重 2)→ 摘要入 id → id 变化(八轮 P1-4)")
+
+        // 冻结规划输入漂移 → id 变化(七轮 P1-3)
+        let differentPlannerInputs = PortfolioDecisionArtifact.assemble(
+            signalIDs: [SignalID(rawValue: "sig-1")],
+            criterionDefinitions: [portfolioMomentumDefinition],
+            factorSnapshotIDs: [ArtifactID(rawValue: "fs_abc")],
+            target: nil,
+            band: band,
+            knowledgeContextSummary: "economicKnowledge(2024-07-20)",
+            decision: decision,
+            comparison: PlanComparisonResult(pairwise: [:], paretoFront: [], blockingUnknowns: []),
+            plans: ["A": planFrom(plannerRun(delta: "0.05", directiveID: "u-A"))],
+            plannerRuns: ["A": plannerRun(delta: "0.07", directiveID: "u-A")],
             producedAt: day
         )
         XCTAssertNotEqual(a.id, differentPlannerInputs.id,
@@ -881,13 +1090,14 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
     func testCodableRoundTrip() throws {
         let decision = PartialDecision(status: .unresolvedTradeoff, admissiblePlans: ["A", "B"],
                                        explanation: "互不支配")
-        let artifact = makeArtifact(decision: decision, plans: ["A": makePlan("A", delta: "0.05"),
-                                                                "B": makePlan("B", delta: "-0.05")])
+        let artifact = makeArtifact(decision: decision, planDeltas: ["A": "0.05", "B": "-0.05"])
         let data = try JSONEncoder().encode(artifact)
         let decoded = try JSONDecoder().decode(PortfolioDecisionArtifact.self, from: data)
         XCTAssertEqual(decoded, artifact)
         XCTAssertEqual(decoded.signalIDs.map(\.rawValue), ["sig-1"])
         XCTAssertEqual(decoded.indifferenceBandVersion, bandVersion)
+        XCTAssertEqual(decoded.criterionContentDigests, artifact.criterionContentDigests,
+                       "内容摘要随 artifact 完整往返")
         XCTAssertEqual(decoded.plannerInputs, artifact.plannerInputs,
                        "冻结规划输入随 artifact 完整往返")
     }

@@ -102,9 +102,17 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
         )
         return .assemble(
             signalIDs: [SignalID(rawValue: "s1")],
-            criterionVersions: ["c@v1"],
+            criterionDefinitions: [
+                CriterionDefinition(
+                    id: "c", version: "v1", evaluatorKind: .weightedSum,
+                    inputReferences: [CriterionDefinition.InputReference(
+                        kind: .factorMetric, referenceID: "fs_x#momentum.return60", weight: 1)],
+                    unit: .ratio)
+            ],
             factorSnapshotIDs: [ArtifactID(rawValue: "fs_x")],
-            target: nil, bandVersion: "b@v1",
+            target: nil,
+            band: IndifferenceBand(policyID: "b", version: "v1", defaultBand: d("0.01"),
+                                   rationale: "test"),
             knowledgeContextSummary: "economicKnowledge(2024)",
             decision: PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x"),
             comparison: PlanComparisonResult(pairwise: [:], paretoFront: ["A"], blockingUnknowns: []),
@@ -161,7 +169,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
     }
 
     func testPortfolioDecisionRoundTrip() throws {
-        try roundTrip(makeDecision(), kind: ArtifactRow.portfolioDecisionKind)
+        try roundTrip(makeDecision(), kind: ArtifactRow.portfolioDecisionV2Kind)
     }
 
     func testLookthroughSnapshotRoundTrip() throws {
@@ -369,6 +377,30 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             XCTAssertEqual(error as? ArtifactReadError,
                            .kindMismatch(expected: ArtifactRow.factorSnapshotKind,
                                          actual: ArtifactRow.dailyAttributionKind))
+        }
+    }
+
+    func testLegacyDecisionKindFailClosed() throws {
+        // 八轮 P1-3 回归:旧 PORTFOLIO_DECISION kind(七轮前的 payload 结构,
+        /// 无 plannerInputs)对 decision typed fetch 是 fail-closed legacy——
+        // kindMismatch 拒绝,不按新结构解码崩溃、不伪造缺失的 PlannerRun
+        let queue = try dbQueue
+        let legacy = ArtifactRow(
+            id: "dec_legacy",
+            artifactKind: ArtifactRow.legacyPortfolioDecisionKind,
+            producedAt: CanonicalColumnCodec.encodeTimestamp(date(1_700_000_000_000)),
+            validityPolicyJSON: try CanonicalColumnCodec.encodeJSON(ValidityPolicy.immutableHistorical),
+            payloadJSON: "{}"   // kind 校验先行,payload 不进入解码
+        )
+        try queue.write { db in
+            try legacy.insert(db)
+        }
+        XCTAssertThrowsError(try queue.read { db in
+            try ArtifactRow.fetchPortfolioDecision(id: "dec_legacy", from: db)
+        }) { error in
+            XCTAssertEqual(error as? ArtifactReadError,
+                           .kindMismatch(expected: ArtifactRow.portfolioDecisionV2Kind,
+                                         actual: ArtifactRow.legacyPortfolioDecisionKind))
         }
     }
 

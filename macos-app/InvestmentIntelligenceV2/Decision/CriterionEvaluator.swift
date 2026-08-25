@@ -66,6 +66,14 @@ struct CriterionDefinition: Sendable, Codable, Hashable {
 
     var fingerprint: String { "\(id)@\(version)" }
 
+    /// 内容摘要（八轮 P1-4）：版本字符串不绑定材料语义——同版本下替换
+    /// 权重 / 输入引用 / 比较方向 / 单位仍会改变决策；摘要纳入 artifact
+    /// 引用层后，绑定时同版本不同内容的定义被拒。确定性类型，编码失败
+    /// 即编程错误（调用方 fail-fast）。
+    func contentDigest() throws -> String {
+        StableDigest.digest(try StableDigest.jsonPayload(self))
+    }
+
     // 旧 payload（方向入定义前）无 higherIsBetter 键 → 按 true 解码，
     // 与 comparator 历史缺省一致；方向变更必须 bump version（D002 纪律）
     private enum CodingKeys: String, CodingKey {
@@ -192,9 +200,10 @@ enum CardinalObservation: Sendable, Codable, Hashable {
     }
 }
 
-/// plan-scoped cardinal 指标（七轮 P1）：从 (plan, portfolio) 确定性推导的
-/// 方案各自量纲——每个 PortfolioActionPlan 有自己的分数，比较才有 D003
-/// 的 dominance 语义。命名空间封闭（本 enum 是唯一合法 refID 来源）。
+/// plan-scoped cardinal 指标（七轮 P1）：从 (plan, portfolio, actionDomain)
+/// 确定性推导的方案各自量纲——每个 PortfolioActionPlan 有自己的分数，
+/// 比较才有 D003 的 dominance 语义。命名空间封闭（本 enum 是唯一合法
+/// refID 来源；投影计算在 extractor 内复用 ProjectedPortfolio）。
 enum PlanMetrics: Sendable {
     /// Σ|Δw|（全部动作的绝对权重变化之和——交易强度/成本代理，量纲 ratio）
     static let turnover = "plan.turnover"
@@ -203,24 +212,6 @@ enum PlanMetrics: Sendable {
 
     static func turnover(of plan: PortfolioActionPlan) -> Decimal {
         plan.actions.reduce(Decimal.zero) { $0 + abs($1.action.deltaWeight.value) }
-    }
-
-    /// plan 的 Δw 应用到 portfolio 后按资产类聚合的权重（不引入新标的的
-    /// 类别信息——组合外 subjectKey 的 Δw 不计入投影，保持可推导）。
-    static func projectedAssetClassWeights(
-        of plan: PortfolioActionPlan, portfolio: PortfolioSnapshot
-    ) -> [AssetClass: Decimal] {
-        var weightsBySubject = Dictionary(
-            uniqueKeysWithValues: portfolio.positions.map { ($0.subjectKey, $0.weight.value) }
-        )
-        for item in plan.actions {
-            weightsBySubject[item.action.subjectKey, default: .zero] += item.action.deltaWeight.value
-        }
-        var byClass: [AssetClass: Decimal] = [:]
-        for position in portfolio.positions {
-            byClass[position.assetClass, default: .zero] += weightsBySubject[position.subjectKey] ?? .zero
-        }
-        return byClass
     }
 }
 
@@ -241,12 +232,16 @@ enum CriterionInputExtractor: Sendable {
         case malformedFactorReference(String)
         /// planMetric 引用 ID 不在 PlanMetrics 封闭命名空间内
         case malformedPlanMetricReference(String)
+        /// 投影含动作域白名单之外的新标的（无法归类——fail-closed，
+        /// 不猜资产类也不静默丢弃，八轮 P1-1）
+        case unresolvedProjectedSubject(String)
     }
 
     static func inputs(
         definition: CriterionDefinition,
         plan: PortfolioActionPlan,
         portfolio: PortfolioSnapshot,
+        actionDomain: ActionDomain,
         factorSnapshots: [String: FactorSnapshot],
         observations: [String: CardinalObservation]
     ) throws -> [CriterionInput] {
@@ -255,7 +250,9 @@ enum CriterionInputExtractor: Sendable {
             case .planMetric:
                 return CriterionInput(
                     referenceID: reference.referenceID,
-                    value: try planMetricValue(reference.referenceID, plan: plan, portfolio: portfolio)
+                    value: try planMetricValue(
+                        reference.referenceID, plan: plan, portfolio: portfolio,
+                        actionDomain: actionDomain)
                 )
             case .factorMetric:
                 let parts = reference.referenceID.split(separator: "#", maxSplits: 1)
@@ -276,7 +273,8 @@ enum CriterionInputExtractor: Sendable {
     private static func planMetricValue(
         _ referenceID: String,
         plan: PortfolioActionPlan,
-        portfolio: PortfolioSnapshot
+        portfolio: PortfolioSnapshot,
+        actionDomain: ActionDomain
     ) throws -> Decimal? {
         if referenceID == PlanMetrics.turnover {
             return PlanMetrics.turnover(of: plan)
@@ -286,7 +284,17 @@ enum CriterionInputExtractor: Sendable {
             guard let assetClass = AssetClass(rawValue: raw) else {
                 throw ExtractionError.malformedPlanMetricReference(referenceID)
             }
-            return PlanMetrics.projectedAssetClassWeights(of: plan, portfolio: portfolio)[assetClass]
+            let projected = ProjectedPortfolio.project(
+                base: portfolio,
+                applying: plan.actions.map(\.action),
+                assetClassForNewSubjects: actionDomain.eligibleNewSubjects
+            )
+            guard projected.unresolvedNewSubjects.isEmpty else {
+                throw ExtractionError.unresolvedProjectedSubject(
+                    projected.unresolvedNewSubjects.sorted().joined(separator: ","))
+            }
+            // 合法但投影中不存在的类别 = 已知的 0（不是 unknown——八轮 P1-1）
+            return projected.assetClassWeights()[assetClass]?.value ?? .zero
         }
         throw ExtractionError.malformedPlanMetricReference(referenceID)
     }

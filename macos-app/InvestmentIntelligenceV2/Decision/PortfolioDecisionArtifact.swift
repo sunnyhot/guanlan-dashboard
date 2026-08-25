@@ -10,18 +10,28 @@ import Foundation
 // 之外的单测（PortfolioDecisionTests）用确定性 planner 闭环覆盖。
 //
 // 六轮审查修复（P1×4）：输入提取/实例身份/重放自包含/依赖多重集合比较。
-// 七轮审查修复（P1×3）：
-// - P1 逐 plan 求值：criterion 输入含 plan-scoped 指标（PlanMetrics——
-//   turnover / 投影资产类权重，从各自的 plan + portfolio 推导）与决策级
-//   共享 cardinal（factor metric / observation）；方案分数不再共享，
-//   dominance 语义恢复（D003）；
-// - P1 what-if 不可变：what-if 以 resolver 材料重算并**产出新 artifact**
-//   记录新引用（D004 §5「替换引用 ID，产出新 artifact」）——同 ID 换
-//   内容的 API 通道不存在；
-// - P1 引用可定位：Planner 输入**冻结内嵌**进 artifact（plannerInputs，
-//   参与确定性 ID 派生）——重放材料自包含，无需尚不存在的 PlannerRun
-//   Store；ordinal→cardinal 转换 policy 已删除（七轮 P1：ordinal 编码是
-//   伪 cardinal），validator 无需为其提供 resolver。
+// 七轮审查修复（P1×3）：逐 plan 求值（PlanMetrics）、what-if 产新 artifact、
+// Planner 输入冻结内嵌、删除 ordinal 伪 cardinal 通道。
+// 八轮审查修复（P1×4 + P2×2）：
+// - P1 投影完整性：projectedWeight 复用 ProjectedPortfolio.project——
+//   白名单新标的（eligibleNewSubjects 声明资产类）进入投影，合法但
+//   缺席的类别返回已知的 0（不是 unknown）；白名外新标的 fail-closed 拒；
+// - P1 冻结规划一致性：frozenPlannerIssue 共享校验（Validator / replay /
+//   what-if 同一门禁）——plans 非空、域相等、逐 run Target 相等、逐 plan
+//   以冻结 asOf 重跑 Planner 与已存 plan 全等，「Validator 放行而
+//   Replayer 拒绝」的分裂不再可能；
+// - P1 payload 兼容：plannerInputs 入 payload 后结构不兼容旧
+//   PORTFOLIO_DECISION——codec 切换到新 kind PORTFOLIO_DECISION_V2，
+//   旧 kind 行不再被 decision typed fetch 接受（不可完整重放的 legacy，
+//   fail-closed，不伪造缺失的 PlannerRun）；
+// - P1 内容绑定：criterion / band 的引用层纳入 contentDigest（同版本
+//   不同权重/引用/方向/阈值在绑定时被拒）；assemble 以定义与 band 实例
+//   为唯一来源派生 versions / digests / band 版本（不允许字符串与内容
+//   分叉）；
+// - P2 Comparator canonical union：定义取全部 plan 的 union，后续 plan
+//   首次出现的 criterion 不再漏登记；方向无默认值回退。
+// - P2 what-if 洗白：what-if 计算前先过冻结规划一致性校验，损坏的 base
+//   不会被「洗成」结构自洽的新 artifact。
 
 /// 决策 artifact（DEC-9）。
 struct PortfolioDecisionArtifact: Artifact {
@@ -37,12 +47,17 @@ struct PortfolioDecisionArtifact: Artifact {
     let signalIDs: [SignalID]
     /// 参与决策的 criterion 版本指纹
     let criterionVersions: [String]
+    /// criterion 内容摘要（fingerprint → contentDigest；八轮 P1-4：
+    /// 版本字符串不绑定材料语义——同版本不同内容在绑定时被拒）
+    let criterionContentDigests: [String: String]
     /// 底层 FactorSnapshot 引用
     let factorSnapshotIDs: [ArtifactID]
     /// 参照 Target（D000 provenance 闭环）
     let target: AllocationTarget?
     /// 比较用的 IndifferenceBand 版本
     let indifferenceBandVersion: String
+    /// band 内容摘要（八轮 P1-4）
+    let bandContentDigest: String
     /// 冻结内嵌的规划输入（七轮 P1-3：每 plan 的 portfolio / target /
     /// remediation / directives / actionDomain / parameters——完整重放
     /// 从 artifact 本体取 Planner 输入，自包含，不依赖外部 Store）
@@ -72,8 +87,17 @@ struct DecisionValidator: Sendable {
         case bandVersionMismatch(artifact: String, referenced: String)
         /// criterion 版本指纹为空（criterion 不可追溯，D002）
         case emptyCriterionVersions
+        /// plans 为空（八轮 P1-2：无方案决策是退化形态，不产出 artifact）
+        case emptyPlans
         /// 内嵌规划输入域与 plans 域不一致（七轮 P1-3）
         case plannerInputDomainViolation(keys: [String])
+        /// 内嵌规划输入的 Target 与 artifact.target 冲突（八轮 P1-2）
+        case plannerTargetConflict(planKey: String)
+        /// 已存 plan 无法由内嵌规划输入以冻结 asOf 重放（八轮 P1-2）
+        case frozenPlanMismatch(planKey: String)
+        /// 内容摘要域不完整（摘要未覆盖全部 criterion 版本 / band 摘要缺失，
+        /// 八轮 P1-4）
+        case contentDigestIncomplete(keys: [String])
         /// 引用无法解析到具体实例（审查 P1-1：fail-closed，不静默放行）
         case unresolvableReference(kind: String, id: String)
         /// comparison 的 plan 域越界（pairwise 键或前沿含 plans 外的 plan）
@@ -141,11 +165,29 @@ struct DecisionValidator: Sendable {
             throw ValidationError.bandVersionMismatch(
                 artifact: "", referenced: "")
         }
-        // 七轮 P1-3：内嵌规划输入恰好覆盖 plans 域
-        let plannerInputKeys = Set(artifact.plannerInputs.keys)
-        guard plannerInputKeys == Set(artifact.plans.keys) else {
-            throw ValidationError.plannerInputDomainViolation(
-                keys: plannerInputKeys.symmetricDifference(artifact.plans.keys).sorted())
+        // 八轮 P1-4：内容摘要恰好覆盖全部 criterion 版本且非空；band 摘要非空
+        let digestKeys = Set(artifact.criterionContentDigests.keys)
+        guard digestKeys == Set(artifact.criterionVersions),
+              !artifact.criterionContentDigests.values.contains(where: \.isEmpty),
+              !artifact.bandContentDigest.isEmpty
+        else {
+            throw ValidationError.contentDigestIncomplete(
+                keys: digestKeys.symmetricDifference(artifact.criterionVersions).sorted())
+        }
+        // 八轮 P1-2：冻结规划一致性（空 plans / 域 / 逐 run Target /
+        // 逐 plan 可重放）——与 Replayer/what-if 共用同一门禁
+        if let issue = DecisionReplayer.frozenPlannerIssue(of: artifact) {
+            switch issue {
+            case .emptyPlans:
+                throw ValidationError.emptyPlans
+            case .domainMismatch(let artifactKeys, let inputKeys):
+                throw ValidationError.plannerInputDomainViolation(
+                    keys: Set(artifactKeys).symmetricDifference(inputKeys).sorted())
+            case .targetConflict(let planKey):
+                throw ValidationError.plannerTargetConflict(planKey: planKey)
+            case .planNotReproducible(let planKey):
+                throw ValidationError.frozenPlanMismatch(planKey: planKey)
+            }
         }
         // D001：provenance 实校验（四轮 P1-3：原实现是空操作枚举）——
         // plan 与 targetRebalance 动作引用的 Target 必须 == artifact.target；
@@ -181,14 +223,20 @@ struct DecisionValidator: Sendable {
         }
         // dependencies 与引用层完整比较（五轮 P1-3:kind/version/重复都参与;
         // 六轮 P1-4:多重集合按 ArtifactDependency 结构化相等计数——不再
-        // 拼接分隔符字符串,referenceID/version 含 `|` 的碰撞不再可能;
-        // criterion/band 的 policy 依赖一并登记）
+        // 拼接分隔符字符串;八轮 P1-4:criterion/band 依赖携带内容摘要为
+        // version——失效传播按内容粒度）
         let expectedDeps: [ArtifactDependency] =
             artifact.signalIDs.map { ArtifactDependency(kind: .signal, referenceID: $0.rawValue) }
             + artifact.factorSnapshotIDs.map { ArtifactDependency(kind: .factorSnapshot, referenceID: $0.rawValue) }
             + (artifact.target.map { [ArtifactDependency(kind: .target, referenceID: $0.id.rawValue)] } ?? [])
-            + artifact.criterionVersions.map { ArtifactDependency(kind: .policy, referenceID: "criterion@\($0)") }
-            + [ArtifactDependency(kind: .policy, referenceID: "band@\(artifact.indifferenceBandVersion)")]
+            + artifact.criterionVersions.map {
+                ArtifactDependency(
+                    kind: .policy, referenceID: "criterion@\($0)",
+                    version: artifact.criterionContentDigests[$0])
+            }
+            + [ArtifactDependency(
+                kind: .policy, referenceID: "band@\(artifact.indifferenceBandVersion)",
+                version: artifact.bandContentDigest)]
         let dependencyCounts = { (deps: [ArtifactDependency]) -> [ArtifactDependency: Int] in
             var counts: [ArtifactDependency: Int] = [:]
             for dep in deps { counts[dep, default: 0] += 1 }
@@ -296,7 +344,8 @@ struct DecisionReplayer: Sendable {
     struct ReplayMaterials: Sendable, Codable, Hashable {
         /// criterion 定义（key = fingerprint「id@version」；一致性校验
         /// key == definition.fingerprint；绑定重放另要求恰好覆盖
-        /// artifact.criterionVersions，what-if 允许记录新版本引用）
+        /// artifact.criterionVersions 且内容摘要一致，what-if 允许记录
+        /// 新版本引用）
         let criterionDefinitions: [String: CriterionDefinition]
         /// FactorSnapshot 强类型实例（key = snapshot ID；一致性校验
         /// key == snapshot.id.rawValue 且与定义派生的引用域精确相等）
@@ -328,10 +377,11 @@ struct DecisionReplayer: Sendable {
 
     /// 纯计算 helper（私有：不做绑定校验——绑定是入口的职责）。
     /// 七轮 P1-1：**逐 plan 求值**——criterion 输入含 plan-scoped 指标
-    /// （turnover / 投影资产类权重，从各自的 plan + portfolio 推导）与
-    /// 决策级共享 cardinal（factor metric / observation），方案分数不再
-    /// 共享。frozenNowByPlan 完整性由调用方保证（replay/what-if 取自
-    /// artifact plans；缺键时兜底 portfolio.asOf——防御性，不改变语义）。
+    /// （turnover / 投影资产类权重，从各自的 plan + portfolio +
+    /// actionDomain 推导）与决策级共享 cardinal（factor metric /
+    /// observation），方案分数不再共享。frozenNowByPlan 完整性由调用方
+    /// 保证（replay/what-if 取自 artifact plans；缺键时兜底
+    /// portfolio.asOf——防御性，不改变语义）。
     private func compute(
         materials: ReplayMaterials,
         plannerInputs: [String: PlannerRun],
@@ -357,6 +407,7 @@ struct DecisionReplayer: Sendable {
                     definition: definition,
                     plan: plan,
                     portfolio: run.portfolio,
+                    actionDomain: run.actionDomain,
                     factorSnapshots: materials.factorSnapshots,
                     observations: materials.observations
                 )
@@ -373,6 +424,67 @@ struct DecisionReplayer: Sendable {
         return ReplayOutcome(plans: plans, comparison: comparison, decision: decision)
     }
 
+    // MARK: - 冻结规划一致性（八轮 P1-2/P2-6，三入口共享门禁）
+
+    /// 冻结规划输入一致性检查（Validator / replay / what-if 共用）：
+    /// ① plans 非空（空方案决策是退化形态）；
+    /// ② plannerInputs 域 == plans 域；
+    /// ③ 逐 run Target 与 artifact.target 无条件严格相等（含双 nil）；
+    /// ④ 逐 plan 以 plan.asOf 冻结时间重跑 TargetRebalancePlanner，必须
+    ///    与已存 plan 全等——artifact 的结果层必须可由内嵌输入重放
+    ///    （「Validator 放行而 Replayer 拒绝」的分裂不再可能）。
+    enum FrozenPlannerIssue: Equatable, Sendable {
+        case emptyPlans
+        case domainMismatch(artifact: [String], inputs: [String])
+        case targetConflict(planKey: String)
+        case planNotReproducible(planKey: String)
+    }
+
+    static func frozenPlannerIssue(
+        of artifact: PortfolioDecisionArtifact
+    ) -> FrozenPlannerIssue? {
+        guard !artifact.plans.isEmpty else { return .emptyPlans }
+        let artifactKeys = Set(artifact.plans.keys)
+        let inputKeys = Set(artifact.plannerInputs.keys)
+        guard artifactKeys == inputKeys else {
+            return .domainMismatch(artifact: artifactKeys.sorted(), inputs: inputKeys.sorted())
+        }
+        for (key, run) in artifact.plannerInputs {
+            guard run.target?.id == artifact.target?.id else {
+                return .targetConflict(planKey: key)
+            }
+            let regenerated = TargetRebalancePlanner(
+                parameters: run.plannerParameters
+            ).plan(
+                portfolio: run.portfolio,
+                target: run.target,
+                remediationTargets: run.remediationTargets,
+                userDirectives: run.userDirectives,
+                actionDomain: run.actionDomain,
+                now: artifact.plans[key]?.asOf ?? run.portfolio.asOf
+            )
+            guard regenerated == artifact.plans[key] else {
+                return .planNotReproducible(planKey: key)
+            }
+        }
+        return nil
+    }
+
+    static func replayError(for issue: FrozenPlannerIssue) -> ReplayError {
+        switch issue {
+        case .emptyPlans:
+            return .frozenTimeUnavailable(artifactPlans: [])
+        case .domainMismatch(let artifactKeys, let inputKeys):
+            return .artifactPlanDomainMismatch(artifact: artifactKeys, inputs: inputKeys)
+        case .targetConflict(let planKey):
+            return .referenceMismatch(
+                declared: "plannerInputs[\(planKey)].target 与 artifact.target 冲突",
+                artifact: "冻结规划输入不一致")
+        case .planNotReproducible(let planKey):
+            return .frozenPlannerInconsistent(planKey: planKey)
+        }
+    }
+
     // MARK: - artifact 绑定重放 / what-if
 
     enum ReplayError: Error, Equatable, Sendable {
@@ -380,13 +492,15 @@ struct DecisionReplayer: Sendable {
         case artifactPlanDomainMismatch(artifact: [String], inputs: [String])
         /// 重放结果与 artifact 不一致（完整重放的「同 IDs → 同决策」被破坏）
         case replayMismatch(detail: String)
-        /// 材料与引用约定不一致（引用域/实例域/版本绑定失败）
+        /// 材料与引用约定不一致（引用域/实例域/版本或内容摘要绑定失败）
         case referenceMismatch(declared: String, artifact: String)
         /// 材料实例身份不符（字典 key ≠ 实例自身 ID——「复制 ID 给别的
         /// 实例」无法通过）
         case materialIdentityMismatch(detail: String)
         /// artifact 无 plans，无法取冻结时间
         case frozenTimeUnavailable(artifactPlans: [String])
+        /// 已存 plan 无法由内嵌规划输入重放（八轮 P1-2）
+        case frozenPlannerInconsistent(planKey: String)
         /// plan key 非法（空或含分隔符 |——throw 而非崩溃）
         case malformedPlanKey(String)
     }
@@ -400,9 +514,9 @@ struct DecisionReplayer: Sendable {
     }
 
     /// 以 artifact 为入口的完整重放：resolver 解析材料 → 绑定校验 →
-    /// 逐 plan 提取输入重算分数 → 全链重跑（Planner 输入取自 artifact
-    /// 冻结内嵌的 plannerInputs，时间从 artifact.plans[key].asOf 冻结——
-    /// 同 IDs 唯一确定重放结果，含 plan id / asOf）。
+    /// 冻结规划一致性校验 → 逐 plan 提取输入重算分数 → 全链重跑
+    /// （Planner 输入取自 artifact 冻结内嵌的 plannerInputs，时间从
+    /// artifact.plans[key].asOf 冻结——同 IDs 唯一确定重放结果）。
     func replay(
         artifact: PortfolioDecisionArtifact,
         resolver: any InputResolving
@@ -414,15 +528,8 @@ struct DecisionReplayer: Sendable {
             throw .referenceMismatch(declared: "resolver 解析失败: \(error)", artifact: "artifact 引用不可解析")
         }
         try validateBinding(materials: materials, against: artifact)
-        // 内嵌规划输入与 plans 域结构一致(fail-closed——绕过 DecisionValidator
-        // 的 artifact 在此拒,不静默按 plannerInputs 域重放)
-        guard Set(artifact.plannerInputs.keys) == Set(artifact.plans.keys) else {
-            throw .artifactPlanDomainMismatch(
-                artifact: artifact.plans.keys.sorted(),
-                inputs: artifact.plannerInputs.keys.sorted())
-        }
-        guard !artifact.plans.isEmpty else {
-            throw .frozenTimeUnavailable(artifactPlans: artifact.plans.keys.sorted())
+        if let issue = Self.frozenPlannerIssue(of: artifact) {
+            throw Self.replayError(for: issue)
         }
         do {
             return try compute(
@@ -439,16 +546,12 @@ struct DecisionReplayer: Sendable {
         }
     }
 
-    /// Partial 重放（what-if，七轮 P1-2 重设计）：以 base 的**冻结规划
-    /// 输入**为准，用 resolver 提供的替换材料（新实例 / 新 criterion
-    /// 版本——版本纪律：引用变更是新定义，必须 bump version）重算比较，
-    /// **产出新 artifact 记录新引用**（D004 §5「替换引用 ID，产出新
-    /// artifact」）。同 ID 换内容的通道不存在——替换实例携带自己的新 ID，
-    /// 新引用（factorSnapshotIDs / criterionVersions / band 版本）写入
-    /// 新 artifact；base 不受影响，审计时同一 ID 永远对应同一实例内容。
-    /// 材料一致性校验同绑定重放（实例身份 / 引用域精确相等），但不与
-    /// base 的 criterionVersions / factorSnapshotIDs 交叉绑定——what-if
-    /// 的语义正是替换引用。
+    /// Partial 重放（what-if，七轮 P1-2 重设计 + 八轮 P2-6）：以 base 的
+    /// **冻结规划输入**为准（先过冻结规划一致性校验——损坏的 base 不会
+    /// 被「洗成」结构自洽的新 artifact），用 resolver 提供的替换材料
+    /// （新实例 / 新 criterion 版本——版本纪律：引用变更是新定义，必须
+    /// bump version）重算比较，**产出新 artifact 记录新引用**（D004 §5）。
+    /// 同 ID 换内容的通道不存在——替换实例携带自己的新 ID。
     func replayWhatIf(
         base: PortfolioDecisionArtifact,
         resolver: any InputResolving,
@@ -461,8 +564,8 @@ struct DecisionReplayer: Sendable {
             throw .referenceMismatch(declared: "resolver 解析失败: \(error)", artifact: "what-if 引用不可解析")
         }
         let referencedFactorIDs = try Self.validateMaterialsConsistency(materials)
-        guard !base.plans.isEmpty else {
-            throw .frozenTimeUnavailable(artifactPlans: base.plans.keys.sorted())
+        if let issue = Self.frozenPlannerIssue(of: base) {
+            throw Self.replayError(for: issue)
         }
         let outcome: ReplayOutcome
         do {
@@ -480,10 +583,12 @@ struct DecisionReplayer: Sendable {
         }
         return PortfolioDecisionArtifact.assemble(
             signalIDs: base.signalIDs,
-            criterionVersions: materials.criterionDefinitions.keys.sorted(),
+            criterionDefinitions: materials.criterionDefinitions.values.sorted {
+                $0.fingerprint < $1.fingerprint
+            },
             factorSnapshotIDs: referencedFactorIDs.sorted().map { ArtifactID(rawValue: $0) },
             target: base.target,
-            bandVersion: "\(materials.band.policyID)@\(materials.band.version)",
+            band: materials.band,
             knowledgeContextSummary: base.knowledgeContextSummary,
             decision: outcome.decision,
             comparison: outcome.comparison,
@@ -495,33 +600,54 @@ struct DecisionReplayer: Sendable {
 
     /// 绑定校验（完整重放）：材料内部自洽（validateMaterialsConsistency）
     /// + 与 artifact 引用层精确对齐——criterion 定义域恰好覆盖
-    /// criterionVersions；band 版本一致；factor 引用域 == 声明域；
-    /// 内嵌规划输入逐 run Target 与 artifact.target 无条件严格相等
-    /// （含双 nil；多 Target 冲突在此拒）。
+    /// criterionVersions 且**内容摘要一致**（八轮 P1-4：同版本不同
+    /// 权重/引用/方向的定义被拒）；band 版本与内容摘要一致；factor
+    /// 引用域 == 声明域。（逐 run Target 与 plans 可重放性在
+    /// frozenPlannerIssue 共享校验中。）
     private func validateBinding(
         materials: ReplayMaterials, against artifact: PortfolioDecisionArtifact
     ) throws(ReplayError) {
         let referencedFactorIDs = try Self.validateMaterialsConsistency(materials)
-        // criterion 定义域恰好覆盖
+        // criterion 定义域恰好覆盖 + 内容摘要一致
         let definitionFingerprints = Set(materials.criterionDefinitions.keys)
         guard definitionFingerprints == Set(artifact.criterionVersions) else {
             throw .referenceMismatch(
                 declared: "definitions=\(definitionFingerprints.sorted())",
                 artifact: "criterionVersions=\(artifact.criterionVersions.sorted())")
         }
-        // band 版本
+        for (key, definition) in materials.criterionDefinitions {
+            let digest: String
+            do {
+                digest = try definition.contentDigest()
+            } catch {
+                throw .referenceMismatch(
+                    declared: "定义摘要计算失败: \(error)",
+                    artifact: "criterion[\(key)]")
+            }
+            guard digest == artifact.criterionContentDigests[key] else {
+                throw .referenceMismatch(
+                    declared: "criterion[\(key)] 内容摘要不符（同版本不同内容）",
+                    artifact: "criterionContentDigests[\(key)]")
+            }
+        }
+        // band 版本 + 内容摘要
         let bandVersion = "\(materials.band.policyID)@\(materials.band.version)"
         guard bandVersion == artifact.indifferenceBandVersion else {
             throw .referenceMismatch(
                 declared: "band=\(bandVersion)", artifact: "band=\(artifact.indifferenceBandVersion)")
         }
-        // 内嵌规划输入逐 run Target 严格相等(含双 nil)
-        for (key, run) in artifact.plannerInputs {
-            guard run.target?.id == artifact.target?.id else {
-                throw .referenceMismatch(
-                    declared: "plannerInputs[\(key)].target=\(run.target?.id.rawValue ?? "nil")",
-                    artifact: "target=\(artifact.target?.id.rawValue ?? "nil")")
-            }
+        let bandDigest: String
+        do {
+            bandDigest = try materials.band.contentDigest()
+        } catch {
+            throw .referenceMismatch(
+                declared: "band 摘要计算失败: \(error)",
+                artifact: "bandContentDigest")
+        }
+        guard bandDigest == artifact.bandContentDigest else {
+            throw .referenceMismatch(
+                declared: "band 内容摘要不符（同版本不同阈值）",
+                artifact: "bandContentDigest")
         }
         // factor 引用域（从定义实例派生）== artifact 声明域
         guard referencedFactorIDs == Set(artifact.factorSnapshotIDs.map(\.rawValue)) else {
@@ -614,15 +740,18 @@ struct DecisionReplayer: Sendable {
 // MARK: - 决策组装器（artifact 构造的便捷入口）
 
 extension PortfolioDecisionArtifact {
-    /// 从比较结论组装 artifact（id 确定性派生：引用层 + 冻结规划输入 +
-    /// 结果层完整语义，只排除 producedAt）。plannerRuns 必须恰好覆盖
-    /// plans 域（冻结内嵌的完整性前提，违反即编程错误 fail-fast）。
+    /// 从比较结论组装 artifact（id 确定性派生：引用层 + 内容摘要 + 冻结
+    /// 规划输入 + 结果层完整语义，只排除 producedAt）。
+    /// **criterion / band 的版本与摘要一律从定义/实例派生**（八轮 P1-4：
+    /// 调用方不再传版本字符串——版本与内容不允许分叉）。
+    /// plannerRuns 必须恰好覆盖 plans 域（冻结内嵌的完整性前提，违反即
+    /// 编程错误 fail-fast）。
     static func assemble(
         signalIDs: [SignalID],
-        criterionVersions: [String],
+        criterionDefinitions: [CriterionDefinition],
         factorSnapshotIDs: [ArtifactID],
         target: AllocationTarget?,
-        bandVersion: String,
+        band: IndifferenceBand,
         knowledgeContextSummary: String,
         decision: PartialDecision,
         comparison: PlanComparisonResult,
@@ -633,27 +762,45 @@ extension PortfolioDecisionArtifact {
         precondition(
             Set(plannerRuns.keys) == Set(plans.keys),
             "assemble 的 plannerRuns 必须恰好覆盖 plans 域（冻结内嵌前提）")
+        precondition(!criterionDefinitions.isEmpty, "assemble 拒绝空 criterion 集（D002）")
+        let sortedDefinitions = criterionDefinitions.sorted { $0.fingerprint < $1.fingerprint }
+        let criterionVersions = sortedDefinitions.map(\.fingerprint)
+        // 内容摘要（确定性类型,编码失败 = 编程错误,fail-fast）
+        var criterionContentDigests: [String: String] = [:]
+        for definition in sortedDefinitions {
+            criterionContentDigests[definition.fingerprint] = try! definition.contentDigest()
+        }
+        let bandVersion = "\(band.policyID)@\(band.version)"
+        let bandContentDigest = try! band.contentDigest()
         // 确定性类型的编码失败 = 编程错误,fail-fast
         let payload = try! StableDigest.jsonPayload(IdentityPayload(
             signalIDs: signalIDs.map(\.rawValue).sorted(),
-            criterionVersions: criterionVersions.sorted(),
+            criterionVersions: criterionVersions,
+            criterionContentDigests: criterionContentDigests,
             factorSnapshotIDs: factorSnapshotIDs.map(\.rawValue).sorted(),
             targetID: target?.id.rawValue,
             bandVersion: bandVersion,
+            bandContentDigest: bandContentDigest,
             plannerInputs: plannerRuns,
             knowledgeContextSummary: knowledgeContextSummary,
             decision: decision,
             comparison: comparison,
             plans: plans
         ))
-        // 五轮 P1-3:criterion / band 的 policy 依赖一并登记(失效传播:
-        // 任一 policy 版本变更 → 受影响决策可反查)
+        // 五轮 P1-3 + 八轮 P1-4:criterion / band 的 policy 依赖携带内容
+        // 摘要为 version(失效传播按内容粒度)
         let deps: [ArtifactDependency] =
             signalIDs.map { ArtifactDependency(kind: .signal, referenceID: $0.rawValue) }
             + factorSnapshotIDs.map { ArtifactDependency(kind: .factorSnapshot, referenceID: $0.rawValue) }
             + (target.map { [ArtifactDependency(kind: .target, referenceID: $0.id.rawValue, version: nil)] } ?? [])
-            + criterionVersions.map { ArtifactDependency(kind: .policy, referenceID: "criterion@\($0)") }
-            + [ArtifactDependency(kind: .policy, referenceID: "band@\(bandVersion)")]
+            + criterionVersions.map {
+                ArtifactDependency(
+                    kind: .policy, referenceID: "criterion@\($0)",
+                    version: criterionContentDigests[$0])
+            }
+            + [ArtifactDependency(
+                kind: .policy, referenceID: "band@\(bandVersion)",
+                version: bandContentDigest)]
         return PortfolioDecisionArtifact(
             id: ArtifactID(rawValue: "dec_\(StableDigest.digest(payload))"),
             producedAt: producedAt,
@@ -661,9 +808,11 @@ extension PortfolioDecisionArtifact {
             dependencies: deps,
             signalIDs: signalIDs,
             criterionVersions: criterionVersions,
+            criterionContentDigests: criterionContentDigests,
             factorSnapshotIDs: factorSnapshotIDs,
             target: target,
             indifferenceBandVersion: bandVersion,
+            bandContentDigest: bandContentDigest,
             plannerInputs: plannerRuns,
             knowledgeContextSummary: knowledgeContextSummary,
             decision: decision,
@@ -672,13 +821,16 @@ extension PortfolioDecisionArtifact {
         )
     }
 
-    /// ID 身份 payload（语义完备；七轮 P1-3：冻结规划输入参与身份派生）。
+    /// ID 身份 payload（语义完备；七轮 P1-3 冻结规划输入 + 八轮 P1-4
+    /// 内容摘要参与身份派生）。
     private struct IdentityPayload: Encodable {
         let signalIDs: [String]
         let criterionVersions: [String]
+        let criterionContentDigests: [String: String]
         let factorSnapshotIDs: [String]
         let targetID: String?
         let bandVersion: String
+        let bandContentDigest: String
         let plannerInputs: [String: DecisionReplayer.PlannerRun]
         let knowledgeContextSummary: String
         let decision: PartialDecision
