@@ -1544,6 +1544,21 @@ macos-app/
 >   （删列不再静默、errorMessage 与 FAILED detail 核对）。
 > - 修复后 swift test 全量绿（1774 passed，环境性排除同前）；干净 HEAD
 >   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
+>
+> **五轮审查修复（2026-08-25，4×P1 + 2×P2，全部闭环）**：
+> - **P1 resolver 材料化**：InputResolving 返回 ReplayMaterials（定义 +
+>   per-plan 输入 + 强类型实例），**分数由 Replayer 内部重算**——signal/
+>   factor 引用域从定义实例结构性派生，resolver 无法自报或注入分数。
+> - **P1 多 Target 折叠**：逐 plannerRun 无条件严格相等（含双 nil）；
+>   Validator 同步无条件。
+> - **P1 dependencies 完整比较**：(kind|refID|version) 多重集比较；
+>   assemble 补 criterion/band 的 policy 依赖。
+> - **P1 读回 split-brain**：fetchDomain 严格读回（id/validity/时间/
+>   依赖表逐字段校验，分歧抛错）。
+> - **P2 pair 键分隔符**：入口拒绝含 | 的 plan key。**P2 iOS 同口径**：
+>   badge/贡献行/residual/覆盖/失败态同步。
+> - 修复后 swift test 全量绿（1777 passed，环境性排除同前）；干净 HEAD
+>   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
