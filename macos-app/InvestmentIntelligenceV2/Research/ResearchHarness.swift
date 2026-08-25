@@ -373,11 +373,18 @@ struct ResearchHarness: Sendable {
             if let raw = submitted.dimension, dimension == nil {
                 return .failure("dimension 必须是 \(SignalDimension.allCases.map(\.rawValue)) 之一，收到 \(raw)")
             }
+            let direction = submitted.direction.flatMap { raw in
+                SignalDirection(rawValue: raw)
+            }
+            if let raw = submitted.direction, direction == nil {
+                return .failure("direction 必须是 BULLISH/BEARISH/NEUTRAL/UNCERTAIN 之一，收到 \(raw)")
+            }
             claims.append(ResearchClaim(
                 statement: submitted.statement,
                 evidenceReferences: submitted.evidenceIds.map { EvidenceID(rawValue: $0) },
                 confidenceLabel: label,
-                dimension: dimension
+                dimension: dimension,
+                direction: direction
             ))
         }
 

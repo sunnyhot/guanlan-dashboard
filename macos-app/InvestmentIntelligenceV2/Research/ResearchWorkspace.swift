@@ -42,7 +42,7 @@ enum ResearchConfidenceLabel: String, Sendable, Codable, Hashable, CaseIterable 
     case low = "LOW"
 }
 
-/// 研究笔记中的单条 claim（结构化事实陈述 + 证据引用）。
+/// 研究笔记中的单条 claim（结构化事实陈述 + 证据引用 + 方向判断）。
 struct ResearchClaim: Sendable, Codable, Hashable {
     /// 事实陈述（一句话）。
     let statement: String
@@ -54,17 +54,24 @@ struct ResearchClaim: Sendable, Codable, Hashable {
     let confidenceLabel: ResearchConfidenceLabel
     /// 声明所属的信号维度（可选；RES-4 转 Signal 时的线索）。
     let dimension: SignalDimension?
+    /// 研究方向判断（ordinal——非数值置信度；铁律允许 LLM 做 Event
+    /// Interpretation / Thesis Formation，direction 是其结论形态）。
+    /// 落地成 InvestmentSignal 前必须过 SignalExtractionPolicy 的证据
+    /// 门槛（RES-4）：无证据方向强制 uncertain。
+    let direction: SignalDirection?
 
     init(
         statement: String,
         evidenceReferences: [EvidenceID],
         confidenceLabel: ResearchConfidenceLabel,
-        dimension: SignalDimension? = nil
+        dimension: SignalDimension? = nil,
+        direction: SignalDirection? = nil
     ) {
         self.statement = statement
         self.evidenceReferences = evidenceReferences
         self.confidenceLabel = confidenceLabel
         self.dimension = dimension
+        self.direction = direction
     }
 }
 
@@ -90,7 +97,7 @@ struct ResearchNotes: Sendable, Codable, Hashable {
         payload["claims"] = claims
             .map { claim in
                 let refs = claim.evidenceReferences.map(\.rawValue).sorted().joined(separator: ",")
-                return "\(claim.statement)|\(refs)|\(claim.confidenceLabel.rawValue)|\(claim.dimension?.rawValue ?? "")"
+                return "\(claim.statement)|\(refs)|\(claim.confidenceLabel.rawValue)|\(claim.dimension?.rawValue ?? "")|\(claim.direction?.rawValue ?? "")"
             }
             .joined(separator: ";")
         payload["producer"] = "\(producedBy.providerID)|\(producedBy.model)|\(producedBy.fingerprint)"
@@ -109,6 +116,7 @@ struct ResearchNotesSubmission: Decodable, Sendable, Hashable {
         let evidenceIds: [String]
         let confidenceLabel: String
         let dimension: String?
+        let direction: String?
     }
 
     let notes: String
@@ -145,6 +153,11 @@ struct ResearchNotesSubmission: Decodable, Sendable, Hashable {
                                 "type": "string",
                                 "enum": ["HIGH", "MEDIUM", "LOW"],
                                 "description": "证据充分度自评。"
+                            ],
+                            "direction": [
+                                "type": "string",
+                                "enum": ["BULLISH", "BEARISH", "NEUTRAL", "UNCERTAIN"],
+                                "description": "该陈述支持的研究方向判断（可选；无足够证据时给 UNCERTAIN）。"
                             ],
                             "dimension": [
                                 "type": "string",
