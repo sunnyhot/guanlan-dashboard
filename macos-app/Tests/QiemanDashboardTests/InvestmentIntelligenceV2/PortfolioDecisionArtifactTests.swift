@@ -717,6 +717,33 @@ final class PortfolioDecisionArtifactTests: XCTestCase {
         }
     }
 
+    func testReplayAndWhatIfRejectEmptyCriterionDefinitions() throws {
+        // 九轮 P1 回归:resolver 返回空 criterion 定义集(criterion store
+        // 故障/维护的外部数据)→ fail-closed 抛错,不崩进程——此前 what-if
+        // 会一路走到 assemble 的 precondition SIGTRAP
+        let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")
+        let base = materialsConsistentArtifact(decision: decision)
+        let emptyMaterials = DecisionReplayer.ReplayMaterials(
+            criterionDefinitions: [:],
+            factorSnapshots: [:], observations: [:], band: band)
+        let replayer = DecisionReplayer()
+
+        XCTAssertThrowsError(try replayer.replayWhatIf(
+            base: base, resolver: TestResolver(materials: emptyMaterials), producedAt: day
+        )) { error in
+            guard case DecisionReplayer.ReplayError.referenceMismatch = error else {
+                return XCTFail("what-if 空定义集应 fail-closed 拒绝,实际 \(error)")
+            }
+        }
+        XCTAssertThrowsError(try replayer.replay(
+            artifact: base, resolver: TestResolver(materials: emptyMaterials)
+        )) { error in
+            guard case DecisionReplayer.ReplayError.referenceMismatch = error else {
+                return XCTFail("replay 空定义集应 fail-closed 拒绝,实际 \(error)")
+            }
+        }
+    }
+
     func testValidatorRejectsInternallyContradictoryResults() throws {
         // 三轮 P1-6 回归:结果层内部矛盾拒收
         let decision = PartialDecision(status: .singlePreferred, admissiblePlans: ["A"], explanation: "x")

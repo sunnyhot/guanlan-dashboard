@@ -209,6 +209,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 8. **分析模块纯派生** — 今日简报、组合诊断、收益归因、策略雷达优先基于本地已聚合数据计算，不在 View 内写业务计算
 9. **AI 行动跟踪单一路径** — 今日研判行动候选由用户主动加入跟踪清单；旧 TradeSignal 设置/通知链已删除
 10. **Release notes** — GitHub Actions 从 tag 间 commit 标题生成更新内容；面向用户的提交标题要清晰、可读
+11. **V2 决策 artifact 写库前必须过 DecisionValidator** — `PortfolioDecisionArtifact` 经 `assemble` 产出后、`ArtifactRow.write` 落库前，接线方必须先 `DecisionValidator().validate(artifact:resolvers:)`（DEC-9 接线/Epic 9 时执行；当前 validator 只有测试调用点——不闭环它就是死代码，损坏决策会直接落库）。同理 `DecisionReplayer`/`replayWhatIf` 的 resolver 材料属外部数据，入口全部 fail-closed 抛错、不得崩进程
 
 ## 已知坑点
 

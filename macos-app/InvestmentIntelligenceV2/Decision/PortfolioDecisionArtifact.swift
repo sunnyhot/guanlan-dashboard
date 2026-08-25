@@ -485,6 +485,24 @@ struct DecisionReplayer: Sendable {
         }
     }
 
+    /// Comparator 错误 → ReplayError 逐 case 映射（九轮 P3：不做
+    /// String(describing:) 笼统归类——比较器将来新增 case 不会被静默
+    /// 误标为 malformedPlanKey）。
+    static func replayError(for compareError: CriterionComparator.CompareError) -> ReplayError {
+        switch compareError {
+        case .malformedPlanKey(let key):
+            return .malformedPlanKey(key)
+        case .duplicateCriterion(let planKey, let criterionID):
+            return .referenceMismatch(
+                declared: "plan[\(planKey)] 的 criterion[\(criterionID)] 重复",
+                artifact: "比较 schema 非法")
+        case .criterionDefinitionMismatch(let criterionID):
+            return .referenceMismatch(
+                declared: "criterion[\(criterionID)] 跨 plan 定义不一致",
+                artifact: "比较 schema 非法")
+        }
+    }
+
     // MARK: - artifact 绑定重放 / what-if
 
     enum ReplayError: Error, Equatable, Sendable {
@@ -538,7 +556,7 @@ struct DecisionReplayer: Sendable {
                 frozenNowByPlan: artifact.plans.mapValues(\.asOf)
             )
         } catch let error as CriterionComparator.CompareError {
-            throw .malformedPlanKey(String(describing: error))
+            throw Self.replayError(for: error)
         } catch {
             throw .referenceMismatch(
                 declared: "输入提取失败: \(error)",
@@ -575,7 +593,7 @@ struct DecisionReplayer: Sendable {
                 frozenNowByPlan: base.plans.mapValues(\.asOf)
             )
         } catch let error as CriterionComparator.CompareError {
-            throw .malformedPlanKey(String(describing: error))
+            throw Self.replayError(for: error)
         } catch {
             throw .referenceMismatch(
                 declared: "what-if 输入提取失败: \(error)",
@@ -658,6 +676,10 @@ struct DecisionReplayer: Sendable {
     }
 
     /// 材料内部自洽（绑定重放与 what-if 共用）：
+    /// ⓪ criterion 定义集非空（九轮 P1：resolver 是外部数据来源——
+    /// criterion store 故障/维护返回空集时不得让 what-if 一路走到
+    /// assemble 的 precondition 崩进程；与六轮 P2「重放路径不崩」同一
+    /// 纪律）；
     /// ① 实例身份——字典 key 必须就是实例自身 ID（definition.fingerprint /
     ///    snapshot.id / observation.id），换版本或换实例挂旧键无法通过；
     /// ② factorMetric 引用约定合法（「<snapshotID>#<metricKey>」）；
@@ -667,6 +689,11 @@ struct DecisionReplayer: Sendable {
     static func validateMaterialsConsistency(
         _ materials: ReplayMaterials
     ) throws(ReplayError) -> Set<String> {
+        guard !materials.criterionDefinitions.isEmpty else {
+            throw .referenceMismatch(
+                declared: "criterion 定义集为空",
+                artifact: "决策材料必须含至少一个 criterion 定义（D002）")
+        }
         for (key, definition) in materials.criterionDefinitions
         where key != definition.fingerprint {
             throw .materialIdentityMismatch(
@@ -763,6 +790,11 @@ extension PortfolioDecisionArtifact {
             Set(plannerRuns.keys) == Set(plans.keys),
             "assemble 的 plannerRuns 必须恰好覆盖 plans 域（冻结内嵌前提）")
         precondition(!criterionDefinitions.isEmpty, "assemble 拒绝空 criterion 集（D002）")
+        // 九轮 P3:同 id@version 两份不同内容传入会静默塌缩摘要字典
+        // (后者胜出)——重复指纹即编程错误,fail-fast
+        precondition(
+            Set(criterionDefinitions.map(\.fingerprint)).count == criterionDefinitions.count,
+            "assemble 拒绝重复 criterion 指纹（同 id@version 不同内容）")
         let sortedDefinitions = criterionDefinitions.sorted { $0.fingerprint < $1.fingerprint }
         let criterionVersions = sortedDefinitions.map(\.fingerprint)
         // 内容摘要（确定性类型,编码失败 = 编程错误,fail-fast）
