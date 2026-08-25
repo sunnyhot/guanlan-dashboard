@@ -1529,6 +1529,21 @@ macos-app/
 >   started-completed 列五重一致性校验。
 > - 修复后 swift test 全量绿（1771 passed，环境性排除同前）；干净 HEAD
 >   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
+>
+> **四轮审查修复（2026-08-25，4×P1 + 2×P2，全部闭环）**：
+> - **P1 引用绑定 resolver 化**：裸 replay(inputs:) 私有化；InputResolving
+>   协议是 inputs 唯一来源；criterion/band/target 从 inputs 实际内容
+>   结构性派生（无法自报），resolver 只声明无法派生的 signal/factor。
+> - **P1 comparison 完整性**：pairwise 必须是完整无序对域 C(n,2)；
+>   paretoFront 必须由 pairwise dominance 重新推导相等。
+> - **P1 provenance 实校验**：plan/动作的 Target 引用 == artifact.target；
+>   dependencies 集合与引用层一致（原空操作枚举删除）。
+> - **P1 badge 分支收窄**：V2 纯 formatter，partial/low 不再被通配分支
+>   吞掉（低于 50% 曾显示「较高」）。
+> - **P2 解码 directAssetClass 归属** / **P2 Job 冗余列完整比较**
+>   （删列不再静默、errorMessage 与 FAILED detail 核对）。
+> - 修复后 swift test 全量绿（1774 passed，环境性排除同前）；干净 HEAD
+>   克隆 macOS + iOS Simulator 构建均通过；每个修复点有回归测试。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
