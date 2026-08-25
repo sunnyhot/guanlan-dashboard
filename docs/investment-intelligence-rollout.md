@@ -1627,6 +1627,41 @@ macos-app/
 >   （per-plan 分歧 / what-if 新引用与身份违规 / 内嵌域与 Target 冲突 /
 >   命名空间外 planMetric / 重复与冲突 criterion schema / dep_index 偏移
 >   幂等冲突）。
+>
+> **八轮审查修复（2026-08-25，4×P1 + 2×P2，全部闭环——重放语义终态收敛）**：
+> - **P1 投影完整性**：`projectedWeight#<class>` 改复用
+>   `ProjectedPortfolio.project`——白名单新标的（`eligibleNewSubjects`
+>   声明资产类）进入投影资产类权重；合法但缺席的类别返回**已知 0**
+>   （不是 unknown）；白名外新标的 fail-closed 抛
+>   `unresolvedProjectedSubject`（不猜分类、不静默丢弃）。
+> - **P1 冻结规划一致性**：`frozenPlannerIssue` 共享校验
+>   （Validator / replay / what-if 同一门禁）——plans 非空、
+>   plannerInputs 域 == plans 域、逐 run Target 严格相等、逐 plan 以冻结
+>   asOf 重跑 TargetRebalancePlanner 与已存 plan 全等。「Validator 放行
+>   而 Replayer 拒绝」的分裂关闭（新错误 case emptyPlans /
+>   plannerTargetConflict / frozenPlanMismatch）。
+> - **P1 payload 兼容**：决策 artifact 切换新 kind
+>   `PORTFOLIO_DECISION_V2`（plannerInputs / 摘要入 payload 后结构不兼容
+>   旧 PORTFOLIO_DECISION）；旧 kind 行对 decision typed fetch 是
+>   **fail-closed legacy**（kindMismatch 拒绝——不伪造缺失的 PlannerRun、
+>   不按新结构解码崩溃）。
+> - **P1 内容绑定**：`CriterionDefinition` / `IndifferenceBand` 增加
+>   `contentDigest()`；artifact 引用层新增 `criterionContentDigests` /
+>   `bandContentDigest`（参与确定性 ID 派生，policy 依赖携带摘要为
+>   version——失效传播按内容粒度）；绑定校验比对摘要，同版本不同
+>   权重/引用/方向/阈值的材料被拒；`assemble` 改以定义与 band 实例为
+>   唯一来源派生版本与摘要（版本字符串与内容不允许分叉）。
+> - **P2 Comparator canonical union**：canonical 定义取**全部 plan 的
+>   union**，后续 plan 首次出现的 criterion 不再漏登记（A 缺 cost 时
+>   B/C 的 cost 不再回退默认方向）；比较阶段移除 higherIsBetter 默认值。
+> - **P2 what-if 洗白**：what-if 计算前先过冻结规划一致性校验——损坏的
+>   base（域缺失 / Target 冲突 / 不可重放）不会被「洗成」结构自洽的
+>   新 artifact。
+> - 修复后 swift test 全量绿（1616 passed，环境性排除同前）；干净 HEAD
+>   macOS release + iOS Simulator 构建均通过；每个修复点有回归测试
+>   （白名单新标的投影 + 缺席类别已知 0 / 同版本不同内容与 band 阈值 /
+>   不可重放 plan 与空 plans / 旧 kind fail-closed / union 方向 /
+>   what-if 拒损坏 base）。
 
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
