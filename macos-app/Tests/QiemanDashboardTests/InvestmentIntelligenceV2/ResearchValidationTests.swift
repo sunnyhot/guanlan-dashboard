@@ -4,28 +4,12 @@ import XCTest
 // RES-5：Research Validation 管道——Schema / EvidenceBinding / Freshness
 // 三层验证的 error/warning 分流。
 
-private func makeNotes(
-    claims: [ResearchClaim],
-    producedAt: Date = Date(timeIntervalSince1970: 1000)
-) throws -> ResearchNotes {
-    ResearchNotes(
-        task: ResearchTask(
-            subject: try CanonicalRef(entityType: "fundShareClass", entityIDRawValue: "sc_513100"),
-            objective: "test"
-        ),
-        notes: "n",
-        claims: claims,
-        producedBy: ModelProviderDescriptor(providerID: "p", model: "m", fingerprint: "f"),
-        producedAt: producedAt
-    )
-}
-
 private let now = Date(timeIntervalSince1970: 10_000)
 
 final class ResearchValidationTests: XCTestCase {
 
     func testValidNotesPassWithNoIssues() throws {
-        let notes = try makeNotes(claims: [
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "动量占优", evidenceReferences: [EvidenceID(rawValue: "EV-1")],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
@@ -41,12 +25,12 @@ final class ResearchValidationTests: XCTestCase {
     // MARK: Schema 层
 
     func testSchemaLayerRejectsStructuralProblems() throws {
-        var notes = try makeNotes(claims: [])
+        var notes = try makeResearchNotes([])
         var result = ResearchValidationPipeline().validate(notes, now: now, knownEvidence: [])
         XCTAssertFalse(result.isValid)
         XCTAssertEqual(result.errors.first?.code, "empty_claims")
 
-        notes = try makeNotes(claims: [
+        notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "  ", evidenceReferences: [EvidenceID(rawValue: "EV-1")],
                 confidenceLabel: .high, dimension: .momentum, direction: nil
@@ -56,7 +40,7 @@ final class ResearchValidationTests: XCTestCase {
         XCTAssertFalse(result.isValid)
         XCTAssertTrue(result.errors.contains { $0.code == "empty_statement" })
 
-        notes = try makeNotes(claims: [
+        notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "无维度", evidenceReferences: [EvidenceID(rawValue: "EV-1")],
                 confidenceLabel: .high, dimension: nil, direction: nil
@@ -77,7 +61,7 @@ final class ResearchValidationTests: XCTestCase {
                 confidenceLabel: .low, dimension: .momentum, direction: nil
             )
         }
-        let result = pipeline.validate(try makeNotes(claims: claims), now: now, knownEvidence: ["EV-1"])
+        let result = pipeline.validate(try makeResearchNotes(claims), now: now, knownEvidence: ["EV-1"])
         XCTAssertFalse(result.isValid)
         XCTAssertTrue(result.errors.contains { $0.code == "too_many_claims" })
     }
@@ -85,7 +69,7 @@ final class ResearchValidationTests: XCTestCase {
     // MARK: EvidenceBinding 层
 
     func testEvidenceBindingRejectsUnknownReferences() throws {
-        let notes = try makeNotes(claims: [
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "s", evidenceReferences: [EvidenceID(rawValue: "EV-1"), EvidenceID(rawValue: "EV-X")],
                 confidenceLabel: .high, dimension: .value, direction: .bearish
@@ -100,7 +84,7 @@ final class ResearchValidationTests: XCTestCase {
     }
 
     func testMissingEvidenceDefaultsToWarningButConfigurable() throws {
-        let notes = try makeNotes(claims: [
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "无证据判断", evidenceReferences: [],
                 confidenceLabel: .medium, dimension: .sentiment, direction: .bullish
@@ -128,8 +112,8 @@ final class ResearchValidationTests: XCTestCase {
         config.evidenceStalenessWarning = 30 * 24 * 3600
         var pipeline = ResearchValidationPipeline()
         pipeline.freshness.config = config
-        let staleNotes = try makeNotes(
-            claims: [
+        let staleNotes = try makeResearchNotes(
+         [
                 ResearchClaim(
                     statement: "s", evidenceReferences: [EvidenceID(rawValue: "EV-OLD"), EvidenceID(rawValue: "EV-NEW")],
                     confidenceLabel: .high, dimension: .macro, direction: .neutral
@@ -147,8 +131,8 @@ final class ResearchValidationTests: XCTestCase {
         XCTAssertTrue(result.warnings.contains { $0.code == "evidence_stale" }, "陈旧证据是 warning（提取层已降级）")
 
         // 新鲜 notes + 新鲜 evidence → 干净通过
-        let fresh = try makeNotes(
-            claims: [
+        let fresh = try makeResearchNotes(
+         [
                 ResearchClaim(
                     statement: "s", evidenceReferences: [EvidenceID(rawValue: "EV-NEW")],
                     confidenceLabel: .high, dimension: .macro, direction: .neutral
@@ -163,8 +147,8 @@ final class ResearchValidationTests: XCTestCase {
 
     func testMissingEvidenceDatesSkipStalenessCheck() throws {
         // 没有证据时间信息：不产生 stale 误报（不猜）。
-        let notes = try makeNotes(
-            claims: [
+        let notes = try makeResearchNotes(
+         [
                 ResearchClaim(
                     statement: "s", evidenceReferences: [EvidenceID(rawValue: "EV-1")],
                     confidenceLabel: .high, dimension: .macro, direction: .neutral
@@ -180,7 +164,7 @@ final class ResearchValidationTests: XCTestCase {
 
     func testPipelineAggregatesAcrossLayers() throws {
         // 同时触发：空陈述（schema error）+ 未知引用（binding error）+ 无证据（warning）。
-        let notes = try makeNotes(claims: [
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "", evidenceReferences: [EvidenceID(rawValue: "EV-X")],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish

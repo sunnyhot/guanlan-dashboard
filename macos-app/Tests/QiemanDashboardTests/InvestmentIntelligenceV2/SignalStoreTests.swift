@@ -25,35 +25,12 @@ private func makeSignal(
     )
 }
 
-private struct SimpleWeekdayCalendar: TradingCalendar {
-    func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
-        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
-        return weekday >= 2 && weekday <= 6
-    }
-    func tradingDay(after date: Date, offset: Int, jurisdiction: Jurisdiction) -> Date {
-        var current = date
-        var remaining = max(offset, 0)
-        var safety = 0
-        while remaining > 0 && safety < 14 {
-            current = Calendar(identifier: .gregorian).date(byAdding: .day, value: 1, to: current)!
-            if isTradingDay(current, jurisdiction: jurisdiction) { remaining -= 1 }
-            safety += 1
-        }
-        return current
-    }
-    func tradingDayStart(_ date: Date, jurisdiction: Jurisdiction) -> Date {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        return cal.startOfDay(for: date)
-    }
-}
-
 final class SignalStoreTests: XCTestCase {
 
     private func makeStores() throws -> [(name: String, store: any SignalStore)] {
         let grdb = GRDBRepository(
             database: try CanonicalDatabase(),
-            calendarBackend: SimpleWeekdayCalendar()
+            calendarBackend: TestWeekdayCalendar()
         )
         return [("grdb", grdb), ("inMemory", InMemorySignalStore())]
     }
@@ -151,10 +128,10 @@ final class SignalStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(atPath: path) }
 
         let signal = try makeSignal()
-        let first = GRDBRepository(database: try CanonicalDatabase(path: path), calendarBackend: SimpleWeekdayCalendar())
+        let first = GRDBRepository(database: try CanonicalDatabase(path: path), calendarBackend: TestWeekdayCalendar())
         try first.write(signal)
 
-        let reopened = GRDBRepository(database: try CanonicalDatabase(path: path), calendarBackend: SimpleWeekdayCalendar())
+        let reopened = GRDBRepository(database: try CanonicalDatabase(path: path), calendarBackend: TestWeekdayCalendar())
         let fetched = try reopened.signal(id: SignalID(rawValue: "sig_test1"))
         XCTAssertEqual(fetched, signal, "重开库后信号仍可查")
         XCTAssertEqual(

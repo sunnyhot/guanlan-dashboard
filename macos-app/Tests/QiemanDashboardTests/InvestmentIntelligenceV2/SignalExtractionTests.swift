@@ -7,26 +7,10 @@ import XCTest
 private let ev1 = EvidenceID(rawValue: "EV-1")
 private let ev2 = EvidenceID(rawValue: "EV-2")
 
-private func makeNotes(
-    _ claims: [ResearchClaim],
-    subject: CanonicalRef? = nil
-) throws -> ResearchNotes {
-    ResearchNotes(
-        task: ResearchTask(
-            subject: try subject ?? CanonicalRef(entityType: "fundShareClass", entityIDRawValue: "sc_513100"),
-            objective: "test"
-        ),
-        notes: "n",
-        claims: claims,
-        producedBy: ModelProviderDescriptor(providerID: "p", model: "test-model", fingerprint: "f"),
-        producedAt: Date(timeIntervalSince1970: 1000)
-    )
-}
-
 final class SignalExtractionTests: XCTestCase {
 
     func testWellEvidenceBullishClaimProducesStrongSignal() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "动量占优", evidenceReferences: [ev1, ev2],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
@@ -48,7 +32,7 @@ final class SignalExtractionTests: XCTestCase {
 
     func testDirectionlessEvidenceStillYieldsUncertainSignalWithEvidence() throws {
         // 有证据但模型未给方向：产出 uncertain 信号（证据仍溯源）。
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "观察到溢价波动", evidenceReferences: [ev1],
                 confidenceLabel: .medium, dimension: .sentiment, direction: nil
@@ -63,7 +47,7 @@ final class SignalExtractionTests: XCTestCase {
 
     func testUnevidencedDirectionIsForcedUncertain() throws {
         // 无证据的方向不进系统（铁律：自由 reasoning 不直接进系统状态）。
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "感觉要涨", evidenceReferences: [],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
@@ -79,7 +63,7 @@ final class SignalExtractionTests: XCTestCase {
         // 策略要求非中性方向 ≥2 条证据；1 条 → 降级。
         var policy = SignalExtractionPolicy.defaultValue
         policy.minEvidenceCountForDirection = 2
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "单一来源", evidenceReferences: [ev1],
                 confidenceLabel: .medium, dimension: .value, direction: .bearish
@@ -89,7 +73,7 @@ final class SignalExtractionTests: XCTestCase {
         XCTAssertEqual(signals[0].direction, .uncertain)
         XCTAssertTrue(signals[0].rationale?.contains("证据数 < 2") ?? false)
         // 两条证据则方向保留
-        let strong = try makeNotes([
+        let strong = try makeResearchNotes([
             ResearchClaim(
                 statement: "双源确认", evidenceReferences: [ev1, ev2],
                 confidenceLabel: .medium, dimension: .value, direction: .bearish
@@ -102,7 +86,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testLowConfidenceHandlingStrategies() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "弱信号观察", evidenceReferences: [ev1],
                 confidenceLabel: .low, dimension: .quality, direction: .bullish
@@ -121,7 +105,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testConflictingDirectionsInSameDimensionDemoteToUncertain() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "多方论据", evidenceReferences: [ev1],
                 confidenceLabel: .high, dimension: .macro, direction: .bullish
@@ -140,7 +124,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testStrengthMapsFromBestConfidenceInGroup() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "中等确信", evidenceReferences: [ev1],
                 confidenceLabel: .medium, dimension: .risk, direction: .neutral
@@ -156,7 +140,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testClaimWithoutDimensionIsSkipped() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "无维度事实", evidenceReferences: [ev1],
                 confidenceLabel: .high, dimension: nil, direction: .bullish
@@ -167,7 +151,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testPolicyVersionParticipatesInSignalID() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "s", evidenceReferences: [ev1],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
@@ -186,7 +170,7 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testExtractionIsIdempotentForSameNotesAndPolicy() throws {
-        let notes = try makeNotes([
+        let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "s", evidenceReferences: [ev1, ev2],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
@@ -200,13 +184,13 @@ final class SignalExtractionTests: XCTestCase {
     }
 
     func testEvidenceOrderDoesNotAffectIdentity() throws {
-        let a = try makeNotes([
+        let a = try makeResearchNotes([
             ResearchClaim(
                 statement: "s", evidenceReferences: [ev1, ev2],
                 confidenceLabel: .medium, dimension: .value, direction: .bearish
             )
         ])
-        let b = try makeNotes([
+        let b = try makeResearchNotes([
             ResearchClaim(
                 statement: "s", evidenceReferences: [ev2, ev1],
                 confidenceLabel: .medium, dimension: .value, direction: .bearish

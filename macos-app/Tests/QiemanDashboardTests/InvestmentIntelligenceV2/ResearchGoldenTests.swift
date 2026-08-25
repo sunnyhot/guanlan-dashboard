@@ -122,7 +122,7 @@ final class ResearchGoldenTests: XCTestCase {
         let (_, signals) = try await runGoldenChain()
         let store = GRDBRepository(
             database: try CanonicalDatabase(),
-            calendarBackend: SimpleGoldenCalendar()
+            calendarBackend: TestWeekdayCalendar()
         )
         for signal in signals {
             try store.write(signal)
@@ -241,25 +241,3 @@ final class ResearchGoldenTests: XCTestCase {
 }
 
 /// golden 套件自用的日历（SignalStore 测试里的同名实现是 private）。
-private struct SimpleGoldenCalendar: TradingCalendar {
-    func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
-        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
-        return weekday >= 2 && weekday <= 6
-    }
-    func tradingDay(after date: Date, offset: Int, jurisdiction: Jurisdiction) -> Date {
-        var current = date
-        var remaining = max(offset, 0)
-        var safety = 0
-        while remaining > 0 && safety < 14 {
-            current = Calendar(identifier: .gregorian).date(byAdding: .day, value: 1, to: current)!
-            if isTradingDay(current, jurisdiction: jurisdiction) { remaining -= 1 }
-            safety += 1
-        }
-        return current
-    }
-    func tradingDayStart(_ date: Date, jurisdiction: Jurisdiction) -> Date {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
-        return cal.startOfDay(for: date)
-    }
-}

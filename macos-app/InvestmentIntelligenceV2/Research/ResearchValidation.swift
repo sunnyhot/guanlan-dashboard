@@ -124,15 +124,11 @@ struct ResearchEvidenceBindingValidator: Sendable {
                 ))
             }
             if claim.evidenceReferences.isEmpty {
-                let issue = ResearchValidationIssue(
+                // error/warning 分流统一在 split()（按 treatMissingEvidenceAsError）。
+                issues.append(ResearchValidationIssue(
                     validator: .evidenceBinding, code: "missing_evidence",
                     detail: "claim 无证据引用（提取时方向将强制 uncertain）", claimIndex: index
-                )
-                if config.treatMissingEvidenceAsError {
-                    issues.append(issue)
-                } else {
-                    issues.append(issue)
-                }
+                ))
             }
         }
         return issues

@@ -3,79 +3,6 @@ import XCTest
 
 // RES-2：Research Workspace + Harness——多轮 Tool Calling 循环的行为锁定。
 
-/// 可编程研究工具（记录调用）。
-final class StubResearchTool: ResearchTool, @unchecked Sendable {
-    let name: String
-    let description: String
-    let parameters: ModelJSONValue
-    private let resultContent: ModelJSONValue
-    private let resultEvidence: [EvidenceID]
-    private let lock = NSLock()
-    private var callCountValue = 0
-    private var lastArgumentsValue: String?
-
-    init(
-        name: String = "get_market_snapshot",
-        content: ModelJSONValue = ["snapshot": "ok"],
-        evidence: [EvidenceID] = [EvidenceID(rawValue: "EV-1")]
-    ) {
-        self.name = name
-        self.description = "测试工具"
-        self.parameters = ["type": "object", "properties": [:]]
-        self.resultContent = content
-        self.resultEvidence = evidence
-    }
-
-    var callCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return callCountValue
-    }
-
-    var lastArguments: String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return lastArgumentsValue
-    }
-
-    func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
-        lock.lock()
-        callCountValue += 1
-        lastArgumentsValue = argumentsJSON
-        lock.unlock()
-        return ResearchToolResult(contentJSON: resultContent, isError: false, evidenceIDs: resultEvidence)
-    }
-}
-
-private func toolCallResponse(_ calls: [(name: String, args: String)]) -> ModelCompletionResponse {
-    let modelCalls = calls.map {
-        ModelToolCall(id: UUID().uuidString, name: $0.name, argumentsJSON: $0.args)
-    }
-    return ModelCompletionResponse(
-        assistantMessage: ModelChatMessage(role: .assistant, content: nil, toolCalls: modelCalls),
-        toolCalls: modelCalls,
-        stopReason: .toolCalls,
-        usage: nil
-    )
-}
-
-private func textOnlyResponse(_ content: String) -> ModelCompletionResponse {
-    ModelCompletionResponse(
-        assistantMessage: ModelChatMessage(role: .assistant, content: content),
-        toolCalls: [],
-        stopReason: .stop,
-        usage: nil
-    )
-}
-
-private func makeTask() throws -> ResearchTask {
-    try ResearchTask(
-        subject: CanonicalRef(entityType: "fundShareClass", entityIDRawValue: "sc_513100"),
-        objective: "评估该标的当前的市场环境",
-        guidance: nil
-    )
-}
-
 private func gateway(provider: ScriptedModelProvider) -> ModelGateway {
     var policy = ModelGatewayPolicy()
     policy.maxRetriesPerProvider = 0
@@ -101,7 +28,7 @@ final class ResearchHarnessTests: XCTestCase {
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [tool])
 
         var events: [ResearchHarnessEvent] = []
-        let outcome = try await harness.run(task: try makeTask()) { event in
+        let outcome = try await harness.run(task: try makeResearchTask()) { event in
             events.append(event)
         }
 
@@ -154,7 +81,7 @@ final class ResearchHarnessTests: XCTestCase {
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [tool])
 
         var rejectedDetails: [String] = []
-        let outcome = try await harness.run(task: try makeTask()) { event in
+        let outcome = try await harness.run(task: try makeResearchTask()) { event in
             if case .submissionRejected(let detail, _) = event {
                 rejectedDetails.append(detail)
             }
@@ -180,7 +107,7 @@ final class ResearchHarnessTests: XCTestCase {
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
         var rejectedDetails: [String] = []
-        let outcome = try await harness.run(task: try makeTask()) { event in
+        let outcome = try await harness.run(task: try makeResearchTask()) { event in
             if case .submissionRejected(let detail, _) = event {
                 rejectedDetails.append(detail)
             }
@@ -203,7 +130,7 @@ final class ResearchHarnessTests: XCTestCase {
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
         var rejectedDetails: [String] = []
-        _ = try await harness.run(task: try makeTask()) { event in
+        _ = try await harness.run(task: try makeResearchTask()) { event in
             if case .submissionRejected(let detail, _) = event {
                 rejectedDetails.append(detail)
             }
@@ -222,7 +149,7 @@ final class ResearchHarnessTests: XCTestCase {
         ])
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertNotNil(outcome.errorDetail)
     }
@@ -239,7 +166,7 @@ final class ResearchHarnessTests: XCTestCase {
         policy.maxTurns = 3
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()], policy: policy)
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertTrue(outcome.errorDetail?.contains("轮次耗尽") ?? false, outcome.errorDetail ?? "")
     }
@@ -254,22 +181,22 @@ final class ResearchHarnessTests: XCTestCase {
         policy.maxToolCalls = 1
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()], policy: policy)
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertTrue(outcome.errorDetail?.contains("工具调用次数超限") ?? false)
     }
 
     func testPlainTextResponsesBeyondLimitFail() async throws {
         let provider = ScriptedModelProvider(providerID: "p", steps: [
-            .response(textOnlyResponse("我认为应该买入。")),
-            .response(textOnlyResponse("再看看。")),
-            .response(textOnlyResponse("还是文本。")),
+            .response(textResponse("我认为应该买入。")),
+            .response(textResponse("再看看。")),
+            .response(textResponse("还是文本。")),
         ])
         var policy = ResearchHarnessPolicy()
         policy.maxPlainTextResponses = 2
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [], policy: policy)
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertTrue(outcome.errorDetail?.contains("未发起工具调用") ?? false)
     }
@@ -294,7 +221,7 @@ final class ResearchHarnessTests: XCTestCase {
         let tool = StubResearchTool()
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [tool])
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertTrue(outcome.succeeded)
         XCTAssertEqual(tool.callCount, 1, "截断轮的工具调用未执行")
     }
@@ -315,7 +242,7 @@ final class ResearchHarnessTests: XCTestCase {
             clock: { tick += 1; return Date().addingTimeInterval(Double(tick * 100)) }
         )
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertTrue(outcome.errorDetail?.contains("超时") ?? false)
     }
@@ -331,7 +258,7 @@ final class ResearchHarnessTests: XCTestCase {
         ])
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertTrue(outcome.succeeded, "未知工具不终止运行，回灌错误信封")
         let unknownToolMessage = outcome.transcript.compactMap { $0.content }.first { $0.contains("unknown_tool") }
         XCTAssertNotNil(unknownToolMessage)
@@ -348,7 +275,7 @@ final class ResearchHarnessTests: XCTestCase {
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
         let task = Task<ResearchRunOutcome, Error> {
-            try await harness.run(task: try makeTask())
+            try await harness.run(task: try makeResearchTask())
         }
         task.cancel()
         do {
@@ -377,7 +304,7 @@ final class ResearchHarnessTests: XCTestCase {
         let tool = StubResearchTool(content: ["data": .string(big)])
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [tool], policy: policy)
 
-        let outcome = try await harness.run(task: try makeTask())
+        let outcome = try await harness.run(task: try makeResearchTask())
         XCTAssertTrue(outcome.succeeded, "截断不终止运行")
         let toolMessage = outcome.transcript.first { $0.role == .tool && $0.content?.contains("truncated") == true }
         XCTAssertNotNil(toolMessage, "回灌内容带 truncated 标记")
@@ -398,7 +325,7 @@ final class ResearchHarnessTests: XCTestCase {
         let tool = StubResearchTool(content: ["data": .string(big)])
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [tool], policy: policy)
 
-        _ = try await harness.run(task: try makeTask())
+        _ = try await harness.run(task: try makeResearchTask())
         // 直接断言裁剪行为发生在 harness 内部不可见，改用行为代理：
         // 本测试主要锁定「裁剪不崩溃、运行继续」，细节由 transcript 体积约束。
         let outcome = try await ResearchHarness(
@@ -408,7 +335,7 @@ final class ResearchHarnessTests: XCTestCase {
             ])),
             tools: [StubResearchTool(content: ["data": .string(big)])],
             policy: policy
-        ).run(task: try makeTask())
+        ).run(task: try makeResearchTask())
         XCTAssertEqual(outcome.job.state, .failed, "轮次耗尽失败（非裁剪崩溃）")
     }
 
@@ -425,7 +352,7 @@ final class ResearchHarnessTests: XCTestCase {
             ])
             return try await ResearchHarness(
                 gateway: gateway(provider: provider), tools: [StubResearchTool()]
-            ).run(task: try makeTask())
+            ).run(task: try makeResearchTask())
         }
         let first = try await runOnce()
         let second = try await runOnce()
@@ -434,7 +361,7 @@ final class ResearchHarnessTests: XCTestCase {
     }
 
     func testNotesContentFingerprintIgnoresProducedAt() throws {
-        let task = try makeTask()
+        let task = try makeResearchTask()
         let producer = ModelProviderDescriptor(providerID: "p", model: "m", fingerprint: "f")
         let claims = [ResearchClaim(
             statement: "s",

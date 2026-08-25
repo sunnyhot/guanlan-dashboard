@@ -70,14 +70,13 @@ extension GRDBRepository: SignalStore {
         try SignalFormValidator.validate(signal)
         let row = try SignalRow.from(signal)
         try database.queue.write { db in
-            if let existing = try SignalRow.fetchOne(
+            if let existingRow = try SignalRow.fetchOne(
                 db, key: signal.id.rawValue
             ) {
-                guard Self.signalsSemanticallyEqual(row, existing) else {
-                    throw SignalStoreError.conflict(
-                        signalID: signal.id.rawValue,
-                        field: Self.firstDivergentField(row, existing) ?? "unknown"
-                    )
+                // 行解码 fail-closed（decodeEnum 不回落默认值），再走统一 domain 比较
+                let existing = try existingRow.toDomain()
+                if let field = signalDivergentField(existing, signal) {
+                    throw SignalStoreError.conflict(signalID: signal.id.rawValue, field: field)
                 }
                 return // 幂等 no-op：保留首条（含首条 effectiveAt）
             }
@@ -124,28 +123,6 @@ extension GRDBRepository: SignalStore {
         }
     }
 
-    // MARK: 语义相等（剥 effective_at；列级比对报告首个分歧字段）
-
-    private static func signalsSemanticallyEqual(_ lhs: SignalRow, _ rhs: SignalRow) -> Bool {
-        firstDivergentField(lhs, rhs) == nil
-    }
-
-    private static func firstDivergentField(_ lhs: SignalRow, _ rhs: SignalRow) -> String? {
-        if lhs.subjectEntityType != rhs.subjectEntityType { return "subject_entity_type" }
-        if lhs.subjectEntityID != rhs.subjectEntityID { return "subject_entity_id" }
-        if lhs.dimension != rhs.dimension { return "dimension" }
-        if lhs.direction != rhs.direction { return "direction" }
-        if lhs.strength != rhs.strength { return "strength" }
-        // evidence 引用是集合语义：JSON 顺序无关（RES-4 产出已排序，
-        // 仍按集合比较防御手写行）
-        let lhsEvidence = Set((try? CanonicalColumnCodec.decodeJSON([String].self, from: lhs.derivedFromEvidenceIDsJSON)) ?? [])
-        let rhsEvidence = Set((try? CanonicalColumnCodec.decodeJSON([String].self, from: rhs.derivedFromEvidenceIDsJSON)) ?? [])
-        if lhsEvidence != rhsEvidence { return "derived_from_evidence_ids" }
-        if lhs.producerKind != rhs.producerKind { return "producer_kind" }
-        if lhs.producerModelIdentifier != rhs.producerModelIdentifier { return "producer_model_identifier" }
-        if lhs.rationale != rhs.rationale { return "rationale" }
-        return nil
-    }
 }
 
 // MARK: - InMemory 实现（测试 parity / 无库环境）
@@ -159,7 +136,7 @@ final class InMemorySignalStore: SignalStore, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         if let existing = storage[signal.id.rawValue] {
-            if let field = Self.firstDivergentField(existing, signal) {
+            if let field = signalDivergentField(existing, signal) {
                 throw SignalStoreError.conflict(signalID: signal.id.rawValue, field: field)
             }
             return signal.id // 幂等 no-op：保留首条 effectiveAt
@@ -190,20 +167,22 @@ final class InMemorySignalStore: SignalStore, @unchecked Sendable {
             .sorted { $0.effectiveAt > $1.effectiveAt }
     }
 
-    /// 与 GRDB 实现同粒度的分歧字段定位（parity：错误信息可比较）。
-    private static func firstDivergentField(
-        _ lhs: InvestmentSignal, _ rhs: InvestmentSignal
-    ) -> String? {
-        if lhs.subjectCanonical != rhs.subjectCanonical { return "subject_entity_type" }
-        if lhs.dimension != rhs.dimension { return "dimension" }
-        if lhs.direction != rhs.direction { return "direction" }
-        if lhs.strength != rhs.strength { return "strength" }
-        if Set(lhs.derivedFromEvidenceIDs.map(\.rawValue))
-            != Set(rhs.derivedFromEvidenceIDs.map(\.rawValue)) {
-            return "derived_from_evidence_ids"
-        }
-        if lhs.producer != rhs.producer { return "producer_kind" }
-        if lhs.rationale != rhs.rationale { return "rationale" }
-        return nil
+}
+
+/// 语义分歧字段定位（domain 级；GRDB / InMemory 双实现共用——剥
+/// effectiveAt，evidence 引用集合语义，字段名用列名风格保持可读）。
+private func signalDivergentField(
+    _ lhs: InvestmentSignal, _ rhs: InvestmentSignal
+) -> String? {
+    if lhs.subjectCanonical != rhs.subjectCanonical { return "subject_entity_type" }
+    if lhs.dimension != rhs.dimension { return "dimension" }
+    if lhs.direction != rhs.direction { return "direction" }
+    if lhs.strength != rhs.strength { return "strength" }
+    if Set(lhs.derivedFromEvidenceIDs.map(\.rawValue))
+        != Set(rhs.derivedFromEvidenceIDs.map(\.rawValue)) {
+        return "derived_from_evidence_ids"
     }
+    if lhs.producer != rhs.producer { return "producer_kind" }
+    if lhs.rationale != rhs.rationale { return "rationale" }
+    return nil
 }

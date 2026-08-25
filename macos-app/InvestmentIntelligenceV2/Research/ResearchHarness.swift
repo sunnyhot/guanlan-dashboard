@@ -50,6 +50,16 @@ struct ResearchToolResult: Sendable, Hashable {
         ResearchToolResult(contentJSON: json, isError: isError, evidenceIDs: [])
     }
 
+    /// 标准错误信封（ResearchToolEnvelope.error + isError——工具错误路径的
+    /// 统一出口，避免信封组合样板散落各工具）。
+    static func errorEnvelope(code: String, message: String) -> ResearchToolResult {
+        ResearchToolResult(
+            contentJSON: ResearchToolEnvelope.error(code: code, message: message),
+            isError: true,
+            evidenceIDs: []
+        )
+    }
+
     static func error(code: String, message: String) -> ResearchToolResult {
         ResearchToolResult(
             contentJSON: [

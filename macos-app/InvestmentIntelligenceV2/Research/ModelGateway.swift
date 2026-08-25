@@ -435,20 +435,12 @@ struct ModelGateway: Sendable {
                 let startedAt = clock()
                 do {
                     let response = try await provider.complete(request, timeout: policy.requestTimeout)
-                    let duration = clock().timeIntervalSince(startedAt)
                     await ledger.record(usage: response.usage)
-                    await traceSink.record(ModelCallTrace(
-                        requestID: requestID,
-                        purpose: request.purpose,
-                        providerID: provider.descriptor.providerID,
-                        model: provider.descriptor.model,
-                        providerIndex: providerIndex,
-                        attempt: attempt,
-                        durationSeconds: duration,
-                        outcome: .succeeded,
-                        errorSummary: nil,
-                        usage: response.usage
-                    ))
+                    await recordTrace(
+                        requestID, request, provider, providerIndex, attempt,
+                        from: startedAt, outcome: .succeeded,
+                        errorSummary: nil, usage: response.usage
+                    )
                     return response
                 } catch let error as ModelProviderError {
                     // 未配置的 provider 直接跳过：不计失败尝试、不产 trace
@@ -459,19 +451,11 @@ struct ModelGateway: Sendable {
                     }
                     sawConfiguredProvider = true
                     lastError = error
-                    let duration = clock().timeIntervalSince(startedAt)
-                    await traceSink.record(ModelCallTrace(
-                        requestID: requestID,
-                        purpose: request.purpose,
-                        providerID: provider.descriptor.providerID,
-                        model: provider.descriptor.model,
-                        providerIndex: providerIndex,
-                        attempt: attempt,
-                        durationSeconds: duration,
-                        outcome: .failed,
-                        errorSummary: String(describing: error),
-                        usage: nil
-                    ))
+                    await recordTrace(
+                        requestID, request, provider, providerIndex, attempt,
+                        from: startedAt, outcome: .failed,
+                        errorSummary: String(describing: error), usage: nil
+                    )
                     // 重试只对可重试错误；不可重试直接换下一 provider。
                     guard error.isRetryable, attempt <= policy.maxRetriesPerProvider else { break }
                     await sleeper(policy.retryInterval)
@@ -493,6 +477,32 @@ struct ModelGateway: Sendable {
     /// usage 快照（运行摘要）。
     func usageSnapshot() async -> ModelUsageSnapshot {
         await ledger.snapshot()
+    }
+
+    /// 一次尝试的 trace 记录（成功 / 失败同一出口）。
+    private func recordTrace(
+        _ requestID: String,
+        _ request: ModelCompletionRequest,
+        _ provider: any ModelProvider,
+        _ providerIndex: Int,
+        _ attempt: Int,
+        from startedAt: Date,
+        outcome: ModelCallTrace.Outcome,
+        errorSummary: String?,
+        usage: ModelTokenUsage?
+    ) async {
+        await traceSink.record(ModelCallTrace(
+            requestID: requestID,
+            purpose: request.purpose,
+            providerID: provider.descriptor.providerID,
+            model: provider.descriptor.model,
+            providerIndex: providerIndex,
+            attempt: attempt,
+            durationSeconds: clock().timeIntervalSince(startedAt),
+            outcome: outcome,
+            errorSummary: errorSummary,
+            usage: usage
+        ))
     }
 }
 

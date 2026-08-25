@@ -165,23 +165,12 @@ enum StructuredGeneration {
         return formatter
     }()
 
-    private static func describe(_ error: DecodingError) -> String {
-        switch error {
-        case .keyNotFound(let key, let context):
-            return "缺少字段 \(key.stringValue)\(pathSuffix(context.codingPath))"
-        case .valueNotFound(_, let context):
-            return "必要值为空\(pathSuffix(context.codingPath))"
-        case .typeMismatch(_, let context):
-            return "字段类型不匹配\(pathSuffix(context.codingPath))"
-        case .dataCorrupted(let context):
-            return context.debugDescription
-        @unknown default:
-            return error.localizedDescription
-        }
-    }
+}
 
-    private static func pathSuffix(_ path: [CodingKey]) -> String {
-        guard !path.isEmpty else { return "" }
-        return "（路径：\(path.map(\.stringValue).joined(separator: "."))）"
+extension StructuredGeneration {
+    /// 解码错误的可读描述（复用 Core 的 AgentDecodingErrorFormatter——
+    /// 字段级提示格式与三条旧 Agent 链一致，模型修复行为不因工作流漂移）。
+    static func describe(_ error: DecodingError) -> String {
+        AgentDecodingErrorFormatter.describe(error)
     }
 }

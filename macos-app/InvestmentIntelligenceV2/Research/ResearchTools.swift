@@ -59,10 +59,7 @@ struct V2WebSearchTool: ResearchTool {
 
     func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
         guard context.sources.isWebSearchConfigured else {
-            return .content(ResearchToolEnvelope.error(
-                code: "web_search_not_configured",
-                message: "未配置 Tavily API Key，联网搜索不可用。"
-            ), isError: true)
+            return .errorEnvelope(code: "web_search_not_configured", message: "未配置 Tavily API Key，联网搜索不可用。")
         }
         guard let params = Self.decodeParams(Params.self, argumentsJSON) else {
             return .content(Self.invalidArguments, isError: true)
@@ -128,20 +125,11 @@ struct V2WebSearchTool: ResearchTool {
                 evidenceIDs: evidenceIDs
             )
         } catch let error as TavilySearchClientError {
-            return .content(ResearchToolEnvelope.error(
-                code: "web_search_failed",
-                message: error.userFacingToolMessage
-            ), isError: true)
+            return .errorEnvelope(code: "web_search_failed", message: error.userFacingToolMessage)
         } catch is CancellationError {
-            return .content(ResearchToolEnvelope.error(
-                code: "web_search_cancelled",
-                message: "搜索已取消。"
-            ), isError: true)
+            return .errorEnvelope(code: "web_search_cancelled", message: "搜索已取消。")
         } catch {
-            return .content(ResearchToolEnvelope.error(
-                code: "web_search_failed",
-                message: error.localizedDescription
-            ), isError: true)
+            return .errorEnvelope(code: "web_search_failed", message: error.localizedDescription)
         }
     }
 }
@@ -181,10 +169,7 @@ struct V2SECOfficialTool: ResearchTool {
 
     func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
         guard context.sources.isSECConfigured else {
-            return .content(ResearchToolEnvelope.error(
-                code: "official_sec_not_configured",
-                message: "未配置 SEC 联系邮箱，EDGAR 查询不可用。"
-            ), isError: true)
+            return .errorEnvelope(code: "official_sec_not_configured", message: "未配置 SEC 联系邮箱，EDGAR 查询不可用。")
         }
         guard let params = Self.decodeParams(Params.self, argumentsJSON) else {
             return .content(Self.invalidArguments, isError: true)
@@ -215,13 +200,9 @@ struct V2SECOfficialTool: ResearchTool {
                 )
             }
         } catch is CancellationError {
-            return .content(ResearchToolEnvelope.error(
-                code: "official_sec_cancelled", message: "SEC EDGAR 查询已取消。"
-            ), isError: true)
+            return .errorEnvelope(code: "official_sec_cancelled", message: "SEC EDGAR 查询已取消。")
         } catch {
-            return .content(ResearchToolEnvelope.error(
-                code: "official_sec_failed", message: error.localizedDescription
-            ), isError: true)
+            return .errorEnvelope(code: "official_sec_failed", message: error.localizedDescription)
         }
     }
 
@@ -383,10 +364,7 @@ struct V2AlphaVantageTool: ResearchTool {
 
     func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
         guard context.sources.isAlphaVantageConfigured else {
-            return .content(ResearchToolEnvelope.error(
-                code: "alpha_vantage_not_configured",
-                message: "未启用或未配置 Alpha Vantage API Key。"
-            ), isError: true)
+            return .errorEnvelope(code: "alpha_vantage_not_configured", message: "未启用或未配置 Alpha Vantage API Key。")
         }
         guard let params = Self.decodeParams(Params.self, argumentsJSON),
               ["etf_profile", "daily_analytics"].contains(params.mode) else {
@@ -405,13 +383,9 @@ struct V2AlphaVantageTool: ResearchTool {
                 return try await dailyAnalyticsResult(symbol: symbol, sources: context.sources)
             }
         } catch is CancellationError {
-            return .content(ResearchToolEnvelope.error(
-                code: "alpha_vantage_cancelled", message: "查询已取消。"
-            ), isError: true)
+            return .errorEnvelope(code: "alpha_vantage_cancelled", message: "查询已取消。")
         } catch {
-            return .content(ResearchToolEnvelope.error(
-                code: "alpha_vantage_request_failed", message: error.localizedDescription
-            ), isError: true)
+            return .errorEnvelope(code: "alpha_vantage_request_failed", message: error.localizedDescription)
         }
     }
 

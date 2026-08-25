@@ -48,18 +48,6 @@ private func makeSchema() -> StructuredGenerationSchema {
     )
 }
 
-private func toolCallResponse(_ arguments: String) -> ModelCompletionResponse {
-    ModelCompletionResponse(
-        assistantMessage: ModelChatMessage(
-            role: .assistant,
-            content: nil,
-            toolCalls: [ModelToolCall(id: "call-1", name: "submit_research_notes", argumentsJSON: arguments)]
-        ),
-        toolCalls: [ModelToolCall(id: "call-1", name: "submit_research_notes", argumentsJSON: arguments)],
-        stopReason: .toolCalls,
-        usage: nil
-    )
-}
 
 final class StructuredGenerationTests: XCTestCase {
 
@@ -80,7 +68,7 @@ final class StructuredGenerationTests: XCTestCase {
     }
 
     func testDecodeSnakeCaseAndMillisecondDates() throws {
-        let response = toolCallResponse("""
+        let response = toolCallResponse([(name: "submit_research_notes", args: """
             {
               "subject": "513100",
               "note_id": "note-42",
@@ -91,7 +79,7 @@ final class StructuredGenerationTests: XCTestCase {
               ],
               "summary": null
             }
-            """)
+            """)])
         let decoded = try StructuredGeneration.decode(response, as: ResearchNoteDraft.self, schema: makeSchema())
         XCTAssertEqual(decoded.subject, "513100")
         XCTAssertEqual(decoded.claims.count, 2)
@@ -108,9 +96,9 @@ final class StructuredGenerationTests: XCTestCase {
     }
 
     func testDecodeAcceptsSecondPrecisionDates() throws {
-        let response = toolCallResponse("""
+        let response = toolCallResponse([(name: "submit_research_notes", args: """
             {"subject": "s", "note_id": "n", "observed_at": "2026-08-25T10:30:00Z", "claims": []}
-            """)
+            """)])
         let decoded = try StructuredGeneration.decode(response, as: ResearchNoteDraft.self, schema: makeSchema())
         XCTAssertEqual(decoded.subject, "s")
         XCTAssertTrue(decoded.claims.isEmpty)
@@ -159,7 +147,7 @@ final class StructuredGenerationTests: XCTestCase {
     }
 
     func testMalformedJSONAndSchemaMismatchAreTypedErrors() {
-        let malformed = toolCallResponse("not-json-at-all")
+        let malformed = toolCallResponse([(name: "submit_research_notes", args: "not-json-at-all")])
         XCTAssertThrowsError(try StructuredGeneration.decode(malformed, as: ResearchNoteDraft.self, schema: makeSchema())) { error in
             guard case .malformedJSON = error as? StructuredGenerationError else {
                 return XCTFail("应是 malformedJSON: \(error)")
@@ -167,9 +155,9 @@ final class StructuredGenerationTests: XCTestCase {
         }
 
         // 合法 JSON 但缺 required 字段（claims）→ decodingFailed，detail 提到字段名。
-        let missingField = toolCallResponse("""
+        let missingField = toolCallResponse([(name: "submit_research_notes", args: """
             {"subject": "s", "note_id": "n", "observed_at": "2026-08-25T10:30:00Z"}
-            """)
+            """)])
         XCTAssertThrowsError(try StructuredGeneration.decode(missingField, as: ResearchNoteDraft.self, schema: makeSchema())) { error in
             guard case .decodingFailed(_, let detail) = error as? StructuredGenerationError else {
                 return XCTFail("应是 decodingFailed: \(error)")
@@ -178,9 +166,9 @@ final class StructuredGenerationTests: XCTestCase {
         }
 
         // 类型不匹配 → decodingFailed。
-        let typeMismatch = toolCallResponse("""
+        let typeMismatch = toolCallResponse([(name: "submit_research_notes", args: """
             {"subject": "s", "note_id": "n", "observed_at": "2026-08-25T10:30:00Z", "claims": "not-an-array"}
-            """)
+            """)])
         XCTAssertThrowsError(try StructuredGeneration.decode(typeMismatch, as: ResearchNoteDraft.self, schema: makeSchema())) { error in
             guard case .decodingFailed = error as? StructuredGenerationError else {
                 return XCTFail("应是 decodingFailed: \(error)")
@@ -188,9 +176,9 @@ final class StructuredGenerationTests: XCTestCase {
         }
 
         // 非法日期 → decodingFailed（dataCorrupted 描述）。
-        let badDate = toolCallResponse("""
+        let badDate = toolCallResponse([(name: "submit_research_notes", args: """
             {"subject": "s", "note_id": "n", "observed_at": "yesterday", "claims": []}
-            """)
+            """)])
         XCTAssertThrowsError(try StructuredGeneration.decode(badDate, as: ResearchNoteDraft.self, schema: makeSchema())) { error in
             guard case .decodingFailed(_, let detail) = error as? StructuredGenerationError else {
                 return XCTFail("应是 decodingFailed: \(error)")

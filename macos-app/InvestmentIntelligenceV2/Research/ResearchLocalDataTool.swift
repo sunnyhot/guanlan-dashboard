@@ -48,66 +48,57 @@ struct V2LocalDataTool: ResearchTool {
             return .content(Self.invalidArguments, isError: true)
         }
         guard let dataAccess = context.dataAccess else {
-            return .content(ResearchToolEnvelope.error(
-                code: "local_data_unavailable",
-                message: "本次运行未接入本地数据。"
-            ), isError: true)
+            return .errorEnvelope(code: "local_data_unavailable", message: "本次运行未接入本地数据。")
         }
         let asOf = now()
 
         switch params.dataset {
         case "fund_nav":
-            let observations = dataAccess.navObservations(
-                shareClassID: FundShareClassID(rawValue: subjectID), asOf: asOf
-            )
-            guard !observations.isEmpty else {
-                return .content(ResearchToolEnvelope.error(
-                    code: "local_data_empty",
-                    message: "该 FundShareClass 无本地净值数据。"
-                ), isError: true)
-            }
             return Self.seriesResult(
-                dataset: "fund_nav", subjectID: subjectID,
-                rows: observations.sorted { $0.temporalEnvelope.effectiveAt > $1.temporalEnvelope.effectiveAt }
-                    .prefix(days)
-                    .map { observation in
-                        [
-                            "date": .string(Self.dayString(observation.temporalEnvelope.effectiveAt)),
-                            "value": .number(Double(truncating: observation.unitNAV.value as NSDecimalNumber))
-                        ]
-                    },
+                dataset: "fund_nav", subjectID: subjectID, days: days,
+                observations: dataAccess.navObservations(
+                    shareClassID: FundShareClassID(rawValue: subjectID), asOf: asOf
+                ),
+                emptyMessage: "该 FundShareClass 无本地净值数据。",
+                value: { ($0.temporalEnvelope.effectiveAt, Double(truncating: $0.unitNAV.value as NSDecimalNumber)) },
                 valueLabel: "nav_per_unit", boundary: "本地 Canonical NAV（economicKnowledge 口径）"
             )
         default:
-            let bars = dataAccess.dailyBars(listingID: ListingID(rawValue: subjectID), asOf: asOf)
-            guard !bars.isEmpty else {
-                return .content(ResearchToolEnvelope.error(
-                    code: "local_data_empty",
-                    message: "该 Listing 无本地日线数据。"
-                ), isError: true)
-            }
             return Self.seriesResult(
-                dataset: "daily_bars", subjectID: subjectID,
-                rows: bars.sorted { $0.temporalEnvelope.effectiveAt > $1.temporalEnvelope.effectiveAt }
-                    .prefix(days)
-                    .map { bar in
-                        [
-                            "date": .string(Self.dayString(bar.temporalEnvelope.effectiveAt)),
-                            "value": .number(Double(truncating: bar.rawClose.value as NSDecimalNumber))
-                        ]
-                    },
+                dataset: "daily_bars", subjectID: subjectID, days: days,
+                observations: dataAccess.dailyBars(listingID: ListingID(rawValue: subjectID), asOf: asOf),
+                emptyMessage: "该 Listing 无本地日线数据。",
+                value: { ($0.temporalEnvelope.effectiveAt, Double(truncating: $0.rawClose.value as NSDecimalNumber)) },
                 valueLabel: "close", boundary: "本地 Canonical 日线（economicKnowledge 口径）"
             )
         }
     }
 
-    private static func seriesResult(
+    /// 序列查询的统一组装：排序取尾 → rows → 内容寻址 evidence → 信封。
+    /// （两个 dataset 的差异只在取数调用与 value 提取，结构完全同构。）
+    private static func seriesResult<Obs>(
         dataset: String,
         subjectID: String,
-        rows: [ModelJSONValue],
+        days: Int,
+        observations: [Obs],
+        emptyMessage: String,
+        value: (Obs) -> (date: Date, value: Double),
         valueLabel: String,
         boundary: String
     ) -> ResearchToolResult {
+        guard !observations.isEmpty else {
+            return .errorEnvelope(code: "local_data_empty", message: emptyMessage)
+        }
+        let rows: [ModelJSONValue] = observations
+            .map(value)
+            .sorted { $0.date > $1.date }
+            .prefix(days)
+            .map { point in
+                [
+                    "date": .string(dayString(point.date)),
+                    "value": .number(point.value)
+                ]
+            }
         let digest = StableDigest.digest(
             "\(dataset)|\(subjectID)|\(rows.count)|\(rows.first ?? .null)|\(rows.last ?? .null)"
         )
