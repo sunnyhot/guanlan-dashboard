@@ -140,8 +140,10 @@ final class UIExperienceRegressionTests: XCTestCase {
         let content = try source(at: "Views_macOS/ContentView.swift")
         let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
         let appModel = try source(at: "Core/AppModel.swift")
-        XCTAssertTrue(settings.contains("case general"))
-        XCTAssertTrue(settings.contains("return \"通用\""))
+        // 分区枚举已收敛到 Core 的 AppSettingsSection（产品重构 §9）
+        let appEnums = try source(at: "Core/Models/AppEnums.swift")
+        XCTAssertTrue(appEnums.contains("case general"))
+        XCTAssertTrue(appEnums.contains("return \"通用\""))
         XCTAssertTrue(settings.contains("settingsNavigation"))
         XCTAssertTrue(settings.contains("availableWidth >= 1_120"))
         XCTAssertTrue(settings.contains("case sidebar"))
@@ -306,13 +308,18 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(source.contains("CommandMenu(\"导航\")"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"1\")"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"6\")"))
-        // 每个快捷键唯一绑定:出现的快捷键修饰数与唯一值数一致
-        // 每个快捷键唯一绑定:提取字面 shortcut("x") 中的 x 并比对唯一性
-        let rawKeys = source
-            .components(separatedBy: "keyboardShortcut(\"")
+        // 每个快捷键唯一绑定：提取「字母 + 修饰符」完整签名（不同修饰符
+        // 不是冲突——产品重构 §8.8 新增投资智能菜单后按签名判重）
+        let rawSignatures = source
+            .components(separatedBy: "keyboardShortcut(")
             .dropFirst()
-            .map { String($0.prefix(1)) }
-        XCTAssertEqual(Set(rawKeys).count, rawKeys.count, "快捷键冲突: \(rawKeys)")
+            .map { chunk in
+                let signature = String(chunk.prefix(while: { $0 != ")" }))
+                return signature.replacingOccurrences(of: " ", with: "")
+            }
+        XCTAssertEqual(
+            Set(rawSignatures).count, rawSignatures.count,
+            "快捷键冲突: \(rawSignatures)")
         XCTAssertTrue(source.contains("NotificationCenter.default.post(name: .qiemanFocusSearch"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"f\")"))
     }
@@ -552,5 +559,82 @@ final class UIExperienceRegressionTests: XCTestCase {
             let values = try url.resourceValues(forKeys: [.isRegularFileKey])
             return values.isRegularFile == true ? url : nil
         }
+    }
+}
+
+// MARK: - 投资智能 V2 产品展示层回归（产品重构 §12.4）
+
+extension UIExperienceRegressionTests {
+
+    /// 主页面不得出现内部实现词（universe 版本 / 配置文件名 / 内部 ID /
+    /// Keychain 术语）；这些只允许存在于详情折叠区与设置面板。
+    func testIntelligenceMainPageExcludesInternalJargon() throws {
+        let intelligenceTree = try sourceTree(at: "Views_macOS/Intelligence")
+        // 详情 sheet 的「技术信息」折叠区单独剥离后再查主页三卡
+        let mainPageFiles = try [
+            "Views_macOS/Intelligence/IntelligenceSectionView.swift",
+            "Views_macOS/Intelligence/IntelligenceOverviewCard.swift",
+            "Views_macOS/Intelligence/StrategicAllocationCard.swift",
+            "Views_macOS/Intelligence/MarketDiscoveryCard.swift",
+            "Views_macOS/Intelligence/PortfolioResearchCard.swift",
+        ].map { try source(at: $0) }.joined()
+
+        for forbidden in [
+            "remote-staging-sync.json", "universe v", "provenance 全程可溯",
+            "最新决策 Artifact", "API Key（Keychain）", "current-target",
+        ] {
+            XCTAssertFalse(
+                mainPageFiles.contains(forbidden),
+                "主页面不得出现内部术语: \(forbidden)")
+        }
+        // 全目录允许出现的位置收敛：user-intent 只在详情技术折叠区
+        XCTAssertTrue(intelligenceTree.contains("DisclosureGroup(\"技术信息"))
+    }
+
+    /// Provider 表单只能存在于设置面板（macOS / iOS），主页面不得有。
+    func testProviderFormOnlyLivesInSettings() throws {
+        let macSettings = try source(at: "Views_macOS/SettingsIntelligencePanel.swift")
+        let iosSettings = try source(at: "Views_iOS/IOSSettingsIntelligencePanel.swift")
+        XCTAssertTrue(macSettings.contains("IntelligenceV2ProviderSettings.save"))
+        XCTAssertTrue(iosSettings.contains("IntelligenceV2ProviderSettings.save"))
+
+        let intelligenceTree = try sourceTree(at: "Views_macOS/Intelligence")
+        XCTAssertFalse(
+            intelligenceTree.contains("IntelligenceV2ProviderSettings.save"),
+            "主页面不得保存 Provider 配置（设置中心专属）")
+        XCTAssertFalse(
+            intelligenceTree.contains("providerConfigCard"),
+            "旧 providerConfigCard 不得复活")
+    }
+
+    /// macOS / iOS 均引用统一 Dashboard DTO（同一 Artifact 同一结论语义）。
+    func testBothPlatformsConsumeUnifiedDashboardDTO() throws {
+        let mac = try source(at: "Views_macOS/Intelligence/IntelligenceSectionView.swift")
+        let ios = try source(at: "Views_iOS/IOSIntelligenceSectionView.swift")
+        XCTAssertTrue(mac.contains("model.intelligenceDashboard"))
+        XCTAssertTrue(ios.contains("model.intelligenceDashboard"))
+        XCTAssertTrue(mac.contains("IntelligencePresentationFormatter"))
+        XCTAssertTrue(ios.contains("IntelligencePresentationFormatter"))
+    }
+
+    /// 页面壳不得直接查库（GRDB Repository / queue.read 禁止出现在 View 层）。
+    func testIntelligenceViewsDoNotQueryDatabaseDirectly() throws {
+        let intelligenceTree = try sourceTree(at: "Views_macOS/Intelligence")
+        for forbidden in ["GRDBRepository", ".queue.read", "sql:"] {
+            XCTAssertFalse(
+                intelligenceTree.contains(forbidden),
+                "View 不得直接访问数据库: \(forbidden)")
+        }
+    }
+
+    /// 双端设置面板共享 AppSettingsSection 深链路由。
+    func testSettingsSectionRoutingSharesCoreEnum() throws {
+        let macSettings = try source(at: "Views_macOS/SettingsSectionView.swift")
+        XCTAssertTrue(macSettings.contains("AppSettingsSection"))
+        XCTAssertTrue(macSettings.contains("consumePendingSettingsSection"))
+        // Core 不反向引用 SwiftUI View 类型
+        let appEnums = try source(at: "Core/Models/AppEnums.swift")
+        XCTAssertTrue(appEnums.contains("enum AppSettingsSection"))
+        XCTAssertFalse(appEnums.contains("import SwiftUI"))
     }
 }
