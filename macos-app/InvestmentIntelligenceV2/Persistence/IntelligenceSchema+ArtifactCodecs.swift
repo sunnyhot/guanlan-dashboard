@@ -30,6 +30,8 @@ extension ArtifactRow {
     static let dailyAttributionKind = "DAILY_ATTRIBUTION"
     /// 市场发现报告（WF-2：universe + 本地因子 + 打分排序的候选清单）。
     static let marketDiscoveryKind = "MARKET_DISCOVERY_REPORT"
+    /// 盘中执行报告（WF-3：Signal + Eligibility + Rebalance execution）。
+    static let intradayExecutionKind = "INTRADAY_EXECUTION_REPORT"
     /// 旧决策 kind（七轮前 payload：无 plannerInputs / 内容摘要字段）。
     /// 八轮 P1-3：新 payload 结构不兼容——新写入/读取一律走
     /// portfolioDecisionV2Kind；本 kind 的存量行对 decision typed fetch
@@ -245,6 +247,9 @@ extension ArtifactRow {
     static func fetchMarketDiscoveryReport(id: String, from db: Database) throws -> MarketDiscoveryReport {
         try fetchDomain(MarketDiscoveryReport.self, id: id, expectedKind: marketDiscoveryKind, from: db)
     }
+    static func fetchIntradayExecutionReport(id: String, from db: Database) throws -> IntradayExecutionReport {
+        try fetchDomain(IntradayExecutionReport.self, id: id, expectedKind: intradayExecutionKind, from: db)
+    }
     static func fetchPortfolioDecision(id: String, from db: Database) throws -> PortfolioDecisionArtifact {
         try fetchDomain(PortfolioDecisionArtifact.self, id: id, expectedKind: portfolioDecisionV2Kind, from: db)
     }
@@ -270,6 +275,9 @@ extension ArtifactRow {
     }
     static func from(_ domain: MarketDiscoveryReport) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
         try from(domain, kind: marketDiscoveryKind)
+    }
+    static func from(_ domain: IntradayExecutionReport) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
+        try from(domain, kind: intradayExecutionKind)
     }
     static func from(_ domain: PortfolioDecisionArtifact) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
         try from(domain, kind: portfolioDecisionV2Kind)

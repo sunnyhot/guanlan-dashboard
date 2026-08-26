@@ -1929,6 +1929,28 @@ macos-app/
 > tie-break、确定性 ID、GRDB 往返、researchTasks 接线、内置清单完整性；
 > 全量 swift test 1728 绿（环境性套件跳过同 WF-1）。
 
+> **状态（2026-08-26，WF-3 收口）**：`Workflows/IntradayWorkflow.swift`
+> 落地——**Signal + Eligibility + Rebalance execution decision** 替代旧
+> 3+1 Agents 盘中链路，D001 纪律结构性保证：
+> - **非 LLM 猜仓位**：workflow 同步纯计算（无 LLM / 无网络）；Δw 唯一
+>   来源是 `TargetRebalancePlanner` 的三类 provenance（target /
+>   remediation / user）——`InvestmentSignal`（SignalStore 跨运行查询）
+>   只作叙述层引用进 artifact（dependencies + referencedSignalIDs），
+>   不进任何 Δw 数学；
+> - **Eligibility 前置**（`IntradayEligibilityPolicy`，versioned heuristic）：
+>   非交易日（TradingCalendar + Exchange 法域）/ 快照陈旧（> 26h）/
+>   无 provenance 来源 → hold（理由显式）；带内偏差 → hold（不交易
+>   是决策）；
+> - **双层约束门**：plan 动作过 `ConstraintGate`（action 裁剪 + 投影
+>   联合约束），gate 拒绝 / 全裁剪 → hold（violations 留证）；
+> - `IntradayExecutionReport` 是 Artifact，**validity = tradingSession**
+>   （本交易时段有效，时区按 Exchange 法域——审查 P2 语义），kind
+>   INTRADAY_EXECUTION_REPORT 接入 typed fetch。
+> 测试 `IntradayWorkflowTests` 8 个：执行路径 provenance 全 target /
+>   signal 叙述层引用、四类 hold（非交易日 / 陈旧 / 无来源 / 带内）、
+>   gate 拒绝（noNegativeWeights）、action 裁剪、确定性 ID + GRDB 往返；
+> 全量 swift test 1736 绿（环境性套件跳过同 WF-1）。
+
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 
 ---
