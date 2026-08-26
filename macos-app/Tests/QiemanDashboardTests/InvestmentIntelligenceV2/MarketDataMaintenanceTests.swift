@@ -30,9 +30,13 @@ final class MarketDataMaintenanceTests: XCTestCase {
 
     /// 满覆盖 stub：窗口内每个日历日一根 bar（覆盖口径按交易日交集计，
     /// 非交易日行不计覆盖——与 MarketUniverseBackfillTests 同款语义）。
+    /// 记录每次抓取的窗口跨度（首轮回看收窄断言用）。
     private final class FullCoverageStubAdapter: ProviderAdapter, @unchecked Sendable {
         let providerID: DataProviderID = .stooq
         let reliabilityClass: ProviderReliabilityClass = .communityAggregated
+
+        private let lock = NSLock()
+        private(set) var windowSpans: [TimeInterval] = []
 
         func fetch(code: ProviderCode, from: Date, to: Date) async throws -> [ProviderRecord] {
             try await fetchWithDiagnostics(code: code, from: from, to: to).records
@@ -41,6 +45,9 @@ final class MarketDataMaintenanceTests: XCTestCase {
         func fetchWithDiagnostics(
             code: ProviderCode, from: Date, to: Date
         ) async throws -> ProviderFetchResult {
+            lock.lock()
+            windowSpans.append(to.timeIntervalSince(from))
+            lock.unlock()
             let payload = DailyBarPayload(
                 rawOpen: Price(value: Decimal(string: "100")!, currency: .usd),
                 rawHigh: Price(value: Decimal(string: "101")!, currency: .usd),
@@ -75,19 +82,27 @@ final class MarketDataMaintenanceTests: XCTestCase {
         }
     }
 
-    private func makeEngine() -> MarketDataMaintenanceEngine {
+    private func makeEngine() -> (engine: MarketDataMaintenanceEngine, stub: FullCoverageStubAdapter) {
         let stub = FullCoverageStubAdapter()
-        return MarketDataMaintenanceEngine(
+        let engine = MarketDataMaintenanceEngine(
             repository: repository,
             dataDirectory: dataDirectory,
             chainFactory: { _ in ProviderFallbackChain(adapters: [stub]) }
         )
+        return (engine, stub)
     }
 
     func testMaintenanceBackfillsUniverseAndDiscoveryFindsCandidates() async throws {
-        let engine = makeEngine()
+        let (engine, stub) = makeEngine()
         let summary = try await engine.runMaintenance(backfillRounds: 3)
         XCTAssertTrue(summary.contains("universe 覆盖 17/31"), "直抓美股 17 条全部达标：\(summary)")
+
+        // 首轮回看收窄（十九轮 P3-2）：增量通道的首次抓取窗口 ≤ 45 天
+        //（默认 400 天与回填 252 交易日窗口重叠 = 首轮重复下载整段历史）
+        XCTAssertTrue(
+            stub.windowSpans.contains { $0 <= 45.0 * 86_400 },
+            "应存在收窄的增量首抓窗口，实际窗口跨度：\(stub.windowSpans.map { Int($0 / 86_400) })天"
+        )
 
         // identity 按数据 Provider 登记（resolver 查表键）——行情行不再卡
         // identity 防火墙（此前只登记 universe-catalog，Stooq 行必被拒收）
@@ -118,7 +133,7 @@ final class MarketDataMaintenanceTests: XCTestCase {
     }
 
     func testMaintenanceIsIdempotentAcrossRounds() async throws {
-        let engine = makeEngine()
+        let (engine, _) = makeEngine()
         _ = try await engine.runMaintenance(backfillRounds: 3)
         let barsBefore = repository.dailyBars(
             listingID: MarketUniverseCatalog.v1.entries[0].listingID,
@@ -132,5 +147,39 @@ final class MarketDataMaintenanceTests: XCTestCase {
         ).count
         XCTAssertEqual(barsBefore, barsAfter, "幂等：重复维护不产生重复行")
         XCTAssertTrue(summary.contains("增量通道"), "摘要应携带增量通道状态：\(summary)")
+    }
+
+    // MARK: - 维护轮串行门（十九轮 P3-1）
+
+    /// 并发入队的维护轮完全串行（state 文件不被并发 read-modify-write）。
+    func testMaintenanceGateSerializesConcurrentRounds() async throws {
+        final class OverlapTracker: @unchecked Sendable {
+            private let lock = NSLock()
+            private var active = 0
+            private(set) var maxOverlap = 0
+            func enter() {
+                lock.lock(); defer { lock.unlock() }
+                active += 1
+                maxOverlap = max(maxOverlap, active)
+            }
+            func exit() {
+                lock.lock(); defer { lock.unlock() }
+                active -= 1
+            }
+        }
+        let gate = MarketDataMaintenanceGate()
+        let tracker = OverlapTracker()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<8 {
+                group.addTask {
+                    await gate.run {
+                        tracker.enter()
+                        try? await Task.sleep(nanoseconds: 10_000_000)
+                        tracker.exit()
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(tracker.maxOverlap, 1, "并发维护轮必须完全串行（无重叠）")
     }
 }

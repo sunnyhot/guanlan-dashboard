@@ -102,8 +102,15 @@ struct MarketDataMaintenanceEngine: Sendable {
             if round.batchKeys.isEmpty { break }
         }
 
-        // 通道 2：收盘后增量（直抓标的）+ remote staging spool 提交（A 股）
-        let dailySync = MarketDailySync(pipeline: pipeline)
+        // 通道 2：收盘后增量（直抓标的）+ remote staging spool 提交（A 股）。
+        // 首轮回看收窄到 30 天（十九轮 P3-2）：≥252 交易日的深度历史是回填
+        // 通道的职责（覆盖不足自动留队列重试），默认 400 天窗口与回填窗口
+        // 重叠会让首轮对同一段历史重复抓取 + 重复过四防火墙管道（幂等但
+        // 浪费带宽与 AV 降级额度）；更早的空洞仍由回填轮负责补齐
+        let dailySync = MarketDailySync(
+            pipeline: pipeline,
+            initialLookbackCalendarDays: 30
+        )
         let directTargets = MarketUniverseCatalog.v1.entries
             .filter(\.fetchDirectly)
             .map { entry in
@@ -183,6 +190,38 @@ final class FactorSnapshotBuffer: @unchecked Sendable {
     }
 }
 
+// MARK: - 维护轮串行门（十九轮 P3-1）
+
+/// 进程内维护轮串行化：6h 循环与「立即扫描」的先行维护共享同一组 sync
+/// state 文件（SyncStateStore 的 load→save 是非原子 read-modify-write），
+/// 并发轮会互踩游标（回退 / 重复抓取浪费额度）。入队操作按到达顺序链式
+/// 执行；库写入幂等兜底语义不变，串行门消除的是进程内自扰。
+actor MarketDataMaintenanceGate {
+    private var tail: Task<Void, Never> = Task {}
+
+    /// 入队并等待本轮完成（含此前排队的所有轮）。
+    func run(_ operation: @escaping @Sendable () async -> Void) async {
+        let previous = tail
+        let chained = Task {
+            await previous.value
+            await operation()
+        }
+        tail = chained
+        await chained.value
+    }
+}
+
+/// 维护结果跨隔离区回传（gate 的 operation 闭包无返回值通道）。
+final class MarketDataMaintenanceResultBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Result<String, Error>?
+
+    var result: Result<String, Error>? {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); defer { lock.unlock() }; stored = newValue }
+    }
+}
+
 // MARK: - AppModel 集成（6 小时维护循环）
 
 extension AppModel {
@@ -200,7 +239,7 @@ extension AppModel {
         marketDataSyncTask = Task.detached(priority: .utility) { [weak self] in
             let interval = UInt64(Self.marketDataSyncInterval * 1_000_000_000)
             while !Task.isCancelled {
-                let didRun = await self?.runMarketDataMaintenanceRound(backfillRounds: 1)
+                let didRun = await self?.runSerializedMarketDataMaintenance(backfillRounds: 1)
                     ?? false
                 do {
                     try await Task.sleep(
@@ -213,9 +252,12 @@ extension AppModel {
         }
     }
 
+    /// 经串行门执行一轮维护（十九轮 P3-1：6h 循环与扫描前维护互斥，state
+    /// 文件不被并发 read-modify-write）。返回 false = runtime / 数据目录未
+    /// 就绪；收敛摘要（含失败文案）统一写入 latestMarketDataSyncSummary。
     @MainActor
     @discardableResult
-    private func runMarketDataMaintenanceRound(backfillRounds: Int) async -> Bool {
+    func runSerializedMarketDataMaintenance(backfillRounds: Int) async -> Bool {
         guard let runtime = intelligenceRuntime,
               let dataDirectory = dataDirectoryURL else { return false }
         let chainFactory = marketDataChainFactoryOverride
@@ -228,13 +270,24 @@ extension AppModel {
             dataDirectory: dataDirectory,
             chainFactory: chainFactory
         )
-        do {
-            latestMarketDataSyncSummary = try await engine.runMaintenance(
-                backfillRounds: backfillRounds
-            )
-        } catch {
+        let box = MarketDataMaintenanceResultBox()
+        await marketDataMaintenanceGate.run {
+            do {
+                box.result = .success(
+                    try await engine.runMaintenance(backfillRounds: backfillRounds)
+                )
+            } catch {
+                box.result = .failure(error)
+            }
+        }
+        switch box.result {
+        case .success(let summary):
+            latestMarketDataSyncSummary = summary
+        case .failure(let error):
             // 维护失败不阻断任何读取面（库是本地积累的派生物）——只记诊断
             latestMarketDataSyncSummary = "市场数据维护失败：\(error.localizedDescription)"
+        case nil:
+            break   // gate.run 已等待完成，不可达
         }
         return true
     }

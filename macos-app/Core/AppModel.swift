@@ -158,6 +158,8 @@ final class AppModel: ObservableObject {
     var portfolioAutoRefreshTask: Task<Void, Never>?
     var remoteStagingSyncTask: Task<Void, Never>?
     var marketDataSyncTask: Task<Void, Never>?
+    /// 维护轮串行门（十九轮 P3-1：6h 循环与扫描前维护互斥执行）
+    let marketDataMaintenanceGate = MarketDataMaintenanceGate()
     /// V2 开库进行中标记（bootstrap 异步化后的幂等守护）
     var isBootstrappingIntelligence = false
     /// 行情 Provider 健康监控（跨维护轮持久——quota 记账不随轮重置）

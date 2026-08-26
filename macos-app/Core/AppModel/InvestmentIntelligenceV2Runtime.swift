@@ -371,8 +371,7 @@ extension AppModel {
 
     @MainActor
     func runMarketDiscovery() {
-        guard let runtime = intelligenceRuntime,
-              let dataDirectory = dataDirectoryURL else {
+        guard let runtime = intelligenceRuntime else {
             latestIntelligenceError = "投资智能运行时未就绪"
             return
         }
@@ -380,32 +379,14 @@ extension AppModel {
         isRunningMarketDiscovery = true
         latestIntelligenceError = nil
         let now = Date()
-        let chainFactory = marketDataChainFactoryOverride
-            ?? MarketDataMaintenanceEngine.productionChainFactory(
-                healthMonitor: marketProviderHealthMonitor,
-                alphaVantage: MarketDataMaintenanceEngine.productionAlphaVantageSettings()
-            )
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningMarketDiscovery = false } }
             do {
-                // 数据维护先行（十八轮 P1-1）：identity 建立 → universe 回填
-                // （首轮冷库多批次推进）→ 收盘增量 + remote spool 提交。维护
-                // 失败不阻断扫描——降级为 coverage gap（DATA006 local 兜底），
-                // 报告显式记录缺口而不是失败
-                let engine = MarketDataMaintenanceEngine(
-                    repository: runtime.repository,
-                    dataDirectory: dataDirectory,
-                    chainFactory: chainFactory
-                )
-                let maintenanceSummary: String
-                if let summary = try? await engine.runMaintenance(backfillRounds: 3) {
-                    maintenanceSummary = summary
-                } else {
-                    maintenanceSummary = "市场数据维护失败（本次扫描基于库内既有数据）"
-                }
-                await MainActor.run {
-                    self?.latestMarketDataSyncSummary = maintenanceSummary
-                }
+                // 数据维护先行（十八轮 P1-1；十九轮 P3-1 起经串行门与 6h
+                // 循环互斥）：identity 建立 → universe 回填（首轮冷库多批次
+                // 推进）→ 收盘增量 + remote spool 提交。维护失败不阻断扫描
+                // ——降级为 coverage gap（DATA006 local 兜底），摘要记入诊断面
+                await self?.runSerializedMarketDataMaintenance(backfillRounds: 3)
 
                 // identity 建立兜底（幂等；维护引擎已建过，引擎整体失败时
                 // 保证 discovery 自身的 factor 读取与后续提交可用）
