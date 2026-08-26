@@ -187,6 +187,76 @@ final class SignalExtractionTests: XCTestCase {
         XCTAssertEqual(v1.direction, v2.direction, "内容相同只是身份不同")
     }
 
+    // MARK: 十五轮审查 P1-3 回归：ID 身份域 == SignalStore 冲突比较域
+
+    func testRephrasedNotesProduceDistinctSignalIDNoConflict() throws {
+        // 同证据、同方向、同 producer，但 claims 措辞不同（或 failover 到
+        // 另一模型）→ 不同 ID（不同信号），不再触发 SignalStore conflict。
+        let store = InMemorySignalStore()
+        func claim(_ statement: String) -> ResearchClaim {
+            ResearchClaim(
+                statement: statement,
+                evidenceReferences: [ev1],
+                confidenceLabel: .high,
+                dimension: .momentum,
+                direction: .bullish
+            )
+        }
+        let first = SignalExtractor().extract(
+            from: try makeResearchNotes([claim("净值连续回升，动量改善")]),
+            now: Date(timeIntervalSince1970: 1000)
+        )
+        let second = SignalExtractor().extract(
+            from: try makeResearchNotes([claim("近三日净值上行，趋势走强")]),
+            now: Date(timeIntervalSince1970: 2000)
+        )
+        XCTAssertEqual(first.count, 1)
+        XCTAssertEqual(second.count, 1)
+        XCTAssertNotEqual(
+            first[0].id, second[0].id,
+            "不同措辞（不同 notes contentFingerprint）是不同信号——ID 必须分叉"
+        )
+        // 两条信号都能落库（同 ID 才会撞 conflict，现在不会）
+        XCTAssertNoThrow(try store.write(first[0]))
+        XCTAssertNoThrow(try store.write(second[0]))
+        XCTAssertEqual(try store.signals(subject: first[0].subjectCanonical).count, 2)
+    }
+
+    func testFailoverToDifferentModelProducesDistinctSignalID() throws {
+        // producer（模型标识）不同 → ID 不同——failover 产新信号而非 conflict
+        func extract(_ model: String) throws -> InvestmentSignal {
+            let notes = ResearchNotes(
+                task: try makeResearchNotes([
+                    ResearchClaim(
+                        statement: "动量改善",
+                        evidenceReferences: [ev1],
+                        confidenceLabel: .high,
+                        dimension: .momentum,
+                        direction: .bullish
+                    )
+                ]).task,
+                notes: "n",
+                claims: [
+                    ResearchClaim(
+                        statement: "动量改善",
+                        evidenceReferences: [ev1],
+                        confidenceLabel: .high,
+                        dimension: .momentum,
+                        direction: .bullish
+                    )
+                ],
+                producedBy: ModelProviderDescriptor(
+                    providerID: "p", model: model, fingerprint: "f-\(model)"
+                ),
+                producedAt: Date(timeIntervalSince1970: 1000)
+            )
+            return try XCTUnwrap(SignalExtractor().extract(from: notes, now: Date(timeIntervalSince1970: 1000)).first)
+        }
+        let fromPrimary = try extract("model-a")
+        let fromFailover = try extract("model-b")
+        XCTAssertNotEqual(fromPrimary.id, fromFailover.id)
+    }
+
     func testExtractionIsIdempotentForSameNotesAndPolicy() throws {
         let notes = try makeResearchNotes([
             ResearchClaim(

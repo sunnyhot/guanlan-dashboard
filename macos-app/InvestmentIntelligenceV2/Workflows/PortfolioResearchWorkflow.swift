@@ -218,6 +218,8 @@ struct PortfolioResearchWorkflow: Sendable {
                         toolName: record.toolName,
                         content: record.result.contentJSON,
                         subject: record.taskSubject,
+                        sourceDate: record.result.evidenceSourceDates[
+                            evidenceID.rawValue],
                         at: record.timestamp
                     )
                     try dependencies.evidenceStore.write(observation)

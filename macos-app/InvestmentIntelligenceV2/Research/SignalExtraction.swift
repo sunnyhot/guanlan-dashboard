@@ -176,8 +176,15 @@ struct SignalExtractor: Sendable {
         }
         rationale += "｜policy=\(policy.identityToken)"
 
-        // 确定性 ID：subject + dimension + direction + strength + evidence + policy
-        //（不含 effectiveAt——同 notes 同 policy 重提取幂等）
+        // 确定性 ID：subject + dimension + direction + strength + evidence +
+        // policy + **producer + notes 内容指纹**（十五轮审查 P1-3：ID 身份域
+        // 必须覆盖 SignalStore 冲突比较的全部语义字段——rationale 由 claims
+        // 措辞派生、producer 含模型标识，两者此前不在 ID 内，导致「同证据
+        // 不同措辞 / failover 换模型」产出同 ID 异 rationale 的信号，重跑
+        // 直接 conflict。contentFingerprint 概括全部 claims 措辞，与 producer
+        // 一起纳入后：同 ID ⟹ 同 rationale 同 producer，两边语义一致；
+        // 措辞变化 = 新信号（新 ID），不再误报 conflict。不含
+        // effectiveAt——同 notes 同 policy 重提取幂等）
         let idPayload = [
             "subject": "\(notes.task.subject.entityType)|\(notes.task.subject.entityIDRawValue)",
             "dimension": dimension.rawValue,
@@ -185,6 +192,8 @@ struct SignalExtractor: Sendable {
             "strength": strength.rawValue,
             "evidence": evidenceIDs.map(\.rawValue).joined(separator: ","),
             "policy": policy.identityToken,
+            "producer": notes.producedBy.model,
+            "notes": notes.contentFingerprint,
         ].sorted { $0.key < $1.key }
         .map { "\($0.key)=\($0.value)" }
         .joined(separator: "|")

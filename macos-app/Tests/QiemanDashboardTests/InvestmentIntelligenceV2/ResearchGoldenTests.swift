@@ -84,8 +84,10 @@ final class ResearchGoldenTests: XCTestCase {
         let (outcome, signals) = try await runGoldenChain()
         let notes = try XCTUnwrap(outcome.notes)
 
-        // 固定的 notes 内容指纹（claims/direction/producer 全部参与）。
-        XCTAssertEqual(notes.contentFingerprint, "1b5e93b6ee75b88f71a330fe68b5a6ef")
+        // 固定的 notes 内容指纹（claims/direction/producer 全部参与；
+        // 十五轮审查 P1-1 后 claims 的 evidence 引用为代码绑定产物——
+        // 两条 claim 经 recency 兜底都绑定最近工具产出的 EV-NAV-1/2）。
+        XCTAssertEqual(notes.contentFingerprint, "cac23b1a198715e27fbe6f7b3e943386")
 
         // 两个维度两个信号；字段级 golden。
         XCTAssertEqual(signals.count, 2)
@@ -95,16 +97,25 @@ final class ResearchGoldenTests: XCTestCase {
         XCTAssertNotNil(value)
         XCTAssertEqual(momentum?.direction, .bullish)
         XCTAssertEqual(momentum?.strength, .strong)
-        XCTAssertEqual(momentum?.derivedFromEvidenceIDs, [EvidenceID(rawValue: "EV-NAV-1")])
+        // RES-8 生产接线后绑定由代码产出：stub 的两条证据同属最近一次工具
+        // 调用，claim 陈述与数据 JSON 的 bigram 相似度低于阈值 → recency
+        // 兜底绑定两条（数据型证据的内容匹配通路天然弱，兜底收窄到最近
+        // 工具输出）。两个维度信号的证据并集因此相同。
+        XCTAssertEqual(momentum?.derivedFromEvidenceIDs, [
+            EvidenceID(rawValue: "EV-NAV-1"), EvidenceID(rawValue: "EV-NAV-2")
+        ])
         XCTAssertEqual(value?.direction, .neutral)
         XCTAssertEqual(value?.strength, .moderate)
-        XCTAssertEqual(value?.derivedFromEvidenceIDs, [EvidenceID(rawValue: "EV-NAV-2")])
+        XCTAssertEqual(value?.derivedFromEvidenceIDs, [
+            EvidenceID(rawValue: "EV-NAV-1"), EvidenceID(rawValue: "EV-NAV-2")
+        ])
         XCTAssertEqual(momentum?.producer.modelIdentifier, "golden-model")
         XCTAssertEqual(momentum?.effectiveAt, Date(timeIntervalSince1970: 1_800_000_000))
 
-        // SignalID golden（确定性派生；任何身份成分变化在此爆出）。
-        XCTAssertEqual(momentum?.id.rawValue, "sig_1a99a9c6c56c62c79ef2a5b56da89acb")
-        XCTAssertEqual(value?.id.rawValue, "sig_1bddbbafaffa12437f899e307d0ab43b")
+        // SignalID golden（确定性派生；任何身份成分变化在此爆出——
+        // 十五轮 P1-3 后 ID 纳入 producer + notes contentFingerprint）。
+        XCTAssertEqual(momentum?.id.rawValue, "sig_2c38ed3bdc2e5d4b0772354207fee019")
+        XCTAssertEqual(value?.id.rawValue, "sig_631bd50fb7177cdea1a8dd9cc9e46d60")
     }
 
     func testGoldenChainIsDeterministicAcrossRuns() async throws {
@@ -131,7 +142,10 @@ final class ResearchGoldenTests: XCTestCase {
         let bySubject = try store.signals(subject: goldenSubject)
         XCTAssertEqual(Set(bySubject.map(\.id)), Set(signals.map(\.id)))
         let viaEvidence = try store.signals(derivedFromEvidence: EvidenceID(rawValue: "EV-NAV-1"))
-        XCTAssertEqual(viaEvidence.map(\.dimension), [.momentum])
+        // 溯源查询按 effectiveAt 降序、同刻稳定序返回
+        XCTAssertEqual(
+            Set(viaEvidence.map(\.dimension)), Set([.momentum, .value])
+        )
     }
 
     // MARK: 校验失败路径 golden

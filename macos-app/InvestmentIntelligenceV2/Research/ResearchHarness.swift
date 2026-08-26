@@ -40,9 +40,21 @@ struct ResearchToolResult: Sendable, Hashable {
     let isError: Bool
     /// 本次动作产出的 evidence IDs（登记进运行簿；空 = 无证据产出）。
     let evidenceIDs: [EvidenceID]
+    /// 每条 evidence 的**来源时间**（EvidenceID rawValue → 事件/发布时刻，
+    /// 如 SEC filed_at、网页 published_date、日线最新交易日）。缺失的条目
+    /// 落库时回退执行时刻（实时查询结果语义）——Freshness 判定用来源时间
+    /// 而不是抓取时间（十五轮审查 P1-4：旧证据今天重抓不会变「新鲜」）。
+    var evidenceSourceDates: [String: Date] = [:]
 
-    static func content(_ json: ModelJSONValue, evidenceIDs: [EvidenceID] = []) -> ResearchToolResult {
-        ResearchToolResult(contentJSON: json, isError: false, evidenceIDs: evidenceIDs)
+    static func content(
+        _ json: ModelJSONValue,
+        evidenceIDs: [EvidenceID] = [],
+        sourceDates: [String: Date] = [:]
+    ) -> ResearchToolResult {
+        ResearchToolResult(
+            contentJSON: json, isError: false, evidenceIDs: evidenceIDs,
+            evidenceSourceDates: sourceDates
+        )
     }
 
     /// 错误信封便利形态（信封内容 + isError 标记）。
@@ -106,13 +118,21 @@ struct ResearchHarnessPolicy: Sendable, Hashable {
 /// 行为契约（与 TrendResearchAgent 的关键差异）：
 /// - 模型访问只经 ModelGateway（selection/retry/budget 在 Gateway 层）
 /// - 提交解码只走 StructuredGeneration（无文本 parse 路径）
-/// - 提交门禁：至少一次工具调用 + claims 的 evidence 引用全部在运行内
-///   登记簿中（RES-8 Evidence Matcher 落地前的最低完整性）
+/// - 提交门禁：至少一次工具调用 + 模型自报 evidence_ids 全部在运行内
+///   登记簿中（候选校验）；**最终绑定由代码产出**——EvidenceMatcher
+///   内容匹配 + recency 兜底,模型引用不直接成为最终引用（RES-8 生产
+///   接线,十五轮审查 P1-1）
 /// - 失败返回 outcome（job.failed + errorDetail）；取消 rethrow
 ///   CancellationError（结构化并发语义不吞）
 struct ResearchHarness: Sendable {
     static let workflowKind = "research"
     static let submitToolName = ResearchNotesSubmission.schema.functionName
+
+    /// 总预算耗尽（硬超时——十五轮审查 P2-1：此前只在轮次边界检查，
+    /// 单次模型请求 / 工具执行阻塞时总预算不生效）。
+    enum TotalBudgetExhaustedError: Error, Sendable {
+        case budgetExhausted(seconds: Int)
+    }
 
     let gateway: ModelGateway
     let tools: [any ResearchTool]
@@ -180,7 +200,14 @@ struct ResearchHarness: Sendable {
             研究目标：\(task.objective)
             """),
         ]
+        // 证据登记簿（RES-8 生产接线,十五轮审查 P1-1）:ID 集合之外同时
+        // 维护**语料文本**(ID → 信封 JSON 摘要,EvidenceMatcher 内容匹配的
+        // 输入)与**最近一次产出证据的工具调用**(数据型证据的 recency 兜底
+        // 绑定来源)。最终 claim→evidence 绑定完全由代码产出——模型自报的
+        // evidence_ids 只经「是否登记在册」的候选校验,不直接成为最终引用。
         var registeredEvidence: Set<String> = []
+        var registeredEvidenceCorpus: [EvidenceID: String] = [:]
+        var lastEvidenceBearingResult: [EvidenceID] = []
         var toolCallCount = 0
         var plainTextResponses = 0
         var invalidSubmissions = 0
@@ -198,11 +225,46 @@ struct ResearchHarness: Sendable {
             return ResearchRunOutcome(job: job, notes: nil, transcript: messages, errorDetail: detail)
         }
 
+        // 硬总预算：剩余秒数（monotonic；轮次边界检查保留作快速失败，
+        // 单次模型请求与工具执行由 withRemainingBudget 结构化超时兜底）。
+        let monotonicStart = ContinuousClock.now
+        func remainingBudgetSeconds() -> TimeInterval {
+            let elapsed = ContinuousClock.now - monotonicStart
+            let elapsedSeconds = TimeInterval(elapsed.components.seconds)
+                + TimeInterval(elapsed.components.attoseconds) / 1_000_000_000_000_000_000
+            return policy.totalTimeoutSeconds - elapsedSeconds
+        }
+        func withRemainingBudget<T: Sendable>(
+            _ label: String,
+            _ operation: @escaping @Sendable () async throws -> T
+        ) async throws -> T {
+            let remaining = remainingBudgetSeconds()
+            guard remaining > 0 else {
+                throw TotalBudgetExhaustedError.budgetExhausted(
+                    seconds: Int(policy.totalTimeoutSeconds))
+            }
+            return try await withThrowingTaskGroup(of: T.self) { group in
+                group.addTask { try await operation() }
+                group.addTask {
+                    try await Task.sleep(
+                        nanoseconds: UInt64(remaining * 1_000_000_000))
+                    throw TotalBudgetExhaustedError.budgetExhausted(
+                        seconds: Int(policy.totalTimeoutSeconds))
+                }
+                guard let first = try await group.next() else {
+                    throw TotalBudgetExhaustedError.budgetExhausted(
+                        seconds: Int(policy.totalTimeoutSeconds))
+                }
+                group.cancelAll()
+                return first
+            }
+        }
+
         do {
             while turn < policy.maxTurns {
                 try Task.checkCancellation()
                 turn += 1
-                if clock().timeIntervalSince(startedAt) > policy.totalTimeoutSeconds {
+                if remainingBudgetSeconds() <= 0 {
                     return await fail("总预算超时（\(Int(policy.totalTimeoutSeconds))s）", at: clock())
                 }
                 await events(.turnStarted(turn: turn))
@@ -215,7 +277,9 @@ struct ResearchHarness: Sendable {
                     maxOutputTokens: policy.maxOutputTokens,
                     purpose: "research.turn"
                 )
-                let response = try await gateway.complete(request)
+                let response = try await withRemainingBudget("model", {
+                    try await gateway.complete(request)
+                })
                 messages.append(response.assistantMessage)
 
                 // 截断的响应不执行工具（参数可能不完整），要求重发。
@@ -238,6 +302,9 @@ struct ResearchHarness: Sendable {
                     ))
                     continue
                 }
+                // 出现合法工具调用即打断「连续」纯文本——计数是连续性度量，
+                // 不是全程累计（间歇性文本+工具交替的正常研究不被误杀）。
+                plainTextResponses = 0
 
                 for call in response.toolCalls {
                     try Task.checkCancellation()
@@ -260,10 +327,35 @@ struct ResearchHarness: Sendable {
                                 toolCallID: call.id
                             ))
                         case .success(let submission):
+                            // RES-8 防火墙的生产接线:claim→evidence 绑定由
+                            // 代码产出——① 内容匹配(EvidenceMatcher,claim
+                            // 陈述 vs 证据语料的 bigram Jaccard,文本型证据
+                            // 通路);② 匹配为空时 recency 兜底(绑最近一次
+                            // 产出证据的工具结果——数据型证据的数据源信号;
+                            // 攻击面从「任意已登记」收窄到「最近工具输出」,
+                            // 内容恒为真实工具产出)。模型自报 ID 不参与最终
+                            // 绑定(谎报不相关证据无法生效;漏报由代码补绑)。
+                            let matcher = EvidenceMatcher()
+                            let reboundClaims = submission.claims.map { submitted in
+                                let contentBound = matcher.match(
+                                    statement: submitted.statement,
+                                    corpus: registeredEvidenceCorpus
+                                )
+                                let bound = contentBound.isEmpty
+                                    ? Array(lastEvidenceBearingResult.prefix(matcher.config.maxMatchesPerClaim))
+                                    : contentBound
+                                return ResearchClaim(
+                                    statement: submitted.statement,
+                                    evidenceReferences: bound,
+                                    confidenceLabel: submitted.confidenceLabel,
+                                    dimension: submitted.dimension,
+                                    direction: submitted.direction
+                                )
+                            }
                             let notes = ResearchNotes(
                                 task: task,
                                 notes: submission.notes,
-                                claims: submission.claims,
+                                claims: reboundClaims,
                                 producedBy: response.resolvedProvider
                                     ?? producedByDescriptor
                                     ?? ModelProviderDescriptor(
@@ -300,14 +392,22 @@ struct ResearchHarness: Sendable {
                         return await fail("工具调用次数超限（\(policy.maxToolCalls)）", at: clock())
                     }
 
-                    let result = await tool.execute(
-                        argumentsJSON: call.argumentsJSON,
-                        context: ResearchToolContext(
-                            task: task, sources: sources, dataAccess: dataAccess
+                    let result = try await withRemainingBudget("tool", {
+                        await tool.execute(
+                            argumentsJSON: call.argumentsJSON,
+                            context: ResearchToolContext(
+                                task: task, sources: sources, dataAccess: dataAccess
+                            )
                         )
-                    )
-                    for evidenceID in result.evidenceIDs {
-                        registeredEvidence.insert(evidenceID.rawValue)
+                    })
+                    if !result.evidenceIDs.isEmpty {
+                        for evidenceID in result.evidenceIDs {
+                            registeredEvidence.insert(evidenceID.rawValue)
+                            registeredEvidenceCorpus[evidenceID] = Self.evidenceCorpusText(
+                                id: evidenceID.rawValue, content: result.contentJSON
+                            )
+                        }
+                        lastEvidenceBearingResult = result.evidenceIDs
                     }
                     await events(.toolExecuted(
                         name: call.name,
@@ -443,6 +543,17 @@ struct ResearchHarness: Sendable {
         case .decodingFailed(_, let detail):
             return "提交参数不符合结构：\(detail)"
         }
+    }
+
+    /// 证据语料文本:信封 JSON 的稳定串(截断控制体积)+ evidence ID
+    /// (ID 携带来源语义片段,如 official:sec:filing / local:fund_nav,
+    /// 参与文本匹配)。内容匹配是纯函数,同内容同语料。
+    private static func evidenceCorpusText(
+        id: String, content: ModelJSONValue
+    ) -> String {
+        let json = (try? JSONEncoder().encode(content))
+            .map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return "\(id) \(json.prefix(2_000))"
     }
 
     private static func toolResultJSON(_ result: ResearchToolResult) -> String {

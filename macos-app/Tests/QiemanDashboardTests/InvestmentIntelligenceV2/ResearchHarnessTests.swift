@@ -63,6 +63,122 @@ final class ResearchHarnessTests: XCTestCase {
         XCTAssertEqual(outcome.transcript.filter { $0.role == .tool }.count, 1)
     }
 
+    // MARK: 十五轮审查 P1-1 / P2-4 回归
+
+    func testPlainTextToolAlternationDoesNotAccumulate() async throws {
+        // 文本-工具-文本-提交：间歇纯文本不累计（连续性度量，非全程累计）。
+        let submission = """
+        {"notes": "完成。", "claims": [
+          {"statement": "数据正常", "evidence_ids": ["EV-1"], "confidence_label": "HIGH"}
+        ]}
+        """
+        let provider = ScriptedModelProvider(providerID: "p", steps: [
+            .response(textResponse("我想先聊聊")),
+            .response(toolCallResponse([(name: "get_market_snapshot", args: "{}")])),
+            .response(textResponse("再看一眼")),
+            .response(textResponse("还想聊聊")),
+            .response(toolCallResponse([(name: "submit_research_notes", args: submission)])),
+        ])
+        let harness = ResearchHarness(
+            gateway: gateway(provider: provider),
+            tools: [StubResearchTool()],
+            policy: {
+                var policy = ResearchHarnessPolicy()
+                policy.maxPlainTextResponses = 2
+                return policy
+            }()
+        )
+        let outcome = try await harness.run(task: try makeResearchTask())
+        XCTAssertTrue(outcome.succeeded, outcome.errorDetail ?? "")
+    }
+
+    func testClaimEvidenceBindingIsCodeProducedNotModelDeclared() async throws {
+        // RES-8 生产接线：模型谎报「EV-1 支撑毫不相关的 claim」也不生效——
+        // 绑定由代码产出。构造两个证据来自两次工具调用（recency 兜底应绑
+        // 最近一次），模型谎报引用第一个：最终引用仍是代码绑定的第二个。
+        let submission = """
+        {"notes": "研究完成。", "claims": [
+          {"statement": "最新数据稳定", "evidence_ids": ["EV-FIRST"], "confidence_label": "HIGH"}
+        ]}
+        """
+        let provider = ScriptedModelProvider(providerID: "p", steps: [
+            .response(toolCallResponse([(name: "get_market_snapshot", args: "{}")])),
+            .response(toolCallResponse([(name: "get_market_snapshot", args: "{}")])),
+            .response(toolCallResponse([(name: "submit_research_notes", args: submission)])),
+        ])
+        final class TwoShotTool: ResearchTool, @unchecked Sendable {
+            let name = "get_market_snapshot"
+            let description = "两阶段工具"
+            let parameters: ModelJSONValue = ["type": "object", "properties": [:]]
+            private var call = 0
+            func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
+                call += 1
+                let id = call == 1 ? "EV-FIRST" : "EV-SECOND"
+                return ResearchToolResult.content(
+                    ["snapshot": .number(Double(call))],
+                    evidenceIDs: [EvidenceID(rawValue: id)]
+                )
+            }
+        }
+        let harness = ResearchHarness(
+            gateway: gateway(provider: provider), tools: [TwoShotTool()]
+        )
+        let outcome = try await harness.run(task: try makeResearchTask())
+        XCTAssertTrue(outcome.succeeded, outcome.errorDetail ?? "")
+        let notes = try XCTUnwrap(outcome.notes)
+        XCTAssertEqual(
+            notes.claims[0].evidenceReferences,
+            [EvidenceID(rawValue: "EV-SECOND")],
+            "模型自报 EV-FIRST 不生效——代码绑定最近一次工具产出（recency 兜底）"
+        )
+    }
+
+    func testContentMatchPathBindsSimilarEvidenceOverRecency() async throws {
+        // 内容匹配通路优先：claim 陈述与某证据语料高度相似时绑定该证据
+        //（而非 recency 兜底的最近工具输出）。
+        let statement = "中际旭创位列基金第一大重仓股"
+        let submission = """
+        {"notes": "持仓研究。", "claims": [
+          {"statement": "\(statement)", "evidence_ids": [], "confidence_label": "HIGH"}
+        ]}
+        """
+        let provider = ScriptedModelProvider(providerID: "p", steps: [
+            .response(toolCallResponse([(name: "get_market_snapshot", args: "{}")])),
+            .response(toolCallResponse([(name: "get_market_snapshot", args: "{}")])),
+            .response(toolCallResponse([(name: "submit_research_notes", args: submission)])),
+        ])
+        final class MixedTool: ResearchTool, @unchecked Sendable {
+            let name = "get_market_snapshot"
+            let description = "混合工具"
+            let parameters: ModelJSONValue = ["type": "object", "properties": [:]]
+            private var call = 0
+            func execute(argumentsJSON: String, context: ResearchToolContext) async -> ResearchToolResult {
+                call += 1
+                if call == 1 {
+                    return ResearchToolResult.content(
+                        ["summary": .string("中际旭创位列基金第一大重仓股，制造业暴露最高")],
+                        evidenceIDs: [EvidenceID(rawValue: "EV-SIMILAR")]
+                    )
+                }
+                return ResearchToolResult.content(
+                    ["snapshot": .number(2)],
+                    evidenceIDs: [EvidenceID(rawValue: "EV-RECENT")]
+                )
+            }
+        }
+        let harness = ResearchHarness(
+            gateway: gateway(provider: provider), tools: [MixedTool()]
+        )
+        let outcome = try await harness.run(task: try makeResearchTask())
+        XCTAssertTrue(outcome.succeeded, outcome.errorDetail ?? "")
+        let notes = try XCTUnwrap(outcome.notes)
+        XCTAssertEqual(
+            notes.claims[0].evidenceReferences.first,
+            EvidenceID(rawValue: "EV-SIMILAR"),
+            "内容匹配优先于 recency 兜底——相似证据是代码绑定的第一通路"
+        )
+    }
+
     // MARK: 提交门禁
 
     func testSubmissionBeforeAnyToolCallIsRejectedAndRecoverable() async throws {

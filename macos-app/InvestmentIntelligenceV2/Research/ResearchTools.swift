@@ -28,6 +28,26 @@ enum ResearchToolEnvelope {
     }
 }
 
+
+/// 工具侧来源时间解析（"yyyy-MM-dd" 与 ISO8601；UTC，解析失败返回 nil
+/// ——不猜时间，落库回退执行时刻）。
+enum ResearchSourceDateParser {
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        return formatter
+    }()
+
+    static func parse(_ raw: String) -> Date? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let date = dayFormatter.date(from: trimmed) { return date }
+        return ISO8601DateFormatter().date(from: trimmed)
+    }
+}
+
 // MARK: - Tavily 网络搜索
 
 struct V2WebSearchTool: ResearchTool {
@@ -100,6 +120,7 @@ struct V2WebSearchTool: ResearchTool {
             )
             var evidenceIDs: [EvidenceID] = []
             var seenEvidenceIDs: Set<String> = []
+            var sourceDates: [String: Date] = [:]
             var rows: [ModelJSONValue] = []
             for result in response.results {
                 guard !result.title.isEmpty, !result.content.isEmpty else { continue }
@@ -107,6 +128,10 @@ struct V2WebSearchTool: ResearchTool {
                 // 同 url+title 的重复结果只登记一次（审查 P3-6）
                 guard seenEvidenceIDs.insert(id).inserted else { continue }
                 evidenceIDs.append(EvidenceID(rawValue: id))
+                if let published = result.publishedDate,
+                   let date = ResearchSourceDateParser.parse(published) {
+                    sourceDates[id] = date
+                }
                 rows.append([
                     "title": .string(result.title),
                     "url": .string(result.url),
@@ -125,7 +150,8 @@ struct V2WebSearchTool: ResearchTool {
             }
             return .content(
                 ResearchToolEnvelope.success(data, evidenceIDs: evidenceIDs),
-                evidenceIDs: evidenceIDs
+                evidenceIDs: evidenceIDs,
+                sourceDates: sourceDates
             )
         } catch let error as TavilySearchClientError {
             return .errorEnvelope(code: "web_search_failed", message: error.userFacingToolMessage)
@@ -248,11 +274,19 @@ struct V2SECOfficialTool: ResearchTool {
         var rows: [ModelJSONValue] = []
         var evidenceIDs: [EvidenceID] = []
         let name = (json["name"] as? String) ?? ticker
-        for index in 0..<min(maxResults, forms.count) {
+        // 上界取三数组与 maxResults 的最小值——上游字段长度不齐时安全跳过，
+        // 不做无条件下标（越界是 crash，不是可恢复错误）。
+        let rowCount = min(maxResults, forms.count, accessionNumbers.count, filingDates.count)
+        var sourceDates: [String: Date] = [:]
+        for index in 0..<rowCount {
             guard let form = forms[index] as? String,
                   let accession = accessionNumbers[index] as? String,
                   let date = filingDates[index] as? String else { continue }
-            evidenceIDs.append(EvidenceID(rawValue: "official:sec:filing:\(accession)"))
+            let evidenceID = EvidenceID(rawValue: "official:sec:filing:\(accession)")
+            evidenceIDs.append(evidenceID)
+            if let filedAt = ResearchSourceDateParser.parse(date) {
+                sourceDates[evidenceID.rawValue] = filedAt
+            }
             rows.append([
                 "form": .string(form),
                 "filed_at": .string(date),
@@ -269,7 +303,8 @@ struct V2SECOfficialTool: ResearchTool {
         ]
         return .content(
             ResearchToolEnvelope.success(data, evidenceIDs: evidenceIDs),
-            evidenceIDs: evidenceIDs
+            evidenceIDs: evidenceIDs,
+            sourceDates: sourceDates
         )
     }
 
@@ -481,6 +516,10 @@ struct V2AlphaVantageTool: ResearchTool {
         }
         let digest = StableDigest.digest("\(symbol)|\(closes.first?.date ?? "")|\(closes.count)")
         let evidenceID = EvidenceID(rawValue: "vendor:alphavantage:daily:\(symbol):\(digest.prefix(12))")
+        // 来源时间 = 日线最新交易日（数据描述的最后事件时刻）
+        let dailySourceDates: [String: Date] = [
+            evidenceID.rawValue: ResearchSourceDateParser.parse(closes[0].date)
+        ].compactMapValues { $0 }
         let data: ModelJSONValue = [
             "symbol": .string(symbol),
             "latest_date": .string(closes[0].date),
@@ -497,7 +536,8 @@ struct V2AlphaVantageTool: ResearchTool {
         ]
         return .content(
             ResearchToolEnvelope.success(data, evidenceIDs: [evidenceID]),
-            evidenceIDs: [evidenceID]
+            evidenceIDs: [evidenceID],
+            sourceDates: dailySourceDates
         )
     }
 

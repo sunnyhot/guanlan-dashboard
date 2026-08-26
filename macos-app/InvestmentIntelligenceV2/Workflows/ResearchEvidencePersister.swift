@@ -65,11 +65,19 @@ struct ResearchEvidenceFactory: Sendable {
     ///   - toolName: 执行的工具名（来源映射）
     ///   - content: 工具结果信封（客观记录工具产出，JSON 编码）
     ///   - subject: 研究任务主体
+    ///   - sourceDate: 证据的**来源时间**（SEC filed_at / 网页 published_date /
+    ///     日线最新交易日——描述事件何时发生/发布）。nil 时回退执行时刻
+    ///     （实时查询结果语义：内容本身就是「此刻查到的」，不存在更早的
+    ///     客观事件时间）。TemporalEnvelope 语义：effective = published =
+    ///     available = 来源时间（点观测无推迟推导）；**ingested = 执行时刻**
+    ///     ——Freshness 判定用来源时间，抓取再新也救不了旧证据（十五轮
+    ///     审查 P1-4）。
     func observation(
         evidenceID: EvidenceID,
         toolName: String,
         content: ModelJSONValue,
         subject: CanonicalRef,
+        sourceDate: Date? = nil,
         at timestamp: Date
     ) throws -> EvidenceObservation {
         let mapped = try ResearchEvidenceSourceMapping.mapped(toolName: toolName)
@@ -86,13 +94,14 @@ struct ResearchEvidenceFactory: Sendable {
         let observationID = ObservationID(
             rawValue: "obs_\(StableDigest.digest(idPayload))"
         )
+        let sourceTime = sourceDate ?? timestamp
         return EvidenceObservation(
             id: observationID,
             evidenceID: evidenceID,
             temporalEnvelope: TemporalEnvelope(
-                effectiveAt: timestamp,
-                publishedAt: timestamp,
-                availableAt: timestamp,
+                effectiveAt: sourceTime,
+                publishedAt: sourceTime,
+                availableAt: sourceTime,
                 ingestedAt: timestamp
             ),
             availabilityProvenance: AvailabilityProvenance(
@@ -104,7 +113,7 @@ struct ResearchEvidenceFactory: Sendable {
                 providerReliability: mapped.reliability,
                 sourceProviderID: DataProviderID(rawValue: toolName)
             ),
-            vintage: Vintage(announcementDate: timestamp, publisherVersion: 1),
+            vintage: Vintage(announcementDate: sourceTime, publisherVersion: 1),
             content: contentJSONString,
             source: mapped.source,
             subjectCanonical: subject

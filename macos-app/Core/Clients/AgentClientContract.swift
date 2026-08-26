@@ -259,11 +259,27 @@ struct AgentTokenUsage: Sendable, Hashable, Codable {
     let promptTokens: Int?
     let completionTokens: Int?
     let totalTokens: Int?
+    /// true = 客户端按字符保守估算（服务未上报 usage）；nil/false = 供应商
+    /// 真实计量。台账 / 审计据此区分两种来源（十五轮审查 P1-2）。
+    var estimated: Bool?
 
     enum CodingKeys: String, CodingKey {
         case promptTokens = "prompt_tokens"
         case completionTokens = "completion_tokens"
         case totalTokens = "total_tokens"
+        case estimated
+    }
+
+    init(
+        promptTokens: Int?,
+        completionTokens: Int?,
+        totalTokens: Int?,
+        estimated: Bool? = nil
+    ) {
+        self.promptTokens = promptTokens
+        self.completionTokens = completionTokens
+        self.totalTokens = totalTokens
+        self.estimated = estimated
     }
 }
 

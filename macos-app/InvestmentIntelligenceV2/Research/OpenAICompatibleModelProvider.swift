@@ -9,7 +9,9 @@ import Foundation
 
 /// 一个 OpenAI-compatible 供应商的连接配置（V2 自有形态；apiKey 只在
 /// 桥接内转成传输层 settings，不进 descriptor / trace / 日志）。
-struct LLMProviderConfiguration: Sendable, Hashable, Codable {
+/// **刻意不做 Codable**（含明文 apiKey——与 ResearchSourcesConfiguration
+/// 同一防密钥落盘策略）：持久化接线时只编码非凭据字段，密钥走 Keychain。
+struct LLMProviderConfiguration: Sendable, Hashable {
     /// 稳定标识（trace / failover 统计用）。
     let providerID: String
     let baseURL: String

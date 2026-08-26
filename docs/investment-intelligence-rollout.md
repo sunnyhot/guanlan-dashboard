@@ -1789,6 +1789,47 @@ macos-app/
 >
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
+> **十五轮审查修复（2026-08-26，4×P1 + 4×P2，Epic 11 + WF-1 接线复查）**：
+> - **P1-1 EvidenceMatcher 生产接线**：Harness 提交的 claim→evidence 绑定
+>   改为**代码产出**——① 内容匹配（EvidenceMatcher，claim 陈述 vs 运行内
+>   证据语料的 bigram Jaccard，语料 = 信封 JSON 摘要 + evidence ID）；
+>   ② 匹配为空时 recency 兜底（绑最近一次产出证据的工具结果——数据型
+>   证据的内容匹配天然弱，兜底把谎报攻击面从「任意已登记」收窄到
+>   「最近工具输出」，内容恒为真实工具产出）。模型自报 evidence_ids 只
+>   经「登记在册」候选校验，不直接成为最终引用；漏报由代码补绑。
+>   Golden 更新锁定新行为（两 claim 经 recency 兜底绑最近工具全部产出，
+>   contentFingerprint / SignalID / 溯源查询随之变化）。
+> - **P1-2 流式 usage 进预算台账**：请求带 `stream_options.include_usage`
+>   （旧链路已删，十三轮 P3-4 的顾虑消除）；完成条件从「收到
+>   finish_reason 即停」改为「finish_reason 且 usage 尾包已收」（OpenAI
+>   官方协议 usage 在 finish 后的空 choices 尾包），finish 后短空闲窗口
+>   （5s）兜底不发 usage 的服务；usage 缺失按字符保守估算记账
+>   （`AgentTokenUsage.estimated = true` 标注，台账/审计可区分）。
+> - **P1-3 SignalID 身份域对齐 conflict 比较域**：ID 派生纳入 producer
+>   （模型标识）+ notes contentFingerprint（概括全部 claims 措辞）——
+>   「同证据不同措辞 / failover 换模型」产新 ID（新信号），不再同 ID 异
+>   rationale 触发 SignalStore conflict；两边身份语义一致（同 ID ⟹ 同
+>   rationale 同 producer）。
+> - **P1-4 evidence 来源时间**：`ResearchToolResult.evidenceSourceDates`
+>   携带每条证据的来源时间（SEC filed_at / Tavily published_date / AV
+>   日线最新交易日 / 本地序列最新 effectiveAt）；落库时 effective =
+>   published = available = 来源时间，**ingested = 执行时刻**——旧证据
+>   今天重抓不再「新鲜」（FreshnessValidator 按来源时间判定），缺失回退
+>   执行时刻（实时查询结果语义，不猜时间）。
+> - **P2-1 总预算硬超时**：ContinuousClock 计算剩余预算，模型请求与工具
+>   执行经结构化并发 race 超时——单次阻塞不再逃逸 900s 策略；轮次边界
+>   检查保留作快速失败。
+> - **P2-2 LLMProviderConfiguration 移除 Codable**：与
+>   ResearchSourcesConfiguration 同一防密钥落盘策略（十四轮 P3 的对称
+>   收口）。
+> - **P2-3 SEC 数组长度安全**：submissions 三数组（form/accessionNumber/
+>   filingDate）长度不齐时上界取最小值，越界从 crash 变为安全跳过。
+> - **P2-4 纯文本计数连续性**：出现合法工具调用即归零——「连续 N 次」
+>   是连续性度量，间歇文本+工具交替的正常研究不再被误杀。
+> - 回归测试：usage 尾包/估算/stream_options 三例、Factory 来源时间、
+>   绑定代码产出（谎报不生效 + content-match 优先）、纯文本交替、
+>   措辞/failover 分叉 ID；修复后全量 1333 tests 绿（环境性排除同前）。
+
 ---
 
 ### Epic 11 — LLM Research 子系统

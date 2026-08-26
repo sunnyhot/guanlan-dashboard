@@ -115,9 +115,13 @@ struct V2LocalDataTool: ResearchTool {
             "count": .number(Double(rows.count)),
             "evidence_boundary": .string(boundary)
         ]
+        // 来源时间 = 序列最新观测的 effectiveAt（数据描述的最后事件时刻；
+        // 抓取时刻只进 ingestedAt——Freshness 按来源时间判定）。
+        let latestSourceDate = observations.map(value).map(\.date).max()
         return .content(
             ResearchToolEnvelope.success(data, evidenceIDs: [evidenceID]),
-            evidenceIDs: [evidenceID]
+            evidenceIDs: [evidenceID],
+            sourceDates: [evidenceID.rawValue: latestSourceDate].compactMapValues { $0 }
         )
     }
 

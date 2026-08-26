@@ -208,6 +208,80 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         XCTAssertEqual(result.finishReason, "tool_calls")
     }
 
+    // MARK: 十五轮审查 P1-2 回归：usage 尾包读取与保守估算
+
+    func testClientReadsUsageTailPacketAfterFinishReason() async throws {
+        // OpenAI 官方流式协议顺序：finish_reason 之后才是空 choices 的
+        // usage 尾包，再 [DONE]。收到 finish_reason 就停会永远丢 usage。
+        let stream = """
+        data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"结论"},"finish_reason":null}]}
+
+        data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":37,"total_tokens":157}}
+
+        data: [DONE]
+
+        """
+        MockAgentURLProtocol.requestHandler = { request in
+            (Self.okResponse(for: request, contentType: "text/event-stream; charset=utf-8"), Data(stream.utf8))
+        }
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        let result = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings()
+        )
+        XCTAssertEqual(result.usage?.promptTokens, 120)
+        XCTAssertEqual(result.usage?.totalTokens, 157)
+        XCTAssertEqual(result.usage?.estimated == true, false, "真实计量不带 estimated 标注")
+    }
+
+    func testClientEstimatesUsageWhenProviderNeverReportsIt() async throws {
+        // 服务不发 usage 尾包（也不发 [DONE]，流在 finish_reason 后直接 EOF）：
+        // 按字符保守估算记账（estimated = true），预算台账不因缺计量失效。
+        let stream = """
+        data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"一段可观的回答文本"},"finish_reason":"stop"}]}
+
+        """
+        MockAgentURLProtocol.requestHandler = { request in
+            (Self.okResponse(for: request, contentType: "text/event-stream; charset=utf-8"), Data(stream.utf8))
+        }
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        let result = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "一二三四五六七八九十")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings()
+        )
+        let usage = try XCTUnwrap(result.usage, "usage 缺失时必须补保守估算")
+        XCTAssertEqual(usage.estimated, true)
+        XCTAssertGreaterThan(usage.promptTokens ?? 0, 0)
+        XCTAssertGreaterThan(usage.completionTokens ?? 0, 0)
+        XCTAssertEqual(usage.totalTokens, (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0))
+    }
+
+    func testClientRequestsStreamOptionsIncludeUsage() async throws {
+        // 请求体必须带 stream_options.include_usage（预算台账的计量前提）。
+        var capturedJSON: [String: Any]?
+        MockAgentURLProtocol.requestHandler = { request in
+            let body = try Self.requestBodyData(request)
+            capturedJSON = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+            return (Self.okResponse(for: request), Self.textMessageResponse(content: "ok"))
+        }
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        _ = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings()
+        )
+        let json = try XCTUnwrap(capturedJSON)
+        let streamOptions = try XCTUnwrap(json["stream_options"] as? [String: Any])
+        XCTAssertEqual(streamOptions["include_usage"] as? Bool, true)
+    }
+
     func testClientDetectsEventStreamWhenProxyOmitsSSEContentType() async throws {
         let stream = """
         data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"兼容成功"},"finish_reason":"stop"}]}

@@ -656,6 +656,39 @@ final class ResearchEvidenceFactoryTests: XCTestCase {
         }
     }
 
+    // MARK: 十五轮审查 P1-4 回归：来源时间进 TemporalEnvelope
+
+    func testFactoryUsesSourceDateForEvidenceLifetime() throws {
+        let factory = ResearchEvidenceFactory()
+        let subject = try CanonicalRef(entityType: "listing", entityIDRawValue: "lst_sd")
+        let filedAt = Date(timeIntervalSince1970: 1_700_000_000)   // 2023-11 的历史申报
+        let fetchedAt = Date(timeIntervalSince1970: 1_900_000_000) // 今天重抓
+
+        let observation = try factory.observation(
+            evidenceID: EvidenceID(rawValue: "EV-SD"),
+            toolName: "official_sec_research",
+            content: ["filed_at": "2023-11-14"],
+            subject: subject,
+            sourceDate: filedAt,
+            at: fetchedAt
+        )
+        // effective = published = available = 来源时间;ingested = 抓取时间
+        XCTAssertEqual(observation.temporalEnvelope.effectiveAt, filedAt)
+        XCTAssertEqual(observation.temporalEnvelope.publishedAt, filedAt)
+        XCTAssertEqual(observation.temporalEnvelope.availableAt, filedAt)
+        XCTAssertEqual(observation.temporalEnvelope.ingestedAt, fetchedAt)
+        XCTAssertEqual(observation.vintage.announcementDate, filedAt)
+
+        // 无来源时间 → 回退执行时刻（实时查询结果语义）
+        let realtime = try factory.observation(
+            evidenceID: EvidenceID(rawValue: "EV-RT"),
+            toolName: "get_local_data",
+            content: [:], subject: subject, sourceDate: nil, at: fetchedAt
+        )
+        XCTAssertEqual(realtime.temporalEnvelope.effectiveAt, fetchedAt)
+        XCTAssertEqual(realtime.temporalEnvelope.ingestedAt, fetchedAt)
+    }
+
     func testFactoryIDIsContentDerived() throws {
         let factory = ResearchEvidenceFactory()
         let subject = try CanonicalRef(entityType: "listing", entityIDRawValue: "list_y")
