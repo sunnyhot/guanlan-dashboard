@@ -15,7 +15,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 
 **技术栈**: SwiftUI + AppKit/UIKit + Foundation (macOS 14+ / iOS) | SPM 测试/校验 + swiftc 打包
 **数据通道**: Swift 原生 API 直连；Agent 技能统一调用原生 `qieman-cli`
-**当前发布版本**: v4.3.0（GitHub Release + `releases/macos/latest.json`，2026-08-26 核对）
+**当前发布版本**: v4.4.0（GitHub Release + `releases/macos/latest.json`）
 
 > 规模提示：下文行数/文件数为 2026-08-05 核对值。项目仍在快速演进，做大改动前建议先用 `find macos-app -name "*.swift" -not -path "*/.build/*" | wc -l` 复核，不要直接采信本文档数字。
 
