@@ -65,6 +65,8 @@ struct ContentView: View {
             PortfolioSectionView()
         case .platform:
             PlatformSectionView()
+        case .intelligence:
+            IOSIntelligenceSectionView()
         case .settings:
             SettingsSectionView()
         }

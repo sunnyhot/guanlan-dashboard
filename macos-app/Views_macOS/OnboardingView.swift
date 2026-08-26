@@ -32,9 +32,9 @@ struct OnboardingView: View {
                     description: "自动抓取且慢持仓、净值、调仓动态"
                 )
                 OnboardingFeatureRow(
-                    icon: "sparkles",
-                    title: "AI 趋势研判",
-                    description: "配置模型后一键生成结构化趋势分析"
+                    icon: "chart.line.uptrend.xyaxis",
+                    title: "组合分析",
+                    description: "组合诊断 / 收益归因 / 基金穿透，本地一键计算"
                 )
                 OnboardingFeatureRow(
                     icon: "menubar.rectangle",
@@ -49,7 +49,7 @@ struct OnboardingView: View {
                     .font(AppPalette.appFont(.footnote, weight: .bold))
                     .foregroundStyle(AppPalette.muted)
                 HStack(spacing: 12) {
-                    OnboardingShortcutHint(key: "⌘1-6", label: "切换板块")
+                    OnboardingShortcutHint(key: "⌘1-4", label: "切换板块")
                     OnboardingShortcutHint(key: "⌘R", label: "刷新")
                     OnboardingShortcutHint(key: "⌘F", label: "搜索")
                 }

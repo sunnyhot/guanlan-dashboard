@@ -4,6 +4,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case overview = "总览"
     case portfolio = "我的持仓"
     case platform = "平台动态"
+    case intelligence = "投资智能"
     case settings = "设置"
 
     var id: String { rawValue }
@@ -18,6 +19,8 @@ enum AppSection: String, CaseIterable, Identifiable {
             return "gearshape"
         case .platform:
             return "rectangle.stack.badge.play"
+        case .intelligence:
+            return "brain.head.profile"
         }
     }
 }

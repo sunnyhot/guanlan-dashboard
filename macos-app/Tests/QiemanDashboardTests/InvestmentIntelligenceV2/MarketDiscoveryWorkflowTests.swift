@@ -117,9 +117,10 @@ final class MarketDiscoveryWorkflowTests: XCTestCase {
         let flatScore = try XCTUnwrap(report.candidates.last?.score)
         XCTAssertEqual(flatScore, 0, "横盘标的动量/趋势/回撤全 0 → 综合分 0")
 
-        // job 状态与依赖（两个因子快照）
+        // job 状态与依赖（三个因子快照——含 coverage-gap 条目：失效
+        // 传播按「参与计算的快照」覆盖,gap 不留盲区,十六轮 P2）
         XCTAssertEqual(outcome.job.state, .completed)
-        XCTAssertEqual(report.dependencies.count, 2)
+        XCTAssertEqual(report.dependencies.count, 3)
         XCTAssertEqual(report.universeVersion, 1)
         XCTAssertEqual(report.rankingPolicy.identityToken, "market-discovery-ranking@v1")
     }
@@ -195,6 +196,91 @@ final class MarketDiscoveryWorkflowTests: XCTestCase {
         let full = try XCTUnwrap(makeWorkflow(topK: 8).run(asOf: now, now: now).report)
         XCTAssertEqual(full.researchTasks(limit: 1).count, 1)
         XCTAssertEqual(full.researchTasks().count, full.candidates.count)
+    }
+
+    // MARK: - ListingID 生产对齐与快照落库（十六轮审查 P1-3 / P2）
+
+    func testCatalogListingIDMatchesIdentitySyncDerivation() {
+        // catalog 条目的 ListingID 必须与生产 IdentitySync 的
+        // exchangeSymbolExact 创建路径同源——否则 GRDB 查不到日线,
+        // discovery 全部落 coverage gap。
+        for entry in MarketUniverseCatalog.v1.entries {
+            let expected = ListingID(IdentitySync.deriveID(
+                "lst", "\(entry.exchange.rawValue)|\(entry.code.value)"))
+            XCTAssertEqual(
+                entry.listingID, expected,
+                "条目 \(entry.key) 的 ListingID 与生产派生不一致"
+            )
+        }
+    }
+
+    func testCatalogIdentityEstablishesAndDiscoveryFindsData() throws {
+        // 集成链：catalog → IdentitySync.establish（登记 providerCode→canonical）
+        // → 用同一 listingID 写入日线 → discovery 能查到（不落 gap）。
+        let repository = GRDBRepository(
+            database: try CanonicalDatabase(), calendarBackend: TestWeekdayCalendar()
+        )
+        let spyEntry = MarketUniverseEntry(
+            key: "us-spy", code: ProviderCode(scheme: "stock_symbol", value: "SPY"),
+            jurisdiction: .unitedStates, exchange: .arca,
+            displayName: "标普500 ETF", priority: 1, fetchDirectly: true
+        )
+        // establish 登记映射（幂等）
+        let sync = IdentitySync(repository: repository)
+        _ = try sync.establish(hints: [spyEntry.identityHint])
+
+        // 用 catalog 派生的 listingID 写入一根日线(availableAt 同日可见)
+        let available = discoveryEpoch.addingTimeInterval(15 * 3600)
+        let bar = DailyBar(
+            id: ObservationID(rawValue: "itd_spy_0"),
+            listingID: spyEntry.listingID,
+            temporalEnvelope: TemporalEnvelope(
+                effectiveAt: discoveryEpoch, publishedAt: available,
+                availableAt: available, ingestedAt: available
+            ),
+            availabilityProvenance: AvailabilityProvenance(
+                policyID: "market_close", policyVersion: "v1", derivedAt: available
+            ),
+            dataQuality: .from(.officialStable, providerID: .stooq),
+            vintage: Vintage(announcementDate: available, publisherVersion: 1),
+            rawOpen: Price(value: Decimal(100), currency: .usd),
+            rawHigh: Price(value: Decimal(100), currency: .usd),
+            rawLow: Price(value: Decimal(100), currency: .usd),
+            rawClose: Price(value: Decimal(100), currency: .usd),
+            volume: 1000, adjustmentFactor: 1
+        )
+        try repository.upsert(bar)
+
+        var policy = DiscoveryRankingPolicy()
+        policy.topK = 4
+        final class SnapshotCollector: @unchecked Sendable {
+            private let lock = NSLock()
+            private var items: [FactorSnapshot] = []
+            func append(_ snapshot: FactorSnapshot) {
+                lock.lock(); defer { lock.unlock() }
+                items.append(snapshot)
+            }
+            var all: [FactorSnapshot] {
+                lock.lock(); defer { lock.unlock() }
+                return items
+            }
+        }
+        let collector = SnapshotCollector()
+        let universe = MarketUniverse(
+            universeVersion: 1, entries: [spyEntry]
+        )
+        let workflow = MarketDiscoveryWorkflow(
+            universe: universe, repository: repository, policy: policy,
+            snapshotSink: { snapshot in collector.append(snapshot) }
+        )
+        let outcome = workflow.run(asOf: now, now: now)
+        XCTAssertTrue(outcome.succeeded, outcome.errorDetail ?? "")
+        // 只有 1 根 bar → momentum insufficient → coverage gap(诚实降级),
+        // 但快照已收集(参与计算即进 dependencies),不再因 ID 不匹配查无数据
+        let report = try XCTUnwrap(outcome.report)
+        XCTAssertEqual(report.coverageGaps.count, 1)
+        XCTAssertEqual(report.dependencies.count, 1)
+        XCTAssertEqual(collector.all.count, 1, "快照经 sink 落库通道产出")
     }
 
     // MARK: - 内置 universe 策展完整性

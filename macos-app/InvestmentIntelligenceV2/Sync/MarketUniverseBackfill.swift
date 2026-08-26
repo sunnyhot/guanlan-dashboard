@@ -42,7 +42,11 @@ struct MarketUniverseEntry: Codable, Sendable, Equatable {
     let key: String
     let code: ProviderCode
     let jurisdiction: Jurisdiction
-    /// canonical listing（策展时已解析——回填不猜 identity）
+    /// 挂牌交易所（ListingID 的派生输入之一——与生产 IdentitySync 同源）
+    let exchange: Exchange
+    /// canonical listing（策展时已解析——回填不猜 identity；派生规则与
+    /// IdentitySync.establish 的 exchangeSymbolExact 创建路径完全一致：
+    /// lst_SHA256(exchange|code) 截断，重复建立幂等）
     let listingID: ListingID
     let displayName: String
     /// 回填优先级（小者先）
@@ -50,6 +54,28 @@ struct MarketUniverseEntry: Codable, Sendable, Equatable {
     /// true = 直接抓取（降级链）；false = remote 通道（只验证覆盖）
     let fetchDirectly: Bool
 
+    init(
+        key: String,
+        code: ProviderCode,
+        jurisdiction: Jurisdiction,
+        exchange: Exchange,
+        displayName: String,
+        priority: Int,
+        fetchDirectly: Bool
+    ) {
+        self.key = key
+        self.code = code
+        self.jurisdiction = jurisdiction
+        self.exchange = exchange
+        self.listingID = ListingID(IdentitySync.deriveID(
+            "lst", "\(exchange.rawValue)|\(code.value)"))
+        self.displayName = displayName
+        self.priority = priority
+        self.fetchDirectly = fetchDirectly
+    }
+
+    /// 旧形态兼容（已持有派生好的 listingID——测试 fixture / 持久化
+    /// 数据读回用；生产策展一律走 exchange 派生形态）。
     init(
         key: String,
         code: ProviderCode,
@@ -62,10 +88,25 @@ struct MarketUniverseEntry: Codable, Sendable, Equatable {
         self.key = key
         self.code = code
         self.jurisdiction = jurisdiction
+        self.exchange = .platform
         self.listingID = listingID
         self.displayName = displayName
         self.priority = priority
         self.fetchDirectly = fetchDirectly
+    }
+
+    /// 生产接线便捷：把条目作为 IdentitySync 建立输入（登记
+    /// providerCode→canonical 映射，行情写入行的 listingID 与本条目一致）。
+    var identityHint: IdentityHint {
+        IdentityHint(
+            providerID: DataProviderID(rawValue: "universe-catalog"),
+            code: code,
+            exchange: exchange,
+            displayName: displayName,
+            instrumentKind: .exchangeTradedFund,
+            assetClass: .equity,
+            jurisdiction: jurisdiction
+        )
     }
 }
 

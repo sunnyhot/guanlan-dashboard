@@ -14,7 +14,6 @@ struct OverviewSectionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
                 todayBriefCard
-                aiTrendCard
                 managerActivityCard
             }
             .padding(.horizontal, IOSDesign.spaceM)
@@ -107,89 +106,6 @@ struct OverviewSectionView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - AI 趋势
-
-    private var aiTrendCard: some View {
-        let summary = model.trendDashboardSummary
-        return IOSSectionCard(title: "AI 趋势研判", subtitle: summary.dataAsOf ?? "尚未生成", icon: "sparkles") {
-            VStack(alignment: .leading, spacing: 10) {
-                // 状态 + 风险 标签行
-                HStack(spacing: 8) {
-                    IOSTintedBadge(text: summary.stateText, tone: .neutral)
-                    if summary.riskLevel != nil, !summary.riskText.isEmpty {
-                        IOSTintedBadge(text: summary.riskText, tone: trendToneToStat(summary.riskTone))
-                    }
-                    Spacer()
-                }
-
-                // 标题 + 详情
-                Text(summary.headline)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppPalette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !summary.detail.isEmpty {
-                    Text(summary.detail)
-                        .font(.system(size: 13))
-                        .foregroundStyle(AppPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                // 周期研判
-                if !summary.horizons.isEmpty {
-                    Divider().opacity(0.5)
-                    Text("周期研判")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppPalette.muted)
-                    ForEach(summary.horizons) { horizon in
-                        trendItemRow(
-                            title: horizon.title,
-                            direction: horizon.directionText,
-                            rationale: horizon.rationale,
-                            tone: horizon.tone
-                        )
-                    }
-                }
-
-                // 主操作按钮
-                Button {
-                    handleTrendAction(summary.primaryAction)
-                } label: {
-                    Label(summary.primaryAction.title, systemImage: summary.primaryAction.systemImage)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(trendToneColor(summary.primaryAction.tone))
-                .disabled(summary.primaryAction.isDisabled)
-            }
-        }
-    }
-
-    private func trendItemRow(title: String, direction: String, rationale: String, tone: TrendDashboardTone) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(trendToneColor(tone))
-                .frame(width: 3)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(title)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(AppPalette.ink)
-                    Spacer()
-                    Text(direction)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(trendToneColor(tone))
-                }
-                if !rationale.isEmpty {
-                    Text(rationale)
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
     // MARK: - 主理人动态
 
     private var managerActivityCard: some View {
@@ -265,18 +181,6 @@ struct OverviewSectionView: View {
             model.selectedPlatformActivityTab = .forum
             model.selectedSection = .platform
         case .settings: model.selectedSection = .settings
-        }
-    }
-
-    private func handleTrendAction(_ action: TrendDashboardAction) {
-        guard !action.isDisabled else { return }
-        switch action.kind {
-        case .configure:
-            model.selectedSection = .settings
-        case .generate, .refresh:
-            model.selectedSection = .enhancement
-        case .openReport, .wait:
-            model.selectedSection = .enhancement
         }
     }
 

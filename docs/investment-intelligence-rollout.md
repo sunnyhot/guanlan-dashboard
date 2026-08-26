@@ -2059,9 +2059,12 @@ macos-app/
 > **验收复核**：三条链路与 V1 类型全局 grep 零残留（仅注释提及来源）；
 > `swift build` + `swift build --build-tests` 通过；全量 `swift test`
 > 1324 绿（环境性套件跳过同 WF-1）；CLI 构建脚本通过（其显式列表本就
-> 不含删除文件）；xcodegen 重新生成工程。App UI 读 V2 Artifact 的接线
-> （ArtifactQueryService → 新面板）属 Epic 13 Agent Runtime / 后续 UI
-> story——V2 数据面（workflows + stores + query service）已就绪。
+> 不含删除文件）；xcodegen 重新生成工程。
+>
+> **十六轮审查修正（2026-08-26，6×P1 + 4×P2）**：初版「M9 达成」的
+> 结论被推翻——旧链路删除时 V2 尚无生产闭环。十六轮修复后闭环补齐
+> （详见下方十六轮记录）：composition root + 双端「投资智能」板块 +
+> 旧数据迁移告知落地，iOS target 重新构建通过（进入每次交付验证）。
 
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 

@@ -22,7 +22,7 @@ enum SECOfficialSourceClientError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingContact:
-            return "SEC 官方源需要联系邮箱。请在「设置 > AI 研判 > 官方数据源」填写，以符合 EDGAR 自动访问规范。"
+            return "SEC 官方源需要联系邮箱。请在研究的官方数据源配置中填写，以符合 EDGAR 自动访问规范。"
         case .timedOut(let seconds):
             return "SEC EDGAR 请求超时：\(Int(seconds)) 秒内未返回。"
         case .invalidResponse(let detail):

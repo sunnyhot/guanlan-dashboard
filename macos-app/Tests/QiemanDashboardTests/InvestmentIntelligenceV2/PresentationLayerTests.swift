@@ -324,8 +324,10 @@ final class PresentationLayerTests: XCTestCase {
             try service.latestMarketDiscoveryReports().map(\.id),
             [report.id]
         )
+        // 十六轮 P2:默认只返回当前时段仍有效的报告——测试报告是固定过去/
+        // 未来时段,走 includeInvalid 拿全量断言
         XCTAssertEqual(
-            try service.latestIntradayReports().map(\.id),
+            try service.latestIntradayReports(includeInvalid: true).map(\.id),
             [intraday.id]
         )
         XCTAssertEqual(

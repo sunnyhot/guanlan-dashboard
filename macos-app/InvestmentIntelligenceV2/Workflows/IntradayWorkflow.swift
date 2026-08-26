@@ -26,6 +26,90 @@ enum IntradayDecisionKind: String, Sendable, Codable, Hashable {
     case hold = "HOLD"
 }
 
+// MARK: - 交易所交易时段（P1-4：盘外 fail-closed）
+
+/// 交易所开市区间（交易所所在地钟表时间）。盘中执行只在开市区间内考虑——
+/// 工作日凌晨 / 午休 / 收盘后一律 HOLD（此前只判「交易日」，盘外也可能
+/// 产出 EXECUTE_REBALANCE）。
+///
+/// 已知限制（诚实记录，不编造日历）：半日市（除夕下午休市等）依赖
+/// TradingCalendar 的交易日判定，精确半日市日历没有免费数据源——
+/// 半日市的下午时段可能被误判开市；该误差方向是「多 HOLD 少执行」的
+/// 反面，生产接线时如引入节假日数据源应在此收紧。
+struct ExchangeSessionSchedule: Sendable, Hashable, Codable {
+    struct Session: Sendable, Hashable, Codable {
+        /// 当日分钟数（本地钟表时间，0 = 00:00）
+        let startMinute: Int
+        let endMinute: Int
+
+        func contains(_ minuteOfDay: Int) -> Bool {
+            minuteOfDay >= startMinute && minuteOfDay < endMinute
+        }
+    }
+
+    let exchange: Exchange
+    let sessions: [Session]
+
+    /// 交易所时区（A 股沪/深同区；美股按美东——DST 由 TimeZone 自行处理）。
+    static func timeZone(for exchange: Exchange) -> TimeZone {
+        switch exchange {
+        case .sse, .szse: return TimeZone(identifier: "Asia/Shanghai")!
+        case .hkex: return TimeZone(identifier: "Asia/Hong_Kong")!
+        case .nyse, .nasdaq, .amex, .arca, .otc:
+            return TimeZone(identifier: "America/New_York")!
+        case .platform: return TimeZone(identifier: "Asia/Shanghai")!
+        }
+    }
+
+    /// 各交易所常规时段（分钟）：A 股 / 港股午休分两段；美股单段。
+    static func schedule(for exchange: Exchange) -> ExchangeSessionSchedule {
+        let sessions: [Session]
+        switch exchange {
+        case .sse, .szse:
+            // 09:30-11:30 / 13:00-15:00（午休休市）
+            sessions = [
+                Session(startMinute: 9 * 60 + 30, endMinute: 11 * 60 + 30),
+                Session(startMinute: 13 * 60, endMinute: 15 * 60),
+            ]
+        case .hkex:
+            // 09:30-12:00 / 13:00-16:00
+            sessions = [
+                Session(startMinute: 9 * 60 + 30, endMinute: 12 * 60),
+                Session(startMinute: 13 * 60, endMinute: 16 * 60),
+            ]
+        case .nyse, .nasdaq, .amex, .arca:
+            // 09:30-16:00（常规时段；盘前盘后不属执行窗口）
+            sessions = [Session(startMinute: 9 * 60 + 30, endMinute: 16 * 60)]
+        case .otc, .platform:
+            // 场外（基金申赎）与平台内部挂牌无固定盘中时段——按「交易日
+            // 全天可执行」处理（T 日任意时刻申赎同口径），不设时段门槛。
+            sessions = [Session(startMinute: 0, endMinute: 24 * 60)]
+        }
+        return ExchangeSessionSchedule(exchange: exchange, sessions: sessions)
+    }
+
+    /// asOf 是否落在开市区间内（按交易所时区的本地钟表时间判定；
+    /// isTradingDay 的交易日判定由调用方（Eligibility）负责）。
+    func isOpen(at date: Date) -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = Self.timeZone(for: exchange)
+        let minuteOfDay = calendar.component(.hour, from: date) * 60
+            + calendar.component(.minute, from: date)
+        return sessions.contains { $0.contains(minuteOfDay) }
+    }
+
+    /// 人读时段描述（HOLD 理由用）。
+    var label: String {
+        sessions
+            .map { session in
+                String(format: "%02d:%02d-%02d:%02d",
+                       session.startMinute / 60, session.startMinute % 60,
+                       session.endMinute / 60, session.endMinute % 60)
+            }
+            .joined(separator: " / ")
+    }
+}
+
 /// Eligibility 策略（versioned heuristic）。
 struct IntradayEligibilityPolicy: Sendable, Codable, Hashable {
     let policyID: String
@@ -148,8 +232,39 @@ struct IntradayWorkflow: Sendable {
     /// hold 不是失败——job completed + decision = .hold + holdReasons 显式；
     /// 抛错只在真异常（signal 查询失败等）。
     func run(input: Input, asOf: Date, now: Date) -> RunOutcome {
+        // 指纹覆盖全部决策输入（十六轮审查 P2：缺输入会让语义不同的运行
+        // 撞同一 job ID）：主体 / 持仓权重快照 / target / remediation /
+        // directives / 动作域 / 约束门配置 / asOf / 策略。
+        //（signals 运行时查询、非输入——经 artifact 引用层体现,不进指纹。）
+        var fingerprintPayload: [String: String] = [
+            "subject": input.subject.stableKey,
+            "portfolioAsOf": String(Int(input.portfolio.asOf.timeIntervalSince1970)),
+            "target": input.target?.id.rawValue ?? "-",
+            "asOf": String(Int(asOf.timeIntervalSince1970)),
+            "policy": eligibility.identityToken,
+        ]
+        let portfolioDigest: String = input.portfolio.positions
+            .map { "\($0.subjectKey):\($0.weight.value)" }
+            .sorted().joined(separator: ",")
+        let remediationDigest: String = input.remediationTargets
+            .map { "\($0.subjectKey):\($0.maxWeight.value):\($0.requirement.constraintID)" }
+            .sorted().joined(separator: ",")
+        let directivesDigest: String = input.userDirectives
+            .map { "\($0.subjectKey):\($0.deltaWeight.value):\($0.directiveID)" }
+            .sorted().joined(separator: ",")
+        let domainDigest: String = input.actionDomain.perSubjectBounds
+            .map { "\($0.key):\($0.value.lower.value)..\($0.value.upper.value)" }
+            .sorted().joined(separator: ",")
+        let actionRulesDigest: String = actionRules.map(\.label).sorted().joined(separator: ",")
+        let portfolioRulesDigest: String = portfolioRules.map(\.label).sorted().joined(separator: ",")
+        fingerprintPayload["portfolio"] = portfolioDigest
+        fingerprintPayload["remediation"] = remediationDigest
+        fingerprintPayload["directives"] = directivesDigest
+        fingerprintPayload["domain"] = domainDigest
+        fingerprintPayload["actionRules"] = actionRulesDigest
+        fingerprintPayload["portfolioRules"] = portfolioRulesDigest
         let fingerprint = StableDigest.digest(
-            "\(input.subject.stableKey)|\(Int(input.portfolio.asOf.timeIntervalSince1970))|\(input.target?.id.rawValue ?? "-")|\(Int(asOf.timeIntervalSince1970))|\(eligibility.identityToken)"
+            StableDigest.jsonPayloadOrString(fingerprintPayload)
         )
         var job = AgentJob(
             workflowKind: Self.workflowKind,
@@ -172,6 +287,15 @@ struct IntradayWorkflow: Sendable {
             let jurisdiction = input.exchange.jurisdiction
             if !calendar.isTradingDay(asOf, jurisdiction: jurisdiction) {
                 holdReasons.append("非交易日（\(input.exchange.rawValue) 法域）")
+            } else {
+                // 交易日还要在开市区间内——盘前 / 午休 / 收盘后 fail-closed
+                //（交易所时区判定，盘外不产执行决策）
+                let session = ExchangeSessionSchedule.schedule(for: input.exchange)
+                if !session.isOpen(at: asOf) {
+                    holdReasons.append(
+                        "非交易时段（\(input.exchange.rawValue) \(session.label)，交易所本地时间）"
+                    )
+                }
             }
             let snapshotAge = asOf.timeIntervalSince(input.portfolio.asOf)
             if snapshotAge > TimeInterval(eligibility.maxSnapshotAgeHours) * 3600 {

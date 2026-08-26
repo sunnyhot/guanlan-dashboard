@@ -392,9 +392,67 @@ final class PortfolioResearchWorkflowTests: XCTestCase {
         XCTAssertEqual(outcome.job.state, .failed)
         XCTAssertTrue(outcome.errorDetail?.contains("empty_claims") ?? false)
         XCTAssertTrue(sink.artifacts.isEmpty)
-        // evidence 已落（阶段先于校验）但 signals / theses / artifact 无
-        XCTAssertEqual(try repository.knownEvidenceIDs().count, 2)
+        // 原子性（十六轮 P1-5）：校验失败同样零落库——evidence 也不再
+        // 先行写入（暂存统一提交）
+        XCTAssertEqual(try repository.knownEvidenceIDs().count, 0)
         XCTAssertTrue(try repository.signals(subject: wfAssetSubject).isEmpty)
+    }
+
+    // MARK: - 原子性（十六轮审查 P1-5：Decision 失败不留半截状态）
+
+    func testDecisionFailureLeavesNoPartialState() async throws {
+        struct FailingMaterialsProvider: PortfolioDecisionMaterialsProviding {
+            func materials(asOf: Date) throws -> PortfolioDecisionMaterials {
+                throw NSError(domain: "test", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "材料不可得"])
+            }
+        }
+        let repository = GRDBRepository(
+            database: try CanonicalDatabase(), calendarBackend: TestWeekdayCalendar()
+        )
+        let submitCall = ModelToolCall(
+            id: "call-submit", name: "submit_research_notes", argumentsJSON: wfSubmission
+        )
+        var gatewayPolicy = ModelGatewayPolicy()
+        gatewayPolicy.maxRetriesPerProvider = 0
+        let provider = ScriptedModelProvider(providerID: "wf-atomic", model: "wf-model", steps: [
+            .response(toolCallResponse([(name: "get_local_data", args: "{}")])),
+            .response(ModelCompletionResponse(
+                assistantMessage: ModelChatMessage(role: .assistant, content: nil, toolCalls: [submitCall]),
+                toolCalls: [submitCall], stopReason: .toolCalls, usage: nil)),
+            .response(toolCallResponse([(name: "get_local_data", args: "{}")])),
+            .response(ModelCompletionResponse(
+                assistantMessage: ModelChatMessage(role: .assistant, content: nil, toolCalls: [submitCall]),
+                toolCalls: [submitCall], stopReason: .toolCalls, usage: nil)),
+        ])
+        let harness = ResearchHarness(
+            gateway: ModelGateway(providers: [provider], policy: gatewayPolicy),
+            tools: [StubResearchTool(name: "get_local_data", evidence: evidence)],
+            clock: wfClock
+        )
+        let sink = ArtifactSinkCollector()
+        let workflow = PortfolioResearchWorkflow(
+            dependencies: PortfolioResearchWorkflow.Dependencies(
+                harness: harness,
+                signalStore: repository,
+                thesisStore: repository,
+                evidenceStore: repository,
+                decisionMaterials: FailingMaterialsProvider(),
+                artifactSink: { artifact in try sink.sink(artifact) }
+            ),
+            clock: wfClock
+        )
+        let outcome = try await workflow.run(input: try makeInput())
+
+        XCTAssertEqual(outcome.job.state, .failed)
+        XCTAssertTrue(outcome.errorDetail?.contains("材料不可得") ?? false)
+        // 全部 store 零残留：evidence / signals / theses / artifact
+        XCTAssertTrue(try repository.knownEvidenceIDs().isEmpty, "evidence 不得先于 Decision 落库")
+        XCTAssertTrue(try repository.signals(subject: wfAssetSubject).isEmpty)
+        XCTAssertTrue(try repository.signals(subject: wfPortfolioSubject).isEmpty)
+        XCTAssertTrue(try repository.theses(kind: .asset, subject: wfAssetSubject).isEmpty)
+        XCTAssertTrue(try repository.theses(kind: .portfolio, subject: wfPortfolioSubject).isEmpty)
+        XCTAssertTrue(sink.artifacts.isEmpty)
     }
 
     // MARK: - Decision 材料预检

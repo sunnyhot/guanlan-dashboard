@@ -270,6 +270,9 @@ struct ContentView: View {
         case .platform:
             PlatformActivitySectionView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .intelligence:
+            IntelligenceSectionView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }

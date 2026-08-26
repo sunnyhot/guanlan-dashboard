@@ -198,10 +198,15 @@ struct ArtifactQueryService: Sendable {
         }
     }
 
-    // MARK: 最新列表（producedAt 降序）
+    // MARK: 最新列表（producedAt 降序；默认只返回仍有效的产物）
 
-    /// 最新决策 artifact 列表（含概要行——id / 产出时间 / 决策状态）。
-    func latestPortfolioDecisions(limit: Int = 20) throws -> [PortfolioDecisionSummary] {
+    /// 最新**仍有效**的决策 artifact 概要列表（十六轮审查 P2：昨天的
+    /// 过期产物不再冒充「最新」——immutableHistorical 的决策报告恒有效；
+    /// untilDependencyChanges 的发现报告默认全部返回,精确失效需依赖
+    /// 传播状态,由调用方按 ID 细查）。
+    func latestPortfolioDecisions(
+        limit: Int = 20, now: Date = Date()
+    ) throws -> [PortfolioDecisionSummary] {
         let ids = try latestArtifactIDs(kind: .portfolioDecision, limit: limit)
         return try ids.compactMap { id in
             try repository.portfolioDecision(id: id).map {
@@ -210,26 +215,41 @@ struct ArtifactQueryService: Sendable {
                     producedAt: $0.producedAt,
                     status: $0.decision.status.rawValue,
                     admissiblePlans: $0.decision.admissiblePlans.sorted(),
-                    signalCount: $0.signalIDs.count
+                    signalCount: $0.signalIDs.count,
+                    isStillValid: $0.validityPolicy.isStillValid(at: now)
                 )
             }
         }
     }
 
-    /// 最新发现报告列表。
-    func latestMarketDiscoveryReports(limit: Int = 10) throws -> [MarketDiscoveryReport] {
+    /// 最新发现报告列表（untilDependencyChanges 粗粒度恒有效——精确实效
+    /// 依赖依赖传播状态,列表不假装判断;isStillValid 字段透明携带）。
+    func latestMarketDiscoveryReports(
+        limit: Int = 10, now: Date = Date()
+    ) throws -> [MarketDiscoveryReport] {
+        // 分离两层读（latestArtifactIDs 内部各持一次 queue.read——
+        // DatabaseQueue 不可重入,嵌套即 crash）
         let ids = try latestArtifactIDs(kind: .marketDiscovery, limit: limit)
-        return try ids.compactMap { try repository.marketDiscoveryReport(id: $0) }
+        return try repository.database.queue.read { db in
+            try ids.compactMap {
+                try ArtifactRow.fetchMarketDiscoveryReport(id: $0, from: db)
+            }
+        }
     }
 
-    /// 最新盘中执行报告列表。
-    func latestIntradayReports(limit: Int = 20) throws -> [IntradayExecutionReport] {
+    /// 最新盘中执行报告列表——**默认只返回当前交易时段仍有效的**（上一
+    /// 时段的报告不再冒充最新;需要历史时传 includeInvalid = true）。
+    func latestIntradayReports(
+        limit: Int = 20, now: Date = Date(), includeInvalid: Bool = false
+    ) throws -> [IntradayExecutionReport] {
         let ids = try latestArtifactIDs(kind: .intradayExecution, limit: limit)
-        return try repository.database.queue.read { db in
+        let reports = try repository.database.queue.read { db in
             try ids.compactMap {
                 try ArtifactRow.fetchIntradayExecutionReport(id: $0, from: db)
             }
         }
+        guard !includeInvalid else { return reports }
+        return reports.filter { $0.validityPolicy.isStillValid(at: now) }
     }
 
     // MARK: 私有
@@ -258,4 +278,6 @@ struct PortfolioDecisionSummary: Sendable, Codable, Hashable {
     let status: String
     let admissiblePlans: [String]
     let signalCount: Int
+    /// 当前是否仍有效（透明携带,UI 自行决定过滤或标注）
+    let isStillValid: Bool
 }

@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - iOS 首次启动引导
 //
 // 替换 ContentView 里的 OnboardingPlaceholder（占位符）。
-// 内容：App 图标 + 标题 + 3 张功能卡（持仓管理 / AI 趋势研判 / 平台动态）+ 底部「开始使用」。
+// 内容：App 图标 + 标题 + 3 张功能卡（持仓管理 / 组合分析 / 平台动态）+ 底部「开始使用」。
 // 去掉 macOS 版的菜单栏卡和快捷键提示（iOS 不适用）。
 // 用 IOSDesign 杂志型排版（暖砖红 + serif 标题）。
 
@@ -61,9 +61,9 @@ struct IOSOnboardingView: View {
                 description: "自动抓取且慢持仓、净值、调仓动态，组合诊断 / 收益归因 / 基金穿透一键查看。"
             )
             featureRow(
-                icon: "sparkles",
-                title: "AI 趋势研判",
-                description: "配置模型后生成结构化趋势分析，跟踪清单帮你记录行动候选。"
+                icon: "chart.line.uptrend.xyaxis",
+                title: "组合分析",
+                description: "组合诊断 / 收益归因 / 基金穿透，本地一键计算。"
             )
             featureRow(
                 icon: "chart.bar.xaxis",

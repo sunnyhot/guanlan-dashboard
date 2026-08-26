@@ -9,6 +9,7 @@ enum Exchange: String, Sendable, Codable, Hashable, CaseIterable {
     case hkex = "HKEX"      // 港交所
     case nyse = "NYSE"      // 纽约证券交易所
     case nasdaq = "NASDAQ"  // 纳斯达克
+    case arca = "ARCA"      // NYSE Arca（主要 ETF 挂牌地：SPY/QQQ/行业 SPDR 等）
     case amex = "AMEX"      // 美国证券交易所
     /// OTC / 场外（如部分基金、ADR）
     case otc = "OTC"
@@ -20,7 +21,7 @@ enum Exchange: String, Sendable, Codable, Hashable, CaseIterable {
         switch self {
         case .sse, .szse: return .chinaMainland
         case .hkex: return .hongKong
-        case .nyse, .nasdaq, .amex, .otc: return .unitedStates
+        case .nyse, .nasdaq, .amex, .arca, .otc: return .unitedStates
         case .platform: return .platform
         }
     }

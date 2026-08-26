@@ -38,13 +38,13 @@ enum MarketUniverseCatalog {
     private static func entry(
         _ key: String, code: String, jurisdiction: Jurisdiction,
         displayName: String, priority: Int, fetchDirectly: Bool,
-        scheme: String = "stock_symbol"
+        exchange: Exchange, scheme: String = "stock_symbol"
     ) -> MarketUniverseEntry {
         MarketUniverseEntry(
             key: key,
             code: ProviderCode(scheme: scheme, value: code),
             jurisdiction: jurisdiction,
-            listingID: ListingID(rawValue: "lst_\(code.lowercased())"),
+            exchange: exchange,
             displayName: displayName,
             priority: priority,
             fetchDirectly: fetchDirectly
@@ -57,69 +57,69 @@ enum MarketUniverseCatalog {
         // 美股宽基与资产类（Alpha Vantage / Stooq 直抓）
         [
             entry("us-spy", code: "SPY", jurisdiction: .unitedStates,
-                  displayName: "标普500 ETF", priority: 1, fetchDirectly: true),
+                  displayName: "标普500 ETF", priority: 1, fetchDirectly: true, exchange: .arca),
             entry("us-qqq", code: "QQQ", jurisdiction: .unitedStates,
-                  displayName: "纳斯达克100 ETF", priority: 1, fetchDirectly: true),
+                  displayName: "纳斯达克100 ETF", priority: 1, fetchDirectly: true, exchange: .arca),
             entry("us-iwm", code: "IWM", jurisdiction: .unitedStates,
-                  displayName: "罗素2000 ETF", priority: 2, fetchDirectly: true),
+                  displayName: "罗素2000 ETF", priority: 2, fetchDirectly: true, exchange: .arca),
             entry("us-vt", code: "VT", jurisdiction: .unitedStates,
-                  displayName: "全球股票 ETF", priority: 2, fetchDirectly: true),
+                  displayName: "全球股票 ETF", priority: 2, fetchDirectly: true, exchange: .arca),
             entry("us-tlt", code: "TLT", jurisdiction: .unitedStates,
-                  displayName: "20年期美债 ETF", priority: 3, fetchDirectly: true),
+                  displayName: "20年期美债 ETF", priority: 3, fetchDirectly: true, exchange: .arca),
             entry("us-gld", code: "GLD", jurisdiction: .unitedStates,
-                  displayName: "黄金 ETF", priority: 3, fetchDirectly: true),
+                  displayName: "黄金 ETF", priority: 3, fetchDirectly: true, exchange: .arca),
             // 美股行业 SPDR（六 sector 对齐旧八组扫描的分组语义）
             entry("us-xlk", code: "XLK", jurisdiction: .unitedStates,
-                  displayName: "科技行业 ETF", priority: 4, fetchDirectly: true),
+                  displayName: "科技行业 ETF", priority: 4, fetchDirectly: true, exchange: .arca),
             entry("us-xlv", code: "XLV", jurisdiction: .unitedStates,
-                  displayName: "医疗保健 ETF", priority: 4, fetchDirectly: true),
+                  displayName: "医疗保健 ETF", priority: 4, fetchDirectly: true, exchange: .arca),
             entry("us-xlf", code: "XLF", jurisdiction: .unitedStates,
-                  displayName: "金融行业 ETF", priority: 4, fetchDirectly: true),
+                  displayName: "金融行业 ETF", priority: 4, fetchDirectly: true, exchange: .arca),
             entry("us-xli", code: "XLI", jurisdiction: .unitedStates,
-                  displayName: "工业制造 ETF", priority: 5, fetchDirectly: true),
+                  displayName: "工业制造 ETF", priority: 5, fetchDirectly: true, exchange: .arca),
             entry("us-xle", code: "XLE", jurisdiction: .unitedStates,
-                  displayName: "能源资源 ETF", priority: 5, fetchDirectly: true),
+                  displayName: "能源资源 ETF", priority: 5, fetchDirectly: true, exchange: .arca),
             entry("us-xlp", code: "XLP", jurisdiction: .unitedStates,
-                  displayName: "必需消费 ETF", priority: 5, fetchDirectly: true),
+                  displayName: "必需消费 ETF", priority: 5, fetchDirectly: true, exchange: .arca),
             entry("us-xlu", code: "XLU", jurisdiction: .unitedStates,
-                  displayName: "公用事业 ETF", priority: 6, fetchDirectly: true),
+                  displayName: "公用事业 ETF", priority: 6, fetchDirectly: true, exchange: .arca),
             entry("us-xlre", code: "XLRE", jurisdiction: .unitedStates,
-                  displayName: "房地产 ETF", priority: 6, fetchDirectly: true),
+                  displayName: "房地产 ETF", priority: 6, fetchDirectly: true, exchange: .arca),
             entry("us-xlb", code: "XLB", jurisdiction: .unitedStates,
-                  displayName: "原材料 ETF", priority: 6, fetchDirectly: true),
+                  displayName: "原材料 ETF", priority: 6, fetchDirectly: true, exchange: .arca),
             entry("us-xly", code: "XLY", jurisdiction: .unitedStates,
-                  displayName: "可选消费 ETF", priority: 6, fetchDirectly: true),
+                  displayName: "可选消费 ETF", priority: 6, fetchDirectly: true, exchange: .arca),
             entry("us-xlvcare", code: "XLC", jurisdiction: .unitedStates,
-                  displayName: "通信服务 ETF", priority: 7, fetchDirectly: true),
+                  displayName: "通信服务 ETF", priority: 7, fetchDirectly: true, exchange: .arca),
             // A 股宽基与行业（remote staging 通道，fetchDirectly = false）
             entry("cn-000300", code: "000300", jurisdiction: .chinaMainland,
-                  displayName: "沪深300", priority: 8, fetchDirectly: false),
+                  displayName: "沪深300", priority: 8, fetchDirectly: false, exchange: .sse),
             entry("cn-000905", code: "000905", jurisdiction: .chinaMainland,
-                  displayName: "中证500", priority: 8, fetchDirectly: false),
+                  displayName: "中证500", priority: 8, fetchDirectly: false, exchange: .sse),
             entry("cn-000852", code: "000852", jurisdiction: .chinaMainland,
-                  displayName: "中证1000", priority: 9, fetchDirectly: false),
+                  displayName: "中证1000", priority: 9, fetchDirectly: false, exchange: .sse),
             entry("cn-399006", code: "399006", jurisdiction: .chinaMainland,
-                  displayName: "创业板指", priority: 9, fetchDirectly: false),
+                  displayName: "创业板指", priority: 9, fetchDirectly: false, exchange: .sse),
             entry("cn-cyborgrowth", code: "399971", jurisdiction: .chinaMainland,
-                  displayName: "中证传媒", priority: 10, fetchDirectly: false),
+                  displayName: "中证传媒", priority: 10, fetchDirectly: false, exchange: .sse),
             entry("cn-medical", code: "399989", jurisdiction: .chinaMainland,
-                  displayName: "中证医疗", priority: 10, fetchDirectly: false),
+                  displayName: "中证医疗", priority: 10, fetchDirectly: false, exchange: .sse),
             entry("cn-csi-food", code: "930653", jurisdiction: .chinaMainland,
-                  displayName: "中证食品饮料", priority: 11, fetchDirectly: false),
+                  displayName: "中证食品饮料", priority: 11, fetchDirectly: false, exchange: .sse),
             entry("cn-bank", code: "399986", jurisdiction: .chinaMainland,
-                  displayName: "中证银行", priority: 11, fetchDirectly: false),
+                  displayName: "中证银行", priority: 11, fetchDirectly: false, exchange: .sse),
             entry("cn-csi-machine", code: "930697", jurisdiction: .chinaMainland,
-                  displayName: "中证机器人", priority: 12, fetchDirectly: false),
+                  displayName: "中证机器人", priority: 12, fetchDirectly: false, exchange: .sse),
             entry("cn-newenergy", code: "399808", jurisdiction: .chinaMainland,
-                  displayName: "中证新能车", priority: 12, fetchDirectly: false),
+                  displayName: "中证新能车", priority: 12, fetchDirectly: false, exchange: .sse),
             entry("cn-csi-res", code: "930708", jurisdiction: .chinaMainland,
-                  displayName: "中证有色金属", priority: 13, fetchDirectly: false),
+                  displayName: "中证有色金属", priority: 13, fetchDirectly: false, exchange: .sse),
             entry("cn-csi-div", code: "930955", jurisdiction: .chinaMainland,
-                  displayName: "中证红利", priority: 13, fetchDirectly: false),
+                  displayName: "中证红利", priority: 13, fetchDirectly: false, exchange: .sse),
             entry("cn-real-estate", code: "931775", jurisdiction: .chinaMainland,
-                  displayName: "中证地产", priority: 14, fetchDirectly: false),
+                  displayName: "中证地产", priority: 14, fetchDirectly: false, exchange: .sse),
             entry("cn-518880", code: "518880", jurisdiction: .chinaMainland,
-                  displayName: "黄金 ETF", priority: 14, fetchDirectly: false),
+                  displayName: "黄金 ETF", priority: 14, fetchDirectly: false, exchange: .sse),
         ]
     }
 }
@@ -230,6 +230,9 @@ struct MarketDiscoveryWorkflow: Sendable {
     /// 多辖区混跑不匹配）；benchmark 数据随快照留存，扩 ranking policy
     /// 时按需装载带 benchmark 的引擎实例。
     let benchmarkByJurisdiction: [Jurisdiction: ListingID]
+    /// 因子快照落库通道（App 接线时写 GRDB artifacts 表，幂等；
+    /// nil = 不落库——重放/失效传播依赖快照持久化，十六轮审查 P2）。
+    let snapshotSink: (@Sendable (FactorSnapshot) throws -> Void)?
 
     init(
         universe: MarketUniverse = MarketUniverseCatalog.v1,
@@ -241,13 +244,15 @@ struct MarketDiscoveryWorkflow: Sendable {
         ]),
         repository: any MarketTimeSeriesRepository,
         policy: DiscoveryRankingPolicy = DiscoveryRankingPolicy(),
-        benchmarkByJurisdiction: [Jurisdiction: ListingID] = [:]
+        benchmarkByJurisdiction: [Jurisdiction: ListingID] = [:],
+        snapshotSink: (@Sendable (FactorSnapshot) throws -> Void)? = nil
     ) {
         self.universe = universe
         self.engine = engine
         self.repository = repository
         self.policy = policy
         self.benchmarkByJurisdiction = benchmarkByJurisdiction
+        self.snapshotSink = snapshotSink
     }
 
     struct RunOutcome: Sendable {
@@ -286,6 +291,12 @@ struct MarketDiscoveryWorkflow: Sendable {
                     benchmarkListingID: benchmarkByJurisdiction[entry.jurisdiction],
                     producedAt: now
                 )
+                // 全部快照统一收集 + 落库（含 coverage-gap 条目——失效
+                // 传播按「参与计算的快照」覆盖,gap 不留盲区）
+                factorIDs.append(snapshot.id)
+                if let snapshotSink {
+                    try snapshotSink(snapshot)
+                }
                 var metricValues: [String: Decimal] = [:]
                 var insufficient: String?
                 for key in DiscoveryRankingPolicy.requiredMetricKeys {
@@ -323,7 +334,6 @@ struct MarketDiscoveryWorkflow: Sendable {
                     factorSnapshotID: snapshot.id,
                     rank: 0
                 ))
-                factorIDs.append(snapshot.id)
             }
 
             // 确定序：score 降序，tie-break universeKey 升序；top-K 截断

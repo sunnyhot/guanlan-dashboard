@@ -208,9 +208,11 @@ struct PortfolioResearchWorkflow: Sendable {
                 ))
             }
 
-            // evidence 本体落库（先于 validation：knownEvidence / evidenceDates
-            // 从落库后的 store 供给，与「运行内登记簿」双通道一致）
-            var persistedEvidence = 0
+            // evidence 本体构造并**暂存**（十六轮审查 P1-5：Decision 失败时
+            // 不留半截状态——全部产物在 Decision 校验通过后统一提交；
+            // 校验管道的 knownEvidence / evidenceDates 由「store 已有 +
+            // 本次暂存」合并供给，语义与落库后一致）
+            var stagedEvidence: [EvidenceObservation] = []
             for record in collector.records {
                 for evidenceID in record.result.evidenceIDs {
                     let observation = try ResearchEvidenceFactory().observation(
@@ -222,16 +224,24 @@ struct PortfolioResearchWorkflow: Sendable {
                             evidenceID.rawValue],
                         at: record.timestamp
                     )
-                    try dependencies.evidenceStore.write(observation)
-                    persistedEvidence += 1
+                    stagedEvidence.append(observation)
                 }
             }
-            await events(.evidencePersisted(count: persistedEvidence))
+            await events(.evidencePersisted(count: stagedEvidence.count))
 
             // ---- 阶段 2：Validate → Extract → Persist signals ----
 
-            let knownEvidence = try dependencies.evidenceStore.knownEvidenceIDs()
-            let evidenceDates = try dependencies.evidenceStore.evidenceDates()
+            var knownEvidence = try dependencies.evidenceStore.knownEvidenceIDs()
+            for observation in stagedEvidence {
+                knownEvidence.insert(observation.evidenceID.rawValue)
+            }
+            var evidenceDates = try dependencies.evidenceStore.evidenceDates()
+            for observation in stagedEvidence {
+                let available = observation.temporalEnvelope.availableAt
+                if (evidenceDates[observation.evidenceID.rawValue] ?? .distantPast) < available {
+                    evidenceDates[observation.evidenceID.rawValue] = available
+                }
+            }
             for notes in allNotes {
                 let verdict = dependencies.validation.validate(
                     notes, now: clock(),
@@ -250,9 +260,6 @@ struct PortfolioResearchWorkflow: Sendable {
                 signals.append(contentsOf: dependencies.extractor.extract(
                     from: notes, now: clock()
                 ))
-            }
-            for signal in signals {
-                try dependencies.signalStore.write(signal)
             }
             await events(.signalsExtracted(count: signals.count))
 
@@ -286,9 +293,6 @@ struct PortfolioResearchWorkflow: Sendable {
                 now: clock()
             )
             theses.append(portfolioThesis)
-            for thesis in theses {
-                try dependencies.thesisStore.write(thesis)
-            }
             await events(.thesesWritten(count: theses.count))
 
             // ---- 阶段 4：Decision（材料 → 首产（= 重放实现）→ 校验 → 落库）----
@@ -324,22 +328,44 @@ struct PortfolioResearchWorkflow: Sendable {
                 plannerRuns: materials.plannerRuns,
                 producedAt: clock()
             )
-            // 落库前强制门禁（AGENTS.md 关键约定 11）：resolvers 实查
-            // stores——signal 查 SignalStore，其余查材料本身
+            // 落库前强制门禁（AGENTS.md 关键约定 11）：resolvers 实查可解析
+            // 域——signal 查「本次暂存 ∪ store 已有」（暂存信号尚未落库，
+            // 域语义与 flush 后一致），其余查材料本身
             let materialFingerprints = Set(materials.replayerMaterials.criterionDefinitions.keys)
             let materialSnapshots = Set(materials.replayerMaterials.factorSnapshots.keys)
             let bandVersion = "\(materials.replayerMaterials.band.policyID)@\(materials.replayerMaterials.band.version)"
+            let stagedSignalIDs = Set(signals.map(\.id))
+            let existingSignalStore = dependencies.signalStore
             try DecisionValidator().validate(
                 artifact: artifact,
                 resolvers: .init(
-                    signal: { [signalStore = dependencies.signalStore] id in
-                        (try? signalStore.signal(id: id)) != nil
+                    signal: { id in
+                        stagedSignalIDs.contains(id)
+                            || (try? existingSignalStore.signal(id: id)) != nil
                     },
                     factorSnapshot: { materialSnapshots.contains($0.rawValue) },
                     criterion: { materialFingerprints.contains($0) },
                     indifferenceBand: { $0 == bandVersion }
                 )
             )
+
+            // ---- 统一提交（十六轮审查 P1-5）----
+            // Decision 校验通过前零落库：材料缺失 / validator 拒绝 / 组装
+            // 失败都不留 evidence / signals / theses 半截状态。顺序：
+            // evidence → signals → theses → artifact——artifact 最后落库，
+            // 下游（Intraday / QueryService）以「存在 decision artifact」为
+            // 本次 run 完成的可见标志。flush 中途 IO 失败仍可能留部分写入
+            // （错误级、各 store 幂等可重跑收敛），与「决策失败留产物」的
+            // 语义性缺陷不同。
+            for observation in stagedEvidence {
+                try dependencies.evidenceStore.write(observation)
+            }
+            for signal in signals {
+                try dependencies.signalStore.write(signal)
+            }
+            for thesis in theses {
+                try dependencies.thesisStore.write(thesis)
+            }
             try dependencies.artifactSink(artifact)
             await events(.decisionAssembled(
                 artifactID: artifact.id.rawValue,

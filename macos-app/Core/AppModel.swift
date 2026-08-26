@@ -106,6 +106,18 @@ final class AppModel: ObservableObject {
     /// 远程增强通道（PROV-3b / ADR-DATA010）诊断状态；默认未配置 = 不启动后台任务
     @Published var remoteStagingSyncStatus: RemoteStagingSyncStatus = .notConfigured("尚未启动")
 
+    // 投资智能 V2 运行时（十六轮审查 P1-1 生产接线）
+    @Published var intelligenceRuntime: AppModel.IntelligenceV2Runtime?
+    @Published var isRunningMarketDiscovery = false
+    @Published var isRunningIntradayDecision = false
+    @Published var isRunningPortfolioResearch = false
+    @Published var latestIntelligenceError: String?
+    @Published var latestDiscoveryReport: MarketDiscoveryReport?
+    @Published var latestIntradayReport: IntradayExecutionReport?
+    @Published var latestResearchArtifactID: String?
+    /// 旧 AI 数据一次性迁移告知（WF-5；展示后由 UI 清空）
+    @Published var legacyAIMigrationNotice: String?
+
     /// 调仓筛选状态
     let filterState = PlatformFilterState()
 
@@ -447,6 +459,12 @@ final class AppModel: ObservableObject {
             let supportDirectory = try dataController.prepareEnvironment()
             logFileURL = dataController.logFileURL
             dataDirectoryURL = supportDirectory
+            // 投资智能 V2：composition root 引导 + 旧 AI 数据一次性迁移告知
+            bootstrapIntelligenceV2()
+            let migrationOutcome = LegacyAIDataMigration.migrateIfNeeded(
+                in: supportDirectory
+            )
+            legacyAIMigrationNotice = migrationOutcome.notice
             // 基金穿透披露接入磁盘缓存：完整披露落盘，部分失败时用历史完整披露兜底，
             // 避免残缺数据冒充完整披露（如股票接口失败只剩债券时）。
             fundLookThroughClient = FundLookThroughClient(

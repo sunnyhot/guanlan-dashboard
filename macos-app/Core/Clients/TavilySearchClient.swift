@@ -115,7 +115,7 @@ enum TavilySearchClientError: Error, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "尚未配置 Tavily API Key。请在「设置 > AI 研判 > 联网搜索」中填写。"
+            return "尚未配置 Tavily API Key。请在研究的联网搜索配置中填写。"
         case .invalidResponse(let detail):
             return "Tavily 返回格式无效：\(detail)"
         case .requestFailed(let statusCode, let detail):
@@ -152,7 +152,7 @@ enum TavilySearchClientError: Error, LocalizedError, Sendable {
     var userFacingToolMessage: String {
         switch self {
         case .missingAPIKey:
-            return "尚未配置 Tavily API Key，请先在 AI 研判设置中完成配置。"
+            return "尚未配置 Tavily API Key，请先完成联网搜索配置。"
         case .requestFailed(let statusCode, _):
             if statusCode == 401 {
                 return "Tavily API Key 无效或无权访问；本次已停止继续搜索。"

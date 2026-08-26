@@ -986,11 +986,17 @@ struct QiemanDashboardApp: App {
                 }
                 .keyboardShortcut("4")
 
+                Button("投资智能") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                }
+                .keyboardShortcut("4")
+
                 Button("设置") {
                     model.selectedSection = .settings
                     appDelegate.showMainWindow()
                 }
-                .keyboardShortcut("6")
+                .keyboardShortcut("5")
             }
 
             CommandGroup(after: .textEditing) {

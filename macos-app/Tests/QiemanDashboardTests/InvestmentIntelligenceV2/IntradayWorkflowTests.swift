@@ -11,8 +11,8 @@ import XCTest
 private let intradaySubject = try! CanonicalRef(
     entityType: "fundShareClass", entityIDRawValue: "sc_itd"
 )
-/// 2024-11-06 周三（TestWeekdayCalendar 下是交易日）。
-private let intradayDay = Date(timeIntervalSince1970: 1_730_851_200)
+/// 2024-11-06 周三 美东 10:30（NASDAQ 盘中；TestWeekdayCalendar 下是交易日）。
+private let intradayDay = Date(timeIntervalSince1970: 1_730_909_400)
 
 final class IntradayWorkflowTests: XCTestCase {
 
@@ -271,6 +271,95 @@ final class IntradayWorkflowTests: XCTestCase {
         XCTAssertTrue(
             outcome.report?.holdReasons.first?.contains("约束裁剪") ?? false
         )
+    }
+
+    // MARK: - 交易时段判定（十六轮审查 P1-4：盘外 fail-closed）
+
+    func testHoldBeforeMarketOpen() throws {
+        // 美东 2024-11-06 08:00（周三盘前）→ HOLD
+        let preMarket = Date(timeIntervalSince1970: 1_730_901_200)
+        let snapshot = PortfolioSnapshot(asOf: preMarket, positions: portfolio.positions)
+        let outcome = makeWorkflow().run(
+            input: makeInput(portfolio: snapshot), asOf: preMarket, now: preMarket
+        )
+        XCTAssertEqual(outcome.report?.decision, .hold)
+        XCTAssertTrue(
+            outcome.report?.holdReasons.contains { $0.contains("非交易时段") } ?? false,
+            "盘前不得产出执行决策：\(outcome.report?.holdReasons ?? [])"
+        )
+    }
+
+    func testHoldAfterMarketClose() throws {
+        // 美东 2024-11-06 17:00（周三收盘后，UTC 22:00）→ HOLD
+        let afterHours = Date(timeIntervalSince1970: 1_730_930_400)
+        let snapshot = PortfolioSnapshot(asOf: afterHours, positions: portfolio.positions)
+        let outcome = makeWorkflow().run(
+            input: makeInput(portfolio: snapshot), asOf: afterHours, now: afterHours
+        )
+        XCTAssertEqual(outcome.report?.decision, .hold)
+        XCTAssertTrue(
+            outcome.report?.holdReasons.contains { $0.contains("非交易时段") } ?? false
+        )
+    }
+
+    func testHoldDuringLunchBreak() throws {
+        // 沪深午休：北京 2024-11-06 12:00 = UTC 04:00（周三）→ A 股 HOLD
+        let lunchBreak = Date(timeIntervalSince1970: 1_730_865_600)
+        let sseInput = IntradayWorkflow.Input(
+            subject: intradaySubject,
+            portfolio: PortfolioSnapshot(asOf: lunchBreak, positions: portfolio.positions),
+            target: target,
+            actionDomain: actionDomain,
+            exchange: .sse
+        )
+        let outcome = makeWorkflow().run(
+            input: sseInput, asOf: lunchBreak, now: lunchBreak
+        )
+        XCTAssertEqual(outcome.report?.decision, .hold)
+        XCTAssertTrue(
+            outcome.report?.holdReasons.contains { $0.contains("非交易时段") } ?? false
+        )
+    }
+
+    func testOTCOnlyRequiresTradingDayNotSession() throws {
+        // 场外基金：T 日任意时刻可执行（无盘中时段门槛）
+        let offSession = Date(timeIntervalSince1970: 1_730_901_200) // 美东 08:00 周三
+        let otcInput = IntradayWorkflow.Input(
+            subject: intradaySubject,
+            portfolio: PortfolioSnapshot(asOf: offSession, positions: portfolio.positions),
+            target: target,
+            actionDomain: actionDomain,
+            exchange: .otc
+        )
+        let outcome = makeWorkflow().run(
+            input: otcInput, asOf: offSession, now: offSession
+        )
+        XCTAssertEqual(outcome.report?.decision, .executeRebalance, "OTC 只判交易日,不设时段")
+    }
+
+    func testJobFingerprintCoversDecisionInputs() {
+        // 同 asOf 不同持仓权重 → 不同 job ID（十六轮审查 P2）
+        let first = makeWorkflow().run(input: makeInput(), asOf: intradayDay, now: intradayDay)
+        let alteredInput = IntradayWorkflow.Input(
+            subject: intradaySubject,
+            portfolio: PortfolioSnapshot(asOf: intradayDay, positions: [
+                PortfolioPosition(
+                    subjectKey: "listing|E", assetClass: .equity,
+                    weight: Ratio(value: d("0.6"))
+                ),
+                PortfolioPosition(
+                    subjectKey: "listing|B", assetClass: .fixedIncome,
+                    weight: Ratio(value: d("0.4"))
+                ),
+            ]),
+            target: target,
+            actionDomain: actionDomain,
+            exchange: .nasdaq
+        )
+        let second = makeWorkflow().run(
+            input: alteredInput, asOf: intradayDay, now: intradayDay
+        )
+        XCTAssertNotEqual(first.job.id, second.job.id, "持仓权重是决策输入,必须参与 job 指纹")
     }
 
     // MARK: - 确定性与落库

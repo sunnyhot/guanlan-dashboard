@@ -34,7 +34,6 @@ struct IOSPersonalAssetDetailSheet: View {
                     headerSection
                     metricsSection
                     priceTrendSection
-                    aiOpinionSection
                     attentionSection
                     pendingTradesSection
                     plansSection
@@ -292,88 +291,6 @@ struct IOSPersonalAssetDetailSheet: View {
     // MARK: - AI 观点（匹配趋势报告里的单标的观点）
 
     @ViewBuilder
-    private var aiOpinionSection: some View {
-        if let assetView = matchedAssetTrend {
-            IOSSectionCard(title: "AI 观点", subtitle: assetView.sector, icon: "sparkles") {
-                VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
-                    if !assetView.impactText.isEmpty {
-                        IOSTintedBadge(text: assetView.impactText, tone: .neutral)
-                    }
-                    // 周期研判
-                    if !assetView.horizons.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(assetView.horizons, id: \.horizon) { horizon in
-                                HStack(spacing: IOSDesign.spaceS) {
-                                    Text(horizonLabel(horizon.horizon)).font(IOSDesign.sansBody(12, weight: .medium)).foregroundStyle(IOSDesign.ink)
-                                    Spacer()
-                                    Text(directionLabel(horizon.direction))
-                                        .font(IOSDesign.sansBody(12, weight: .semibold))
-                                        .foregroundStyle(directionColor(horizon.direction))
-                                }
-                            }
-                        }
-                    }
-                    if !assetView.rationale.isEmpty {
-                        Text(assetView.rationale)
-                            .font(IOSDesign.sansBody(13))
-                            .foregroundStyle(IOSDesign.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if !assetView.counterSignals.isEmpty {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("反向信号").font(IOSDesign.sansBody(11, weight: .semibold)).foregroundStyle(AppPalette.warning)
-                            ForEach(assetView.counterSignals, id: \.self) { signal in
-                                Text("· \(signal)").font(IOSDesign.sansBody(11)).foregroundStyle(IOSDesign.muted)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// 从趋势报告里按 code/name 匹配当前标的的 AI 观点
-    private var matchedAssetTrend: TrendAssetView? {
-        guard let trends = model.trendReport?.assetTrends, !trends.isEmpty else { return nil }
-        // 优先按代码匹配
-        if let code = row.fundCode, !code.isEmpty {
-            let lower = code.lowercased()
-            if let m = trends.first(where: { ($0.code ?? "").lowercased() == lower }) {
-                return m
-            }
-        }
-        // 退而按名称包含匹配
-        let name = row.fundName
-        return trends.first(where: { $0.name.contains(name) || name.contains($0.name) })
-    }
-
-    private func horizonLabel(_ h: TrendHorizon) -> String {
-        switch h {
-        case .short: return "短期"
-        case .medium: return "中期"
-        case .long: return "长期"
-        }
-    }
-
-    private func directionLabel(_ d: TrendDirection) -> String {
-        switch d {
-        case .bullish: return "看多"
-        case .neutralPositive: return "偏多"
-        case .neutral: return "中性"
-        case .neutralNegative: return "偏空"
-        case .bearish: return "看空"
-        case .uncertain: return "不确定"
-        }
-    }
-
-    private func directionColor(_ d: TrendDirection) -> Color {
-        switch d {
-        case .bullish, .neutralPositive: return AppPalette.marketGain
-        case .bearish, .neutralNegative: return AppPalette.marketLoss
-        case .neutral, .uncertain: return AppPalette.muted
-        }
-    }
-
     // MARK: - 关注项(计划/待确认提醒)
 
     private var attentionSection: some View {
