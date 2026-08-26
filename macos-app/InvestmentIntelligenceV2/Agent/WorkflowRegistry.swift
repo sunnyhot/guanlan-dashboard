@@ -236,15 +236,25 @@ struct WorkflowRegistry: Sendable {
             let detail = result.artifactIDs.isEmpty
                 ? result.summary
                 : "\(result.summary)｜artifacts: \(result.artifactIDs.joined(separator: ","))"
-            try job.transition(to: .completed, at: clock(), detail: detail)
-            // 终态落库失败：job 已完成但行停在 RUNNING——上抛给调用方，
-            // 恢复面会把该行按 abandoned 处理后幂等重跑（产物写入幂等）
-            try store.record(job: job)
+            // 终态段（二十轮 P2-7）：runner 已成功、终态落库失败时不得被
+            // 通用 catch 吞成「completed + result nil / 行停 RUNNING」——
+            // 包成 terminalRecordFailed 上抛（调用方报错退出；行由恢复面
+            // 按 abandoned 幂等处置，产物写入本身幂等）
+            do {
+                try job.transition(to: .completed, at: clock(), detail: detail)
+                try store.record(job: job)
+            } catch {
+                throw AgentRegistryError.terminalRecordFailed(
+                    jobID: job.id, detail: String(describing: error)
+                )
+            }
             return (job: job, result: result)
         } catch is CancellationError {
             try? job.transition(to: .cancelled, at: clock(), detail: nil)
             try? store.record(job: job)
             throw CancellationError()
+        } catch let error as AgentRegistryError {
+            throw error   // 终态落库失败不降格为「运行失败」语义
         } catch {
             try? job.transition(to: .failed, at: clock(), detail: String(describing: error))
             try? store.record(job: job)
@@ -264,6 +274,8 @@ struct WorkflowRegistry: Sendable {
 enum AgentRegistryError: Error, Equatable, Sendable {
     /// fingerprint 后缀推进超护栏（行被外部写坏 / 并发循环冲突）
     case attemptExhausted(kind: String, base: String)
+    /// runner 已成功但终态落库失败（行可能停 RUNNING——由恢复面处置）
+    case terminalRecordFailed(jobID: String, detail: String)
 }
 
 // MARK: - JobRecovery
@@ -293,11 +305,10 @@ struct JobRecovery: Sendable {
     static let defaultStaleAfter: TimeInterval = 2 * 60 * 60
 
     /// 扫描并处置全部非终端作业（逐作业 best-effort：单作业失败不阻断
-    /// 其余作业，失败如实入返回值）。
-    func recover(staleAfter: TimeInterval = JobRecovery.defaultStaleAfter) async -> [Outcome] {
-        guard let jobs = try? registry.store.nonTerminalJobs() else {
-            return []
-        }
+    /// 其余作业，失败如实入返回值）。**扫描本身失败上抛**（二十轮 P2-10：
+    /// 吞成空列表会让调用方把「读不出」当「无事可做」）。
+    func recover(staleAfter: TimeInterval = JobRecovery.defaultStaleAfter) async throws -> [Outcome] {
+        let jobs = try registry.store.nonTerminalJobs()
         var outcomes: [Outcome] = []
         for job in jobs {
             do {

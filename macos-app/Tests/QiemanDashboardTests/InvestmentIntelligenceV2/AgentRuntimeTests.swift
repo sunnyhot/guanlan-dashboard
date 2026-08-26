@@ -136,6 +136,31 @@ final class AgentRuntimeTests: XCTestCase {
         }
     }
 
+
+    /// 二十轮 P2-6：库内时间线比内存视图长时，record 拒收陈旧回写
+    /// （另一写者已推进更多事件——回写会把行状态倒拨）。
+    func testRecordRejectsStaleJobView() throws {
+        let store = try makeStore()
+        guard case .new(var job) = try store.enqueue(
+            workflowKind: "w", fingerprint: "fp", inputJSON: "{}", now: t0
+        ) else { return XCTFail() }
+        try job.transition(to: .running, at: t0)
+        try store.record(job: job)
+        try job.transition(to: .completed, at: t0.addingTimeInterval(5), detail: "done")
+        try store.record(job: job)
+
+        // 陈旧视图（只见过 2 个事件）回写 → staleJobView 拒收
+        var stale = AgentJob(workflowKind: "w", inputFingerprint: "fp", createdAt: t0)
+        try stale.transition(to: .running, at: t0)
+        XCTAssertThrowsError(try store.record(job: stale)) { error in
+            guard case AgentJobStore.StoreError.staleJobView = error else {
+                return XCTFail("应拒收陈旧视图：\(error)")
+            }
+        }
+        // 库内状态不受陈旧回写影响
+        XCTAssertEqual(try store.job(id: job.id)?.state, .completed)
+    }
+
     func testCheckpointsAndLastActivity() throws {
         let store = try makeStore()
         guard case .new(var job) = try store.enqueue(
@@ -365,7 +390,7 @@ final class AgentRuntimeTests: XCTestCase {
         let recovery = JobRecovery(registry: registry)
 
         now = t0.addingTimeInterval(3600)
-        let outcomes = await recovery.recover(staleAfter: 1800)
+        let outcomes = try await recovery.recover(staleAfter: 1800)
         XCTAssertEqual(outcomes.count, 3)
 
         func outcomeJobID(_ o: JobRecovery.Outcome) -> String {

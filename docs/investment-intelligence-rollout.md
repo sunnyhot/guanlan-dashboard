@@ -2092,9 +2092,10 @@ macos-app/
 >   崩溃行已落盘检查点（续跑而非从头重来的通道；registry 不解释 state）。
 >   活跃判定 = max(最后事件, 最后检查点)（无心跳列——迁移只追加，已发布
 >   schema 不动；单写者现实下足够，并发双进程由调用方用足够 staleAfter 排除）。
-> 测试 `AgentRuntimeTests` 11 个：指纹约定 / 入队幂等 / 事件增量 / 检查点
-> 与活跃度 / 提交幂等与重试 / 陈旧恢复带检查点 / 活跃拒收 / queued 直跑 /
-> 终态与缺失 / 混合状态扫描。消费方（AGENT-2 CLI 的 data-sync /
+> 测试 `AgentRuntimeTests` 12 个：指纹约定 / 入队幂等 / 事件增量 / 检查点
+> 与活跃度 / 陈旧视图回写拒收 / 提交幂等与重试 / 陈旧恢复带检查点 /
+> 活跃拒收 / queued 直跑 / 终态与缺失 / 混合状态扫描。消费方（AGENT-2
+> CLI 的 data-sync /
 > market-research / portfolio-review / attribution 命令走 registry 提交）
 > 随 AGENT-2 落地。
 
@@ -2109,10 +2110,11 @@ macos-app/
 >   agent 命令集，一律 GUI）。`scripts/investment-agent` 启动器按
 >   dist App bundle → SPM release/debug 顺序找二进制。
 > - **命令面（V3.1 §97）**：data-sync（维护轮：identity→回填→增量，
->   经 AGENT-1 registry 提交 + 分轮 checkpoint）/ health（库 schema 版本、
->   artifacts 按 kind 计数、signals/evidence/theses、非终端作业、行情与
->   NAV 规模、组合持仓数）/ identity-inspect（resolver lookup，scheme
->   按代码形态缺省推导）/ market-research（本地因子筛选 + top-K 研究任务
+>   经 AGENT-1 registry 提交 + 分轮 checkpoint，**崩溃续跑按轮消费检查点**
+>   ——二十轮 P1-2）/ health（库 schema 版本、artifacts 按 kind 计数、
+>   signals/evidence/theses、非终端作业、行情与 NAV 规模、组合持仓数）/
+>   identity-inspect（resolver lookup，缺省双 scheme 依次尝试——A 股股票
+>   与基金代码同为全数字，形态启发不可靠，二十轮 P2-4）/ market-research（本地因子筛选 + top-K 研究任务
 >   + 报告落库）/ portfolio-review（WF-1 全链，选择性研究接最新 discovery
 >   报告 top-4；LLM 凭据经环境变量 QIEMAN_LLM_*——CLI 进程不读 App 的
 >   UserDefaults 域，Keychain 跨二进制 ACL 不可靠，显式环境变量是唯一
@@ -2124,6 +2126,10 @@ macos-app/
 > - **作业纪律**：四个副作用命令全部经 WorkflowRegistry 提交（幂等 /
 >   attempt 重试 / 事件时间线 / resume），失败作业 exit 1（unix 惯例）
 >   且 JSON 完整输出（脚本可两用）；输出 JSON sortedKeys 确定性。
+>   **幂等输入含业务锚点**（二十轮 P1-1）：data-sync / market-research
+>   以运行日为锚（同日重跑幂等命中、次日自然新 job），portfolio-review
+>   纳入持仓文件摘要 + 最新 discovery 报告引用，attribution 以归因日为
+>   锚；`--force` 附加 nonce 显式重跑。
 > - **数据目录**：`--data-dir` 覆盖 > `~/Library/Application Support/
 >   QiemanDashboard`（与 App 共库；App 的 UserDefaults 自定义目录对 CLI
 >   进程不可见——域不同，需显式 --data-dir）。
@@ -2131,7 +2137,7 @@ macos-app/
 >   同一套常量（costIntensity v1 + live-band v1 + 维持当前配置对照），
 >   差异只在权重口径（成本 vs 估值）——decision-replay 对两条链路产出
 >   都可解析绑定。
-> 测试 `InvestmentAgentCLITests` 13 个（version/help/unknown、health 建库、
+> 测试 `InvestmentAgentCLITests` 18 个（version/help/unknown、health 建库、
 > attribution 成本口径 + 幂等重提 + 空组合失败、market-research 端到端
 > 出报告、portfolio-review 凭据门槛、LLM 配置解析、identity 启发、
 > replay/resume not-found、数据目录解析）。xcodegen 重生成（main.swift 编入
@@ -2172,6 +2178,47 @@ macos-app/
 > 进程级 kill 实测属运维验收，语义由同一实现覆盖）；package 抽取按 PKG001
 > 条件不触发，双端构建维持基线。**Epic 13 收口：AGENT-1（8）+ AGENT-2（5）
 > + PKG-1（5，评估闭环）= 18 点签收；AGENT-3（可选，不排期）显式处置。**
+
+> **二十轮审查修复（2026-08-26，1×P0 + 3×P1 + 7×P2，Epic 13 外部审查，全部闭环）**：
+> - **P0 CLI 错误路径永久挂死（实测复现）**：submitJob / resume 的同步桥
+>   用 nil 哨兵区分「未完成」，而 `try?` 把 submit/resume 的**抛错也变成
+>   nil**（requiredInput 对旧形态行的显式拒收、toAgentJob fail-closed、
+>   存储错误、attemptExhausted）——永久自旋。修复：`run()` 本体改 async，
+>   命令内直接 `try await`（错误如实穿透）；`main()` 出口单一 Result 桥
+>   （nil 严格等于未完成），二进制级验证旧形态行 0 秒快速报错退出。
+> - **P1-1 幂等输入空间退化**：data-sync / market-research / portfolio-review
+>   的指纹不含业务输入（completed 后同参数永远 alreadyCompleted、一次性
+>   workflow）。修复：输入纳入业务锚点（运行日 / 持仓文件摘要 + 最新
+>   discovery 引用 / 归因日）+ `--force` 显式重跑通道；同日幂等 / 跨日新
+>   job / force 重跑三态有回归测试。
+> - **P1-2 检查点只写不读**：四个生产 runner 均未消费 resumeCheckpoints。
+>   修复：data-sync 按轮消费（同轮数配置跳过已完成批次，崩溃续跑不再从
+>   头再来）；其余三个单相 runner 如实标注「产物幂等、重跑即恢复、无中
+>   间阶段」并修正文档口径（本记录同步 §4.8 / AGENT-2 状态块）。
+> - **P1-3 data-sync 的 HealthMonitor 固定时钟**：冷却判定 / quota 周期
+>   滚动依赖 now() 前进——固定 context.now 使冷却永不解除。改真实时钟。
+> - **P2-4 identity-inspect 启发方向性错误**：A 股股票代码全数字，纯启发
+>   无法区分基金/股票——改缺省双 scheme 依次尝试（fund_code →
+>   stock_symbol），显式 --scheme 仍只查声明值。
+> - **P2-5 attribution 两点**：未解析股票的兜底 subject 从伪 fund 改
+>   listing 维度（universe 目录同款 `lst_<code>` 约定）；非法 `--date`
+>   dispatch + runner 双层 fail-closed 报错（不静默回落今天）。
+> - **P2-6 record 陈旧视图回写**：库内事件多于内存视图时拒收
+>   `staleJobView`（原先会把行状态倒拨）。
+> - **P2-7 execute 终态落库失败出口失真**：runner 成功但 completed 落库
+>   失败原先被通用 catch 吞成「completed + result nil / 行停 RUNNING / CLI
+>   exit 0」——改抛 `terminalRecordFailed`（调用方报错退出，恢复面处置）。
+> - **P2-8 enqueue 约束捕获过宽**：SQLITE_CONSTRAINT 分类收窄到
+>   idempotency_key 唯一键（其他约束违例按原错误上抛）。
+> - **P2-9 命令清单双维护**：main.swift 的清单改引
+>   `InvestmentAgentCLI.knownCommands` 单一来源。
+> - **P2-10 recover 输出与静默**：`recovered` 改 `processed` + breakdown
+>   分类（skipped-active 不再计入「已恢复」）；扫描失败从吞成空列表改
+>   为上抛（读不出 ≠ 无事可做）。
+> - 文档：PKG001「三入口共享同一 SPM target」措辞精确化（iOS 走 xcodegen
+>   工程的同一源集，非 SPM target）。
+> - 修复后 AgentRuntimeTests 12 + InvestmentAgentCLITests 18 全绿；全量
+>   swift test 与双端构建见提交验证记录。
 
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
@@ -2275,7 +2322,9 @@ M2 不过不进 Epic 5（GRDB schema 冻结）——**M2 已于 2026-08-21 Pass�
   WF-1 引擎层验证，真实 LLM 端到端需用户凭据，同 Epic 11/12 遗留口径）
 - Job 中途 kill → resume 能继续——**引擎层达成**（AgentRuntimeTests 模拟
   RUNNING 崩溃停滞 + 检查点落盘 → resume 开新 attempt 携带检查点续跑；
-  CLI `resume`/`recover` 是运维出口）
+  检查点的**生产消费**在 data-sync runner 落地——按轮跳过已完成批次，
+  二十轮 P1-2；其余三个 runner 是单相任务，产物写入幂等、重跑即恢复，
+  无中间阶段可跳过。CLI `resume`/`recover` 是运维出口）
 - package 抽取（若执行）后 macos-app 仍正常构建——**条件不触发**
   （PKG001：暂不抽取；双端构建维持基线）
 

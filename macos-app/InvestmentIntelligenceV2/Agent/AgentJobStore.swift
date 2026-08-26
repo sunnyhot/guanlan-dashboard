@@ -55,6 +55,9 @@ struct AgentJobStore: Sendable {
         case jobNotEnqueued(jobID: String)
         /// 重放型恢复需要原始输入，行内只有指纹（旧形态 / 损坏行）
         case missingInputJSON(jobID: String)
+        /// 内存 job 视图落后于库内时间线（另一写者已推进更多事件）——
+        /// 陈旧视图回写会把行状态倒拨，拒收（二十轮 P2-6）
+        case staleJobView(jobID: String, storedEvents: Int, localEvents: Int)
     }
 
     enum EnqueueOutcome: Sendable {
@@ -99,8 +102,12 @@ struct AgentJobStore: Sendable {
                 for event in events { try event.insert(db) }
             }
             return .new(pending)
-        } catch let error as DatabaseError where error.resultCode == .SQLITE_CONSTRAINT {
-            // 幂等键冲突 = 同 (workflow, fingerprint) 已入队（并发提交 / 重放）
+        } catch let error as DatabaseError
+        where error.resultCode == .SQLITE_CONSTRAINT
+            && (error.message ?? "").contains("idempotency_key") {
+            // 唯一键冲突 = 同 (workflow, fingerprint) 已入队（并发提交 / 重放）。
+            // 约束分类收窄到 idempotency_key（二十轮 P2-8）：其他约束违例
+            // （如事件 PK 撞）不在此列，按原错误上抛。
             let key = row.idempotencyKey ?? "\(workflowKind)|\(fingerprint)"
             guard let existing = try self.job(idempotencyKey: key) else {
                 throw error
@@ -110,7 +117,9 @@ struct AgentJobStore: Sendable {
     }
 
     /// 按事件时间线增量持久化 job 当前状态（行必须已 enqueue）。
-    /// 已入库事件数之后的部分才追加——重复 record 幂等。
+    /// 已入库事件数之后的部分才追加——重复 record 幂等；库内时间线比
+    /// 内存视图更长时拒收（staleJobView：陈旧视图回写会把行状态倒拨，
+    /// 二十轮 P2-6——单写者假设被并发写者打破时的显式失败，不静默）。
     func record(job: AgentJob) throws {
         let fresh = try AgentJobRow.from(job: job)
         try database.queue.write { db in
@@ -118,6 +127,15 @@ struct AgentJobStore: Sendable {
                 db, sql: "SELECT * FROM agent_jobs WHERE id = ?", arguments: [job.id]
             ) != nil else {
                 throw StoreError.jobNotEnqueued(jobID: job.id)
+            }
+            let existingCount = try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM agent_job_events WHERE job_id = ?",
+                arguments: [job.id]
+            ) ?? 0
+            guard existingCount <= job.events.count else {
+                throw StoreError.staleJobView(
+                    jobID: job.id, storedEvents: existingCount, localEvents: job.events.count
+                )
             }
             try db.execute(
                 sql: """
@@ -127,10 +145,6 @@ struct AgentJobStore: Sendable {
                 """,
                 arguments: [fresh.status, fresh.startedAt, fresh.completedAt, fresh.errorMessage, job.id]
             )
-            let existingCount = try Int.fetchOne(
-                db, sql: "SELECT COUNT(*) FROM agent_job_events WHERE job_id = ?",
-                arguments: [job.id]
-            ) ?? 0
             for eventRow in try AgentJobRow.eventRows(for: job).dropFirst(existingCount) {
                 try eventRow.insert(db)
             }

@@ -29,9 +29,10 @@ PKG-1 要求在 M10（AGENT-2 完成后）按**已知依赖形状**评估是否�
 `MarketDataSync`、`Core/CLI/InvestmentAgentCLI`、`main.swift`、
 `Views_macOS/Intelligence/IntelligenceSectionView`（另有 Tests 全套）。
 
-消费方形态：macOS App、iOS App、`investment-agent` CLI **三个入口共享同一
-SPM target（同一模块）**——AGENT-2 的 CLI 经 main.swift 双模式入口实现，
-没有为 agent 建独立 target。
+消费方形态：macOS App 与 `investment-agent` CLI 共享同一 SPM target
+（同一模块；CLI 经 main.swift 双模式入口实现，没有为 agent 建独立
+target）；iOS App 经 xcodegen 的 Xcode 工程编入**同一源集**（非 SPM
+target，但源文件共享面相同）。
 
 备选方案与代价：
 
@@ -66,8 +67,9 @@ V2 + Core + Views + agent CLI）；V2 与 Core 的隔离继续按 rollout §2.3
 
 ## Consequences
 
-- **Positive**：零迁移成本；agent CLI 与 App 共享同一模块（无 import /
-  工程对齐税）；依赖形状保持可测（本 ADR 的实测数据即基线）。
+- **Positive**：零迁移成本；agent CLI 与 macOS App 共享同一模块（无
+  import / 工程对齐税）；iOS 经同一源集共享（xcodegen 工程）；依赖形状
+  保持可测（本 ADR 的实测数据即基线）。
 - **Negative**：V2 ↔ Core 的边界只能靠纪律维持（编译器不强制）；
   将来若触发抽取，Core/Clients 的迁移是主要成本，需单独 story。
 - **Neutral / Neutrality Risks**：AGENT-3（XPC daemon，可选）若立项会

@@ -2,7 +2,8 @@ import XCTest
 @testable import QiemanDashboard
 
 /// AGENT-2 单元测试：investment-agent CLI 的可测入口（run(arguments:)，
-/// 注入临时数据目录 / 环境 / 无真实网络路径）。
+/// 注入临时数据目录 / 环境 / 时钟，无真实网络路径）。
+/// 二十轮审查回归：P0 同步桥挂死 / P1-1 输入锚点与 --force / P2 双 scheme。
 final class InvestmentAgentCLITests: XCTestCase {
 
     private var dataDirectory: URL!
@@ -23,10 +24,11 @@ final class InvestmentAgentCLITests: XCTestCase {
 
     private func runCLI(
         _ arguments: [String],
-        environment: [String: String] = [:]
-    ) -> InvestmentAgentCLI.RunOutcome {
-        InvestmentAgentCLI.run(
-            arguments: arguments, environment: environment, now: { Date() }
+        environment: [String: String] = [:],
+        now: Date = Date()
+    ) async -> InvestmentAgentCLI.RunOutcome {
+        await InvestmentAgentCLI.run(
+            arguments: arguments, environment: environment, now: { now }
         )
     }
 
@@ -56,24 +58,28 @@ final class InvestmentAgentCLITests: XCTestCase {
 
     // MARK: 基础命令
 
-    func testVersionOutputsSchemaVersion() throws {
-        let outcome = runCLI(["version"])
+    func testVersionOutputsSchemaVersion() async throws {
+        let outcome = await runCLI(["version"])
         XCTAssertEqual(outcome.exitCode, 0)
         let body = try decodeBody(outcome)
         XCTAssertEqual(body["schema_version"] as? Int, CanonicalDatabase.schemaVersion)
         XCTAssertEqual(body["agent_version"] as? String, InvestmentAgentCLI.agentVersion)
     }
 
-    func testHelpAndUnknownCommand() throws {
-        let help = runCLI(["help"])
+    func testHelpAndUnknownCommand() async throws {
+        let help = await runCLI(["help"])
         XCTAssertEqual(help.exitCode, 0)
         let body = try decodeBody(help)
         XCTAssertTrue(
             (body["help"] as? String ?? "").contains("investment-agent"),
             "help 应含用法说明"
         )
+        XCTAssertTrue(
+            (body["help"] as? String ?? "").contains("--force"),
+            "help 应含 --force 说明（二十轮 P1-1）"
+        )
 
-        let unknown = runCLI(["nope-command"])
+        let unknown = await runCLI(["nope-command"])
         XCTAssertEqual(unknown.exitCode, 1)
         XCTAssertTrue(
             (unknown.stderr ?? "").contains("未知命令"),
@@ -81,12 +87,12 @@ final class InvestmentAgentCLITests: XCTestCase {
         )
     }
 
-    func testHealthWithDataDirOverrideCreatesDatabase() throws {
-        let outcome = runCLI(["health", "--data-dir", dataDirectory.path])
+    func testHealthWithDataDirOverrideCreatesDatabase() async throws {
+        let outcome = await runCLI(["health", "--data-dir", dataDirectory.path])
         XCTAssertEqual(outcome.exitCode, 0)
         let body = try decodeBody(outcome)
         XCTAssertEqual(body["data_directory"] as? String, dataDirectory.path)
-        XCTAssertEqual(body["schema_version"] as? Int, 7)
+        XCTAssertEqual(body["schema_version"] as? Int, CanonicalDatabase.schemaVersion)
         XCTAssertEqual(body["non_terminal_jobs"] as? Int, 0)
         XCTAssertTrue(
             FileManager.default.fileExists(
@@ -99,9 +105,9 @@ final class InvestmentAgentCLITests: XCTestCase {
 
     // MARK: 作业命令（经 AGENT-1 registry）
 
-    func testAttributionRunWithCostBasisWeightsAndFullCoverageGap() throws {
+    func testAttributionRunWithCostBasisWeightsAndFullCoverageGap() async throws {
         try writePortfolio(sampleHoldings)
-        let outcome = runCLI(["attribution", "--data-dir", dataDirectory.path])
+        let outcome = await runCLI(["attribution", "--data-dir", dataDirectory.path])
         XCTAssertEqual(outcome.exitCode, 0)
         let body = try decodeBody(outcome)
         XCTAssertEqual(body["executed"] as? Bool, true)
@@ -111,40 +117,103 @@ final class InvestmentAgentCLITests: XCTestCase {
         XCTAssertTrue(summary.contains("coverage 0.0%"), "无 NAV 数据时覆盖应为 0：\(summary)")
         // artifact 已落库（DAILY_ATTRIBUTION kind）
         let health = try decodeBody(
-            runCLI(["health", "--data-dir", dataDirectory.path])
+            await runCLI(["health", "--data-dir", dataDirectory.path])
         )
         let counts = health["artifact_counts"] as? [String: Int] ?? [:]
         XCTAssertEqual(counts["DAILY_ATTRIBUTION"], 1)
     }
 
-    func testAttributionIdempotentResubmit() throws {
+    func testAttributionIdempotentSameDayAndNewJobNextDay() async throws {
         try writePortfolio(sampleHoldings)
+        let day1 = Date(timeIntervalSince1970: 1_782_000_000)
         let first = try decodeBody(
-            runCLI(["attribution", "--data-dir", dataDirectory.path])
+            await runCLI(["attribution", "--data-dir", dataDirectory.path], now: day1)
         )
         XCTAssertEqual(first["executed"] as? Bool, true)
+        // 同归因日（anchor 日相同）重提 → 幂等命中
         let second = try decodeBody(
-            runCLI(["attribution", "--data-dir", dataDirectory.path])
+            await runCLI(
+                ["attribution", "--data-dir", dataDirectory.path],
+                now: day1.addingTimeInterval(3600)
+            )
         )
-        XCTAssertEqual(second["executed"] as? Bool, false, "同输入已完成应幂等命中")
-        XCTAssertEqual(
-            second["job_id"] as? String, first["job_id"] as? String
+        XCTAssertEqual(second["executed"] as? Bool, false, "同归因日应幂等命中")
+        XCTAssertEqual(second["job_id"] as? String, first["job_id"] as? String)
+        // 次日（归因日锚变化）→ 新 job 执行
+        let third = try decodeBody(
+            await runCLI(
+                ["attribution", "--data-dir", dataDirectory.path],
+                now: day1.addingTimeInterval(90_000)
+            )
         )
+        XCTAssertEqual(third["executed"] as? Bool, true, "跨归因日应开新 job")
+        XCTAssertNotEqual(third["job_id"] as? String, first["job_id"] as? String)
     }
 
-    func testAttributionEmptyPortfolioFails() throws {
-        let outcome = runCLI(["attribution", "--data-dir", dataDirectory.path])
+    func testAttributionForceRerunsSameInput() async throws {
+        try writePortfolio(sampleHoldings)
+        let first = try decodeBody(
+            await runCLI(["attribution", "--data-dir", dataDirectory.path])
+        )
+        XCTAssertEqual(first["executed"] as? Bool, true)
+        // --force：同输入显式重跑（nonce 破坏幂等）
+        let forced = try decodeBody(
+            await runCLI(["attribution", "--data-dir", dataDirectory.path, "--force"])
+        )
+        XCTAssertEqual(forced["executed"] as? Bool, true, "--force 应重跑")
+        XCTAssertNotEqual(forced["job_id"] as? String, first["job_id"] as? String)
+    }
+
+    func testAttributionInvalidDateFailsClosed() async throws {
+        try writePortfolio(sampleHoldings)
+        let outcome = await runCLI([
+            "attribution", "--data-dir", dataDirectory.path, "--date", "2026-13-45",
+        ])
+        XCTAssertEqual(outcome.exitCode, 1, "非法日期应报错不静默回落今天")
+        XCTAssertTrue((outcome.stderr ?? "").contains("非法日期"))
+    }
+
+    func testAttributionEmptyPortfolioFails() async throws {
+        let outcome = await runCLI(["attribution", "--data-dir", dataDirectory.path])
         XCTAssertEqual(outcome.exitCode, 1)
         // 失败作业入列（attempt 可重试）
         let jobs = try decodeBody(
-            runCLI(["jobs", "--data-dir", dataDirectory.path])
+            await runCLI(["jobs", "--data-dir", dataDirectory.path])
         )
         let entries = jobs["jobs"] as? [[String: Any]] ?? []
         XCTAssertEqual(entries.first?["status"] as? String, "FAILED")
     }
 
-    func testMarketResearchProducesDiscoveryReportAndJobsEntry() throws {
-        let outcome = runCLI(["market-research", "--data-dir", dataDirectory.path, "--limit", "3"])
+    func testMarketResearchAnchorYieldsNewJobNextDay() async throws {
+        let day1 = Date(timeIntervalSince1970: 1_782_000_000)
+        let first = try decodeBody(
+            await runCLI(
+                ["market-research", "--data-dir", dataDirectory.path, "--limit", "3"],
+                now: day1
+            )
+        )
+        XCTAssertEqual(first["executed"] as? Bool, true)
+        // 同日重提 → 幂等命中（当日 anchor 相同）
+        let sameDay = try decodeBody(
+            await runCLI(
+                ["market-research", "--data-dir", dataDirectory.path, "--limit", "3"],
+                now: day1.addingTimeInterval(3600)
+            )
+        )
+        XCTAssertEqual(sameDay["executed"] as? Bool, false)
+        // 次日（anchor 变化）→ 新 job
+        let nextDay = try decodeBody(
+            await runCLI(
+                ["market-research", "--data-dir", dataDirectory.path, "--limit", "3"],
+                now: day1.addingTimeInterval(90_000)
+            )
+        )
+        XCTAssertEqual(nextDay["executed"] as? Bool, true, "跨日应开新 job（anchor 锚）")
+        XCTAssertNotEqual(nextDay["job_id"] as? String, first["job_id"] as? String)
+    }
+
+    func testMarketResearchProducesDiscoveryReportAndJobsEntry() async throws {
+        let outcome = await runCLI(["market-research", "--data-dir", dataDirectory.path, "--limit", "3"])
         XCTAssertEqual(outcome.exitCode, 0)
         let body = try decodeBody(outcome)
         XCTAssertEqual(body["executed"] as? Bool, true)
@@ -153,7 +222,7 @@ final class InvestmentAgentCLITests: XCTestCase {
         XCTAssertEqual(ids.count, 1, "应产出 MARKET_DISCOVERY_REPORT artifact")
 
         let jobs = try decodeBody(
-            runCLI(["jobs", "--data-dir", dataDirectory.path])
+            await runCLI(["jobs", "--data-dir", dataDirectory.path])
         )
         let entries = jobs["jobs"] as? [[String: Any]] ?? []
         XCTAssertEqual(entries.first?["workflow"] as? String, "marketDiscovery")
@@ -162,8 +231,8 @@ final class InvestmentAgentCLITests: XCTestCase {
 
     // MARK: portfolio-review 凭据门槛
 
-    func testPortfolioReviewRequiresLLMEnvironment() throws {
-        let outcome = runCLI(
+    func testPortfolioReviewRequiresLLMEnvironment() async throws {
+        let outcome = await runCLI(
             ["portfolio-review", "--data-dir", dataDirectory.path], environment: [:]
         )
         XCTAssertEqual(outcome.exitCode, 1)
@@ -171,7 +240,7 @@ final class InvestmentAgentCLITests: XCTestCase {
             (outcome.stderr ?? "").contains("QIEMAN_LLM"),
             "缺配置应提示环境变量：\(outcome.stderr ?? "")"
         )
-        let partial = runCLI(
+        let partial = await runCLI(
             ["portfolio-review", "--data-dir", dataDirectory.path],
             environment: ["QIEMAN_LLM_BASE_URL": "https://example.com"]
         )
@@ -194,24 +263,35 @@ final class InvestmentAgentCLITests: XCTestCase {
 
     // MARK: 查询命令
 
-    func testIdentityInspectSchemeHeuristicAndUnresolved() throws {
+    func testIdentityInspectTriesBothSchemesByDefault() async throws {
         try writePortfolio(sampleHoldings)
-        let fund = try decodeBody(
-            runCLI(["identity-inspect", "--code", "110022", "--data-dir", dataDirectory.path])
+        // 缺省双 scheme：全数字代码（可能基金也可能 A 股股票）依次尝试，
+        // 两者皆未登记时如实 unresolved（二十轮 P2-4）
+        let digitCode = try decodeBody(
+            await runCLI(["identity-inspect", "--code", "110022", "--data-dir", dataDirectory.path])
         )
-        XCTAssertEqual(fund["resolved"] as? Bool, false)
-        XCTAssertEqual(fund["scheme"] as? String, "fund_code", "纯数字缺省基金 scheme")
+        XCTAssertEqual(digitCode["resolved"] as? Bool, false)
+        let schemes = digitCode["schemes"] as? [String] ?? []
+        XCTAssertEqual(Set(schemes), Set(["fund_code", "stock_symbol"]))
+        // 显式 --scheme 只查声明的
         let stock = try decodeBody(
-            runCLI(["identity-inspect", "--code", "AAPL", "--data-dir", dataDirectory.path])
+            await runCLI([
+                "identity-inspect", "--code", "AAPL", "--scheme", "stock_symbol",
+                "--data-dir", dataDirectory.path,
+            ])
         )
-        XCTAssertEqual(stock["scheme"] as? String, "stock_symbol", "含字母缺省股票 scheme")
+        XCTAssertEqual(
+            (stock["schemes"] as? [String])?.first, "stock_symbol",
+            "显式 --scheme 只查声明的 scheme"
+        )
+        XCTAssertEqual(stock["resolved"] as? Bool, false)
         // 缺 --code 报用法错
-        let missing = runCLI(["identity-inspect", "--data-dir", dataDirectory.path])
+        let missing = await runCLI(["identity-inspect", "--data-dir", dataDirectory.path])
         XCTAssertEqual(missing.exitCode, 1)
     }
 
-    func testDecisionReplayNotFound() throws {
-        let outcome = runCLI([
+    func testDecisionReplayNotFound() async throws {
+        let outcome = await runCLI([
             "decision-replay", "--id", "art_none", "--data-dir", dataDirectory.path,
         ])
         XCTAssertEqual(outcome.exitCode, 0)
@@ -220,11 +300,55 @@ final class InvestmentAgentCLITests: XCTestCase {
         XCTAssertEqual(body["reason"] as? String, "artifact 不存在：art_none")
     }
 
-    func testResumeNotFound() throws {
-        let outcome = runCLI(["resume", "--id", "job_none", "--data-dir", dataDirectory.path])
+    func testResumeNotFound() async throws {
+        let outcome = await runCLI(["resume", "--id", "job_none", "--data-dir", dataDirectory.path])
         XCTAssertEqual(outcome.exitCode, 0)
         let body = try decodeBody(outcome)
         XCTAssertEqual(body["mode"] as? String, "not-found")
+    }
+
+    /// 二十轮 P0 回归：旧形态（仅 fingerprint、无 input）的 queued 行，
+    /// resume 必须快速报错退出——修复前 nil 哨兵自旋永久挂死。
+    func testResumeLegacyFingerprintOnlyRowFailsFast() async throws {
+        let database = try CanonicalStorePaths.openDatabase(in: dataDirectory)
+        let job = AgentJob(
+            workflowKind: "attribution", inputFingerprint: "legacyfp", createdAt: t0()
+        )
+        // 旧形态行：input_json 只有 fingerprint（无 input 键）
+        let row = AgentJobRow(
+            id: job.id, workflow: job.workflowKind,
+            idempotencyKey: "\(job.workflowKind)|\(job.inputFingerprint)",
+            status: "QUEUED",
+            inputJSON: try CanonicalColumnCodec.encodeJSON(["fingerprint": "legacyfp"]),
+            createdAt: CanonicalColumnCodec.encodeTimestamp(t0()),
+            startedAt: nil, completedAt: nil, errorMessage: nil
+        )
+        try await database.queue.write { db in
+            try row.insert(db)
+            for eventRow in try AgentJobRow.eventRows(for: job) {
+                try eventRow.insert(db)
+            }
+        }
+
+        let outcome = await runCLI(["resume", "--id", job.id, "--data-dir", dataDirectory.path])
+        XCTAssertEqual(outcome.exitCode, 1, "旧形态行应快速报错（missingInputJSON）")
+        let stderr = outcome.stderr ?? ""
+        XCTAssertTrue(
+            stderr.contains("missingInputJSON") || stderr.contains("input"),
+            "错误应指明缺原始输入：\(stderr)"
+        )
+    }
+
+    private func t0() -> Date { Date(timeIntervalSince1970: 1_700_000_000) }
+
+    // MARK: recover 输出
+
+    func testRecoverOnEmptyQueueReportsProcessed() async throws {
+        let outcome = await runCLI(["recover", "--data-dir", dataDirectory.path])
+        XCTAssertEqual(outcome.exitCode, 0)
+        let body = try decodeBody(outcome)
+        XCTAssertEqual(body["processed"] as? Int, 0)
+        XCTAssertNotNil(body["breakdown"], "应含 breakdown 分类（二十轮 P2-10）")
     }
 
     // MARK: 数据目录解析

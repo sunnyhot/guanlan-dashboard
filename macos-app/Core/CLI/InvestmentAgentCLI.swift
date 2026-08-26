@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GRDB
 
@@ -29,6 +30,7 @@ enum AgentCLIError: Error, CustomStringConvertible {
     case unknownCommand(String)
     case workflowFailed(String)
     case missingOption(String)
+    case invalidOption(String, detail: String)
 
     var description: String {
         switch self {
@@ -40,6 +42,8 @@ enum AgentCLIError: Error, CustomStringConvertible {
             return "workflow 执行失败：\(detail)"
         case .missingOption(let name):
             return "缺少必填选项：--\(name)"
+        case .invalidOption(let name, let detail):
+            return detail.isEmpty ? "非法选项：--\(name)" : detail
         }
     }
 }
@@ -86,7 +90,11 @@ enum InvestmentAgentCLI {
       --provider <name>     identity-inspect 的 Provider（默认 eastmoney）
       --scheme <name>       identity-inspect 的 scheme（默认按代码形态推导）
       --id <id>             decision-replay 的 artifact ID / resume 的 job ID
-      --date <yyyy-mm-dd>   attribution 的归因日（默认今天）
+      --date <yyyy-mm-dd>   attribution 的归因日（默认今天；非法格式报错不回落）
+      --force               显式重跑：同输入 completed 也开新 attempt
+                           （日常无需——作业输入含数据锚点，数据变了自然新 job：
+                           data-sync/market-research 按运行日、portfolio-review
+                           含持仓摘要与最新 discovery 引用、attribution 按归因日）
 
     凭据（环境变量；CLI 进程不读 App 的 UserDefaults 域）：
       QIEMAN_LLM_BASE_URL / QIEMAN_LLM_MODEL / QIEMAN_LLM_API_KEY
@@ -103,7 +111,36 @@ enum InvestmentAgentCLI {
     // MARK: 入口
 
     static func main(arguments: [String]) -> Int32 {
-        let outcome = run(arguments: arguments)
+        // 同步出口的 async 桥（二十轮 P0）：Result 区分「未完成」与
+        // 「完成但抛错」——nil 哨兵会把 submit/resume 的存储错误变成
+        // 永久自旋挂死，这里只能出现一处桥，错误如实穿透。
+        final class ResultBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var stored: Result<RunOutcome, Error>?
+            var result: Result<RunOutcome, Error>? {
+                get { lock.lock(); defer { lock.unlock() }; return stored }
+                set { lock.lock(); defer { lock.unlock() }; stored = newValue }
+            }
+        }
+        let box = ResultBox()
+        Task.detached {
+            do { box.result = .success(await run(arguments: arguments)) }
+            catch { box.result = .failure(error) }
+        }
+        // nil 严格等于「未完成」——完成必置 success/failure（区别于旧实现的
+        // nil 双义哨兵），自旋等待必然终止
+        while box.result == nil {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.005))
+        }
+        let outcome: RunOutcome
+        switch box.result! {
+        case .success(let value): outcome = value
+        case .failure(let error):
+            outcome = RunOutcome(
+                exitCode: 1, stdout: Data(),
+                stderr: "agent 执行异常：\(String(describing: error))\n"
+            )
+        }
         FileHandle.standardOutput.write(outcome.stdout)
         if let text = outcome.stderr, !text.isEmpty {
             FileHandle.standardError.write(Data(text.utf8))
@@ -112,11 +149,12 @@ enum InvestmentAgentCLI {
     }
 
     /// 可测入口（不碰真实 stdio / 环境；测试注入临时目录与凭据）。
+    /// async——命令内部直接 await registry，不再有 nil 哨兵同步桥。
     static func run(
         arguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment,
         now: @escaping @Sendable () -> Date = { Date() }
-    ) -> RunOutcome {
+    ) async -> RunOutcome {
         let parsed: QiemanCommandArguments
         do {
             parsed = try QiemanCommandArguments(arguments)
@@ -124,7 +162,7 @@ enum InvestmentAgentCLI {
             return failure(errorText: helpText, exitCode: 64)
         }
         do {
-            let command = try dispatch(parsed, environment: environment, now: now)
+            let command = try await dispatch(parsed, environment: environment, now: now)
             return RunOutcome(
                 exitCode: command.exitCode,
                 stdout: try Self.encode(command.body),
@@ -169,7 +207,7 @@ enum InvestmentAgentCLI {
         _ args: QiemanCommandArguments,
         environment: [String: String],
         now: @escaping @Sendable () -> Date
-    ) throws -> CommandOutcome {
+    ) async throws -> CommandOutcome {
         switch args.command {
         case "help", "--help", "-h":
             return CommandOutcome(["help": helpText])
@@ -184,30 +222,42 @@ enum InvestmentAgentCLI {
             return CommandOutcome(try health(dataDirectory: directory))
         case "data-sync":
             let runtime = try makeRuntime(args, environment: environment, now: now)
-            return try submitJob(
+            return try await submitJob(
                 runtime.registry, kind: AgentDataSyncRunner.kindID,
-                input: ["rounds": args.int("rounds", default: 3)]
+                input: dataSyncInput(args, now: now())
             )
         case "market-research":
             let runtime = try makeRuntime(args, environment: environment, now: now)
-            return try submitJob(
+            return try await submitJob(
                 runtime.registry, kind: AgentMarketDiscoveryRunner.kindID,
-                input: ["topK": args.int("limit", default: 8)]
+                input: marketResearchInput(args, now: now())
             )
         case "portfolio-review":
             guard llmConfiguration(environment) != nil else {
                 throw AgentCLIError.missingLLMConfig
             }
             let runtime = try makeRuntime(args, environment: environment, now: now)
-            return try submitJob(
+            return try await submitJob(
                 runtime.registry, kind: AgentPortfolioReviewRunner.kindID,
-                input: [:]
+                input: try portfolioReviewInput(runtime, args: args, now: now())
             )
         case "attribution":
+            let date = args.string("date")
+            if !date.isEmpty {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+                guard formatter.date(from: date) != nil else {
+                    throw AgentCLIError.invalidOption(
+                        "date", detail: "非法日期：\(date)（格式 yyyy-MM-dd）"
+                    )
+                }
+            }
             let runtime = try makeRuntime(args, environment: environment, now: now)
-            var input: [String: Any] = [:]
-            if !args.string("date").isEmpty { input["date"] = args.string("date") }
-            return try submitJob(runtime.registry, kind: AgentAttributionRunner.kindID, input: input)
+            return try await submitJob(
+                runtime.registry, kind: AgentAttributionRunner.kindID,
+                input: attributionInput(args, now: now())
+            )
         case "identity-inspect":
             let runtime = try makeRuntime(args, environment: environment, now: now)
             return CommandOutcome(try identityInspect(
@@ -227,18 +277,23 @@ enum InvestmentAgentCLI {
             let runtime = try makeRuntime(args, environment: environment, now: now)
             let id = args.string("id")
             guard !id.isEmpty else { throw AgentCLIError.missingOption("id") }
-            return try resume(
+            return try await resume(
                 runtime.registry, jobID: id,
                 staleAfter: TimeInterval(args.int("stale-after", default: 0))
             )
         case "recover":
             let runtime = try makeRuntime(args, environment: environment, now: now)
             let recovery = JobRecovery(registry: runtime.registry)
-            let outcomes = awaitRecovery(
-                recovery, staleAfter: TimeInterval(args.int("stale-after", default: 0))
+            let outcomes = try await recovery.recover(
+                staleAfter: TimeInterval(args.int("stale-after", default: 0))
             )
+            var breakdown: [String: Int] = [:]
+            for outcome in outcomes {
+                breakdown[recoveryOutcomeKind(outcome), default: 0] += 1
+            }
             return CommandOutcome([
-                "recovered": outcomes.count,
+                "processed": outcomes.count,
+                "breakdown": breakdown,
                 "outcomes": outcomes.map(recoveryOutcomeBody),
             ])
         default:
@@ -246,30 +301,16 @@ enum InvestmentAgentCLI {
         }
     }
 
-    /// 同步桥：JobRecovery.recover 是 async（runner 可能 await）——CLI 的
-    /// dispatch 是同步树，用半自旋等待（与 App 命令行场景一致的短时任务）。
-    private static func awaitRecovery(
-        _ recovery: JobRecovery, staleAfter: TimeInterval
-    ) -> [JobRecovery.Outcome] {
-        final class Box: @unchecked Sendable {
-            private let lock = NSLock()
-            private var value: [JobRecovery.Outcome]?
-            func get() -> [JobRecovery.Outcome]? {
-                lock.lock(); defer { lock.unlock() }; return value
-            }
-            func set(_ v: [JobRecovery.Outcome]) {
-                lock.lock(); defer { lock.unlock() }; value = v
-            }
+    /// recovery outcome 的短类名（processed breakdown 用）。
+    private static func recoveryOutcomeKind(_ outcome: JobRecovery.Outcome) -> String {
+        switch outcome {
+        case .continuedQueued: return "continued-queued"
+        case .reattempted: return "reattempted"
+        case .skippedActive: return "skipped-active"
+        case .alreadyTerminal: return "already-terminal"
+        case .unknownWorkflow: return "unknown-workflow"
+        case .failed: return "failed"
         }
-        let box = Box()
-        let task = Task.detached {
-            box.set(await recovery.recover(staleAfter: staleAfter))
-        }
-        while box.get() == nil {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.005))
-        }
-        _ = task
-        return box.get() ?? []
     }
 
     // MARK: 装配
@@ -366,9 +407,86 @@ enum InvestmentAgentCLI {
         return body
     }
 
+    // MARK: 作业输入的幂等口径（二十轮 P1-1）
+    //
+    // 指纹必须覆盖真实业务输入，否则 completed 后同参数重提永远
+    // alreadyCompleted、workflow 变一次性：
+    // - data-sync / market-research 以「运行日」为锚——同日重跑幂等命中
+    //   （当日数据已同步），次日新数据自然开新 job；
+    // - portfolio-review 纳入持仓文件摘要 + 最新 discovery 报告引用
+    //   （选择性研究的实际输入）；
+    // - attribution 以归因日为锚（默认今天）；
+    // - `--force` 附加一次性 nonce：显式声明「这次就是要重跑」。
+
+    private static func anchorDay(_ now: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        return formatter.string(from: now)
+    }
+
+    private static func withForce(
+        _ args: QiemanCommandArguments, input: [String: Any]
+    ) -> [String: Any] {
+        guard args.bool("force") else { return input }
+        var forced = input
+        forced["nonce"] = UUID().uuidString
+        return forced
+    }
+
+    private static func dataSyncInput(
+        _ args: QiemanCommandArguments, now: Date
+    ) -> [String: Any] {
+        withForce(args, input: [
+            "rounds": args.int("rounds", default: 3),
+            "anchor": anchorDay(now),
+        ])
+    }
+
+    private static func marketResearchInput(
+        _ args: QiemanCommandArguments, now: Date
+    ) -> [String: Any] {
+        withForce(args, input: [
+            "topK": args.int("limit", default: 8),
+            "anchor": anchorDay(now),
+        ])
+    }
+
+    private static func portfolioReviewInput(
+        _ runtime: AgentRuntimeContext, args: QiemanCommandArguments, now: Date
+    ) throws -> [String: Any] {
+        var input: [String: Any] = [
+            "anchor": anchorDay(now),
+            "holdings": fileDigest(
+                runtime.dataDirectory.appendingPathComponent("user-portfolio.json")
+            ),
+            "discovery": try ArtifactQueryService(repository: runtime.repository)
+                .latestMarketDiscoveryReports(limit: 1).first?.id.rawValue ?? "",
+        ]
+        return withForce(args, input: input)
+    }
+
+    private static func attributionInput(
+        _ args: QiemanCommandArguments, now: Date
+    ) -> [String: Any] {
+        // 缺省显式归因日（anchor 日）：同日幂等、跨日新 job；不静默用
+        // 「解析失败回落今天」（二十轮 P2-5：非法 --date 在 dispatch 报错）
+        let date = args.string("date")
+        return withForce(args, input: [
+            "date": date.isEmpty ? anchorDay(now) : date,
+        ])
+    }
+
+    /// 文件内容摘要（不存在 = "none"；SHA256 hex 前 16 位足够做指纹成分）。
+    private static func fileDigest(_ url: URL) -> String {
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return "none" }
+        return SHA256.hash(data: data).prefix(8)
+            .map { String(format: "%02x", $0) }.joined()
+    }
+
     private static func submitJob(
         _ registry: WorkflowRegistry, kind: String, input: [String: Any]
-    ) throws -> CommandOutcome {
+    ) async throws -> CommandOutcome {
         let inputJSON: String
         if let data = try? JSONSerialization.data(
             withJSONObject: input.isEmpty ? [:] : input, options: [.sortedKeys]
@@ -377,28 +495,9 @@ enum InvestmentAgentCLI {
         } else {
             inputJSON = "{}"
         }
-
-        // submit 是 async（runner await）——同步桥（与 recover 同款短任务自旋）
-        final class Box: @unchecked Sendable {
-            private let lock = NSLock()
-            private var value: AgentSubmissionOutcome?
-            func get() -> AgentSubmissionOutcome? {
-                lock.lock(); defer { lock.unlock() }; return value
-            }
-            func set(_ v: AgentSubmissionOutcome?) {
-                lock.lock(); defer { lock.unlock() }; value = v
-            }
-        }
-        let box = Box()
-        Task.detached {
-            box.set(try? await registry.submit(kind: kind, inputJSON: inputJSON))
-        }
-        while box.get() == nil {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.005))
-        }
-        guard let outcome = box.get() else {
-            throw AgentCLIError.workflowFailed("registry 提交异常（存储访问失败）")
-        }
+        // 二十轮 P0：直接 await——存储错误 / requiredInput 拒收 / attemptExhausted
+        // 如实上抛（原先 try? + nil 哨兵会把它们变成永久自旋挂死）
+        let outcome = try await registry.submit(kind: kind, inputJSON: inputJSON)
         switch outcome {
         case .ran(let job, let result):
             var body = jobBody(job)
@@ -431,39 +530,44 @@ enum InvestmentAgentCLI {
         _ runtime: AgentRuntimeContext, code: String, provider: String, scheme: String
     ) throws -> [String: Any] {
         guard !code.isEmpty else { throw AgentCLIError.missingOption("code") }
-        // scheme 缺省启发：全数字视为基金代码（用户组合以基金为主），
-        // 含字母视为股票 symbol；显式 --scheme 始终优先
-        let resolvedScheme = scheme.isEmpty
-            ? (code.allSatisfy(\.isNumber) ? "fund_code" : "stock_symbol")
-            : scheme
+        // 双 scheme 依次尝试（二十轮 P2-4）：A 股股票代码（600519 等）与
+        // 基金代码同为全数字，形态启发无法可靠区分——缺省时先 fund_code
+        // 再 stock_symbol，命中即报；显式 --scheme 只查声明的 scheme。
+        let schemes = scheme.isEmpty ? ["fund_code", "stock_symbol"] : [scheme]
         let resolver = IdentityResolver(
             identifiers: runtime.repository.allProviderIdentifiers()
         )
         let providerID = DataProviderID(rawValue: provider)
-        switch resolver.resolve(providerID: providerID, scheme: resolvedScheme, value: code) {
-        case .resolved(let canonical, let via):
-            return [
-                "resolved": true,
-                "canonical_type": canonical.entityType,
-                "canonical_id": canonical.entityIDRawValue,
-                "via": via.rawValue,
-                "provider": provider, "scheme": resolvedScheme, "code": code,
-            ]
-        case .candidates(let candidates):
-            return [
-                "resolved": false,
-                "reason": "fuzzy candidate（未验证，不可用于数据解析）",
-                "candidates": candidates.map {
-                    ["canonical_id": $0.candidate.entityIDRawValue, "confidence": $0.confidence]
-                },
-            ]
-        case .unresolved:
-            return [
-                "resolved": false,
-                "reason": "未登记（运行 data-sync 建立 universe identity，或人工 verified 映射）",
-                "provider": provider, "scheme": resolvedScheme, "code": code,
-            ]
+        for candidateScheme in schemes {
+            switch resolver.resolve(
+                providerID: providerID, scheme: candidateScheme, value: code
+            ) {
+            case .resolved(let canonical, let via):
+                return [
+                    "resolved": true,
+                    "canonical_type": canonical.entityType,
+                    "canonical_id": canonical.entityIDRawValue,
+                    "via": via.rawValue,
+                    "provider": provider, "scheme": candidateScheme, "code": code,
+                ]
+            case .candidates(let candidates):
+                return [
+                    "resolved": false,
+                    "reason": "fuzzy candidate（未验证，不可用于数据解析）",
+                    "scheme": candidateScheme,
+                    "candidates": candidates.map {
+                        ["canonical_id": $0.candidate.entityIDRawValue, "confidence": $0.confidence]
+                    },
+                ]
+            case .unresolved:
+                continue
+            }
         }
+        return [
+            "resolved": false,
+            "reason": "未登记（运行 data-sync 建立 universe identity，或人工 verified 映射）",
+            "provider": provider, "schemes": schemes, "code": code,
+        ]
     }
 
     private static func decisionReplay(
@@ -516,27 +620,9 @@ enum InvestmentAgentCLI {
 
     private static func resume(
         _ registry: WorkflowRegistry, jobID: String, staleAfter: TimeInterval
-    ) throws -> CommandOutcome {
-        final class Box: @unchecked Sendable {
-            private let lock = NSLock()
-            private var value: AgentResumeOutcome?
-            func get() -> AgentResumeOutcome? {
-                lock.lock(); defer { lock.unlock() }; return value
-            }
-            func set(_ v: AgentResumeOutcome?) {
-                lock.lock(); defer { lock.unlock() }; value = v
-            }
-        }
-        let box = Box()
-        Task.detached {
-            box.set(try? await registry.resume(jobID: jobID, staleAfter: staleAfter))
-        }
-        while box.get() == nil {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.005))
-        }
-        guard let outcome = box.get() else {
-            throw AgentCLIError.workflowFailed("resume 异常（存储访问失败）")
-        }
+    ) async throws -> CommandOutcome {
+        // 二十轮 P0：直接 await（同 submitJob——错误穿透不挂死）
+        let outcome = try await registry.resume(jobID: jobID, staleAfter: staleAfter)
         switch outcome {
         case .ran(let job, let result):
             var body = jobBody(job)
@@ -631,7 +717,27 @@ struct AgentDataSyncRunner: AgentWorkflowRunner {
         let input = try? JSONDecoder().decode(Input.self, from: Data(inputJSON.utf8))
         let rounds = max(input?.rounds ?? 3, 1)
 
-        let monitor = ProviderHealthMonitor(now: { context.now })
+        // 检查点消费（二十轮 P1-2）：崩溃行已完成的轮次直接跳过——
+        // 每轮是一个完整维护批次（state 文件推进 + 幂等提交），轮是
+        // 本 runner 唯一有意义的续跑单位；同轮数配置才算数（配置变了
+        // 从头跑）。其余三个 runner 是单相任务（产物幂等落库，重跑即
+        // 恢复），无中间阶段可跳——检查点通道面向这种多阶段形态。
+        struct RoundCheckpoint: Codable { let round: Int; let rounds: Int }
+        let doneRounds = context.resumeCheckpoints.compactMap { checkpoint -> Int? in
+            guard let payload = try? JSONDecoder().decode(
+                RoundCheckpoint.self, from: Data(checkpoint.stateJSON.utf8)
+            ), payload.rounds == rounds else { return nil }
+            return payload.round
+        }.max() ?? 0
+        if doneRounds >= rounds {
+            return AgentRunResult(
+                summary: "检查点显示 \(doneRounds)/\(rounds) 轮已完成（前次 attempt 崩溃于收尾前）——无剩余批次"
+            )
+        }
+
+        // 真实时钟（二十轮 P1-3）：限流冷却判定与 quota 周期滚动都依赖
+        // now() 前进——固定 context.now 会让冷却永不解除、quota 永不重置
+        let monitor = ProviderHealthMonitor()
         let alphaVantage = Self.alphaVantageSettings(environment)
         await MarketDataMaintenanceEngine.registerProductionProviders(
             healthMonitor: monitor, alphaVantage: alphaVantage
@@ -644,14 +750,15 @@ struct AgentDataSyncRunner: AgentWorkflowRunner {
             )
         )
         var summary = ""
-        for round in 1...rounds {
+        for round in (doneRounds + 1)...rounds {
             summary = try await engine.runMaintenance(backfillRounds: 1)
             try context.saveCheckpoint(
                 "round-\(round)",
                 "{\"round\":\(round),\"rounds\":\(rounds)}"
             )
         }
-        return AgentRunResult(summary: summary)
+        return AgentRunResult(summary: summary.isEmpty
+            ? "从检查点第 \(doneRounds) 轮续跑完成" : summary)
     }
 
     private static func alphaVantageSettings(
@@ -791,7 +898,19 @@ struct AgentAttributionRunner: AgentWorkflowRunner {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        let date = (input?.date).flatMap { formatter.date(from: $0) } ?? context.now
+        // 日期 fail-closed（二十轮 P2-5）：dispatch 已拦非法 --date，这里
+        // 对直接调用 runner 的路径同样拒绝——不静默回落今天
+        let date: Date
+        if let raw = input?.date {
+            guard let parsed = formatter.date(from: raw) else {
+                throw AgentCLIError.invalidOption(
+                    "date", detail: "非法日期：\(raw)（格式 yyyy-MM-dd）"
+                )
+            }
+            date = parsed
+        } else {
+            date = context.now
+        }
 
         let holdings = try UserPortfolioStore().load(
             from: dataDirectory.appendingPathComponent("user-portfolio.json")
@@ -873,12 +992,19 @@ struct AgentAttributionRunner: AgentWorkflowRunner {
             }
         }
         // 收益率未知的持仓仍进引擎（weight 已知、return nil → coverage 缺口，
-        // 不猜）——subject 用稳定 key 兜底
+        // 不猜）。兜底 subject 按资产类型取 kind（二十轮 P2-5）：股票走
+        // universe 目录同款 lst_<code> 约定（listing 维度），基金用 fund 维度
+        func fallbackSubject(_ holding: UserPortfolioHolding) -> AttributionSubject {
+            holding.assetType == .stock
+                ? .listing(ListingID(rawValue: "lst_\(holding.fundCode)"))
+                : .fund(FundProductID(rawValue: holding.fundCode))
+        }
         let knownCodes = Set(positions.map { $0.subject.stableKey })
-        for (holding, amount) in amounts where !knownCodes.contains("fund|\(holding.fundCode)") && !knownCodes.contains("listing|\(holding.fundCode)") {
+        for (holding, amount) in amounts
+        where !knownCodes.contains(fallbackSubject(holding).stableKey) {
             let weight = Ratio(value: amount / total)
             positions.append(AttributionPositionInput(
-                subject: .fund(FundProductID(rawValue: holding.fundCode)),
+                subject: fallbackSubject(holding),
                 weight: weight, periodReturn: nil, sourceObservationID: nil
             ))
         }

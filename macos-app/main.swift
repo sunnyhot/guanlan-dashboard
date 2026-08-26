@@ -11,11 +11,9 @@ import Foundation
 // 普通启动（Finder / open / login item）不会命中 agent 命令集（含历史
 // -psn_ 前缀参数），一律走 GUI。
 
-let agentCommands: Set<String> = [
-    "data-sync", "health", "identity-inspect", "market-research",
-    "portfolio-review", "attribution", "decision-replay",
-    "jobs", "resume", "recover", "version",
-]
+// 命令清单单一来源：InvestmentAgentCLI.knownCommands（二十轮 P2-9——
+// 双清单手工同步会分叉）
+let agentCommands = InvestmentAgentCLI.knownCommands
 
 let launchArguments = Array(CommandLine.arguments.dropFirst())
 var agentArguments: [String]?
