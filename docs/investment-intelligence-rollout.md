@@ -1951,6 +1951,26 @@ macos-app/
 >   gate 拒绝（noNegativeWeights）、action 裁剪、确定性 ID + GRDB 往返；
 > 全量 swift test 1736 绿（环境性套件跳过同 WF-1）。
 
+> **状态（2026-08-26，PRES-1 收口）**：`Presentation/PresentationLayer.swift`
+> 落地——V2.2 §11 三分补全：
+> - **DecisionNarrator**（只解释不重决）：从 artifact 结果层
+>   （comparison.pairwise / paretoFront / decision.explanation /
+>   blockingUnknowns）程序化生成 `DecisionNarrative`——headline /
+>   逐 pair 支配解释 / unresolved 取舍说明 / unknown 阻断透明 / 研究信号
+>   背景注记；不重算 scores、不重跑 planner（Presentation 无决策权）；
+> - **ResearchNarrator**：theses + signals → `ResearchNarrative`（组合
+>   headline 统计 / 资产故事线含信号方向摘要 / ordinal 信号 digest），
+>   无 portfolio thesis 时显式降级；
+> - **ArtifactQueryService**：UI / CLI 读 V2 产出的统一入口——点查
+>   （decision / discovery / intraday）+ latest 列表（kind 隔离、
+>   producedAt 降序、limit）+ 决策概要行（`PortfolioDecisionSummary`），
+>   全部 typed fetch（损坏行 fail-closed）。
+> 全部程序化生成（确定性，无 LLM 调用点）。测试
+> `PresentationLayerTests` 6 个：两分支决策解释、研究故事线、降级、
+> 列表/点查/kind 隔离；全量 swift test 1742 绿。
+> App UI 接线（读 ArtifactQueryService 替换旧 AI 面板）随 WF-4/5
+> 下线切换一起做。
+
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 
 ---
