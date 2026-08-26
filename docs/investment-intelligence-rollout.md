@@ -1908,6 +1908,27 @@ macos-app/
 > 审查记录）。App 生产接线（真 LLM + 真 Repository 供料）随 PRES-1 后
 > UI 切换一起做。
 
+> **状态（2026-08-26，WF-2 收口）**：`Workflows/MarketDiscoveryWorkflow.swift`
+> 落地——**Universe + Local Factor 候选 + 选择性 Research** 替代固定八组
+> Tavily 盲扫：
+> - **Universe 策展**（SYNC-6b 留给 WF-2 的职责）：`MarketUniverseCatalog`
+>   内置 v1 清单（30 条：美股宽基/行业 SPDR/资产类直抓 + A 股宽基/行业
+>   remote 通道），listingID 按 `lst_<code>` 确定性构造，扩充走
+>   universeVersion bump + 增量（回填引擎已支持）；
+> - **本地因子先筛**：`FactorEngine`（momentum/trend/volatility/drawdown）
+>   从本地日线算 cardinal，`DiscoveryRankingPolicy`（versioned heuristic，
+>   provenance 显式）加权打分——**零网络零额度**；输入不足进
+>   coverageGaps 显式记录（DATA006 不猜）；
+> - **选择性 Research**：top-K 截断（确定性 tie-break），`researchTasks()`
+>   生成 ResearchTask 喂 WF-1——LLM/Tavily 只花在筛出的少数标的上，
+>   消耗被结构性压住；
+> - `MarketDiscoveryReport` 是 Artifact（untilDependencyChanges，
+>   dependencies → factor snapshots），kind MARKET_DISCOVERY_REPORT 接入
+>   typed fetch / 幂等写。
+> 测试 `MarketDiscoveryWorkflowTests` 6 个：排名/coverage、top-K 与
+> tie-break、确定性 ID、GRDB 往返、researchTasks 接线、内置清单完整性；
+> 全量 swift test 1728 绿（环境性套件跳过同 WF-1）。
+
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 
 ---
