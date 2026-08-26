@@ -121,6 +121,11 @@ final class AppModel: ObservableObject {
     @Published var latestMarketDataSyncSummary: String?
     /// 旧 AI 数据一次性迁移告知（WF-5；展示后由 UI 清空）
     @Published var legacyAIMigrationNotice: String?
+    // 投资智能 V2 产品展示层状态（产品重构 §5.3；定义见 InvestmentIntelligenceV2Dashboard.swift）
+    @Published var intelligenceDashboard: AppModel.IntelligenceDashboardLoadState = .idle
+    @Published var intradayOperationState: AppModel.IntelligenceOperationState = .idle
+    @Published var discoveryOperationState: AppModel.IntelligenceOperationState = .idle
+    @Published var researchOperationState: AppModel.IntelligenceOperationState = .idle
 
     /// 调仓筛选状态
     let filterState = PlatformFilterState()

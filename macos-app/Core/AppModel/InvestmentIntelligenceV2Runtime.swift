@@ -215,12 +215,16 @@ extension AppModel {
                     self?.intelligenceRuntime = runtime
                     self?.isBootstrappingIntelligence = false
                     self?.restoreLatestIntelligenceArtifacts(runtime: runtime)
+                    // 产品重构 §5.3：bootstrap 完成后自动加载最新快照（只读库）
+                    self?.refreshIntelligenceDashboard()
                 }
             } catch {
                 await MainActor.run { [weak self] in
                     self?.isBootstrappingIntelligence = false
                     self?.latestIntelligenceError =
                         "投资智能数据目录初始化失败：\(error.localizedDescription)"
+                    self?.intelligenceDashboard = .failed(
+                        IntelligenceUserFacingError.runtimeFailure(error))
                 }
             }
         }
@@ -259,6 +263,8 @@ extension AppModel {
         guard !isRunningMarketDiscovery else { return }
         isRunningMarketDiscovery = true
         latestIntelligenceError = nil
+        let startedAt = Date()
+        discoveryOperationState = .running(startedAt: startedAt, stage: .preparing)
         let now = Date()
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningMarketDiscovery = false } }
@@ -299,10 +305,16 @@ extension AppModel {
                                             outcome.errorDetail ?? "发现运行失败"])
                 }
                 try runtime.repository.writeMarketDiscoveryReport(report)
-                await MainActor.run { self?.latestDiscoveryReport = report }
+                await MainActor.run {
+                    self?.latestDiscoveryReport = report
+                    self?.discoveryOperationState = .idle
+                    self?.refreshIntelligenceDashboard()
+                }
             } catch {
                 await MainActor.run {
                     self?.latestIntelligenceError = "市场发现失败：\(error.localizedDescription)"
+                    self?.discoveryOperationState = .failed(
+                        IntelligenceUserFacingError.from(error))
                 }
             }
         }
@@ -319,6 +331,7 @@ extension AppModel {
         guard !isRunningIntradayDecision else { return }
         isRunningIntradayDecision = true
         latestIntelligenceError = nil
+        intradayOperationState = .running(startedAt: Date(), stage: .evaluating)
         let rows = personalAssetRows
         let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
         let now = Date()
@@ -356,14 +369,22 @@ extension AppModel {
                     try ArtifactRow.write(
                         try ArtifactRow.from(report), into: db)
                 }
-                await MainActor.run { self?.latestIntradayReport = report }
+                await MainActor.run {
+                    self?.latestIntradayReport = report
+                    self?.intradayOperationState = .idle
+                    self?.refreshIntelligenceDashboard()
+                }
             } catch let inputError as IntelligenceInputError {
                 await MainActor.run {
                     self?.latestIntelligenceError = inputError.userFacingMessage
+                    self?.intradayOperationState = .failed(
+                        IntelligenceUserFacingError.from(inputError))
                 }
             } catch {
                 await MainActor.run {
                     self?.latestIntelligenceError = "盘中决策失败：\(error.localizedDescription)"
+                    self?.intradayOperationState = .failed(
+                        IntelligenceUserFacingError.from(error))
                 }
             }
         }
@@ -390,6 +411,7 @@ extension AppModel {
         guard !isRunningPortfolioResearch else { return }
         isRunningPortfolioResearch = true
         latestIntelligenceError = nil
+        researchOperationState = .running(startedAt: Date(), stage: .collecting)
         let rows = personalAssetRows
         let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
         let now = Date()
@@ -449,18 +471,30 @@ extension AppModel {
                         // 概要统一读面刷新（十八轮 P2-5：View body 不查库）
                         let summary = (try? runtime.queryService.latestPortfolioDecisions(limit: 1))?.first
                         self?.latestPortfolioDecisionSummary = summary
+                        self?.researchOperationState = .idle
+                        self?.refreshIntelligenceDashboard()
                     } else {
                         self?.latestIntelligenceError =
                             "组合研究失败：\(outcome.errorDetail ?? "unknown")"
+                        self?.researchOperationState = .failed(
+                            IntelligenceUserFacingError.runtimeFailure(
+                                NSError(
+                                    domain: "intelligence", code: 4,
+                                    userInfo: [NSLocalizedDescriptionKey:
+                                               outcome.errorDetail ?? "unknown"])))
                     }
                 }
             } catch let inputError as IntelligenceInputError {
                 await MainActor.run {
                     self?.latestIntelligenceError = inputError.userFacingMessage
+                    self?.researchOperationState = .failed(
+                        IntelligenceUserFacingError.from(inputError))
                 }
             } catch {
                 await MainActor.run {
                     self?.latestIntelligenceError = "组合研究失败：\(error.localizedDescription)"
+                    self?.researchOperationState = .failed(
+                        IntelligenceUserFacingError.from(error))
                 }
             }
         }
