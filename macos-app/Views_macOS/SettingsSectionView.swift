@@ -4,61 +4,9 @@ import AppKit
 import SwiftUI
 
 // MARK: - Settings
-
-enum SettingsFocus: CaseIterable, Identifiable {
-    case general
-    case watch
-    case menuBar
-    case valuationAlert
-    case sync
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .general:
-            return "通用"
-        case .watch:
-            return "提醒与巡检"
-        case .menuBar:
-            return "菜单栏"
-        case .valuationAlert:
-            return "估值预警"
-        case .sync:
-            return "数据同步"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .general:
-            return "外观、启动与更新"
-        case .watch:
-            return "主理人动态通知"
-        case .menuBar:
-            return "摘要样式与内容"
-        case .valuationAlert:
-            return "持仓目标买卖提醒"
-        case .sync:
-            return "跨设备同步数据"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .general:
-            return "gearshape"
-        case .watch:
-            return "bell.badge"
-        case .menuBar:
-            return "menubar.rectangle"
-        case .valuationAlert:
-            return "target"
-        case .sync:
-            return "icloud.and.arrow.up.and.down"
-        }
-    }
-}
+//
+// 分区枚举收敛为 Core 的 AppSettingsSection（产品重构 §9——跨板块深链：
+// AppModel.pendingSettingsSection 在此消费后清空）。
 
 private enum SettingsNavigationLayout {
     case sidebar
@@ -67,7 +15,7 @@ private enum SettingsNavigationLayout {
 
 struct SettingsSectionView: View {
     @EnvironmentObject var model: AppModel
-    @State var selectedSettingsFocus: SettingsFocus = .general
+    @State var selectedAppSettingsSection: AppSettingsSection = .general
     @State var isMenuBarHoldingOptionsExpanded = false
     @State var isMenuBarMarketIndexExpanded = false
     @State var isMenuBarFundMarketExpanded = false
@@ -120,6 +68,18 @@ struct SettingsSectionView: View {
             }
             .scrollIndicators(.hidden)
         }
+        .onAppear { consumePendingSettingsSection() }
+        .onChange(of: model.pendingSettingsSection) { _ in
+            consumePendingSettingsSection()
+        }
+    }
+
+    /// 消费跨板块深链（AppModel 发布待跳转分区 → 选中并清空）。
+    private func consumePendingSettingsSection() {
+        if let pending = model.pendingSettingsSection {
+            selectedAppSettingsSection = pending
+            model.pendingSettingsSection = nil
+        }
     }
 
     @ViewBuilder
@@ -142,7 +102,7 @@ struct SettingsSectionView: View {
     private var selectedSettingsContent: some View {
         selectedSettingsPanel
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .id(selectedSettingsFocus)
+            .id(selectedAppSettingsSection)
     }
 
     private func settingsNavigation(layout: SettingsNavigationLayout) -> some View {
@@ -159,7 +119,7 @@ struct SettingsSectionView: View {
 
                 Spacer(minLength: AppPalette.spaceM)
 
-                Text("\(SettingsFocus.allCases.count) 个分区")
+                Text("\(AppSettingsSection.allCases.count) 个分区")
                     .font(AppPalette.appFont(.footnote, weight: .semibold, design: .rounded))
                     .foregroundStyle(AppPalette.brand)
                     .padding(.horizontal, 9)
@@ -170,14 +130,14 @@ struct SettingsSectionView: View {
             switch layout {
             case .sidebar:
                 VStack(spacing: AppPalette.spaceS) {
-                    ForEach(SettingsFocus.allCases) { focus in
+                    ForEach(AppSettingsSection.allCases) { focus in
                         settingsNavigationButton(for: focus, layout: layout)
                     }
                 }
             case .grid:
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
-                        ForEach(SettingsFocus.allCases) { focus in
+                        ForEach(AppSettingsSection.allCases) { focus in
                             settingsNavigationButton(for: focus, layout: layout)
                                 .frame(minWidth: 158, maxWidth: .infinity)
                         }
@@ -190,7 +150,7 @@ struct SettingsSectionView: View {
                         ],
                         spacing: 10
                     ) {
-                        ForEach(SettingsFocus.allCases) { focus in
+                        ForEach(AppSettingsSection.allCases) { focus in
                             settingsNavigationButton(for: focus, layout: layout)
                         }
                     }
@@ -214,11 +174,11 @@ struct SettingsSectionView: View {
     }
 
     private func settingsNavigationButton(
-        for focus: SettingsFocus,
+        for focus: AppSettingsSection,
         layout: SettingsNavigationLayout
     ) -> some View {
         Button {
-            selectedSettingsFocus = focus
+            selectedAppSettingsSection = focus
         } label: {
             SettingsNavigationRow(
                 title: focus.title,
@@ -226,14 +186,14 @@ struct SettingsSectionView: View {
                 status: settingsStatus(for: focus),
                 icon: focus.systemImage,
                 tint: settingsStatusTint(for: focus),
-                isSelected: selectedSettingsFocus == focus,
+                isSelected: selectedAppSettingsSection == focus,
                 isCompact: layout == .sidebar
             )
         }
         .buttonStyle(PressResponsiveButtonStyle())
     }
 
-    private func settingsStatus(for focus: SettingsFocus) -> String {
+    private func settingsStatus(for focus: AppSettingsSection) -> String {
         switch focus {
         case .general:
             return model.appearance.rawValue
@@ -251,10 +211,15 @@ struct SettingsSectionView: View {
                 : "已关闭"
         case .sync:
             return SyncClient.shared.isConfigured ? "已配置" : "未配置"
+        case .intelligence:
+            if !IntelligenceV2ProviderSettings.isConfigured { return "缺少模型" }
+            return model.intelligenceDashboardSnapshot.map { snapshot in
+                snapshot.readiness.blocker == nil ? "已就绪" : "数据准备中"
+            } ?? "准备中"
         }
     }
 
-    private func settingsStatusTint(for focus: SettingsFocus) -> Color {
+    private func settingsStatusTint(for focus: AppSettingsSection) -> Color {
         switch focus {
         case .general:
             return AppPalette.brand
@@ -266,12 +231,15 @@ struct SettingsSectionView: View {
             return model.portfolioValuationAlertSettings.isEnabled ? AppPalette.warning : AppPalette.muted
         case .sync:
             return SyncClient.shared.isConfigured ? AppPalette.positive : AppPalette.muted
+        case .intelligence:
+            if !IntelligenceV2ProviderSettings.isConfigured { return AppPalette.warning }
+            return AppPalette.brand
         }
     }
 
     @ViewBuilder
     private var selectedSettingsPanel: some View {
-        switch selectedSettingsFocus {
+        switch selectedAppSettingsSection {
         case .general:
             appPanel
         case .watch:
@@ -282,6 +250,8 @@ struct SettingsSectionView: View {
             valuationAlertPanel
         case .sync:
             MacSyncConfigPanel()
+        case .intelligence:
+            SettingsIntelligencePanel()
         }
     }
 }
