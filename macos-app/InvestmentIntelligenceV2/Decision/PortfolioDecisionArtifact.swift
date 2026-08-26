@@ -375,14 +375,16 @@ struct DecisionReplayer: Sendable {
         let decision: PartialDecision
     }
 
-    /// 纯计算 helper（私有：不做绑定校验——绑定是入口的职责）。
+    /// 纯计算 helper（**不做绑定校验——绑定是入口的职责**；WF-1 起对
+    /// Workflow 层开放：plannerInputs → plans → scores → compare → decide
+    /// 的首产与重放共用同一实现，首产即重放一致）。
     /// 七轮 P1-1：**逐 plan 求值**——criterion 输入含 plan-scoped 指标
     /// （turnover / 投影资产类权重，从各自的 plan + portfolio +
     /// actionDomain 推导）与决策级共享 cardinal（factor metric /
     /// observation），方案分数不再共享。frozenNowByPlan 完整性由调用方
-    /// 保证（replay/what-if 取自 artifact plans；缺键时兜底
-    /// portfolio.asOf——防御性，不改变语义）。
-    private func compute(
+    /// 保证（replay/what-if 取自 artifact plans；首产传空字典，plan
+    /// asOf 兜底 portfolio.asOf——防御性，不改变语义）。
+    func compute(
         materials: ReplayMaterials,
         plannerInputs: [String: PlannerRun],
         frozenNowByPlan: [String: Date]

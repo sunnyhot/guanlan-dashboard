@@ -121,6 +121,9 @@ struct ResearchHarness: Sendable {
     var sources: ResearchSourcesConfiguration = .empty
     /// 本地取数白名单（进工具 Context；nil = 本地取数不可用）。
     var dataAccess: (any ResearchDataAccess)? = nil
+    /// 工具结果观察者（WF-1 evidence 落库接线）：每次研究工具执行后回调
+    /// (toolName, result)；submit 调用不回调。默认 nil 零行为变化。
+    var toolResultObserver: (@Sendable (_ toolName: String, _ result: ResearchToolResult) -> Void)? = nil
     private let clock: @Sendable () -> Date
 
     init(
@@ -129,6 +132,7 @@ struct ResearchHarness: Sendable {
         policy: ResearchHarnessPolicy = ResearchHarnessPolicy(),
         sources: ResearchSourcesConfiguration = .empty,
         dataAccess: (any ResearchDataAccess)? = nil,
+        toolResultObserver: (@Sendable (_ toolName: String, _ result: ResearchToolResult) -> Void)? = nil,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.gateway = gateway
@@ -136,6 +140,7 @@ struct ResearchHarness: Sendable {
         self.policy = policy
         self.sources = sources
         self.dataAccess = dataAccess
+        self.toolResultObserver = toolResultObserver
         self.clock = clock
     }
 
@@ -309,6 +314,7 @@ struct ResearchHarness: Sendable {
                         evidenceCount: result.evidenceIDs.count,
                         isError: result.isError
                     ))
+                    toolResultObserver?(call.name, result)
 
                     var content = Self.toolResultJSON(result)
                     if content.utf8.count > policy.maxToolResultBytes {

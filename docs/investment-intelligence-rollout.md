@@ -1884,6 +1884,30 @@ macos-app/
 | WF-4 | `TrendAnalysisReport` / `NextHourGuidanceReport` 完全下线（三条旧链路代码删除 + 测试删除）| PRES-1 | 5 | 三条旧链路代码不存在 |
 | WF-5 | **Slice 0-7 下线**：删除 `Core/InvestmentIntelligence/` 全部代码（22 源文件）+ 关 Feature Flag + 删对应测试（~118 个）+ AppModel extension 清理 + 数据迁移（DecisionCase → PortfolioDecisionArtifact 若有迁移路径，否则清空重来并明确告知用户）| WF-4 | 8 | `InvestmentIntelligenceFeatureFlag` 删除；旧目录不存在；用户数据迁移有明确路径 |
 
+> **状态（2026-08-26，WF-1 收口）**：`Workflows/PortfolioResearchWorkflow.swift`
+> 等三文件落地——Research → AssetThesis / PortfolioThesis → Signals →
+> Decision 全链闭环：
+> - **evidence 本体落库**（Epic 11 遗留项）：`ResearchHarness` 增
+>   `toolResultObserver` 钩子（默认 nil 零行为变化），`ResearchEvidenceFactory`
+>   把工具结果构造为 `EvidenceObservation`（点观测四时间一致；ObservationID
+>   由 evidenceID+内容派生，同证据异内容 = 新 vintage，DATA008 语义），
+>   `ResearchEvidenceStore` GRDB/InMemory 双实现（幂等写 + knownEvidence /
+>   evidenceDates 供给 RES-5 管道）；
+> - **theses 表消费**：`ResearchThesis` + `ThesisSynthesizer`（asset /
+>   portfolio 两级，确定性 ID）+ `ThesisStore`（幂等写，同 SignalStore 纪律；
+>   溯源指纹内嵌 statement 头部，不改已发布 schema）；
+> - **Decision 接线**：`PortfolioDecisionMaterialsProviding` 协议供料 →
+>   `DecisionReplayer.compute`（private → internal，首产与重放共用同一实现）
+>   → `assemble` → **DecisionValidator 强制门禁**（resolvers 实查 store /
+>   材料，AGENTS.md 关键约定 11 闭环）→ artifact 落库（`GRDBRepository
+>   .writeArtifact` / `portfolioDecision(id:)`）。
+> 测试：`PortfolioResearchWorkflowTests`（全链 happy path / 幂等重跑同
+> artifact / 研究失败无半截状态 / 校验拒绝 / 材料预检）+ `ThesisStoreTests`
+> + `ResearchEvidenceFactoryTests`；全量 `swift test` 1722 绿（M2Live 与
+> AppLaunch 套件环境性跳过——AppLaunch 崩溃基线复核为预存在，同十三轮
+> 审查记录）。App 生产接线（真 LLM + 真 Repository 供料）随 PRES-1 后
+> UI 切换一起做。
+
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 
 ---
