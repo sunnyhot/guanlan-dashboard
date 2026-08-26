@@ -1737,6 +1737,33 @@ macos-app/
 > - 修复后 swift test 全量绿（1623 passed，环境性排除同前）；干净 HEAD
 >   macOS release + iOS Simulator 构建均通过。
 
+> **十三轮审查修复（2026-08-26，2×P2 + 4×P3 + 小项，全部闭环——Epic 11
+> 外部审查报告）**：
+> - **P2-1 Harness 截断消息 JSON 注入**：截断前缀字符串插值拼 JSON，工具
+>   结果含引号/反斜杠/换行时回灌非法 tool message——改经 JSONEncoder
+>   编码转义；回归测试锁「恶意字符下截断信封仍是合法 JSON」。
+> - **P2-2 Extractor↔Store 接缝**：某维度全部 claim 无证据时提取器产出
+>   空 derivedFrom 信号，被 SignalStore 写入门禁拒（validate 默认把
+>   missing_evidence 当 warning，extract→write 在写库处爆 malformed）——
+>   提取层跳过空证据维度组（「无证据不是信号是叙述」两端对齐）。语义
+>   变化：无证据 claim 不再产出 uncertain 信号；混合证据组中无据 claim
+>   的方向拒收但不影响有据方向（新增测试锁定）。
+> - **P3-1 producedBy 溯源**：`ModelCompletionResponse.resolvedProvider`
+>   由 Gateway 在 failover 后回填实际完成 provider，Harness 优先采用
+>   （原取首选候选的口径仅作兜底）。
+> - **P3-2 时钟一致**：Harness 残留 8 处 `Date()` 统一注入 clock()。
+> - **P3-3 预算检查**：未声明 `maxOutputTokens` 按估算值占预算（默认
+>   4096，不再按 0 计）；重试前复查（可见已发生记账，测试用 sleeper
+>   注入记账锁定拦截时序）。
+> - **P3-5** golden 噪音断言删除；**P3-6** dayString 缓存 / local digest
+>   规范 JSON 编码 / web 搜索去重 / 取消测试事件驱动。
+> - **P3-4 留 Epic 12**：`stream_options.include_usage` 会改全部旧链路
+>   请求体，需真实供应商验证后再接（当前 usage 长期走 unreported 分支
+>   的事实保留在本记录，不静默）。
+> - 修复后 Research 9 套件 92 tests + 全量 1715 tests 绿（AppLaunch
+>   环境性排除同前）；golden happy path 指纹/ID 不变（P2-2 只影响降级
+>   路径测试断言）。
+>
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
 ---
