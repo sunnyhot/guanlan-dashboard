@@ -2098,6 +2098,50 @@ macos-app/
 > market-research / portfolio-review / attribution 命令走 registry 提交）
 > 随 AGENT-2 落地。
 
+> **状态（2026-08-26，AGENT-2 已签收，M10 核心达成）**：
+> `investment-agent` CLI 落地——**不启动 SwiftUI 能跑 sync/factor/discovery/
+> attribution/decision**（M10 验收「investment-agent portfolio-review 不启动
+> SwiftUI 能跑通」的入口面；portfolio-review 命令本身还需 LLM 凭据）：
+> - **双模式入口**：@main 从 App 结构移到 `macos-app/main.swift`——默认
+>   GUI（`QiemanDashboardApp.main()`，行为等价）；`--agent <command>` 或
+>   直接以已知 agent 子命令启动二进制时在 SwiftUI 起跑前分流到 CLI 并
+>   退出（Finder/open/login item 的普通启动含 -psn_ 前缀参数不命中
+>   agent 命令集，一律 GUI）。`scripts/investment-agent` 启动器按
+>   dist App bundle → SPM release/debug 顺序找二进制。
+> - **命令面（V3.1 §97）**：data-sync（维护轮：identity→回填→增量，
+>   经 AGENT-1 registry 提交 + 分轮 checkpoint）/ health（库 schema 版本、
+>   artifacts 按 kind 计数、signals/evidence/theses、非终端作业、行情与
+>   NAV 规模、组合持仓数）/ identity-inspect（resolver lookup，scheme
+>   按代码形态缺省推导）/ market-research（本地因子筛选 + top-K 研究任务
+>   + 报告落库）/ portfolio-review（WF-1 全链，选择性研究接最新 discovery
+>   报告 top-4；LLM 凭据经环境变量 QIEMAN_LLM_*——CLI 进程不读 App 的
+>   UserDefaults 域，Keychain 跨二进制 ACL 不可靠，显式环境变量是唯一
+>   凭据通道）/ attribution（单日归因：成本口径权重 units×costPrice +
+>   本地库 NAV/行情收益率，未知进 coverage 缺口；artifact 落库）/
+>   decision-replay（verify 全链重放校验，criterion/band 用生产同源常量
+>   重建、factor 实例按 artifact 引用 typed fetch）/ jobs / resume /
+>   recover（AGENT-1 恢复面的 CLI 出口）。
+> - **作业纪律**：四个副作用命令全部经 WorkflowRegistry 提交（幂等 /
+>   attempt 重试 / 事件时间线 / resume），失败作业 exit 1（unix 惯例）
+>   且 JSON 完整输出（脚本可两用）；输出 JSON sortedKeys 确定性。
+> - **数据目录**：`--data-dir` 覆盖 > `~/Library/Application Support/
+>   QiemanDashboard`（与 App 共库；App 的 UserDefaults 自定义目录对 CLI
+>   进程不可见——域不同，需显式 --data-dir）。
+> - 决策材料 `CLIPortfolioMaterials`：与 App `LivePortfolioDecisionMaterials`
+>   同一套常量（costIntensity v1 + live-band v1 + 维持当前配置对照），
+>   差异只在权重口径（成本 vs 估值）——decision-replay 对两条链路产出
+>   都可解析绑定。
+> 测试 `InvestmentAgentCLITests` 13 个（version/help/unknown、health 建库、
+> attribution 成本口径 + 幂等重提 + 空组合失败、market-research 端到端
+> 出报告、portfolio-review 凭据门槛、LLM 配置解析、identity 启发、
+> replay/resume not-found、数据目录解析）。xcodegen 重生成（main.swift 编入
+> macOS target、iOS 不含），macOS + iOS Simulator 双端构建通过。
+> 
+> 期间发现并修复生产 bug（de3180f）：App 挂了 ProviderHealthMonitor 但从未
+> register 任何 Provider——isCallable 对未注册一律 false，生产降级链全部
+> 候选 skippedNotCallable、零网络。补 `registerProductionProviders`（幂等）
+> 供 App 维护循环与 agent CLI data-sync 共用，含回归测试。
+
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | AGENT-1 | `AgentJob` / `AgentEvent` / `WorkflowRegistry` / `JobRecovery`（checkpoint + idempotency key）| WF-* | 8 | |

@@ -48,6 +48,10 @@ targets:
       - path: macos-app/Resources/Assets.xcassets
       - path: macos-app/Views_macOS
       - path: macos-app/QiemanDashboardApp.swift
+      # AGENT-2 双模式入口：GUI 默认 / --agent 分流（agent CLI 实现在
+      # Core/CLI/InvestmentAgentCLI.swift，随 Core 一并编入）。iOS target
+      # 不含 main.swift（其入口是 QiemanDashboardApp_iOS.swift 的 @main）。
+      - path: macos-app/main.swift
       # InvestmentIntelligenceV2 是双端共享的纯 Foundation/CryptoKit 代码
       # （无 SwiftUI/AppKit）；Collector/ 是进程外 Python（PROV-3a/3b），
       # 不进任何 target 的编译源或资源

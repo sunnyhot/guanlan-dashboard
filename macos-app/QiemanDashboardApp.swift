@@ -897,7 +897,8 @@ private enum QiemanAppModelHolder {
     static let shared = AppModel()
 }
 
-@main
+// AGENT-2 起 @main 移至 main.swift（双模式入口：GUI 默认 / --agent 分流），
+// GUI 路径由 main.swift 调 QiemanDashboardApp.main() 启动——行为等价。
 struct QiemanDashboardApp: App {
     @NSApplicationDelegateAdaptor(QiemanApplicationDelegate.self) private var appDelegate
     @StateObject private var model: AppModel

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# investment-agent 启动器（AGENT-2，V3.1 §97）
+#
+# 查找顺序：
+#   1. QIEMAN_AGENT_BINARY 环境变量（显式指定）
+#   2. dist/macos-app 构建产物（App bundle 内二进制，--agent 分流入口）
+#   3. macos-app/.build/{release,debug} SPM 产物
+#
+# 数据目录默认 ~/Library/Application Support/QiemanDashboard（与 App 共库），
+# 可用 --data-dir 覆盖；凭据经环境变量（见 --agent help）。
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [[ -n "${QIEMAN_AGENT_BINARY:-}" ]]; then
+  exec "$QIEMAN_AGENT_BINARY" --agent "$@"
+fi
+
+APP_BINARY="$ROOT_DIR/dist/macos-app/QiemanDashboard.app/Contents/MacOS/QiemanDashboard"
+if [[ -x "$APP_BINARY" ]]; then
+  exec "$APP_BINARY" --agent "$@"
+fi
+
+for CONFIG in release debug; do
+  SPM_BINARY="$ROOT_DIR/macos-app/.build/$CONFIG/QiemanDashboard"
+  if [[ -x "$SPM_BINARY" ]]; then
+    exec "$SPM_BINARY" --agent "$@"
+  fi
+done
+
+echo "investment-agent：找不到 QiemanDashboard 二进制。" >&2
+echo "先构建（bash scripts/build_macos_app.sh 或 cd macos-app && swift build -c release），" >&2
+echo "或用 QIEMAN_AGENT_BINARY 指定二进制路径。" >&2
+exit 1
