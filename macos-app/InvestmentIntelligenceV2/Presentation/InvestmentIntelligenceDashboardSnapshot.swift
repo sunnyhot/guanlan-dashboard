@@ -135,6 +135,10 @@ extension InvestmentIntelligenceDashboardSnapshot {
         let moves: [PlannedMove]
         let validity: Validity
         let producedAt: Date
+        /// 报告 artifact id（内部 id——首页不显示，详情技术信息区用）。
+        let artifactID: String
+        /// 报告参照的 target id（详情技术信息区用）。
+        let targetID: String?
     }
 }
 

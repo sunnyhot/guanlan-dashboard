@@ -159,7 +159,9 @@ extension ArtifactQueryService {
             holdReasons: report.holdReasons,
             moves: moves,
             validity: report.validityPolicy.isStillValid(at: now) ? .current : .expired,
-            producedAt: report.producedAt)
+            producedAt: report.producedAt,
+            artifactID: report.id.rawValue,
+            targetID: report.target?.id.rawValue)
     }
 
     // MARK: - 市场发现

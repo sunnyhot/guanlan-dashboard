@@ -193,7 +193,7 @@ enum IntelligencePresentationFormatter {
 
 /// 用户可见错误（title/message/recovery + 诊断码）。主页面不得直接显示
 /// `error.localizedDescription`；diagnosticCode 可在详情中复制用于排查。
-struct IntelligenceUserFacingError: Equatable, Sendable {
+struct IntelligenceUserFacingError: Error, Equatable, Sendable {
     /// 恢复动作（UI 据此渲染主动作按钮）。
     enum Recovery: Equatable, Sendable {
         /// 前往 AI 设置
