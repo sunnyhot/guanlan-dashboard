@@ -15,7 +15,13 @@ import Foundation
 // 调用方（模型）不能选择 PIT 语境——研究永远用「当时已知」口径。
 
 /// V2 Research 外部源配置（apiKey 只进桥接层，不进 trace / evidence / 日志）。
-struct ResearchSourcesConfiguration: Sendable, Hashable, Codable {
+///
+/// **刻意不做 Codable**（审查预告项：防密钥落盘）——本类型含明文 apiKey，
+/// 若提供序列化能力，Epic 12 接线时极易被顺手 JSON 落盘（违反 AGENTS.md
+/// #4 的 Keychain 约定）。持久化需求出现时必须显式设计：非凭据字段走
+/// JSON、凭据字段走 Keychain（对照 TrendAnalysisSettingsStore 的拆分模式）。
+struct ResearchSourcesConfiguration: Sendable, Hashable {
+    var tavilyEnabled: Bool = true
     var tavilyAPIKey: String = ""
     var secContactEmail: String = ""
     var secEnabled: Bool = false
@@ -26,7 +32,7 @@ struct ResearchSourcesConfiguration: Sendable, Hashable, Codable {
     static let empty = ResearchSourcesConfiguration()
 
     var isWebSearchConfigured: Bool {
-        !tavilyAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        tavilyEnabled && !tavilyAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var isSECConfigured: Bool {

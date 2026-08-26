@@ -309,6 +309,71 @@ final class ResearchToolRegistryTests: XCTestCase {
         }
     }
 
+    func testSECCompanyFactsUnitSelectionIsDeterministic() async throws {
+        // 审查 P3 回归：同一概念同时有 USD 与 USD/shares 两个 unit 时，
+        // 必须确定性选 USD（原 units.values.first 依赖 Dictionary 迭代序，
+        // 跨进程漂移 → evidence 内容寻址 ID 漂移）。
+        let client = StubbedSECClient()
+        client.stub(
+            url: URL(string: "https://www.sec.gov/files/company_tickers.json")!,
+            data: Data(#"{"0": {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc"}}"#.utf8)
+        )
+        // shares 单元放在 JSON 前面（若实现按字典序或首序取值不稳定会暴露）
+        let facts = """
+        {"facts": {"us-gaap": {
+            "EarningsPerShareDiluted": {"units": {
+                "USD/shares": [
+                    {"end": "2025-09-30", "val": 6.11, "fp": "FY"}
+                ],
+                "USD": [
+                    {"end": "2025-09-30", "val": 999, "fp": "FY"}
+                ]
+            }}
+        }}}
+        """
+        client.stub(
+            url: URL(string: "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json")!,
+            data: Data(facts.utf8)
+        )
+        let tool = V2SECOfficialTool(client: client, cache: SECOfficialSourceCache())
+        let context = try taskContext(sources: configuredSources())
+        let first = await tool.execute(
+            argumentsJSON: "{\"ticker\": \"AAPL\", \"mode\": \"company_facts\"}", context: context
+        )
+        let second = await tool.execute(
+            argumentsJSON: "{\"ticker\": \"AAPL\", \"mode\": \"company_facts\"}", context: context
+        )
+        XCTAssertEqual(first.evidenceIDs, second.evidenceIDs)
+        // 选中的是 USD unit 的值（999），且 evidence ID 稳定
+        XCTAssertEqual(first.evidenceIDs.map(\.rawValue).first, second.evidenceIDs.map(\.rawValue).first)
+        guard case .object(let data) = first.contentJSON,
+              case .object(let inner)? = data["data"],
+              case .array(let rows)? = inner["facts"],
+              let row = rows.first,
+              case .object(let entry) = row,
+              case .string(let concept)? = entry["concept"] else {
+            return XCTFail("facts 结构不对")
+        }
+        XCTAssertEqual(concept, "EarningsPerShareDiluted")
+        if case .number(let value)? = entry["value"] {
+            XCTAssertEqual(value, 999, "unit 优先级 USD 先于 USD/shares")
+        } else {
+            XCTFail("value 缺失")
+        }
+    }
+
+    func testWebSearchDisabledSwitchBlocksEvenWithKey() async throws {
+        // Tavily enabled 开关（对称性修复）：关掉后即使有 key 也不可用。
+        var sources = configuredSources()
+        sources.tavilyEnabled = false
+        let result = await V2WebSearchTool(client: FakeTavilyClient()).execute(
+            argumentsJSON: "{\"query\": \"valid query\"}",
+            context: try taskContext(sources: sources)
+        )
+        XCTAssertEqual(unwrapErrorCode(result), "web_search_not_configured")
+        XCTAssertEqual(ResearchSourcesConfiguration().tavilyEnabled, true, "默认开启保持兼容")
+    }
+
     func testSECNotConfiguredOrUnknownTicker() async throws {
         let tool = V2SECOfficialTool(client: StubbedSECClient(), cache: SECOfficialSourceCache())
         var result = await tool.execute(

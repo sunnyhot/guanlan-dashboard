@@ -293,10 +293,17 @@ struct V2SECOfficialTool: ResearchTool {
         var rows: [ModelJSONValue] = []
         for key in interestingKeys where gaap[key] != nil {
             guard let concept = gaap[key] as? [String: Any],
-                  let units = concept["units"] as? [String: Any],
-                  let firstUnitValues = units.values.first as? [[String: Any]] else { continue }
+                  let units = concept["units"] as? [String: Any] else { continue }
+            // unit 选择必须跨进程确定（审查 P3：units.values.first 依赖
+            // Dictionary 迭代序，EPS 等概念同时有 USD 与 USD/shares 时不同
+            // 进程可能选中不同 unit → evidence 内容漂移 → 内容寻址 ID 漂移）。
+            // 优先级：USD 最常用，其余按 unit 名排序取最小。
+            let unitName = units.keys.first(where: { $0 == "USD" })
+                ?? units.keys.sorted().first
+            guard let unitName,
+                  let unitValues = units[unitName] as? [[String: Any]] else { continue }
             // 取年度（fy 数据）最近一条
-            let annual = firstUnitValues
+            let annual = unitValues
                 .filter { ($0["fp"] as? String) == "FY" }
                 .compactMap { entry -> (String, Any)? in
                     guard let end = entry["end"] as? String else { return nil }

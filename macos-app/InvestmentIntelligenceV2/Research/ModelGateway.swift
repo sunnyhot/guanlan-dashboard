@@ -434,7 +434,7 @@ struct ModelGateway: Sendable {
             throw ModelGatewayError.noProvidersConfigured
         }
 
-        if let (violation, _) = try await budgetViolation(request) {
+        if let violation = await budgetViolation(request) {
             throw violation
         }
 
@@ -475,8 +475,8 @@ struct ModelGateway: Sendable {
                     )
                     // 重试只对可重试错误；不可重试直接换下一 provider。
                     guard error.isRetryable, attempt <= policy.maxRetriesPerProvider else { break }
-                    // 重试前复查预算（前次尝试可能已记账消耗）。
-                    if let (violation, _) = try await budgetViolation(request) {
+                    // 重试前复查预算（可见前次尝试之后新记账的消耗）。
+                    if let violation = await budgetViolation(request) {
                         throw violation
                     }
                     await sleeper(policy.retryInterval)
@@ -501,18 +501,15 @@ struct ModelGateway: Sendable {
     }
 
     /// 预算检查（审查 P3-3）：未声明输出上限的请求按估算值占预算
-    ///（fail-closed 保守）；返回 nil = 通过，否则携带待抛的错误与 requested。
+    ///（fail-closed 保守）；nil = 通过。
     private func budgetViolation(
         _ request: ModelCompletionRequest
-    ) async throws -> (ModelGatewayError, Int)? {
+    ) async -> ModelGatewayError? {
         let consumed = await ledger.consumedTokens()
         let requested = request.maxOutputTokens ?? policy.perRequestOutputEstimate
         if consumed + requested > policy.tokenBudget {
-            return (
-                .tokenBudgetExhausted(
-                    consumed: consumed, requested: requested, budget: policy.tokenBudget
-                ),
-                requested
+            return .tokenBudgetExhausted(
+                consumed: consumed, requested: requested, budget: policy.tokenBudget
             )
         }
         return nil

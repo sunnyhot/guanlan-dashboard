@@ -314,10 +314,18 @@ struct ResearchHarness: Sendable {
                     if content.utf8.count > policy.maxToolResultBytes {
                         // 截断前缀含任意字符（引号/反斜杠/换行），必须经 JSONEncoder
                         // 转义——字符串插值拼 JSON 会产出非法 tool message。
+                        // 按字节预算截断（prefix(n) 按字符计数，CJK 内容最多
+                        // 超出 ~3 倍——审查外观项）；尾部落在多字节序列中间时
+                        // String(decoding:) 以 U+FFFD 替换，信封经 JSONEncoder
+                        // 转义后仍是合法 JSON。
+                        let bytePrefix = String(
+                            decoding: Data(content.utf8).prefix(policy.maxToolResultBytes),
+                            as: UTF8.self
+                        )
                         let envelope: ModelJSONValue = [
                             "truncated": true,
                             "notice": .string("工具结果超过回灌上限被截断，完整 evidence 已登记，可换更小范围参数重试"),
-                            "prefix": .string(String(content.prefix(policy.maxToolResultBytes)))
+                            "prefix": .string(bytePrefix)
                         ]
                         content = Self.toolResultJSON(ResearchToolResult.content(envelope))
                     }
