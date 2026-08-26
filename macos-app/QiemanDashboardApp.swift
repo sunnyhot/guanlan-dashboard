@@ -1023,6 +1023,46 @@ struct QiemanDashboardApp: App {
                 .keyboardShortcut("6")
             }
 
+            // 投资智能动作菜单（产品重构 §8.8：按 readiness 动态禁用）
+            CommandMenu("投资智能") {
+                Button("刷新结果") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                    model.refreshIntelligenceDashboard()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(model.intelligenceRuntime == nil)
+
+                Button("运行市场发现") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                    model.runMarketDiscovery()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                .disabled(model.discoveryOperationState.isRunning
+                          || model.intelligenceRuntime == nil)
+
+                Button("运行盘中评估") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                    model.runIntradayDecision()
+                }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(model.intradayOperationState.isRunning
+                          || !model.intelligenceIntradayReady)
+
+                Button("运行组合研究") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                    model.runPortfolioResearch()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(model.researchOperationState.isRunning
+                          || !model.intelligenceV2ProviderConfigured
+                          || model.intelligenceRuntime == nil
+                          || !model.intelligenceIntradayReady)
+            }
+
             CommandGroup(after: .textEditing) {
                 Button("搜索当前页面") {
                     appDelegate.showMainWindow()

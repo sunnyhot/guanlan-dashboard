@@ -221,8 +221,6 @@ extension AppModel {
             } catch {
                 await MainActor.run { [weak self] in
                     self?.isBootstrappingIntelligence = false
-                    self?.latestIntelligenceError =
-                        "投资智能数据目录初始化失败：\(error.localizedDescription)"
                     self?.intelligenceDashboard = .failed(
                         IntelligenceUserFacingError.runtimeFailure(error))
                 }
@@ -230,25 +228,14 @@ extension AppModel {
         }
     }
 
-    /// 重启恢复（十八轮 P2-5）：UI 消费的是 AppModel 内存态，重启后库里有
-    /// artifact 但板块空白——启动时经 ArtifactQueryService 统一读面把最新
-    /// 产物灌回 published 状态。只补空位，不覆盖本会话新产出。
+    /// 重启恢复（十八轮 P2-5；产品重构 §5.3 收敛）：研究链路的 top-K 输入
+    /// 需要最新发现报告在内存——启动时经 ArtifactQueryService 统一读面灌回；
+    /// UI 面全部由 refreshIntelligenceDashboard() 快照驱动，不再恢复散置字段。
     @MainActor
     func restoreLatestIntelligenceArtifacts(runtime: IntelligenceV2Runtime) {
         if latestDiscoveryReport == nil,
            let report = try? runtime.queryService.latestMarketDiscoveryReports(limit: 1).first {
             latestDiscoveryReport = report
-        }
-        if latestIntradayReport == nil,
-           let report = try? runtime.queryService.latestIntradayReports(
-               limit: 1, includeInvalid: true
-           ).first {
-            latestIntradayReport = report
-        }
-        if latestResearchArtifactID == nil {
-            let summary = (try? runtime.queryService.latestPortfolioDecisions(limit: 1))?.first
-            latestResearchArtifactID = summary?.artifactID
-            latestPortfolioDecisionSummary = summary
         }
     }
 
@@ -257,12 +244,15 @@ extension AppModel {
     @MainActor
     func runMarketDiscovery() {
         guard let runtime = intelligenceRuntime else {
-            latestIntelligenceError = "投资智能运行时未就绪"
+            discoveryOperationState = .failed(IntelligenceUserFacingError(
+                title: "运行时未就绪",
+                message: "投资智能运行时尚未初始化完成，请稍后重试。",
+                recovery: .retry,
+                diagnosticCode: "INTL-RUNTIME-NOT-READY"))
             return
         }
         guard !isRunningMarketDiscovery else { return }
         isRunningMarketDiscovery = true
-        latestIntelligenceError = nil
         let startedAt = Date()
         discoveryOperationState = .running(startedAt: startedAt, stage: .preparing)
         let now = Date()
@@ -312,7 +302,6 @@ extension AppModel {
                 }
             } catch {
                 await MainActor.run {
-                    self?.latestIntelligenceError = "市场发现失败：\(error.localizedDescription)"
                     self?.discoveryOperationState = .failed(
                         IntelligenceUserFacingError.from(error))
                 }
@@ -325,12 +314,15 @@ extension AppModel {
     @MainActor
     func runIntradayDecision() {
         guard let runtime = intelligenceRuntime else {
-            latestIntelligenceError = "投资智能运行时未就绪"
+            intradayOperationState = .failed(IntelligenceUserFacingError(
+                title: "运行时未就绪",
+                message: "投资智能运行时尚未初始化完成，请稍后重试。",
+                recovery: .retry,
+                diagnosticCode: "INTL-RUNTIME-NOT-READY"))
             return
         }
         guard !isRunningIntradayDecision else { return }
         isRunningIntradayDecision = true
-        latestIntelligenceError = nil
         intradayOperationState = .running(startedAt: Date(), stage: .evaluating)
         let rows = personalAssetRows
         let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
@@ -370,19 +362,16 @@ extension AppModel {
                         try ArtifactRow.from(report), into: db)
                 }
                 await MainActor.run {
-                    self?.latestIntradayReport = report
                     self?.intradayOperationState = .idle
                     self?.refreshIntelligenceDashboard()
                 }
             } catch let inputError as IntelligenceInputError {
                 await MainActor.run {
-                    self?.latestIntelligenceError = inputError.userFacingMessage
                     self?.intradayOperationState = .failed(
                         IntelligenceUserFacingError.from(inputError))
                 }
             } catch {
                 await MainActor.run {
-                    self?.latestIntelligenceError = "盘中决策失败：\(error.localizedDescription)"
                     self?.intradayOperationState = .failed(
                         IntelligenceUserFacingError.from(error))
                 }
@@ -400,17 +389,21 @@ extension AppModel {
     @MainActor
     func runPortfolioResearch() {
         guard let runtime = intelligenceRuntime else {
-            latestIntelligenceError = "投资智能运行时未就绪"
+            researchOperationState = .failed(IntelligenceUserFacingError(
+                title: "运行时未就绪",
+                message: "投资智能运行时尚未初始化完成，请稍后重试。",
+                recovery: .retry,
+                diagnosticCode: "INTL-RUNTIME-NOT-READY"))
             return
         }
         guard let configuration = IntelligenceV2ProviderSettings.providerConfiguration()
         else {
-            latestIntelligenceError = "尚未配置 AI 模型（投资智能板块内填写 baseURL / 模型 / API Key）"
+            researchOperationState = .failed(
+                IntelligenceUserFacingError.providerNotConfigured())
             return
         }
         guard !isRunningPortfolioResearch else { return }
         isRunningPortfolioResearch = true
-        latestIntelligenceError = nil
         researchOperationState = .running(startedAt: Date(), stage: .collecting)
         let rows = personalAssetRows
         let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
@@ -467,15 +460,11 @@ extension AppModel {
                 let outcome = try await workflow.run(input: input)
                 await MainActor.run {
                     if outcome.succeeded {
-                        self?.latestResearchArtifactID = outcome.artifact?.id.rawValue
-                        // 概要统一读面刷新（十八轮 P2-5：View body 不查库）
-                        let summary = (try? runtime.queryService.latestPortfolioDecisions(limit: 1))?.first
-                        self?.latestPortfolioDecisionSummary = summary
+                        // 概要统一读面刷新（十八轮 P2-5：View body 不查库；
+                        // 产品重构后快照整体刷新）
                         self?.researchOperationState = .idle
                         self?.refreshIntelligenceDashboard()
                     } else {
-                        self?.latestIntelligenceError =
-                            "组合研究失败：\(outcome.errorDetail ?? "unknown")"
                         self?.researchOperationState = .failed(
                             IntelligenceUserFacingError.runtimeFailure(
                                 NSError(
@@ -486,13 +475,11 @@ extension AppModel {
                 }
             } catch let inputError as IntelligenceInputError {
                 await MainActor.run {
-                    self?.latestIntelligenceError = inputError.userFacingMessage
                     self?.researchOperationState = .failed(
                         IntelligenceUserFacingError.from(inputError))
                 }
             } catch {
                 await MainActor.run {
-                    self?.latestIntelligenceError = "组合研究失败：\(error.localizedDescription)"
                     self?.researchOperationState = .failed(
                         IntelligenceUserFacingError.from(error))
                 }

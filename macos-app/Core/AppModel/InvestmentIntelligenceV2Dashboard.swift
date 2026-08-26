@@ -122,4 +122,100 @@ extension AppModel {
         guard let snapshot = intelligenceDashboardSnapshot else { return false }
         return snapshot.readiness.blocker == nil
     }
+
+    // MARK: - 用户意图写入（编辑器入口；D000——Target 永远只从用户动作产生）
+
+    /// 请求跳转到设置中心的指定分区（跨板块深链；Settings View 消费后清空）。
+    @MainActor
+    func requestSettingsSection(_ section: AppSettingsSection) {
+        pendingSettingsSection = section
+        selectedSection = .settings
+        revealMainWindowIfNeeded()
+    }
+
+    /// 保存战略目标（编辑器提交）。五类权重经 Policy 构造 + Store 落盘；
+    /// 校验失败返回可展示错误（编辑器 inline 提示，不弹窗）。
+    @MainActor
+    @discardableResult
+    func saveStrategicAllocationTarget(
+        weights: [AssetClass: Decimal], changeReason: String?
+    ) -> Result<Void, IntelligenceUserFacingError> {
+        guard let runtime = intelligenceRuntime else {
+            return .failure(IntelligenceUserFacingError(
+                title: "运行时未就绪",
+                message: "投资智能运行时尚未初始化完成，请稍后重试。",
+                recovery: .retry,
+                diagnosticCode: "INTL-RUNTIME-NOT-READY"))
+        }
+        let entries = AssetClass.allCases.map { assetClass in
+            AllocationTargetEntry(
+                assetClass: assetClass,
+                targetWeight: Ratio(value: weights[assetClass] ?? .zero))
+        }
+        do {
+            let now = Date()
+            let target = try StrategicAllocationPolicy().applyUserAllocation(
+                entries: entries, note: changeReason, now: now)
+            let supersedes = try runtime.targetStore.loadCurrentEvent()?
+                .target.id.rawValue
+            try runtime.targetStore.record(
+                target: target, supersedesTargetID: supersedes,
+                changeReason: changeReason, now: now)
+            refreshIntelligenceDashboard()
+            return .success(())
+        } catch let error as StrategicAllocationValidator.ValidationError {
+            return .failure(IntelligenceUserFacingError(
+                title: "目标配置无效",
+                message: Self.validationMessage(error),
+                recovery: .configureTarget,
+                diagnosticCode: "INTL-TARGET-INVALID"))
+        } catch {
+            return .failure(IntelligenceUserFacingError.runtimeFailure(error))
+        }
+    }
+
+    /// 保存单个持仓的用户分类（编辑器提交；用户事件不被系统识别覆盖）。
+    @MainActor
+    @discardableResult
+    func saveAssetClassAssignment(
+        subjectKey: String, assetClass: AssetClass
+    ) -> Result<Void, IntelligenceUserFacingError> {
+        guard let runtime = intelligenceRuntime else {
+            return .failure(IntelligenceUserFacingError(
+                title: "运行时未就绪",
+                message: "投资智能运行时尚未初始化完成，请稍后重试。",
+                recovery: .retry,
+                diagnosticCode: "INTL-RUNTIME-NOT-READY"))
+        }
+        do {
+            let assignment = StrategicAssetClassAssignmentStore.makeAssignment(
+                subjectKey: subjectKey, assetClass: assetClass,
+                source: .user, recordedAt: Date())
+            try runtime.assignmentStore.record(assignment)
+            refreshIntelligenceDashboard()
+            return .success(())
+        } catch {
+            return .failure(IntelligenceUserFacingError.runtimeFailure(error))
+        }
+    }
+
+    private static func validationMessage(
+        _ error: StrategicAllocationValidator.ValidationError
+    ) -> String {
+        switch error {
+        case .emptyEntries:
+            return "至少需要一类资产配置。"
+        case .negativeWeight:
+            return "目标占比不能为负数。"
+        case .duplicateAssetClass:
+            return "同一资产类出现了多次。"
+        case .weightsDoNotSumToOne(let sum):
+            let percent = (sum * 100).rounded(toScale: 1)
+            return "五类占比之和需恰好 100%（当前 \(percent)%）。"
+        case .missingAssetClasses(let missing):
+            let names = missing.map(IntelligencePresentationFormatter.assetClassName)
+                .joined(separator: "、")
+            return "缺少资产类：\(names)（权重可以为 0，但不能缺类）。"
+        }
+    }
 }

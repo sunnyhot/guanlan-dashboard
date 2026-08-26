@@ -388,7 +388,15 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
         }
         XCTAssertFalse(model.isRunningMarketDiscovery)
         // 空数据也可能直接失败(数据目录语义)——两种收敛都接受,关键是不悬挂
-        let reportOrError = model.latestDiscoveryReport != nil || model.latestIntelligenceError != nil
-        XCTAssertTrue(reportOrError, "动作必须收敛:产出报告或显式错误")
+        // （产品重构 §5.3：散置错误字段已收敛为 operation state / dashboard）
+        let reportOrFailed: Bool
+        if model.latestDiscoveryReport != nil {
+            reportOrFailed = true
+        } else if case .failed = model.discoveryOperationState {
+            reportOrFailed = true
+        } else {
+            reportOrFailed = false
+        }
+        XCTAssertTrue(reportOrFailed, "动作必须收敛:产出报告或显式错误")
     }
 }

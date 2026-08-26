@@ -25,6 +25,54 @@ enum AppSection: String, CaseIterable, Identifiable {
     }
 }
 
+/// 设置中心分区路由（macOS / iOS 共用；产品重构 §9——跨板块精确跳转）。
+///
+/// Core 只发布「待跳转分区」，Settings View 消费后清空——避免 Core 反向
+/// 引用 SwiftUI View 类型（原 macOS View 私有的 SettingsFocus 收敛于此）。
+enum AppSettingsSection: String, CaseIterable, Identifiable, Sendable {
+    case general
+    case watch
+    case menuBar
+    case valuationAlert
+    case sync
+    case intelligence
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: return "通用"
+        case .watch: return "提醒与巡检"
+        case .menuBar: return "菜单栏"
+        case .valuationAlert: return "估值预警"
+        case .sync: return "数据同步"
+        case .intelligence: return "投资智能"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .general: return "外观、启动与更新"
+        case .watch: return "主理人动态通知"
+        case .menuBar: return "摘要样式与内容"
+        case .valuationAlert: return "持仓目标买卖提醒"
+        case .sync: return "跨设备同步数据"
+        case .intelligence: return "AI 模型、市场数据与隐私"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general: return "gearshape"
+        case .watch: return "bell.badge"
+        case .menuBar: return "menubar.rectangle"
+        case .valuationAlert: return "target"
+        case .sync: return "icloud.and.arrow.up.and.down"
+        case .intelligence: return "brain.head.profile"
+        }
+    }
+}
+
 enum PlatformActivityTab: String, CaseIterable, Identifiable {
     case adjustments = "调仓动态"
     case forum = "论坛发言"

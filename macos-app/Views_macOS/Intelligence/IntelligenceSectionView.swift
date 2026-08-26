@@ -1,34 +1,119 @@
 import SwiftUI
 
-// MARK: - 投资智能 V2 板块（十六轮审查 P1-1 生产接线的 UI 面）
+// MARK: - 投资智能 V2 板块（产品重构 P2：页面壳，只做布局与 sheet 调度）
 //
-// 消费面全部走 AppModel 的 V2 运行时动作 + ArtifactQueryService 派生状态：
-// - 市场发现（WF2，纯本地因子）与盘中执行决策（WF3，纯本地）随时可跑
-// - 组合研究（WF1）需 LLM 配置（baseURL/模型走 UserDefaults，API Key 走
-//   Keychain——与旧链路同一 account，升级用户免重填）
-// - 旧 AI 数据迁移通知（一次性 alert）
+// 数据消费只经 AppModel.intelligenceDashboard（Presentation DTO 快照），
+// View 不查库、不重算决策、不拼业务文案（文案在 IntelligencePresentationFormatter）。
+// 布局：宽 ≥1100 两列（战略配置 2/3 + 系统状态 1/3；盘中 2/3 + 机会 1/3），
+// 窄窗单列；内容区上限 1320。AI Provider 配置不在本页——统一在设置中心。
 
 struct IntelligenceSectionView: View {
     @EnvironmentObject var model: AppModel
-    @State private var llmBaseURL = IntelligenceV2ProviderSettings.baseURL
-    @State private var llmModel = IntelligenceV2ProviderSettings.model
-    @State private var llmAPIKey = ""
+    @State private var activeSheet: IntelligenceSheet?
+
+    enum IntelligenceSheet: String, Identifiable {
+        case editTarget
+        case classifyHoldings
+        case intradayDetail
+
+        var id: String { rawValue }
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                intradayCard
-                discoveryCard
-                researchCard
-                providerConfigCard
+                header
+                content
             }
-            .padding(14)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 22)
+            .frame(maxWidth: 1_320, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .editTarget:
+                AllocationTargetEditor()
+            case .classifyHoldings:
+                AssetClassAssignmentEditor()
+            case .intradayDetail:
+                IntradayDecisionDetailSheet()
+            }
+        }
         .alert("旧版 AI 数据已归档", isPresented: legacyNoticeBinding) {
             Button("知道了", role: .cancel) {}
         } message: {
             Text(model.legacyAIMigrationNotice ?? "")
+        }
+    }
+
+    // MARK: - 头部（最近更新 + 刷新 + 开始研究）
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceM) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("投资智能")
+                    .font(AppPalette.appFont(.title2, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                if let generatedAt = model.intelligenceDashboardSnapshot?.generatedAt {
+                    Text("最近更新 \(IntelligencePresentationFormatter.dateTimeText(generatedAt))")
+                        .font(AppPalette.appFont(.footnote))
+                        .foregroundStyle(AppPalette.muted)
+                }
+            }
+            Spacer(minLength: AppPalette.spaceM)
+            Button {
+                model.refreshIntelligenceDashboard()
+            } label: {
+                Label("刷新", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.appSecondary)
+            .controlSize(.small)
+            .help("刷新投资智能结果 (⌘⇧R)")
+            .accessibilityLabel("刷新投资智能结果")
+
+            Button {
+                model.runPortfolioResearch()
+            } label: {
+                Label(
+                    model.researchOperationState.isRunning ? "研究中…" : "开始研究",
+                    systemImage: "wand.and.stars")
+            }
+            .buttonStyle(.appPrimary)
+            .controlSize(.small)
+            .disabled(
+                model.researchOperationState.isRunning
+                    || !model.intelligenceV2ProviderConfigured
+                    || model.intelligenceRuntime == nil)
+            .help(researchButtonHelp)
+            .accessibilityLabel("开始组合研究")
+        }
+    }
+
+    private var researchButtonHelp: String {
+        if model.researchOperationState.isRunning { return "研究正在进行" }
+        guard model.intelligenceRuntime != nil else { return "投资智能运行时未就绪" }
+        guard model.intelligenceV2ProviderConfigured else {
+            return "需先在「设置 › 投资智能」中配置 AI 模型"
+        }
+        guard model.intelligenceIntradayReady else { return "需先完成战略配置与持仓归类" }
+        return "运行组合研究 (⌘⇧S)"
+    }
+
+    // MARK: - 内容区（自适应两列 / 单列）
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.intelligenceDashboard {
+        case .idle, .loading:
+            IntelligenceSkeletonContent()
+        case let .failed(error):
+            IntelligenceErrorCard(error: error, model: model)
+        case let .loaded(snapshot):
+            IntelligenceLoadedContent(
+                snapshot: snapshot,
+                activeSheet: $activeSheet,
+                model: model)
         }
     }
 
@@ -38,222 +123,56 @@ struct IntelligenceSectionView: View {
             set: { if !$0 { model.legacyAIMigrationNotice = nil } }
         )
     }
-
-    // MARK: - 盘中执行决策
-
-    private var intradayCard: some View {
-        SectionCard(
-            title: "盘中执行决策",
-            subtitle: "信号 + 可执行性 + 再平衡执行（非 LLM 猜仓位）",
-            icon: "clock.arrow.circlepath",
-            trailing: {
-                Button {
-                    model.runIntradayDecision()
-                } label: {
-                    Label(
-                        model.isRunningIntradayDecision ? "决策中…" : "立即评估",
-                        systemImage: "arrow.clockwise"
-                    )
-                }
-                .buttonStyle(.appSecondary)
-                .controlSize(.small)
-                .disabled(model.isRunningIntradayDecision || model.intelligenceRuntime == nil)
-            }
-        ) {
-            if let report = model.latestIntradayReport {
-                VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                    LabeledValue(
-                        title: "结论",
-                        value: report.decision == .executeRebalance ? "执行再平衡" : "持有不动"
-                    )
-                    if !report.holdReasons.isEmpty {
-                        Text(report.holdReasons.joined(separator: "；"))
-                            .font(AppPalette.appFont(.footnote))
-                            .foregroundStyle(AppPalette.muted)
-                    }
-                    if let plan = report.plan, !plan.actions.isEmpty {
-                        Text("计划动作 \(plan.actions.count) 条（provenance 全程可溯）")
-                            .font(AppPalette.appFont(.footnote))
-                    }
-                    Text("评估时间 \(report.asOf.formatted(date: .abbreviated, time: .shortened))")
-                        .font(AppPalette.appFont(.caption))
-                        .foregroundStyle(AppPalette.muted)
-                }
-            } else {
-                emptyHint("评估持仓相对「维持当前配置」的偏差与可执行性")
-            }
-        }
-    }
-
-    // MARK: - 市场发现
-
-    private var discoveryCard: some View {
-        SectionCard(
-            title: "市场发现",
-            subtitle: "本地因子先筛 + top-K 选择性研究（替代盲扫）",
-            icon: "dot.radiowaves.left.and.right",
-            trailing: {
-                Button {
-                    model.runMarketDiscovery()
-                } label: {
-                    Label(
-                        model.isRunningMarketDiscovery ? "扫描中…" : "立即扫描",
-                        systemImage: "arrow.clockwise"
-                    )
-                }
-                .buttonStyle(.appSecondary)
-                .controlSize(.small)
-                .disabled(model.isRunningMarketDiscovery || model.intelligenceRuntime == nil)
-            }
-        ) {
-            if let report = model.latestDiscoveryReport {
-                VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                    if report.candidates.isEmpty {
-                        Text("暂无候选（数据不足的标的 \(report.coverageGaps.count) 个已记录）")
-                            .font(AppPalette.appFont(.footnote))
-                            .foregroundStyle(AppPalette.muted)
-                    }
-                    ForEach(report.candidates.prefix(8), id: \.universeKey) { candidate in
-                        HStack {
-                            Text("#\(candidate.rank)")
-                                .font(AppPalette.appFont(.caption, weight: .bold))
-                                .foregroundStyle(AppPalette.brand)
-                                .frame(width: 28, alignment: .leading)
-                            Text(candidate.displayName)
-                                .font(AppPalette.appFont(.subheadline, weight: .medium))
-                            Spacer()
-                            Text("评分 \(candidate.score)")
-                                .font(AppPalette.appFont(.caption, design: .rounded))
-                                .foregroundStyle(AppPalette.muted)
-                        }
-                    }
-                    Text("universe v\(report.universeVersion) · 候选 \(report.candidates.count) · 数据缺口 \(report.coverageGaps.count)")
-                        .font(AppPalette.appFont(.caption))
-                        .foregroundStyle(AppPalette.muted)
-                    // 数据供给诊断（十八轮 P1-1 生产接线：维护摘要可见，
-                    // 缺口可解释——A 股通道未启用不再是「莫名缺数据」）
-                    if let syncSummary = model.latestMarketDataSyncSummary {
-                        Text("数据维护：\(syncSummary)")
-                            .font(AppPalette.appFont(.caption))
-                            .foregroundStyle(AppPalette.muted)
-                    }
-                    if case .notConfigured = model.remoteStagingSyncStatus {
-                        Text("A股行情需启用远程增强通道（remote-staging-sync.json），未启用时 A 股标的计入数据缺口")
-                            .font(AppPalette.appFont(.caption))
-                            .foregroundStyle(AppPalette.muted)
-                    }
-                }
-            } else {
-                emptyHint("从内置 universe（31 标的）用本地动量/趋势/回撤因子排序")
-            }
-        }
-    }
-
-    // MARK: - 组合研究（WF1，需 LLM）
-
-    private var researchCard: some View {
-        SectionCard(
-            title: "组合研究",
-            subtitle: "Research → 论点 → 信号 → 决策（全链可溯）",
-            icon: "sparkles",
-            trailing: {
-                Button {
-                    model.runPortfolioResearch()
-                } label: {
-                    Label(
-                        model.isRunningPortfolioResearch ? "研究中…" : "开始研究",
-                        systemImage: "wand.and.stars"
-                    )
-                }
-                .buttonStyle(.appPrimary)
-                .controlSize(.small)
-                .disabled(
-                    model.isRunningPortfolioResearch
-                        || !model.intelligenceV2ProviderConfigured
-                        || model.intelligenceRuntime == nil
-                )
-            }
-        ) {
-            if !model.intelligenceV2ProviderConfigured {
-                Label("配置 AI 模型后启用（下方填写）", systemImage: "lock")
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-            } else if let artifactID = model.latestResearchArtifactID {
-                VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                    LabeledValue(title: "最新决策 Artifact", value: String(artifactID.prefix(24)) + "…")
-                    // 概要来自 AppModel published 状态（启动恢复 / 研究完成时
-                    // 异步刷新）——View body 不做同步 SQLite 查询（十八轮 P2-5）
-                    if let summary = model.latestPortfolioDecisionSummary {
-                        LabeledValue(title: "结论", value: summary.status == "singlePreferred"
-                                     ? "方案 \(summary.admissiblePlans.first ?? "?") 胜出"
-                                     : "多方案待裁决")
-                        Text("信号引用 \(summary.signalCount) 条 · \(summary.producedAt.formatted(date: .abbreviated, time: .shortened))")
-                            .font(AppPalette.appFont(.caption))
-                            .foregroundStyle(AppPalette.muted)
-                    }
-                }
-            } else {
-                emptyHint("多轮工具调用收集证据，产出结构化信号与决策方案")
-            }
-        }
-    }
-
-    // MARK: - Provider 配置
-
-    private var providerConfigCard: some View {
-        SectionCard(
-            title: "AI 模型配置",
-            subtitle: "baseURL / 模型存本地设置，API Key 存 Keychain（不落盘）",
-            icon: "key"
-        ) {
-            VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                LabeledTextField(title: "Base URL", text: $llmBaseURL, placeholder: "https://open.bigmodel.cn/api/paas/v4")
-                LabeledTextField(title: "模型", text: $llmModel, placeholder: "glm-4.7")
-                SecureField("API Key（Keychain）", text: $llmAPIKey)
-                    .textFieldStyle(.roundedBorder)
-                HStack {
-                    Button("保存配置") {
-                        IntelligenceV2ProviderSettings.save(
-                            baseURL: llmBaseURL, model: llmModel, apiKey: llmAPIKey
-                        )
-                        llmAPIKey = ""
-                        model.objectWillChange.send()
-                    }
-                    .buttonStyle(.appPrimary)
-                    .controlSize(.small)
-                    .disabled(llmBaseURL.isEmpty || llmModel.isEmpty)
-                    if model.intelligenceV2ProviderConfigured {
-                        Label("已配置", systemImage: "checkmark.circle.fill")
-                            .font(AppPalette.appFont(.caption, weight: .medium))
-                            .foregroundStyle(AppPalette.positive)
-                    }
-                }
-            }
-        }
-    }
-
-    private func emptyHint(_ text: String) -> some View {
-        Text(text)
-            .font(AppPalette.appFont(.subheadline))
-            .foregroundStyle(AppPalette.muted)
-            .padding(.vertical, AppPalette.spaceS)
-    }
 }
 
-/// 轻量标题输入行（配置卡用；不引通用组件依赖）。
-private struct LabeledTextField: View {
-    let title: String
-    @Binding var text: String
-    let placeholder: String
+// MARK: - 已加载内容（布局分流）
+
+private struct IntelligenceLoadedContent: View {
+    let snapshot: InvestmentIntelligenceDashboardSnapshot
+    @Binding var activeSheet: IntelligenceSectionView.IntelligenceSheet?
+    @ObservedObject var model: AppModel
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(AppPalette.appFont(.footnote, weight: .medium))
-                .foregroundStyle(AppPalette.muted)
-                .frame(width: 64, alignment: .leading)
-            TextField(placeholder, text: $text)
-                .textFieldStyle(.roundedBorder)
+        IntelligenceOverviewCard(
+            snapshot: snapshot,
+            activeSheet: $activeSheet,
+            model: model)
+
+        ViewThatFits(in: .horizontal) {
+            twoColumnLayout
+            singleColumnLayout
+        }
+    }
+
+    private var twoColumnLayout: some View {
+        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+            HStack(alignment: .top, spacing: AppPalette.spaceL) {
+                StrategicAllocationCard(
+                    snapshot: snapshot, activeSheet: $activeSheet)
+                    .frame(maxWidth: .infinity)
+                IntelligenceStatusCard(snapshot: snapshot, activeSheet: $activeSheet, model: model)
+                    .frame(width: 320)
+            }
+            HStack(alignment: .top, spacing: AppPalette.spaceL) {
+                IntradayDecisionCard(
+                    snapshot: snapshot, activeSheet: $activeSheet, model: model)
+                    .frame(maxWidth: .infinity)
+                MarketDiscoveryCard(snapshot: snapshot, model: model)
+                    .frame(width: 320)
+            }
+            PortfolioResearchCard(snapshot: snapshot, model: model)
+            IntelligenceHistoryCard(history: snapshot.history)
+        }
+    }
+
+    private var singleColumnLayout: some View {
+        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+            StrategicAllocationCard(snapshot: snapshot, activeSheet: $activeSheet)
+            IntelligenceStatusCard(snapshot: snapshot, activeSheet: $activeSheet, model: model)
+            IntradayDecisionCard(snapshot: snapshot, activeSheet: $activeSheet, model: model)
+            MarketDiscoveryCard(snapshot: snapshot, model: model)
+            PortfolioResearchCard(snapshot: snapshot, model: model)
+            IntelligenceHistoryCard(history: snapshot.history)
         }
     }
 }
