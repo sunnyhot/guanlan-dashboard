@@ -67,6 +67,15 @@ enum AppMainWindowDuplicatePolicy {
     }
 }
 
+enum AppMainWindowDiscardPolicy {
+    /// SwiftUI scene windows are owned by the SwiftUI scene runtime; closing
+    /// one from AppKit-side teardown races the scene lifecycle (most visibly
+    /// under persistent-state restoration at login). Hiding is enough.
+    static func shouldClose(windowClassName: String) -> Bool {
+        !windowClassName.hasPrefix("SwiftUI.")
+    }
+}
+
 @MainActor
 final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("QiemanDashboard.mainWindow")
@@ -495,6 +504,12 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
             contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
+        // Lifetime is owned by the mainWindow reference: with the default
+        // isReleasedWhenClosed = true, the duplicate-convergence close()
+        // releases the window while AppKit still holds transient references
+        // (window list, state restoration, pending autoreleases), which
+        // over-releases it and crashes later in an autorelease pool pop.
+        window.isReleasedWhenClosed = false
         window.center()
         configureMainWindowIdentity(window)
         window.titleVisibility = .hidden
@@ -793,7 +808,15 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         if window.delegate === self {
             window.delegate = nil
         }
-        window.close()
+        // A closed window can outlive this call (isReleasedWhenClosed = false
+        // on manual windows); strip its main-window identity so a lingering
+        // instance is never re-matched by findReusableMainWindow /
+        // isMainWindowCandidate and resurrected as a duplicate.
+        window.identifier = nil
+        window.title = ""
+        if AppMainWindowDiscardPolicy.shouldClose(windowClassName: NSStringFromClass(type(of: window))) {
+            window.close()
+        }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
