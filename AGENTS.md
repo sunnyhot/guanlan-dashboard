@@ -84,8 +84,9 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 |---|---|
 | `InvestmentIntelligenceV2/Workflows/` | WF-1..3：PortfolioResearchWorkflow（Research→Thesis→Signals→Decision 全链，DecisionValidator 落库前强制门禁）/ MarketDiscoveryWorkflow（universe 策展 v1 + 本地因子打分 + top-K 选择性研究，替代固定八组 Tavily 盲扫）/ IntradayWorkflow（Signal+Eligibility+执行决策，非 LLM 猜仓位，validity=tradingSession）；含 ThesisStore / ResearchEvidencePersister |
 | `InvestmentIntelligenceV2/Research/` | RES-1..9：ModelGateway / ResearchHarness（多轮 Tool Calling）/ 工具集 / SignalExtraction / Validation 管道 / SignalStore / EvidenceMatcher / StructuredGeneration |
-| `InvestmentIntelligenceV2/Presentation/` | PRES-1：DecisionNarrator（只解释不重决）/ ResearchNarrator / ArtifactQueryService（UI 唯一读面） |
+| `InvestmentIntelligenceV2/Presentation/` | PRES-1：DecisionNarrator（只解释不重决）/ ResearchNarrator / ArtifactQueryService（UI 唯一读面）。产品展示层（2026-08-26 重构）：`InvestmentIntelligenceDashboardSnapshot`（双端共用 DTO，状态全 enum）+ `DashboardProjector.dashboardSnapshot`（聚合入口；盘中/决策报告按 target ID 可解析性过滤，旧自复制 Target 产物只留历史审计）+ `IntelligencePresentationFormatter`（稳定文案 + `IntelligenceUserFacingError` 七类错误映射与恢复动作） |
 | `InvestmentIntelligenceV2/Decision/` | DEC-*：criterion 求值比较 / TargetRebalancePlanner（Δw 唯一来源，D001）/ ConstraintGate / PortfolioDecisionArtifact + DecisionValidator + Replayer |
+| `InvestmentIntelligenceV2/Persistence/`（user-intent） | 用户意图文件事实源（2026-08-26 产品重构 P0，不进 SQLite、删库重放不丢）：`StrategicAllocationTargetStore`（战略目标 append-only 事件 + current 指针原子推进；五类完备写入门禁 `validateCompleteCoverage`，同 ID 异内容/伪 ID fail-closed）与 `StrategicAssetClassAssignmentStore`（持仓资产分类事件；用户桶恒优先于系统识别）。Target/分类只从用户动作产生（D000），LLM/Signal 无构造通道 |
 | `Core/Clients/` | 数据源 + LLM 传输层（契约层与诊断日志在 WF-4 迁入归位） |
 
 > 旧三条 AI 链路（`Core/TrendResearch/` + `Core/Trend/` + `Core/NextHourGuidance*`）与 V1 Slice 0-7（`Core/InvestmentIntelligence/`）已于 2026-08-26（WF-4+WF-5）全部删除；`FundLookThrough.swift` 刻意保留（双端穿透 UI 在用，切换 V2 计算器属后续 UI 迁移）。
