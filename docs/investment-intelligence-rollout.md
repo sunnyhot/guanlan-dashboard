@@ -1764,6 +1764,29 @@ macos-app/
 >   环境性排除同前）；golden happy path 指纹/ID 不变（P2-2 只影响降级
 >   路径测试断言）。
 >
+> **十四轮审查修复（2026-08-26，1×P3 确定性 bug + 1×P3 预告收口 + 3 项
+> 外观收敛——Epic 11 深度复查：全量基线对比 / GRDB codec / AgentJob 状态机）**：
+> - **P3 SEC companyfacts unit 跨进程不确定**：`units.values.first` 依赖
+>   Dictionary 迭代序（字符串哈希带进程随机种子），EPS 等概念同时有 USD
+>   与 USD/shares 时不同进程选中不同 unit → evidence 内容漂移 → 内容寻址
+>   ID 漂移。修复：USD 优先、其余按 unit 名排序取最小；回归测试用
+>   shares-in-front JSON 锁定。
+> - **P3 防密钥落盘（类型层收口）**：`ResearchSourcesConfiguration` 移除
+>   Codable（零消费方）——含明文 apiKey 的值类型不提供序列化能力，
+>   Epic 12 持久化需求出现时必须显式设计（非凭据走 JSON、凭据走
+>   Keychain，对照 TrendAnalysisSettingsStore 拆分模式）。
+> - **外观收敛**：`budgetViolation` 去掉从不抛的 throws 与无消费的 tuple
+>   Int；截断改按字节预算（原按字符计数，CJK 最多超 ~3 倍，尾部多字节以
+>   U+FFFD 替换、信封经 JSONEncoder 转义仍合法 JSON）；Tavily 配置补
+>   `tavilyEnabled` 开关（与 SEC/AV 形态对称，默认 true 兼容）。
+> - **全量 signal-11 复查确认**：基线 `359b27f`（Epic 11 前）worktree
+>   同样复现——AppLaunch 预存在环境问题，非 Epic 11 引入，与本文档
+>   「环境性排除同前」口径一致。
+> - 复查同时验证无问题的面：SignalRow codec（枚举 fail-closed / 时间戳 /
+>   JSON 列码）、AgentJob 状态机迁移合法性、191 套件顺序执行零污染、
+>   前十三轮修复无回归、golden 指纹/ID 未变。
+> - 修复后 189 套件 1717 tests 绿（AppLaunch 环境性排除同前）。
+>
 > Epic 11（LLM Research 子系统）解锁——WF-1/2/3 的真实 Signal 生产前置。
 
 ---
