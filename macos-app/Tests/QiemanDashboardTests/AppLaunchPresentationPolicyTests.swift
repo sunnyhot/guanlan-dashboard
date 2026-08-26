@@ -49,6 +49,11 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         ))
     }
 
+    func testDiscardPolicyNeverClosesSwiftUIOwnedWindows() {
+        XCTAssertFalse(AppMainWindowDiscardPolicy.shouldClose(windowClassName: "SwiftUI.Window"))
+        XCTAssertTrue(AppMainWindowDiscardPolicy.shouldClose(windowClassName: "NSWindow"))
+    }
+
     @MainActor
     func testTrackingNewSceneDiscardsPreviousTrackedWindowEvenIfPreviousIsNotYetVisible() {
         let delegate = QiemanApplicationDelegate()
@@ -180,6 +185,7 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         XCTAssertNotNil(created)
         XCTAssertEqual(created?.identifier, NSUserInterfaceItemIdentifier("QiemanDashboard.mainWindow"))
         created?.delegate = nil
+        created?.identifier = nil
         created?.orderOut(nil)
         created?.close()
     }
@@ -287,10 +293,11 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         delegate.finishLaunchingDate = Date(timeIntervalSinceNow: -10)
         delegate.showMainWindow()
         let manual = try XCTUnwrap(delegate.mainWindow)
-        // createMainWindow leaves isReleasedWhenClosed at the default true;
-        // opt out so the discard-close below cannot free the instance that the
-        // defer block still touches (use-after-free crashed CI with SIGSEGV).
-        manual.isReleasedWhenClosed = false
+        // createMainWindow must opt out of isReleasedWhenClosed so the
+        // discard-close below cannot free the instance that the defer block
+        // still touches (use-after-free crashed CI with SIGSEGV, and shipped
+        // as the v4.2.1 login-launch SIGSEGV in objc_release).
+        XCTAssertFalse(manual.isReleasedWhenClosed)
 
         let scene = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 240),
@@ -315,6 +322,28 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
         XCTAssertTrue(tracked)
         XCTAssertTrue(delegate.mainWindow === scene)
         XCTAssertFalse(manual.isVisible)
+    }
+
+    @MainActor
+    func testCreateMainWindowOptsOutOfReleaseOnClose() throws {
+        let delegate = QiemanApplicationDelegate()
+        delegate.configure(model: AppModel())
+
+        delegate.createMainWindow()
+
+        let window = try XCTUnwrap(delegate.mainWindow)
+        // isReleasedWhenClosed = true makes close() release the window while
+        // AppKit may still hold transient references (state restoration,
+        // window list) — the v4.2.1 login-launch over-release crash.
+        XCTAssertFalse(window.isReleasedWhenClosed)
+        // Mirror discardDuplicateMainWindow cleanup: without the release-on-
+        // close the closed window lingers in NSApp.windows and would pollute
+        // later tests' global window-list assertions.
+        window.delegate = nil
+        window.identifier = nil
+        window.title = ""
+        window.orderOut(nil)
+        window.close()
     }
 
     @MainActor
