@@ -271,7 +271,11 @@ struct MarketDiscoveryWorkflow: Sendable {
             inputFingerprint: StableDigest.digest(fingerprint),
             createdAt: now
         )
-        if job.state == .cancelled {
+        // 取消点：job 在 run 内创建、恒为 queued，原 `job.state == .cancelled`
+        // 是永假死代码（十八轮审查 P2-7）——改查外层结构化并发任务，调用方
+        // 取消 enclosing task 时本 job 以合法的 queued→cancelled 收场
+        if Task.isCancelled {
+            try? job.transition(to: .cancelled, at: now, detail: nil)
             return RunOutcome(job: job, report: nil, errorDetail: nil)
         }
         do {

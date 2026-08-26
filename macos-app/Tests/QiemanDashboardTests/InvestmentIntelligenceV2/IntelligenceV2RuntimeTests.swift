@@ -318,28 +318,43 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
 
     // MARK: - Bootstrap 冒烟（composition root）
 
+    /// 等待异步 bootstrap（十八轮 P2：开库含迁移移出主线程）收敛。
     @MainActor
-    func testBootstrapOpensDatabaseAndBuildsRuntime() throws {
+    private func waitForRuntime(_ model: AppModel) async throws {
+        for _ in 0..<100 {
+            if model.intelligenceRuntime != nil { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    @MainActor
+    func testBootstrapOpensDatabaseAndBuildsRuntime() async throws {
         let model = AppModel()
         let directory = try makeTempDirectory()
         model.dataDirectoryURL = directory
         model.bootstrapIntelligenceV2()
 
+        try await waitForRuntime(model)
         let runtime = try XCTUnwrap(model.intelligenceRuntime, "composition root 应建立运行时")
         // QueryService 可用:空库查询零结果不报错
         let summaries = try runtime.queryService.latestPortfolioDecisions(limit: 5)
         XCTAssertTrue(summaries.isEmpty)
         // 幂等:重复 bootstrap 不重建
         model.bootstrapIntelligenceV2()
+        try await waitForRuntime(model)
     }
 
     @MainActor
     func testMarketDiscoveryActionRunsOnEmptyData() async throws {
-        // 空库 + 空 universe 数据:动作跑完 → coverage gap 全量,报告可读
+        // 空库 + 空 universe 数据:动作跑完 → coverage gap 全量,报告可读。
+        // 维护链注入空候选（不打真实网络——网络路径由
+        // MarketDataMaintenanceTests 用 stub 覆盖）
         let model = AppModel()
         let directory = try makeTempDirectory()
         model.dataDirectoryURL = directory
+        model.marketDataChainFactoryOverride = { _ in ProviderFallbackChain(adapters: []) }
         model.bootstrapIntelligenceV2()
+        try await waitForRuntime(model)
         XCTAssertNotNil(model.intelligenceRuntime)
 
         model.runMarketDiscovery()

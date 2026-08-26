@@ -295,9 +295,12 @@ extension AppModel {
         let queryService: ArtifactQueryService
     }
 
+    /// 引导 V2 运行时（十八轮 P2：开库含迁移，移出主线程——原先 start()
+    /// 内同步执行会卡启动）。
     func bootstrapIntelligenceV2() {
-        guard intelligenceRuntime == nil else { return }
+        guard intelligenceRuntime == nil, !isBootstrappingIntelligence else { return }
         guard let dataDirectory = dataDirectoryURL else { return }
+        isBootstrappingIntelligence = true
         // 诊断日志挂载（十七轮 P2：record 默认 no-op,生产需显式挂文件
         #if canImport(AppKit) || canImport(UIKit)
         Task.detached(priority: .utility) {
@@ -316,52 +319,118 @@ extension AppModel {
             }
         }
         #endif
-        do {
-            let database = try CanonicalStorePaths.openDatabase(in: dataDirectory)
-            let repository = GRDBRepository(
-                database: database,
-                calendarBackend: HolidayTableTradingCalendar.bundled
-            )
-            intelligenceRuntime = IntelligenceV2Runtime(
-                repository: repository,
-                queryService: ArtifactQueryService(repository: repository)
-            )
-        } catch {
-            latestIntelligenceError = "投资智能数据目录初始化失败：\(error.localizedDescription)"
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let database = try CanonicalStorePaths.openDatabase(in: dataDirectory)
+                let repository = GRDBRepository(
+                    database: database,
+                    calendarBackend: HolidayTableTradingCalendar.bundled
+                )
+                let runtime = IntelligenceV2Runtime(
+                    repository: repository,
+                    queryService: ArtifactQueryService(repository: repository)
+                )
+                await MainActor.run { [weak self] in
+                    self?.intelligenceRuntime = runtime
+                    self?.isBootstrappingIntelligence = false
+                    self?.restoreLatestIntelligenceArtifacts(runtime: runtime)
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.isBootstrappingIntelligence = false
+                    self?.latestIntelligenceError =
+                        "投资智能数据目录初始化失败：\(error.localizedDescription)"
+                }
+            }
         }
     }
 
-    // MARK: - WF2 市场发现（纯本地，无 LLM 依赖）
+    /// 重启恢复（十八轮 P2-5）：UI 消费的是 AppModel 内存态，重启后库里有
+    /// artifact 但板块空白——启动时经 ArtifactQueryService 统一读面把最新
+    /// 产物灌回 published 状态。只补空位，不覆盖本会话新产出。
+    @MainActor
+    func restoreLatestIntelligenceArtifacts(runtime: IntelligenceV2Runtime) {
+        if latestDiscoveryReport == nil,
+           let report = try? runtime.queryService.latestMarketDiscoveryReports(limit: 1).first {
+            latestDiscoveryReport = report
+        }
+        if latestIntradayReport == nil,
+           let report = try? runtime.queryService.latestIntradayReports(
+               limit: 1, includeInvalid: true
+           ).first {
+            latestIntradayReport = report
+        }
+        if latestResearchArtifactID == nil {
+            let summary = (try? runtime.queryService.latestPortfolioDecisions(limit: 1))?.first
+            latestResearchArtifactID = summary?.artifactID
+            latestPortfolioDecisionSummary = summary
+        }
+    }
+
+    // MARK: - WF2 市场发现（纯本地因子；数据供给经维护引擎先行）
 
     @MainActor
     func runMarketDiscovery() {
-        guard let runtime = intelligenceRuntime else {
+        guard let runtime = intelligenceRuntime,
+              let dataDirectory = dataDirectoryURL else {
             latestIntelligenceError = "投资智能运行时未就绪"
             return
         }
         guard !isRunningMarketDiscovery else { return }
         isRunningMarketDiscovery = true
         latestIntelligenceError = nil
-        let rows = personalAssetRows
         let now = Date()
+        let chainFactory = marketDataChainFactoryOverride
+            ?? MarketDataMaintenanceEngine.productionChainFactory(
+                healthMonitor: marketProviderHealthMonitor,
+                alphaVantage: MarketDataMaintenanceEngine.productionAlphaVantageSettings()
+            )
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningMarketDiscovery = false } }
             do {
-                // identity 建立（universe 条目 → providerCode→canonical 映射）
-                let sync = IdentitySync(repository: runtime.repository)
-                _ = try sync.establish(
-                    hints: MarketUniverseCatalog.v1.entries.map(\.identityHint)
+                // 数据维护先行（十八轮 P1-1）：identity 建立 → universe 回填
+                // （首轮冷库多批次推进）→ 收盘增量 + remote spool 提交。维护
+                // 失败不阻断扫描——降级为 coverage gap（DATA006 local 兜底），
+                // 报告显式记录缺口而不是失败
+                let engine = MarketDataMaintenanceEngine(
+                    repository: runtime.repository,
+                    dataDirectory: dataDirectory,
+                    chainFactory: chainFactory
                 )
+                let maintenanceSummary: String
+                if let summary = try? await engine.runMaintenance(backfillRounds: 3) {
+                    maintenanceSummary = summary
+                } else {
+                    maintenanceSummary = "市场数据维护失败（本次扫描基于库内既有数据）"
+                }
+                await MainActor.run {
+                    self?.latestMarketDataSyncSummary = maintenanceSummary
+                }
+
+                // identity 建立兜底（幂等；维护引擎已建过，引擎整体失败时
+                // 保证 discovery 自身的 factor 读取与后续提交可用）
+                try MarketDataMaintenanceEngine.establishUniverseIdentity(
+                    repository: runtime.repository
+                )
+
+                // 因子快照批量缓冲（原逐条目一个写事务 → 整轮单事务，
+                // 十八轮 P2；含 coverage-gap 条目——失效传播不留盲区）
+                let snapshotBuffer = FactorSnapshotBuffer()
                 let workflow = MarketDiscoveryWorkflow(
                     repository: runtime.repository,
                     snapshotSink: { snapshot in
-                        try runtime.repository.database.queue.write { db in
-                            try ArtifactRow.write(
-                                try ArtifactRow.from(snapshot), into: db)
-                        }
+                        snapshotBuffer.append(snapshot)
                     }
                 )
                 let outcome = workflow.run(asOf: now, now: now)
+                let snapshots = snapshotBuffer.drain()
+                if !snapshots.isEmpty {
+                    try await runtime.repository.database.queue.write { db in
+                        for snapshot in snapshots {
+                            try ArtifactRow.write(try ArtifactRow.from(snapshot), into: db)
+                        }
+                    }
+                }
                 guard let report = outcome.report else {
                     throw NSError(domain: "intelligence", code: 1,
                                   userInfo: [NSLocalizedDescriptionKey:
@@ -454,6 +523,11 @@ extension AppModel {
         latestIntelligenceError = nil
         let rows = personalAssetRows
         let now = Date()
+        // 选择性研究接线（十八轮 P2-4）：市场发现 top-K 候选 → assetTasks，
+        // LLM / Tavily 只花在本地因子筛出的标的上（AGENTS.md 的 Epic 12
+        // 语义——「本地因子先筛 + 选择性研究」的研究侧闭环）。limit 4 是
+        // 单次点击的 LLM 预算上限；top-K 8 全量留给批处理场景
+        let discoveryAssetTasks = latestDiscoveryReport?.researchTasks(limit: 4) ?? []
         let provider = OpenAICompatibleModelProvider(configuration: configuration)
         var gatewayPolicy = ModelGatewayPolicy()
         gatewayPolicy.maxRetriesPerProvider = 1
@@ -489,7 +563,7 @@ extension AppModel {
                 )
                 let input = PortfolioResearchWorkflow.Input(
                     portfolioSubject: subject,
-                    assetTasks: [],
+                    assetTasks: discoveryAssetTasks,
                     portfolioTask: ResearchTask(
                         subject: subject,
                         objective: "评估组合当前配置的动量、估值与主要风险"
@@ -499,6 +573,9 @@ extension AppModel {
                 await MainActor.run {
                     if outcome.succeeded {
                         self?.latestResearchArtifactID = outcome.artifact?.id.rawValue
+                        // 概要统一读面刷新（十八轮 P2-5：View body 不查库）
+                        let summary = (try? runtime.queryService.latestPortfolioDecisions(limit: 1))?.first
+                        self?.latestPortfolioDecisionSummary = summary
                     } else {
                         self?.latestIntelligenceError =
                             "组合研究失败：\(outcome.errorDetail ?? "unknown")"

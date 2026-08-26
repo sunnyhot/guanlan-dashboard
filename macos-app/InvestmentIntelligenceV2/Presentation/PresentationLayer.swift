@@ -193,8 +193,14 @@ struct ArtifactQueryService: Sendable {
     }
 
     func intradayExecutionReport(id: String) throws -> IntradayExecutionReport? {
+        // nil 语义与两个兄弟点查一致：不存在 → nil；存在但损坏 → 抛错
+        // fail-closed（十八轮审查 P1-2）
         try repository.database.queue.read { db in
-            try ArtifactRow.fetchIntradayExecutionReport(id: id, from: db)
+            do {
+                return try ArtifactRow.fetchIntradayExecutionReport(id: id, from: db)
+            } catch ArtifactReadError.notFound {
+                return nil
+            }
         }
     }
 

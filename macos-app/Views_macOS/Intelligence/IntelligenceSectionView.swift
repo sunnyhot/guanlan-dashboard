@@ -130,6 +130,18 @@ struct IntelligenceSectionView: View {
                     Text("universe v\(report.universeVersion) · 候选 \(report.candidates.count) · 数据缺口 \(report.coverageGaps.count)")
                         .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
+                    // 数据供给诊断（十八轮 P1-1 生产接线：维护摘要可见，
+                    // 缺口可解释——A 股通道未启用不再是「莫名缺数据」）
+                    if let syncSummary = model.latestMarketDataSyncSummary {
+                        Text("数据维护：\(syncSummary)")
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                    }
+                    if case .notConfigured = model.remoteStagingSyncStatus {
+                        Text("A股行情需启用远程增强通道（remote-staging-sync.json），未启用时 A 股标的计入数据缺口")
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                    }
                 }
             } else {
                 emptyHint("从内置 universe（31 标的）用本地动量/趋势/回撤因子排序")
@@ -169,9 +181,9 @@ struct IntelligenceSectionView: View {
             } else if let artifactID = model.latestResearchArtifactID {
                 VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                     LabeledValue(title: "最新决策 Artifact", value: String(artifactID.prefix(24)) + "…")
-                    if let runtime = model.intelligenceRuntime,
-                       let summaries = try? runtime.queryService.latestPortfolioDecisions(limit: 1),
-                       let summary = summaries.first {
+                    // 概要来自 AppModel published 状态（启动恢复 / 研究完成时
+                    // 异步刷新）——View body 不做同步 SQLite 查询（十八轮 P2-5）
+                    if let summary = model.latestPortfolioDecisionSummary {
                         LabeledValue(title: "结论", value: summary.status == "singlePreferred"
                                      ? "方案 \(summary.admissiblePlans.first ?? "?") 胜出"
                                      : "多方案待裁决")

@@ -115,6 +115,10 @@ final class AppModel: ObservableObject {
     @Published var latestDiscoveryReport: MarketDiscoveryReport?
     @Published var latestIntradayReport: IntradayExecutionReport?
     @Published var latestResearchArtifactID: String?
+    /// 最新决策概要（重启恢复 / 研究完成后续一读面；View body 不再查库）
+    @Published var latestPortfolioDecisionSummary: PortfolioDecisionSummary?
+    /// 市场数据维护摘要（十八轮 P1-1 生产供给闭环的诊断面）
+    @Published var latestMarketDataSyncSummary: String?
     /// 旧 AI 数据一次性迁移告知（WF-5；展示后由 UI 清空）
     @Published var legacyAIMigrationNotice: String?
 
@@ -153,6 +157,15 @@ final class AppModel: ObservableObject {
     var personalAssetAutomationTask: Task<Void, Never>?
     var portfolioAutoRefreshTask: Task<Void, Never>?
     var remoteStagingSyncTask: Task<Void, Never>?
+    var marketDataSyncTask: Task<Void, Never>?
+    /// V2 开库进行中标记（bootstrap 异步化后的幂等守护）
+    var isBootstrappingIntelligence = false
+    /// 行情 Provider 健康监控（跨维护轮持久——quota 记账不随轮重置）
+    let marketProviderHealthMonitor = ProviderHealthMonitor()
+    /// 维护引擎降级链工厂的测试注入点（nil = 生产 Stooq/AV 工厂——
+    /// 单测注入空候选链避免打真实网络）
+    var marketDataChainFactoryOverride:
+        (@Sendable (MarketUniverseEntry) -> ProviderFallbackChain)?
     var activeCommentsRequestKey = ""
     var isApplyingPersonalAssetAutomation = false
     var portfolioLookThroughLoadedRequestKey: String?
@@ -436,6 +449,7 @@ final class AppModel: ObservableObject {
         personalAssetAutomationTask?.cancel()
         portfolioAutoRefreshTask?.cancel()
         remoteStagingSyncTask?.cancel()
+        marketDataSyncTask?.cancel()
     }
 
     func start() async {
@@ -515,6 +529,7 @@ final class AppModel: ObservableObject {
         restartPersonalAssetAutomationLoop()
         restartPortfolioAutoRefreshLoop()
         startRemoteStagingSyncLoopIfNeeded()
+        startMarketDataSyncLoopIfNeeded()
         scheduleAutomaticUpdateCheckIfNeeded()
     }
 

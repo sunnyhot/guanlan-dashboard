@@ -187,15 +187,21 @@ struct PortfolioResearchWorkflow: Sendable {
             // ---- 阶段 1：Research（工具结果收集 + evidence 落库）----
 
             await events(.researchStarted(taskCount: input.assetTasks.count + (input.portfolioTask == nil ? 0 : 1)))
-            // observer 线程安全收集（Harness 在本 run 的并发上下文回调）
+            // observer 线程安全收集（Harness 在本 run 的并发上下文回调）。
+            // 主体绑定走闭包捕获（十八轮审查 P1-3）：每个任务的 observer 副本
+            // 不可变地携带 task.subject，工具结果归属由构造保证——不依赖
+            // 「Harness 工具循环串行」的隐式契约，harness 将来并发执行工具
+            // 也不会把 evidence 归错主体
             let collector = ResearchToolResultCollector()
-            let harness = dependencies.harness.withToolResultObserver {
-                collector.record(toolName: $0, result: $1, at: clock())
-            }
 
             var allNotes: [ResearchNotes] = []
             for task in input.assetTasks + [input.portfolioTask].compactMap({ $0 }) {
-                collector.anchor(subject: task.subject)
+                let harness = dependencies.harness.withToolResultObserver {
+                    collector.record(
+                        toolName: $0, result: $1,
+                        subject: task.subject, at: clock()
+                    )
+                }
                 let outcome = try await harness.run(task: task)
                 guard let notes = outcome.notes else {
                     return await fail(
@@ -389,8 +395,8 @@ struct PortfolioResearchWorkflow: Sendable {
 // MARK: - 工具结果收集（线程安全）
 
 /// ResearchHarness observer 的收集端：记录 (toolName, result, task 主体,
-/// 时间)。task 主体经 Harness 调用上下文传入（observer 闭包只拿到工具
-/// 名与结果——主体由 workflow 在构造 observer 时按当前任务锚定）。
+/// 时间)。主体随 observer 闭包构造传入（每任务一个闭包副本，闭包捕获
+/// 不可变）——不存在可变的锚定状态，任务并发也无归属竞态。
 private final class ResearchToolResultCollector: @unchecked Sendable {
     struct Record: Sendable {
         let toolName: String
@@ -400,21 +406,14 @@ private final class ResearchToolResultCollector: @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    private var subject: CanonicalRef?
     var records: [Record] = []
 
-    /// workflow 在发起每个研究任务前锚定主体（observer 回调读到的是
-    /// 最近锚定的主体——run 循环内串行，无竞态窗口）。
-    func anchor(subject: CanonicalRef) {
+    func record(
+        toolName: String, result: ResearchToolResult,
+        subject: CanonicalRef, at timestamp: Date
+    ) {
         lock.lock()
         defer { lock.unlock() }
-        self.subject = subject
-    }
-
-    func record(toolName: String, result: ResearchToolResult, at timestamp: Date) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let subject else { return }
         records.append(
             Record(toolName: toolName, result: result, taskSubject: subject, timestamp: timestamp)
         )

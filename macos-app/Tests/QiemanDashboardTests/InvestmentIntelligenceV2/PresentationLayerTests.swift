@@ -341,4 +341,16 @@ final class PresentationLayerTests: XCTestCase {
         // 决策列表不被其他 kind 污染
         XCTAssertTrue(try service.latestPortfolioDecisions().isEmpty)
     }
+
+    /// 十八轮 P1-2：三个点查的 nil 语义一致——不存在的 ID → nil（此前
+    /// intradayExecutionReport 对缺失 ID 抛 notFound，与兄弟方法断裂）。
+    func testPointQueryMissingIDReturnsNilAcrossKinds() throws {
+        let repository = GRDBRepository(
+            database: try CanonicalDatabase(), calendarBackend: TestWeekdayCalendar()
+        )
+        let service = ArtifactQueryService(repository: repository)
+        XCTAssertNil(try service.portfolioDecision(id: "dec_missing"))
+        XCTAssertNil(try service.marketDiscoveryReport(id: "mkt_missing"))
+        XCTAssertNil(try service.intradayExecutionReport(id: "itd_missing"))
+    }
 }

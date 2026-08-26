@@ -501,6 +501,18 @@ struct DecisionReplayer: Sendable {
             return .referenceMismatch(
                 declared: "criterion 指纹重复：\(fingerprints.sorted())",
                 artifact: "同 id@version 不同内容")
+        case .criterionDigestFailed(let fingerprint, let underlying):
+            return .referenceMismatch(
+                declared: "criterion[\(fingerprint)] 内容摘要编码失败：\(underlying)",
+                artifact: "材料含不可编码值")
+        case .bandDigestFailed(let version, let underlying):
+            return .referenceMismatch(
+                declared: "band[\(version)] 内容摘要编码失败：\(underlying)",
+                artifact: "材料含不可编码值")
+        case .identityPayloadEncodingFailed(let underlying):
+            return .referenceMismatch(
+                declared: "身份 payload 编码失败：\(underlying)",
+                artifact: "引用层/结果层含不可编码值")
         }
     }
 
@@ -801,6 +813,14 @@ extension PortfolioDecisionArtifact {
         case plannerRunDomainMismatch(artifact: [String], inputs: [String])
         case emptyCriterionDefinitions
         case duplicateCriterionFingerprints([String])
+        /// criterion 内容摘要编码失败（外部材料含不可编码值——可恢复输入
+        /// 错误，十八轮审查 P2-6：不再 try! 崩进程）
+        case criterionDigestFailed(fingerprint: String, underlying: String)
+        /// band 内容摘要编码失败（同上）
+        case bandDigestFailed(version: String, underlying: String)
+        /// 身份 payload 编码失败（引用层/结果层含不可编码值——NaN Decimal
+        /// 等外部材料）
+        case identityPayloadEncodingFailed(underlying: String)
     }
 
     /// 从比较结论组装 artifact（id 确定性派生：引用层 + 内容摘要 + 冻结
@@ -836,28 +856,43 @@ extension PortfolioDecisionArtifact {
         }
         let sortedDefinitions = criterionDefinitions.sorted { $0.fingerprint < $1.fingerprint }
         let criterionVersions = sortedDefinitions.map(\.fingerprint)
-        // 内容摘要（确定性类型,编码失败 = 编程错误,fail-fast）
+        // 内容摘要（编码失败 = 外部材料不可编码，可恢复输入错误——
+        // 十八轮审查 P2-6：try! 崩进程改为 AssemblyError fail-closed）
         var criterionContentDigests: [String: String] = [:]
         for definition in sortedDefinitions {
-            criterionContentDigests[definition.fingerprint] = try! definition.contentDigest()
+            do {
+                criterionContentDigests[definition.fingerprint] = try definition.contentDigest()
+            } catch {
+                throw AssemblyError.criterionDigestFailed(
+                    fingerprint: definition.fingerprint, underlying: "\(error)")
+            }
         }
         let bandVersion = "\(band.policyID)@\(band.version)"
-        let bandContentDigest = try! band.contentDigest()
-        // 确定性类型的编码失败 = 编程错误,fail-fast
-        let payload = try! StableDigest.jsonPayload(IdentityPayload(
-            signalIDs: signalIDs.map(\.rawValue).sorted(),
-            criterionVersions: criterionVersions,
-            criterionContentDigests: criterionContentDigests,
-            factorSnapshotIDs: factorSnapshotIDs.map(\.rawValue).sorted(),
-            targetID: target?.id.rawValue,
-            bandVersion: bandVersion,
-            bandContentDigest: bandContentDigest,
-            plannerInputs: plannerRuns,
-            knowledgeContextSummary: knowledgeContextSummary,
-            decision: decision,
-            comparison: comparison,
-            plans: plans
-        ))
+        let bandContentDigest: String
+        do {
+            bandContentDigest = try band.contentDigest()
+        } catch {
+            throw AssemblyError.bandDigestFailed(version: bandVersion, underlying: "\(error)")
+        }
+        let payload: String
+        do {
+            payload = try StableDigest.jsonPayload(IdentityPayload(
+                signalIDs: signalIDs.map(\.rawValue).sorted(),
+                criterionVersions: criterionVersions,
+                criterionContentDigests: criterionContentDigests,
+                factorSnapshotIDs: factorSnapshotIDs.map(\.rawValue).sorted(),
+                targetID: target?.id.rawValue,
+                bandVersion: bandVersion,
+                bandContentDigest: bandContentDigest,
+                plannerInputs: plannerRuns,
+                knowledgeContextSummary: knowledgeContextSummary,
+                decision: decision,
+                comparison: comparison,
+                plans: plans
+            ))
+        } catch {
+            throw AssemblyError.identityPayloadEncodingFailed(underlying: "\(error)")
+        }
         // 五轮 P1-3 + 八轮 P1-4:criterion / band 的 policy 依赖携带内容
         // 摘要为 version(失效传播按内容粒度)
         let deps: [ArtifactDependency] =
