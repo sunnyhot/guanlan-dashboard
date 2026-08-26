@@ -19,6 +19,7 @@ struct SettingsSectionView: View {
             appearanceSection
             managerSection
             alertSection
+            intelligenceSection
             syncSection
             aboutSection
         }
@@ -29,6 +30,37 @@ struct SettingsSectionView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("完成") { focusedField = nil }
+            }
+        }
+        .onAppear { consumePendingSettingsSection() }
+        .onChange(of: model.pendingSettingsSection) { _ in
+            consumePendingSettingsSection()
+        }
+    }
+
+    /// 消费跨板块深链（AppModel 发布待跳转分区 → 导航并清空）。
+    private func consumePendingSettingsSection() {
+        guard model.pendingSettingsSection == .intelligence else { return }
+        model.pendingSettingsSection = nil
+        // iOS 设置页为单页滚动形态——深链滚到投资智能分区即可
+    }
+
+    // MARK: - 投资智能
+
+    private var intelligenceSection: some View {
+        Section("投资智能") {
+            NavigationLink {
+                IOSSettingsIntelligencePanel()
+            } label: {
+                HStack {
+                    Label("AI 模型与数据源", systemImage: "brain.head.profile")
+                    Spacer()
+                    if IntelligenceV2ProviderSettings.isConfigured {
+                        Text("已就绪").foregroundStyle(IOSDesign.muted)
+                    } else {
+                        Text("缺少模型").foregroundStyle(AppPalette.warning)
+                    }
+                }
             }
         }
     }
