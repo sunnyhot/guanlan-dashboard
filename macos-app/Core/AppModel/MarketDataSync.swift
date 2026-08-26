@@ -29,8 +29,29 @@ struct MarketDataMaintenanceEngine: Sendable {
     let dataDirectory: URL
     let chainFactory: @Sendable (MarketUniverseEntry) -> ProviderFallbackChain
 
+    /// 生产 Provider 声明注册（幂等——重复 register 保留既有统计）。
+    ///
+    /// **必须在 productionChainFactory 产出的链被使用前调用**：monitor 的
+    /// isCallable 对未注册 Provider 一律 false（DATA006「未声明即拒绝」），
+    /// 只挂 monitor 不注册 = 全部候选 skippedNotCallable、零网络（本方法
+    /// 正是修复该缺口的唯一注册入口；App 的维护循环与 agent CLI 共用）。
+    static func registerProductionProviders(
+        healthMonitor: ProviderHealthMonitor,
+        alphaVantage: AlphaVantageSettings?
+    ) async {
+        await healthMonitor.register(.stooq, reliabilityClass: .documentFreeAPI)
+        if let alphaVantage, alphaVantage.isConfigured {
+            await healthMonitor.register(
+                .alphaVantage,
+                reliabilityClass: .documentFreeAPI,
+                quota: QuotaConfig(period: .daily, total: alphaVantage.dailyRequestLimit)
+            )
+        }
+    }
+
     /// 生产降级链工厂：Stooq primary（免费无 key）→ Alpha Vantage
     /// secondary（配置了 key 才挂——quota 感知由 ProviderHealthMonitor 承担）。
+    /// **使用前须先 registerProductionProviders**（见其文档）。
     static func productionChainFactory(
         healthMonitor: ProviderHealthMonitor,
         alphaVantage: AlphaVantageSettings?
@@ -260,10 +281,17 @@ extension AppModel {
     func runSerializedMarketDataMaintenance(backfillRounds: Int) async -> Bool {
         guard let runtime = intelligenceRuntime,
               let dataDirectory = dataDirectoryURL else { return false }
+        let alphaVantage = MarketDataMaintenanceEngine.productionAlphaVantageSettings()
+        // 生产 Provider 注册（幂等）：未注册 = isCallable false = 全部候选
+        // 零网络跳过——必须在链被使用前完成
+        await MarketDataMaintenanceEngine.registerProductionProviders(
+            healthMonitor: marketProviderHealthMonitor,
+            alphaVantage: alphaVantage
+        )
         let chainFactory = marketDataChainFactoryOverride
             ?? MarketDataMaintenanceEngine.productionChainFactory(
                 healthMonitor: marketProviderHealthMonitor,
-                alphaVantage: MarketDataMaintenanceEngine.productionAlphaVantageSettings()
+                alphaVantage: alphaVantage
             )
         let engine = MarketDataMaintenanceEngine(
             repository: runtime.repository,

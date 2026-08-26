@@ -182,4 +182,37 @@ final class MarketDataMaintenanceTests: XCTestCase {
         }
         XCTAssertEqual(tracker.maxOverlap, 1, "并发维护轮必须完全串行（无重叠）")
     }
+
+    /// 生产 Provider 注册缺口回归（agent CLI 接线时发现）：只挂 monitor
+    /// 不注册 = isCallable 对未注册一律 false = 全部候选零网络跳过。
+    /// registerProductionProviders 必须让 stooq / 已配置的 alphaVantage 可调用。
+    func testRegisterProductionProvidersMakesChainCallable() async throws {
+        let monitor = ProviderHealthMonitor()
+        // 注册前：未声明即拒绝（DATA006）
+        let beforeStooq = await monitor.isCallable(.stooq)
+        XCTAssertEqual(beforeStooq, false)
+
+        let unconfiguredAV = AlphaVantageSettings(
+            enabled: true, apiKey: "",
+            dailyRequestLimit: AlphaVantageSettings.freeDailyRequestLimit
+        )
+        await MarketDataMaintenanceEngine.registerProductionProviders(
+            healthMonitor: monitor, alphaVantage: unconfiguredAV
+        )
+        let afterStooq = await monitor.isCallable(.stooq)
+        let afterAVUnconfigured = await monitor.isCallable(.alphaVantage)
+        XCTAssertEqual(afterStooq, true)
+        // 未配置 key 的 AV 不注册（链上也不会挂它）
+        XCTAssertEqual(afterAVUnconfigured, false)
+
+        let configuredAV = AlphaVantageSettings(
+            enabled: true, apiKey: "demo-key",
+            dailyRequestLimit: AlphaVantageSettings.freeDailyRequestLimit
+        )
+        await MarketDataMaintenanceEngine.registerProductionProviders(
+            healthMonitor: monitor, alphaVantage: configuredAV
+        )
+        let afterAVConfigured = await monitor.isCallable(.alphaVantage)
+        XCTAssertEqual(afterAVConfigured, true, "注册幂等且补齐 AV 声明")
+    }
 }
