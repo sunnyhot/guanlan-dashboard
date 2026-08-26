@@ -64,9 +64,45 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
                 LegacyAIDataMigration.markerFileName).path))
     }
 
-    // MARK: - Live 决策材料（P1-1 真实供给）
+    // MARK: - Live 决策材料（P0 重构：真实 Target + 分类解析）
 
-    func testLiveMaterialsProduceConsistentSnapshotAndTarget() throws {
+    /// 五类完备测试目标（产品形态：编辑器只允许保存五类齐备的和为 100% 配置）。
+    static func makeCompleteTarget(now: Date) throws -> AllocationTarget {
+        try StrategicAllocationPolicy().applyUserAllocation(
+            entries: AssetClass.allCases.map { assetClass in
+                AllocationTargetEntry(
+                    assetClass: assetClass,
+                    targetWeight: Ratio(value: Decimal(string: "0.2")!)
+                )
+            },
+            note: "测试五类目标", now: now
+        )
+    }
+
+    /// 带估值行的持仓 fixture（基准日 2028-12-10（CST），priceTime 提供新鲜估值）。
+    static func valuedRow(
+        code: String, assetType: PersonalAssetType = .fund,
+        marketValue: Double, priceTime: String? = "2028-12-09 15:00"
+    ) -> PersonalAssetAggregateRow {
+        let holding = UserPortfolioHolding(
+            fundCode: code, assetType: assetType, units: 1000, costPrice: 1,
+            displayName: code
+        )
+        let valuation = UserPortfolioValuationRow(
+            holding: holding, fundName: code, currentPrice: nil,
+            priceTime: priceTime, priceSource: nil, officialNav: nil,
+            officialNavDate: nil, estimatePrice: nil, estimatePriceTime: nil,
+            marketValue: marketValue, costValue: nil, profitAmount: nil,
+            profitPct: nil, estimateChangePct: nil
+        )
+        return PersonalAssetAggregateRow(
+            key: code, assetType: assetType, fundName: code, fundCode: code,
+            holdingRow: valuation, rawHolding: holding, archivedHolding: nil,
+            pendingTrades: [], plans: []
+        )
+    }
+
+    func testLiveMaterialsFailClosedOnEmptyPortfolio() throws {
         let day = Date(timeIntervalSince1970: 1_860_000_000)
         let rows = [
             PersonalAssetAggregateRow(
@@ -74,62 +110,49 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
                 holdingRow: nil, rawHolding: nil, archivedHolding: nil,
                 pendingTrades: [], plans: []
             ),
-            PersonalAssetAggregateRow(
-                key: "b", assetType: .stock, fundName: "股票 B", fundCode: "600519",
-                holdingRow: nil, rawHolding: nil, archivedHolding: nil,
-                pendingTrades: [], plans: []
-            ),
         ]
-        // effectiveHoldingAmount 来自 marketValue(nil) → 0 → 空持仓 fail-closed
-        XCTAssertThrowsError(try LivePortfolioDecisionMaterials(rows: rows, now: day)
-            .materials(asOf: day)) { error in
-            XCTAssertEqual(error as? LivePortfolioDecisionMaterials.LiveMaterialsError,
-                           .emptyPortfolio)
+        let materials = LivePortfolioDecisionMaterials(
+            rows: rows,
+            classification: ["fund|000001": .resolved(.equity, origin: .user)],
+            target: try Self.makeCompleteTarget(now: day),
+            now: day
+        )
+        XCTAssertThrowsError(try materials.materials(asOf: day)) { error in
+            XCTAssertEqual(
+                error as? LivePortfolioDecisionMaterials.LiveMaterialsError,
+                .emptyPortfolio)
         }
     }
 
-    // MARK: 十七轮 P0 回归
+    // MARK: 十七轮 P0 回归（P0 产品重构改写：真实 target 透传 + 精确归一）
 
     func testLiveMaterialsAcceptsRealAmountsProducingExactTarget() throws {
         // 真实金额（权重比为非终尽小数:123456.78 / 876543.21）——残差归
-        // 最大类后 target 构造不再抛 weightsDoNotSumToOne(P0-1)
+        // 最大仓后权重和恒精确 = 1；target 为用户意图原样透传（不再自复制）
         let day = Date(timeIntervalSince1970: 1_860_000_000)
-        func row(code: String, marketValue: Double) -> PersonalAssetAggregateRow {
-            let holding = UserPortfolioHolding(
-                fundCode: code, assetType: .fund, units: 1000, costPrice: 1,
-                displayName: code
-            )
-            let valuation = UserPortfolioValuationRow(
-                holding: holding, fundName: code, currentPrice: nil,
-                priceTime: nil, priceSource: nil, officialNav: nil,
-                officialNavDate: nil, estimatePrice: nil, estimatePriceTime: nil,
-                marketValue: marketValue, costValue: nil, profitAmount: nil,
-                profitPct: nil, estimateChangePct: nil
-            )
-            return PersonalAssetAggregateRow(
-                key: code, assetType: .fund, fundName: code, fundCode: code,
-                holdingRow: valuation, rawHolding: holding, archivedHolding: nil,
-                pendingTrades: [], plans: []
-            )
-        }
         let rows = [
-            row(code: "000001", marketValue: 123_456.78),
-            row(code: "000002", marketValue: 876_543.21),
-            row(code: "000003", marketValue: 555_555.55),
+            Self.valuedRow(code: "000001", marketValue: 123_456.78),
+            Self.valuedRow(code: "000002", marketValue: 876_543.21),
+            Self.valuedRow(code: "000003", marketValue: 555_555.55),
         ]
-        let materials = try LivePortfolioDecisionMaterials(rows: rows, now: day)
-            .materials(asOf: day)
+        let classification: [String: StrategicAssetClassification] = [
+            "fund|000001": .resolved(.equity, origin: .user),
+            "fund|000002": .resolved(.fixedIncome, origin: .user),
+            "fund|000003": .resolved(.cash, origin: .user),
+        ]
+        let target = try Self.makeCompleteTarget(now: day)
+        let materials = try LivePortfolioDecisionMaterials(
+            rows: rows, classification: classification, target: target, now: day
+        ).materials(asOf: day)
         let run = try XCTUnwrap(materials.plannerRuns["current"])
-        // 权重和恰为 1(positions 权重=target 权重域同构)
+        // 权重和恰为 1（残差归最大仓的 Decimal 精确归一）
         let weightSum = run.portfolio.positions.reduce(Decimal.zero) {
             $0 + $1.weight.value
         }
         XCTAssertEqual(weightSum, Decimal(1), "持仓权重和应为 1(比例归一)")
-        // target 恒过 StrategicAllocationValidator(残差归最大类)
-        let target = try XCTUnwrap(materials.target)
-        XCTAssertEqual(target.entries.reduce(Decimal.zero) {
-            $0 + $1.targetWeight.value
-        }, Decimal(1))
+        // target 原样透传（用户意图不被材料层改写）
+        XCTAssertEqual(materials.target, target)
+        XCTAssertEqual(run.target, target)
     }
 
     func testIntradayHoldsDuringChineseNewYearWithOverride() throws {

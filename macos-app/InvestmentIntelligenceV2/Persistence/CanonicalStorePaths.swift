@@ -7,17 +7,24 @@ import Foundation
 // ```
 // <AppData>/
 // └─ investment-intelligence-v2/          ← V2 工作目录（与 remote-staging 同级）
-//    ├─ canonical.sqlite3                 ← 本类型管辖
-//    └─ remote-staging/                   ← RemoteStagingSyncPaths 管辖
-//       ├─ spool.jsonl
-//       └─ state.json
+//    ├─ canonical.sqlite3                 ← 本类型管辖（可删库重放，派生物）
+//    ├─ remote-staging/                   ← RemoteStagingSyncPaths 管辖
+//    │  ├─ spool.jsonl
+//    │  └─ state.json
+//    └─ user-intent/                      ← 用户意图事实源（不进 SQLite、不可重放）
+//       ├─ allocation-targets/            ← StrategicAllocationTargetStore
+//       │  ├─ <target-id>.json
+//       │  └─ current.json
+//       └─ asset-class-assignments/       ← StrategicAssetClassAssignmentStore
+//          └─ <event-id>.json
 // ```
 //
 // 分层语义：`CanonicalDatabase.init(path:)` 刻意要求父目录已存在（路径拼错
 // 宁可失败暴露，不静默落到别处）——「数据目录布局由 App 侧统一负责」指的就是
 // 本类型：建工作目录（幂等）+ 给出库文件 URL + 打开生产库的单一入口。
 // GRDB-7 的 Repository 装配、Epic 6 的 Sync 循环都经 `openDatabase(in:)`
-// 拿库，不各自拼路径。
+// 拿库，不各自拼路径。user-intent/ 是用户输入（Target / 资产分类）的事实源
+// ——删库重放只重建派生的行情与 artifact，用户意图永不丢。
 
 /// Canonical Store 的数据目录规划（纯函数命名空间 + 生产库打开入口）。
 enum CanonicalStorePaths {

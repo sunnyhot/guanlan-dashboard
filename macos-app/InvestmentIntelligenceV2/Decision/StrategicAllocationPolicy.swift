@@ -140,9 +140,16 @@ struct StrategicAllocationValidator: Sendable {
         case duplicateAssetClass(AssetClass)
         /// 权重和 ≠ 1（显式报差值；「剩余配 cash」类隐式补齐禁止）
         case weightsDoNotSumToOne(sum: Decimal)
+        /// 用户意图存储的五类完备门禁：缺类即拒（允许权重为 0，不允许缺类）
+        case missingAssetClasses([AssetClass])
     }
 
     /// 校验目标条目集：非空 / 权重非负 / 无重复资产类 / 权重和恰为 1。
+    ///
+    /// 基础不变量——decode 门禁（`AllocationTarget.init(from:)`）与本方法
+    /// 共用：历史 artifact 内嵌的精简类目 Target（算法测试 / 旧对照链
+    /// 产物）仍可解码审计；「五类完备」只约束**用户意图写入**（见
+    /// `validateCompleteCoverage`），不追溯既有数据。
     func validate(entries: [AllocationTargetEntry]) throws {
         guard !entries.isEmpty else { throw ValidationError.emptyEntries }
         var seen = Set<AssetClass>()
@@ -158,6 +165,18 @@ struct StrategicAllocationValidator: Sendable {
         }
         guard sum == Decimal(1) else {
             throw ValidationError.weightsDoNotSumToOne(sum: sum)
+        }
+    }
+
+    /// 用户意图写入门禁：在基础不变量之上要求显式覆盖
+    /// `AssetClass.allCases` 全部五类（权重可为 0，缺类即拒）。
+    /// Target Store 落盘前必经；Strategy 编辑器保存路径同源调用。
+    func validateCompleteCoverage(entries: [AllocationTargetEntry]) throws {
+        try validate(entries: entries)
+        let present = Set(entries.map(\.assetClass))
+        let missing = AssetClass.allCases.filter { !present.contains($0) }
+        guard missing.isEmpty else {
+            throw ValidationError.missingAssetClasses(missing)
         }
     }
 }

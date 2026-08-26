@@ -4,13 +4,14 @@ import GRDB
 // MARK: - Investment Intelligence V2 生产运行时（composition root，十六轮审查 P1-1）
 //
 // App 启动时引导（bootstrap）：打开 canonical.sqlite3 → GRDBRepository →
-// ArtifactQueryService。动作面：市场发现（WF2，纯本地）/ 盘中执行决策
-// （WF3，纯本地）/ 组合研究（WF1，需 LLM 配置——baseURL/model 走
-// UserDefaults，apiKey 走 Keychain，与旧链路同一 account 复用既有凭据）。
+// ArtifactQueryService + 用户意图 Store（Target / 资产分类，文件事实源）。
+// 动作面：市场发现（WF2，纯本地）/ 盘中执行决策（WF3，纯本地）/ 组合研究
+// （WF1，需 LLM 配置——baseURL/model 走 UserDefaults，apiKey 走 Keychain，
+// 与旧链路同一 account 复用既有凭据）。
 //
-// 决策材料（真实供给）：从 personalAssetRows 构造 PortfolioSnapshot，
-// AllocationTarget = 当前资产类聚合权重（「维持当前配置」的再平衡对照——
-// 偏差超容忍带才产动作，用户无显式目标配置时不发明目标，D000 语义）。
+// 决策输入（P0 产品重构）：Target 只来自用户意图 Store（无显式目标时
+// fail-closed 不写 Artifact）；持仓资产类经「用户显式 > 股票规则 > 披露
+// 识别」解析，unresolved 持仓阻断执行计划——不再自复制当前仓位。
 
 // MARK: - V2 LLM Provider 配置（防密钥落盘拆分：非凭据 UserDefaults / 凭据 Keychain）
 
@@ -79,137 +80,10 @@ enum IntelligenceV2ProviderSettings {
 }
 
 // MARK: - 真实决策材料供给（WF1 / WF3 共用）
-
-/// 从 App 持仓行构造 V2 决策输入（PortfolioSnapshot + 「维持当前配置」
-/// 对照 target + costIntensity criterion + 单 plannerRun）。
-struct LivePortfolioDecisionMaterials: PortfolioDecisionMaterialsProviding {
-    let rows: [PersonalAssetAggregateRow]
-    let now: Date
-
-    private func dec(_ double: Double) -> Decimal {
-        // locale 无关（String(format:) 的 %f 随 locale 出逗号）;金额精度
-        // 到分位足够构造权重比例
-        Decimal((double * 10_000).rounded() / 10_000)
-    }
-
-    /// 持仓 → V2 positions（subjectKey 与 AttributionSubject.stableKey 同域）。
-    /// 权重归一（十七轮 P0-1 根治）：残差 (1 − Σothers) 归入最大仓——
-    /// Decimal 除法对非终尽小数（1/3 等）的权和 ≠ 1,下游 target 校验
-    /// 精确比对 1,不归一必然被拒。
-    private var positions: [PortfolioPosition] {
-        let amounts = rows.compactMap { row -> (code: String, amount: Decimal, assetClass: AssetClass)? in
-            guard row.effectiveHoldingAmount > 0, let code = row.fundCode,
-                  !code.isEmpty else { return nil }
-            // 资产类映射（十七轮 P2 已知限制）：股票 → equity；基金内部
-            // 细分（债/货/黄金）需穿透数据，当前统一 alternative——精确
-            // 分类属后续 FundLookThrough 接线
-            return (
-                code, dec(row.effectiveHoldingAmount),
-                row.assetType == .stock ? .equity : .alternative
-            )
-        }
-        let total = amounts.map(\.amount).reduce(Decimal.zero, +)
-        guard total > 0 else { return [] }
-        var normalized = amounts.map {
-            (code: $0.code, assetClass: $0.assetClass, weight: $0.amount / total)
-        }
-        // 残差归最大仓（和恒精确 = 1）
-        let largestIndex = normalized.indices.max(by: {
-            normalized[$0].weight == normalized[$1].weight
-                ? normalized[$0].code < normalized[$1].code
-                : normalized[$0].weight < normalized[$1].weight
-        })
-        if let largestIndex {
-            let othersSum = normalized.enumerated()
-                .filter { $0.offset != largestIndex }
-                .reduce(Decimal.zero) { $0 + $1.element.weight }
-            normalized[largestIndex].weight = Decimal(1) - othersSum
-        }
-        return normalized.map {
-            PortfolioPosition(
-                subjectKey: "fund|\($0.code)",
-                assetClass: $0.assetClass,
-                weight: Ratio(value: $0.weight)
-            )
-        }
-    }
-
-    func materials(asOf: Date) throws -> PortfolioDecisionMaterials {
-        let snapshotPositions = positions
-        guard !snapshotPositions.isEmpty else {
-            throw LiveMaterialsError.emptyPortfolio
-        }
-        let portfolio = PortfolioSnapshot(asOf: asOf, positions: snapshotPositions)
-
-        // 「维持当前配置」对照 target：资产类聚合权重归一化（用户显式
-        // 目标配置入口属后续 UI story——无显式目标时不发明目标，对照
-        // 现状只检查漂移；带内不交易）。
-        // 归一化（十七轮 P0-1）：Decimal 除法对非终尽小数（如 1/3）的
-        // 权重和 ≠ 1，StrategicAllocationValidator 精确校验会拒——把
-        // 残差 (1 − Σothers) 归入权重最大的类，entries 权重和恒精确 = 1。
-        var classTotals: [AssetClass: Decimal] = [:]
-        for position in snapshotPositions {
-            classTotals[position.assetClass, default: 0] += position.weight.value
-        }
-        guard let largestClass = classTotals.max(by: {
-            $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value < $1.value
-        })?.key else {
-            throw LiveMaterialsError.emptyPortfolio
-        }
-        let othersSum = classTotals
-            .filter { $0.key != largestClass }
-            .values.reduce(Decimal.zero, +)
-        classTotals[largestClass] = Decimal(1) - othersSum
-        let entries = classTotals
-            .map { AllocationTargetEntry(assetClass: $0.key, targetWeight: Ratio(value: $0.value)) }
-            .sorted { $0.assetClass.rawValue < $1.assetClass.rawValue }
-        let target = try StrategicAllocationPolicy().applyUserAllocation(
-            entries: entries, note: "维持当前配置（对照检查漂移）", now: asOf
-        )
-
-        let definition = CriterionDefinition(
-            id: "costIntensity", version: "v1", evaluatorKind: .weightedSum,
-            inputReferences: [CriterionDefinition.InputReference(
-                kind: .planMetric, referenceID: PlanMetrics.turnover, weight: 1)],
-            unit: .ratio, higherIsBetter: false
-        )
-        let bounds = Dictionary(
-            uniqueKeysWithValues: snapshotPositions.map {
-                ($0.subjectKey, ActionDomain.SubjectBounds(
-                    lower: Ratio(value: Decimal(string: "-1")!), upper: Ratio(value: Decimal(string: "1")!)))
-            }
-        )
-        let actionDomain = ActionDomain(
-            perSubjectBounds: bounds,
-            eligibleNewSubjects: [:],
-            builderVersion: "live-v1",
-            newSubjectBuyUpper: Ratio(value: Decimal(string: "1")!)
-        )
-        let plannerRun = DecisionReplayer.PlannerRun(
-            portfolio: portfolio, target: target, remediationTargets: [],
-            userDirectives: [], actionDomain: actionDomain,
-            plannerParameters: TargetRebalancePlanner.Parameters()
-        )
-        return PortfolioDecisionMaterials(
-            replayerMaterials: DecisionReplayer.ReplayMaterials(
-                criterionDefinitions: [definition.fingerprint: definition],
-                factorSnapshots: [:], observations: [:],
-                band: IndifferenceBand(
-                    policyID: "live-band", version: "v1",
-                    defaultBand: Decimal(string: "0.01")!,
-                    rationale: "生产默认带——turnover 差 1% 内视为无差异"
-                )
-            ),
-            plannerRuns: ["current": plannerRun],
-            target: target,
-            knowledgeContextSummary: "economicKnowledge(自 \(now))· live materials"
-        )
-    }
-
-    enum LiveMaterialsError: Error, Equatable, Sendable {
-        case emptyPortfolio
-    }
-}
+//
+// LivePortfolioDecisionMaterials 定义在 Core/AppModel/InvestmentIntelligenceV2Materials.swift
+// （P0 重构：target 由 Target Store 的用户意图传入 + 持仓资产分类经解析
+// 优先级确定，不再自复制当前仓位伪造对照目标）。
 
 // MARK: - 旧 AI 数据迁移（WF-5「清空重来并明确告知」，十六轮审查 P1-6）
 
@@ -293,6 +167,10 @@ extension AppModel {
     struct IntelligenceV2Runtime: Sendable {
         let repository: GRDBRepository
         let queryService: ArtifactQueryService
+        /// 用户战略目标 Store（user-intent/allocation-targets，文件事实源）。
+        let targetStore: StrategicAllocationTargetStore
+        /// 持仓战略资产分类 Store（user-intent/asset-class-assignments）。
+        let assignmentStore: StrategicAssetClassAssignmentStore
     }
 
     /// 引导 V2 运行时（十八轮 P2：开库含迁移，移出主线程——原先 start()
@@ -326,9 +204,12 @@ extension AppModel {
                     database: database,
                     calendarBackend: HolidayTableTradingCalendar.bundled
                 )
+                let workDirectory = CanonicalStorePaths.workDirectory(in: dataDirectory)
                 let runtime = IntelligenceV2Runtime(
                     repository: repository,
-                    queryService: ArtifactQueryService(repository: repository)
+                    queryService: ArtifactQueryService(repository: repository),
+                    targetStore: StrategicAllocationTargetStore(workDirectory: workDirectory),
+                    assignmentStore: StrategicAssetClassAssignmentStore(workDirectory: workDirectory)
                 )
                 await MainActor.run { [weak self] in
                     self?.intelligenceRuntime = runtime
@@ -439,17 +320,20 @@ extension AppModel {
         isRunningIntradayDecision = true
         latestIntelligenceError = nil
         let rows = personalAssetRows
+        let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
         let now = Date()
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningIntradayDecision = false } }
             do {
-                let subject = CanonicalRef.fundShareClass(FundShareClassID(rawValue: "portfolio_live"))
-                let materials = LivePortfolioDecisionMaterials(rows: rows, now: now)
+                // P0：真实 Target（无 → fail-closed）+ 分类解析（unresolved → 阻断）
+                let materials = try LiveDecisionMaterialsAssembler.assemble(
+                    rows: rows, disclosures: disclosures, runtime: runtime, now: now)
                 let providerMaterials = try materials.materials(asOf: now)
                 guard let plannerRun = providerMaterials.plannerRuns["current"] else {
                     throw NSError(domain: "intelligence", code: 3,
                                   userInfo: [NSLocalizedDescriptionKey: "决策材料缺规划输入"])
                 }
+                let subject = CanonicalRef.fundShareClass(FundShareClassID(rawValue: "portfolio_live"))
                 let input = IntradayWorkflow.Input(
                     subject: subject,
                     portfolio: plannerRun.portfolio,
@@ -473,6 +357,10 @@ extension AppModel {
                         try ArtifactRow.from(report), into: db)
                 }
                 await MainActor.run { self?.latestIntradayReport = report }
+            } catch let inputError as IntelligenceInputError {
+                await MainActor.run {
+                    self?.latestIntelligenceError = inputError.userFacingMessage
+                }
             } catch {
                 await MainActor.run {
                     self?.latestIntelligenceError = "盘中决策失败：\(error.localizedDescription)"
@@ -503,6 +391,7 @@ extension AppModel {
         isRunningPortfolioResearch = true
         latestIntelligenceError = nil
         let rows = personalAssetRows
+        let disclosures = portfolioLookThroughSnapshot?.disclosures ?? [:]
         let now = Date()
         // 选择性研究接线（十八轮 P2-4）：市场发现 top-K 候选 → assetTasks，
         // LLM / Tavily 只花在本地因子筛出的标的上（AGENTS.md 的 Epic 12
@@ -515,6 +404,9 @@ extension AppModel {
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningPortfolioResearch = false } }
             do {
+                // P0：研究当前也产出决策 Artifact，Target 同样必须就绪（fail-closed）
+                let liveMaterials = try LiveDecisionMaterialsAssembler.assemble(
+                    rows: rows, disclosures: disclosures, runtime: runtime, now: now)
                 let subject = CanonicalRef.fundShareClass(FundShareClassID(rawValue: "portfolio_live"))
                 let harness = ResearchHarness(
                     gateway: ModelGateway(providers: [provider], policy: gatewayPolicy),
@@ -536,7 +428,7 @@ extension AppModel {
                         signalStore: runtime.repository,
                         thesisStore: runtime.repository,
                         evidenceStore: runtime.repository,
-                        decisionMaterials: LivePortfolioDecisionMaterials(rows: rows, now: now),
+                        decisionMaterials: liveMaterials,
                         artifactSink: { artifact in
                             try runtime.repository.writeArtifact(artifact)
                         }
@@ -561,6 +453,10 @@ extension AppModel {
                         self?.latestIntelligenceError =
                             "组合研究失败：\(outcome.errorDetail ?? "unknown")"
                     }
+                }
+            } catch let inputError as IntelligenceInputError {
+                await MainActor.run {
+                    self?.latestIntelligenceError = inputError.userFacingMessage
                 }
             } catch {
                 await MainActor.run {
