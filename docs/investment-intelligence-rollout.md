@@ -2072,6 +2072,32 @@ macos-app/
 
 ### Epic 13 — Agent Runtime 独立化 + 可选 package 抽取
 
+> **状态（2026-08-26，AGENT-1 已签收）**：`InvestmentIntelligenceV2/Agent/`
+> 三文件落地——AgentJob/AgentEvent 从 ATTR-4 位置迁入（AgentJobStatus 从
+> IntelligenceSchema 迁入，同模块移动消费方零改动）：
+> - **AgentJobStore**：agent_jobs / agent_job_events / agent_checkpoints
+>   的领域读面。enqueue 按 idempotency_key（workflow|fingerprint）幂等
+>   （UNIQUE 唯一键兜底并发）；record 按事件时间线增量追加（重复幂等，
+>   崩溃时留 RUNNING 行即恢复线索）；job(id:) 读回走 toAgentJob 全量
+>   fail-closed 校验（身份闭环 / 时间线 / 冗余列一致——codec 十余轮审查
+>   成果直接复用）；input_json 存 {fingerprint, input}（旧纯指纹行可解码，
+>   续跑需原始输入时显式拒收不猜）；
+> - **WorkflowRegistry**：kind → runner 调度面。submit 幂等——同输入
+>   completed → alreadyCompleted（不重跑）；queued/running → inProgress；
+>   failed/cancelled → 新 attempt（fingerprint 后缀 `#n`，重试一等公民，
+>   每次尝试独立成行完整审计）；执行逐步落库（STARTED 先行，终态后落）；
+> - **JobRecovery**：非终端作业两态处置——queued 直跑（同行续时间线）；
+>   running 且陈旧（超过 staleAfter 无事件/检查点活动）→ abandoned 标
+>   failed + 新 attempt 续跑，新 attempt 经 context.resumeCheckpoints 收到
+>   崩溃行已落盘检查点（续跑而非从头重来的通道；registry 不解释 state）。
+>   活跃判定 = max(最后事件, 最后检查点)（无心跳列——迁移只追加，已发布
+>   schema 不动；单写者现实下足够，并发双进程由调用方用足够 staleAfter 排除）。
+> 测试 `AgentRuntimeTests` 11 个：指纹约定 / 入队幂等 / 事件增量 / 检查点
+> 与活跃度 / 提交幂等与重试 / 陈旧恢复带检查点 / 活跃拒收 / queued 直跑 /
+> 终态与缺失 / 混合状态扫描。消费方（AGENT-2 CLI 的 data-sync /
+> market-research / portfolio-review / attribution 命令走 registry 提交）
+> 随 AGENT-2 落地。
+
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | AGENT-1 | `AgentJob` / `AgentEvent` / `WorkflowRegistry` / `JobRecovery`（checkpoint + idempotency key）| WF-* | 8 | |

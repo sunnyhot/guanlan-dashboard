@@ -189,14 +189,8 @@ enum IntelligenceSchema {
 // MARK: - AgentJobStatus（ATTR-4 / AGENT-1 的 Job 生命周期）
 
 /// Agent Job 生命周期状态（rollout ATTR-4：queued/running/completed/failed/
-/// cancelled）。定义在 schema 文件——Epic 13 Agent/ 目录展开时随 story 迁移。
-enum AgentJobStatus: String, Sendable, Codable, Hashable, CaseIterable {
-    case queued = "QUEUED"
-    case running = "RUNNING"
-    case completed = "COMPLETED"
-    case failed = "FAILED"
-    case cancelled = "CANCELLED"
-}
+/// cancelled）。AGENT-1 已迁至 Agent/AgentJob.swift（同模块移动，此处不再
+/// 重复定义）。
 
 // MARK: - 行类型（有领域类型的表）
 
