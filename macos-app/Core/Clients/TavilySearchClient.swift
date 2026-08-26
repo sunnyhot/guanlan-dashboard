@@ -347,3 +347,29 @@ private extension KeyedDecodingContainer {
         return nil
     }
 }
+
+// MARK: - 联网搜索可用性阻断原因
+
+/// 联网搜索可用性阻断原因（Tavily 配额 / 鉴权；传输层与 V2 Research 共用）。
+/// 原生于 Core/TrendResearch/TrendWebSearchGovernor.swift（旧趋势链路），
+/// 旧链路下线（WF-4）时随 TavilySearchClient 迁入此处归位。
+enum TrendWebSearchAvailabilityBlockReason: String, Sendable {
+    case quotaOrRateLimit
+    case authentication
+
+    var toolErrorCode: String {
+        switch self {
+        case .quotaOrRateLimit: "web_search_quota_exhausted"
+        case .authentication: "web_search_auth_failed"
+        }
+    }
+
+    var userFacingMessage: String {
+        switch self {
+        case .quotaOrRateLimit:
+            "Tavily 套餐额度已用尽或达到请求限制；已暂停重复联网请求。请升级套餐、更换 API Key，或等待额度恢复。"
+        case .authentication:
+            "Tavily API Key 鉴权失败；已暂停联网搜索。请检查 Key 配置。"
+        }
+    }
+}

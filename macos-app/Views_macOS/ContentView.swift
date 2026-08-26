@@ -51,9 +51,6 @@ struct ContentView: View {
         }
         .task {
             await model.start()
-            // 趋势分析是 LLM 后台任务，与首屏无关，不阻塞 .task 完成；
-            // 必须在 start() 之后（依赖其加载的 trendSettings），用 fire-and-forget 解耦。
-            Task { await model.runDailyTrendAnalysisIfNeeded() }
             model.refreshDataForSectionIfNeeded(model.selectedSection)
         }
         .onChange(of: model.selectedSection) { _, section in
@@ -254,7 +251,6 @@ struct ContentView: View {
     private func sidebarBadge(for section: AppSection) -> Int {
         switch section {
         case .portfolio: return model.pendingTrades.count
-        case .enhancement: return model.trendTrackingItems.count
         default: return 0
         }
     }
@@ -273,9 +269,6 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .platform:
             PlatformActivitySectionView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .enhancement:
-            EnhancementCenterView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -373,16 +366,10 @@ private struct SidebarSectionButton: View {
                 Task { try? await model.refreshLatest() }
             }
             .keyboardShortcut("r", modifiers: .command)
-            if section == .enhancement {
-                Divider()
-                Button("生成趋势分析") {
-                    model.startTrendAnalysis(userInitiated: true)
-                }
-                Button("快捷操作") {
-                    model.isPresentingCommandPalette = true
-                }
-                .keyboardShortcut("k", modifiers: .command)
+            Button("快捷操作") {
+                model.isPresentingCommandPalette = true
             }
+            .keyboardShortcut("k", modifiers: .command)
         }
         .animation(AppPalette.motionStandard, value: isHovering)
         .animation(AppPalette.motionSpring, value: isSelected)

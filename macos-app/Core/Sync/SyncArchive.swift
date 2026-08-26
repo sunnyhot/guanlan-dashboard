@@ -23,7 +23,6 @@ struct SyncPayload: Codable {
     var watchlist: [WatchlistItemSync]
 
     // 趋势配置(含 API Key,加密保护;内存短暂存在)
-    var trendSettings: TrendSettingsSyncDTO
 
     static let currentSchemaVersion = 1
 }
@@ -102,19 +101,6 @@ struct WatchlistItemSync: Codable {
     func toRecord() -> PersonalWatchlistRecord {
         PersonalWatchlistRecord(item: item, baseline: baseline,
                                 dailyPoints: [], alertRules: alertRules, alertState: nil)
-    }
-}
-
-/// 趋势配置(含 API Key)。仅在内存短暂存在,加密后随 payload 传输。
-struct TrendSettingsSyncDTO: Codable {
-    var provider: TrendAIProviderSettings
-    var webSearch: TavilySearchSettings
-    var alphaVantage: AlphaVantageSettings
-
-    init(from s: TrendAnalysisSettings) {
-        self.provider = s.provider
-        self.webSearch = s.webSearch
-        self.alphaVantage = s.alphaVantage
     }
 }
 

@@ -13,7 +13,6 @@ struct PersonalAssetTableRow: View {
     var sixthWidth: CGFloat = 190
     var actionWidth: CGFloat = 128
     var labelWidth: CGFloat = 260
-    var trendSummary: TrendAssetTagSummary?
     var isSelectedForComparison = false
     var isComparisonToggleDisabled = false
     var allowsHoverFeedback = true
@@ -77,10 +76,6 @@ struct PersonalAssetTableRow: View {
                 }
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
-                if let trendSummary {
-                    trendSignalBlock(trendSummary)
-                        .padding(.top, 2)
-                }
             }
             .frame(width: labelWidth, alignment: .leading)
             .modifier(AssetTableLabelColumnModifier(isCompact: isCompact, minWidth: labelWidth))
@@ -327,12 +322,6 @@ struct PersonalAssetTableRow: View {
             Button("管理计划…") { isPresentingPlanManager = true }
             Divider()
             Button("查看详情…") { onOpenDetail?() }
-            if let summary = trendSummary {
-                Button("复制趋势摘要") {
-                    let text = "\(row.fundName)(\(row.fundCode ?? "-"))：\(summary.impactText)"
-                    PasteboardHelper.copy(text)
-                }
-            }
             Divider()
             Button("删除", role: .destructive) {
                 pendingDeleteScope = .all
@@ -351,44 +340,6 @@ struct PersonalAssetTableRow: View {
             ? (row.changePeriodTitle == "今日涨跌" ? "今日" : "最近")
             : row.changePeriodTitle
         return "\(prefix) \(dailyChangeCurrencyText(row.estimateChangeAmount, market: row.detectedMarket)) · \(dailyChangePercentText(row.estimateChangePct))"
-    }
-
-    private func trendSignalBlock(_ summary: TrendAssetTagSummary) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles")
-                    .font(AppPalette.appFont(.caption, weight: .bold))
-                    .foregroundStyle((summary.primaryDirection?.assetTagTone ?? .brand).color)
-                Text(primaryTrendText(summary))
-                    .font(AppPalette.appFont(.footnote, weight: .bold))
-                    .foregroundStyle((summary.primaryDirection?.assetTagTone ?? .brand).color)
-                    .lineLimit(1)
-                Text(summary.impactText)
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-            }
-
-            HStack(spacing: 6) {
-                Text(summary.tradePlan.method)
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(1)
-                if !summary.counterSignals.isEmpty {
-                    Text("·")
-                        .foregroundStyle(AppPalette.muted)
-                    Text("\(summary.counterSignals.count) 条反证")
-                        .foregroundStyle(AppPalette.warning)
-                        .lineLimit(1)
-                }
-            }
-            .font(AppPalette.appFont(.caption, weight: .medium))
-        }
-    }
-
-    private func primaryTrendText(_ summary: TrendAssetTagSummary) -> String {
-        guard let direction = summary.primaryDirection else { return summary.tradePlan.label }
-        return "\(summary.tradePlan.label) · \(direction.assetTagText) · \(summary.primaryConfidence.label)"
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
@@ -625,25 +576,6 @@ struct PersonalAssetTableRow: View {
             return "calendar"
         case .all:
             return "trash"
-        }
-    }
-}
-
-private extension TrendAssetTagTone {
-    var color: Color {
-        switch self {
-        case .brand:
-            return AppPalette.brand
-        case .positive:
-            return AppPalette.positive
-        case .info:
-            return AppPalette.info
-        case .warning:
-            return AppPalette.warning
-        case .danger:
-            return AppPalette.danger
-        case .muted:
-            return AppPalette.muted
         }
     }
 }

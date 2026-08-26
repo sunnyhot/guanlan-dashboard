@@ -9,7 +9,6 @@ enum TodayBriefKind: String, Hashable {
     case platformAction
     case forumRecord
     case managerWatch
-    case closeReviewMissed
 }
 
 enum TodayBriefDestination: Hashable {
@@ -17,7 +16,6 @@ enum TodayBriefDestination: Hashable {
     case platform
     case forum
     case settings
-    case aiResearch
 }
 
 enum TodayBriefTone: Hashable {
@@ -62,8 +60,6 @@ struct TodayBriefContext: Hashable {
     let managerWatchEnabled: Bool
     let managerWatchScopeText: String
     let managerWatchError: String?
-    /// 今晚收盘复盘的自动窗口已尝试但未成功（同日至多一次，不会自动重试）。
-    let closeReviewAutoMissed: Bool
 
     init(
         hasPersonalPortfolio: Bool,
@@ -102,7 +98,6 @@ struct TodayBriefContext: Hashable {
         self.managerWatchEnabled = managerWatchEnabled
         self.managerWatchScopeText = managerWatchScopeText
         self.managerWatchError = managerWatchError
-        self.closeReviewAutoMissed = closeReviewAutoMissed
     }
 }
 
@@ -142,20 +137,6 @@ enum TodayBriefBuilder {
             )
         }
 
-        if context.closeReviewAutoMissed {
-            items.append(
-                TodayBriefItem(
-                    kind: .closeReviewMissed,
-                    title: "收盘复盘未完成",
-                    detail: "今晚自动复盘未成功，不会自动重试，可手动补做",
-                    metric: "待补做",
-                    iconName: "sunset",
-                    tone: .warning,
-                    destination: .aiResearch,
-                    priority: 32
-                )
-            )
-        }
 
         if context.pendingActionCount > 0 {
             items.append(
@@ -316,10 +297,6 @@ extension AppModel {
             }
         let latestPlatform = latestPlatformActions.first
         let latestForum = hasForumPosts ? forumRecords.first : nil
-        var closeReviewAutoMissed = false
-        if case .tonightUnfinished(autoAttempted: true) = marketCloseReviewFreshness.phase {
-            closeReviewAutoMissed = true
-        }
 
         return TodayBriefContext(
             hasPersonalPortfolio: hasPersonalPortfolio || personalAssetSummary != nil,
@@ -338,8 +315,7 @@ extension AppModel {
             latestForumDate: latestForum?.createdAt,
             managerWatchEnabled: managerWatchSettings.isEnabled,
             managerWatchScopeText: managerWatchScopeText,
-            managerWatchError: managerWatchSettings.lastErrorMessage,
-            closeReviewAutoMissed: closeReviewAutoMissed
+            managerWatchError: managerWatchSettings.lastErrorMessage
         )
     }
 }

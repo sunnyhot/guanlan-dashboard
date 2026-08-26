@@ -2,7 +2,6 @@ import Foundation
 
 enum MenuBarTickerKind: String, Codable, CaseIterable, Identifiable {
     case totalValue
-    case aiPosture
     case overallDailyAmount
     case overallDailyPct
     case overallProfitAmount
@@ -48,7 +47,6 @@ enum MenuBarTickerKind: String, Codable, CaseIterable, Identifiable {
 
         switch self {
         case .totalValue: return "总资产"
-        case .aiPosture: return "AI 姿态"
         case .overallDailyAmount: return "整体涨跌额"
         case .overallDailyPct: return "整体涨跌率"
         case .overallProfitAmount: return "整体收益额"
@@ -80,8 +78,6 @@ enum MenuBarTickerKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .totalValue:
             return "总持仓 + 待确认 + 下次计划"
-        case .aiPosture:
-            return "盘中研判的总体倾向(防守/均衡/选择/进攻);无报告或已过期会如实标注"
         case .overallDailyAmount, .overallDailyPct:
             return "全部已持有资产今日涨跌"
         case .overallProfitAmount, .overallProfitPct:

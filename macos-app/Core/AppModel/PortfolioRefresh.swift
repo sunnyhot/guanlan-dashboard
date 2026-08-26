@@ -192,8 +192,5 @@ extension AppModel {
         if portfolioValuationAlertSettings.isEnabled, userPortfolioSnapshot != nil {
             await evaluatePortfolioValuationAlerts()
         }
-
-        // 投资智能(Slice 1):集中度评估。gate 在 InvestmentIntelligence.enabled。
-        await refreshConcentrationDecisionCases()
     }
 }

@@ -183,8 +183,6 @@ extension AppModel {
                 compactText: "总 \(compactCurrency(value))",
                 tone: .neutral
             )
-        case .aiPosture:
-            return menuBarPostureEntry(id: kind.rawValue)
         case .overallDailyAmount:
             let aggregate = aggregates().all
             return aggregate.amountEntry(id: kind.rawValue, title: "整体涨跌", compactTitle: "今", value: aggregate.dailyAmount)
@@ -259,45 +257,6 @@ extension AppModel {
             guard let row = topRow else { return nil }
             return menuBarTickerEntry(row: row, metric: .profitPct, customTitle: "最大收益")
         }
-    }
-
-    /// AI 姿态条目:无报告与已过期都如实标注,不用旧姿态冒充当前判断。
-    /// 过期判定复用摘要卡的 isIntradayExpired(兼容固定槽/手动槽两种格式)。
-    private func menuBarPostureEntry(id: String) -> MenuBarTickerEntry {
-        guard let report = nextHourGuidanceReport else {
-            return MenuBarTickerEntry(
-                id: id,
-                title: "AI 姿态",
-                value: "暂无",
-                detail: "盘中研判将在下一交易时段自动生成",
-                compactText: "AI·暂无盘中研判",
-                tone: .neutral
-            )
-        }
-        let expired = InvestmentTodayResearchSummary.isIntradayExpired(
-            validUntil: report.validUntil,
-            currentTimestamp: Self.timestampString()
-        )
-        let postureText = report.posture.displayName
-        let untilText = String(report.validUntil.suffix(5))
-        if expired {
-            return MenuBarTickerEntry(
-                id: id,
-                title: "AI 姿态",
-                value: postureText,
-                detail: "已过有效期(\(untilText)),等待下一时段研判",
-                compactText: "AI·\(postureText)·已过期",
-                tone: .neutral
-            )
-        }
-        return MenuBarTickerEntry(
-            id: id,
-            title: "AI 姿态",
-            value: postureText,
-            detail: "\(report.headline) · 有效至 \(untilText)",
-            compactText: "AI·\(postureText)·至\(untilText)",
-            tone: .neutral
-        )
     }
 
     func menuBarTickerEntry(indexKind: MarketIndexKind, metric: MarketIndexMetric, id: String) -> MenuBarTickerEntry? {

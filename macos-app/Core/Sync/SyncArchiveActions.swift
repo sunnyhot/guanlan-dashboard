@@ -11,30 +11,9 @@ extension AppModel {
     // MARK: - 组装 SyncPayload
 
     /// 从当前内存数据构建同步 payload。清洗运行态字段。
-    /// 注意:trendSettings 的 API Key 从 Keychain 读取后填入(内存短暂存在)。
+    /// （旧 AI 链路的 trendSettings 同步段已随链路下线删除,WF-4——
+    /// API Key 由 Keychain 本机管理,不再跨设备传输。）
     func makeSyncPayload(sourceDeviceName: String) -> SyncPayload {
-        var settings = trendSettings
-        // API Key:取内存值、Keychain、UserDefaults 三者中第一个非空的。
-        // 不能用 nil 覆盖内存里的非空值(Keychain 弹窗被拒时写入可能失败)。
-        func resolveKey(memValue: String, kcAccount: String, udKey: String) -> String {
-            if !memValue.isEmpty { return memValue }
-            if let kc = KeychainHelper.get(account: kcAccount), !kc.isEmpty { return kc }
-            if let ud = UserDefaults.standard.string(forKey: udKey), !ud.isEmpty { return ud }
-            return ""
-        }
-        settings.provider.apiKey = resolveKey(
-            memValue: settings.provider.apiKey,
-            kcAccount: KeychainHelper.Account.openAIKey,
-            udKey: "qieman.trend.openai.key")
-        settings.webSearch.apiKey = resolveKey(
-            memValue: settings.webSearch.apiKey,
-            kcAccount: KeychainHelper.Account.tavilyKey,
-            udKey: "qieman.trend.tavily.key")
-        settings.alphaVantage.apiKey = resolveKey(
-            memValue: settings.alphaVantage.apiKey,
-            kcAccount: KeychainHelper.Account.alphaVantageKey,
-            udKey: "qieman.trend.alphavantage.key")
-
         return SyncPayload(
             schemaVersion: SyncPayload.currentSchemaVersion,
             exportedAt: Date(),
@@ -46,8 +25,7 @@ extension AppModel {
             valuationAlerts: portfolioValuationAlertProfiles.values.map { ValuationAlertProfileConfig(from: $0) },
             valuationAlertSettings: ValuationAlertSettingsConfig(from: portfolioValuationAlertSettings),
             managerWatch: ManagerWatchSyncConfig(from: managerWatchSettings),
-            watchlist: personalWatchlistRecords.map { WatchlistItemSync(from: $0) },
-            trendSettings: TrendSettingsSyncDTO(from: settings)
+            watchlist: personalWatchlistRecords.map { WatchlistItemSync(from: $0) }
         )
     }
 
@@ -65,21 +43,7 @@ extension AppModel {
         // 2. 备份当前同步文件
         let backupURL = try backupCurrentSyncFiles()
 
-        // 3. 先把 API Key 存入 Keychain + UserDefaults(双写 fallback)
-        if !payload.trendSettings.provider.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
-            UserDefaults.standard.set(payload.trendSettings.provider.apiKey, forKey: "qieman.trend.openai.key")
-        }
-        if !payload.trendSettings.webSearch.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
-            UserDefaults.standard.set(payload.trendSettings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
-        }
-        if !payload.trendSettings.alphaVantage.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
-            UserDefaults.standard.set(payload.trendSettings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
-        }
-
-        // 4. 逐项持久化(失败则恢复备份)
+        // 3. 逐项持久化(失败则恢复备份)
         do {
             try persistSyncedData(payload)
         } catch {
@@ -112,25 +76,6 @@ extension AppModel {
         portfolioValuationAlertSettings = payload.valuationAlertSettings.toSettings()
         payload.managerWatch.merge(into: &managerWatchSettings)
         alfaPortfolios = payload.alfaPortfolios
-
-        // AI 请求和设置界面都直接读取内存中的 API Key。
-        // 明文只不落 JSON 文件，不能在应用同步后把运行态也清空。
-        trendSettings = Self.trendSettingsByApplyingSync(
-            payload.trendSettings,
-            to: trendSettings
-        )
-    }
-
-    /// 纯数据合并：同步三类外部服务配置，保留本机不在同步协议中的运行设置。
-    static func trendSettingsByApplyingSync(
-        _ synced: TrendSettingsSyncDTO,
-        to current: TrendAnalysisSettings
-    ) -> TrendAnalysisSettings {
-        var settings = current
-        settings.provider = synced.provider
-        settings.webSearch = synced.webSearch
-        settings.alphaVantage = synced.alphaVantage
-        return settings
     }
 
     // MARK: - 持久化到文件
@@ -160,20 +105,6 @@ extension AppModel {
         try saveJSON(watchSettings, to: dir.appendingPathComponent("manager-watch-settings.json"), encoder: encoder)
 
         try saveJSON(payload.alfaPortfolios, to: dir.appendingPathComponent("alfa-portfolios.json"), encoder: encoder)
-
-        // 趋势设置:API Key 存 Keychain(已在 applySyncPayload 做了),JSON 只存 config
-        // 保留现有 settings 的其余字段(officialSources/privacy/autoAnalysis),只覆盖 provider/webSearch/alphaVantage
-        var trendForFile = trendSettings
-        trendForFile.provider = payload.trendSettings.provider
-        trendForFile.webSearch = payload.trendSettings.webSearch
-        trendForFile.alphaVantage = payload.trendSettings.alphaVantage
-        trendForFile.provider.apiKey = ""
-        trendForFile.webSearch.apiKey = ""
-        trendForFile.alphaVantage.apiKey = ""
-        let store = TrendAnalysisSettingsStore()
-        if let url = trendAnalysisSettingsFileURL {
-            try store.save(trendForFile, to: url)
-        }
     }
 
     private func saveJSON<T: Encodable>(_ value: T, to url: URL, encoder: JSONEncoder) throws {
@@ -262,7 +193,6 @@ extension AppModel {
         loadPendingTrades()
         loadManagerWatchSettings()
         loadAlfaPortfolios()
-        loadTrendAnalysisState()
         // watchlist/portfolio/alerts 需从文件加载
         if let url = personalWatchlistFileURL,
            let records = try? PersonalWatchlistStore().load(from: url) {

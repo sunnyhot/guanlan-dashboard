@@ -47,7 +47,6 @@ struct ContentView: View {
         }
         .task {
             await model.start()
-            await model.runDailyTrendAnalysisIfNeeded()
             model.refreshDataForSectionIfNeeded(model.selectedSection)
         }
         .onChange(of: model.selectedSection) { _, section in
@@ -66,8 +65,6 @@ struct ContentView: View {
             PortfolioSectionView()
         case .platform:
             PlatformSectionView()
-        case .enhancement:
-            EnhancementSectionView()
         case .settings:
             SettingsSectionView()
         }
@@ -76,7 +73,6 @@ struct ContentView: View {
     private func badge(for section: AppSection) -> Int {
         switch section {
         case .portfolio: return model.pendingTrades.count
-        case .enhancement: return model.trendTrackingItems.count
         default: return 0
         }
     }

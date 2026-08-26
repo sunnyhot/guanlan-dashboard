@@ -15,11 +15,6 @@ extension AppModel {
     func loadEnhancementState() {
         loadManagerWatchTimeline()
         loadPortfolioInsightSnapshots()
-        loadTrendAnalysisState()
-        loadMarketCloseReviewArchive()
-        loadNextHourGuidanceState()
-        loadTrendTrackingState()
-        loadInvestmentIntelligenceState()
     }
 
     func loadManagerWatchTimeline() {

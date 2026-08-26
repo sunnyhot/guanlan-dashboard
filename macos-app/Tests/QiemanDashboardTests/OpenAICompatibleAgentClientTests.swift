@@ -80,7 +80,7 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
                 providerName: "Test",
                 baseURL: "https://api.example.com/v1",
                 model: "glm-5.2",
-                privacyMode: TrendPrivacyMode.sanitized.rawValue,
+                privacyMode: "sanitized",
                 startedAt: "2026-08-10 18:00:00"
             )
         )

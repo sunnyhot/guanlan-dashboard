@@ -60,36 +60,8 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("portfolio-insight-snapshots.json", isDirectory: false)
     }
 
-    var trendAnalysisSettingsFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-analysis-settings.json", isDirectory: false)
-    }
-
-    var trendAnalysisReportFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-analysis-report.json", isDirectory: false)
-    }
-
-    var marketCloseReviewArchiveFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("market-close-review.json", isDirectory: false)
-    }
-
-    var trendAgentRunLogFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-agent.log", isDirectory: false)
-    }
-
-    var trendAgentRunArtifactsDirectoryURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-agent-runs", isDirectory: true)
-    }
-
     var aiAnalysisDiagnosticLogsDirectoryURL: URL? {
         dataDirectoryURL?.appendingPathComponent("ai-analysis-logs", isDirectory: true)
-    }
-
-    var nextHourGuidanceFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("next-hour-guidance.json", isDirectory: false)
-    }
-
-    var trendTrackingItemsFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-tracking-items.json", isDirectory: false)
     }
 
     var fundLookThroughCacheFileURL: URL? {

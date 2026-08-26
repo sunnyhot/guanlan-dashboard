@@ -1,35 +1,8 @@
 import SwiftUI
 
-/// 统一把握度胶囊进度条：数字写在胶囊里，按档位用同色系浅深渐变。
-/// 供总览 AI 趋势摘要、今日研判、跟踪清单等所有展示确定性评分的地方共用。
-struct TrendConfidenceMeter: View {
-    let confidence: TrendConfidence
-
-    var body: some View {
-        let score = confidence.normalizedScore
-        let width: CGFloat = 58
-        let height: CGFloat = 14
-        let fill = max(height, width * CGFloat(score) / 100)
-        let base = score >= 75 ? AppPalette.positive : (score >= 45 ? AppPalette.warning : AppPalette.danger)
-        ZStack(alignment: .leading) {
-            Capsule()
-                .fill(AppPalette.muted.opacity(0.2))
-                .frame(width: width, height: height)
-            Capsule()
-                .fill(LinearGradient(colors: [base.opacity(0.7), base], startPoint: .leading, endPoint: .trailing))
-                .frame(width: fill, height: height)
-            Text("把握\(score)")
-                .font(AppPalette.appFont(.caption2, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: width, height: height)
-        }
-        .frame(width: width, height: height)
-        .help(ResearchTerm.confidence.plainExplanation)
-    }
-}
-
 /// 等高网格：同一行内的卡片取最高者为行高、内容顶对齐，不空撑。
 /// 供收益归因指标、市场视图板块/大盘等需要行内对齐的卡片共用。
+/// （旧 AI 链路的 TrendConfidenceMeter 已随链路下线删除,WF-4。）
 struct EqualHeightGrid<Item: Identifiable, Card: View>: View {
     let items: [Item]
     var columnsCount: Int = 3

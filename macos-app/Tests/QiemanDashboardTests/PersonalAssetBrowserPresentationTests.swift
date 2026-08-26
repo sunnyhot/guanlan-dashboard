@@ -127,7 +127,7 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertTrue(source.contains("case .watchlist:\n            PersonalWatchlistPanel()"))
         XCTAssertTrue(source.contains("PortfolioDiagnosticsPanel(summary: model.portfolioDiagnosticsSummary)"))
         XCTAssertTrue(source.contains("ProfitAttributionPanel(summary: model.profitAttributionSummary)"))
-        XCTAssertTrue(source.contains("PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)"))
+        XCTAssertTrue(source.contains("PersonalAssetBrowser(rows: model.personalAssetRows)"))
         XCTAssertTrue(source.contains("pendingTradesSection\n            investmentPlansSection"))
     }
 
@@ -201,35 +201,6 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
         XCTAssertFalse(rowSource.contains("// In compact mode, show shares inline under the name"))
     }
 
-    func testAssetDetailUsesAIOpinionCopyAndKeepsConditionsVisible() throws {
-        let source = try String(contentsOf: personalAssetDetailSourceURL(), encoding: .utf8)
-
-        XCTAssertTrue(source.contains("detailSection(title: \"AI 观点\", icon: \"sparkles\")"))
-        XCTAssertTrue(source.contains("trendDecisionHeader(summary)"))
-        XCTAssertTrue(source.contains("trendActionBlock(summary.tradePlan)"))
-        XCTAssertTrue(source.contains("trendEvidenceBlock(summary)"))
-        XCTAssertTrue(source.contains("trendEvidenceTitle(summary)"))
-        XCTAssertTrue(source.contains("trendEvidenceDetails(summary)"))
-        XCTAssertTrue(source.contains("let accent = tone.detailAccentColor"))
-        XCTAssertTrue(source.contains("let accent = plan.tone.detailAccentColor"))
-        XCTAssertTrue(source.contains("var detailAccentColor: Color"))
-        XCTAssertTrue(source.contains("self == .muted ? AppPalette.info : color"))
-        XCTAssertTrue(source.contains("Text(trendEvidenceTitle(summary))\n                .font(AppPalette.appFont(.footnote))"))
-        XCTAssertTrue(source.contains(".lineSpacing(1)"))
-        XCTAssertFalse(source.contains("Text(trendEvidenceTitle(summary))\n                .font(.system(size: 11, weight: .semibold))"))
-        XCTAssertFalse(source.contains("private func trendHorizonRow"))
-        let equalHeightFrame = ".frame(maxWidth: .infinity, minHeight: 174, maxHeight: .infinity, alignment: .topLeading)"
-        XCTAssertEqual(source.components(separatedBy: equalHeightFrame).count - 1, 2)
-        XCTAssertTrue(source.contains("trendInvalidationBlock(invalidationConditions)"))
-        XCTAssertTrue(source.contains("title: \"执行前确认\""))
-        XCTAssertTrue(source.contains("Text(\"什么情况下改变判断\")"))
-        XCTAssertTrue(source.contains("summary.tradePlan.invalidatingConditions + summary.counterSignals"))
-        XCTAssertTrue(source.contains("Text(\"数据截至 \\(summary.dataAsOf)\""))
-        XCTAssertFalse(source.contains("Text(\"核心依据\")"))
-        XCTAssertFalse(source.contains("ForEach(summary.tags)"))
-        XCTAssertFalse(source.contains("trendListBlock(title: \"反证条件\""))
-    }
-
     func testAssetDetailShowsInteractivePriceTrendBeforeSupportingSections() throws {
         let detailSource = try String(contentsOf: personalAssetDetailSourceURL(), encoding: .utf8)
         let chartSource = try String(contentsOf: personalAssetTrendChartSourceURL(), encoding: .utf8)
@@ -267,19 +238,11 @@ final class PersonalAssetBrowserPresentationTests: XCTestCase {
     func testTableRowKeepsOnlyNonRedundantAssetAndTrendMetadata() throws {
         let source = try String(contentsOf: personalAssetTableRowSourceURL(), encoding: .utf8)
 
-        XCTAssertTrue(source.contains("if let trendSummary"))
-        XCTAssertTrue(source.contains("trendSignalBlock(trendSummary)"))
-        XCTAssertTrue(source.contains("summary.tradePlan.label"))
-        XCTAssertTrue(source.contains("summary.primaryConfidence.label"))
-        XCTAssertTrue(source.contains("Text(summary.tradePlan.method)"))
-        XCTAssertTrue(source.contains("Text(\"·\")"))
-        XCTAssertTrue(source.contains("Text(\"\\(summary.counterSignals.count) 条反证\")"))
         XCTAssertFalse(source.contains("private func trendTagChip"))
         XCTAssertTrue(source.contains("if row.assetType == .stock, let stockMarketLabel = row.detectedMarket?.displayName"))
         XCTAssertTrue(source.contains("ToolbarBadge(title: stockMarketLabel"))
         XCTAssertFalse(source.contains("rawHolding?.marketLabel"))
         XCTAssertFalse(source.contains("ToolbarBadge(title: row.combinedStatusText"))
-        XCTAssertFalse(source.contains("Spacer(minLength: 4)\n                if !summary.counterSignals.isEmpty"))
         XCTAssertTrue(source.contains("ToolbarBadge(title: \"待确认\""))
         XCTAssertTrue(source.contains("ToolbarBadge(title: \"计划中\""))
     }

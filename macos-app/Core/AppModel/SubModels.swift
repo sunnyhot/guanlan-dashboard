@@ -107,46 +107,5 @@ final class UpdateState: ObservableObject {
 final class EnhancementState: ObservableObject {
     @Published var managerWatchTimelineEvents: [ManagerWatchTimelineEvent] = []
     @Published var portfolioInsightSnapshots: [PortfolioInsightSnapshot] = []
-    @Published var trendReport: TrendAnalysisReport?
-    @Published var trendSettings: TrendAnalysisSettings = .default
-
-    // 「全市场机会」分析 memo(P1 #9 并入):输入未变时复用,
-    // 避免面板与摘要卡同帧各自 analyze。非发布状态,纯缓存。
-    var marketOpportunityMemoKey: String?
-    var marketOpportunityMemoValue: MarketOpportunityAnalysis?
-    var marketOpportunityMemoHitCount = 0
-    @Published var trendGenerationState: TrendGenerationState = .idle
-    @Published var trendResearchScope: TrendResearchRunScope = .full
-    @Published var trendResearchRequestedScope: TrendResearchRunScope = .full
-    @Published var trendResearchProgress: TrendResearchModuleProgress = .idle
-    @Published var marketCloseReviewArchive: MarketCloseReviewArchive?
-    @Published var trendConnectionState: TrendConnectionState = .idle
-    @Published var trendProviderCapabilities: TrendProviderCapabilities?
-    @Published var trendPrivacyMode: TrendPrivacyMode = .sanitized
-    @Published var lastTrendGeneratedAt: String?
-    @Published var lastTrendError = ""
-    @Published var lastTrendConnectionMessage = ""
-    @Published var trendProgressLogs: [TrendProgressLog] = []
-    @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
-    @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
-    @Published var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage = .idle
-    @Published var nextHourGuidanceError = ""
-    @Published var trendTrackingItems: [TrendTrackingItem] = []
-    @Published var selectedTrendTrackingItemID: UUID?
     @Published var isPresentingCommandPalette = false
-
-    // 投资智能(Slice 1):DecisionCase + UserDecisionProfile。
-    // 全部由 InvestmentIntelligence.enabled gate,enabled=false 时不加载不消费。
-    @Published var decisionCases: [DecisionCase] = []
-    @Published var userDecisionProfile: UserDecisionProfile = .default
-    @Published var isRefreshingDecisionCases = false
-    // Slice 3:专项研究状态
-    @Published var decisionCaseResearchState: TrendGenerationState = .idle
-    @Published var lastDecisionCaseResearchError = ""
-    @Published var researchingDecisionCaseID: UUID?
-    @Published var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] = [:]
-    @Published var latestDecisionCaseResearchRuns: [UUID: DecisionCaseResearchRunRecord] = [:]
-    @Published var decisionCaseResearchErrors: [UUID: String] = [:]
-    @Published var decisionCaseReviews: [UUID: [DecisionReview]] = [:]
-    @Published var lastDecisionReviewError = ""
 }

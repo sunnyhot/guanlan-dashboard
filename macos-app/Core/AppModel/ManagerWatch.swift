@@ -526,8 +526,6 @@ extension AppModel {
             openPlatformAction(payload)
         case .forumRecord:
             openForumRecord(payload)
-        case .workbenchTrend:
-            openWorkbenchTrend(targetID: payload.targetID)
         case .personalWatchlist:
             selectedSection = .portfolio
         case .portfolioValuationAlert:
@@ -535,14 +533,6 @@ extension AppModel {
         }
     }
 
-    func openWorkbenchTrend(targetID: String? = nil) {
-        selectedSection = .enhancement
-        if let targetID {
-            // 通知深链跳到 AI 研判单页；命中跟踪项时设置 selectedTrendTrackingItemID，
-            // 页面会监听它并自动展开底部折叠的旧趋势跟踪清单。
-            _ = selectTrackingItem(forTargetID: targetID)
-        }
-    }
 
     func openPlatformAction(_ payload: NotificationDeepLinkPayload) {
         selectedPlatformActivityTab = .adjustments

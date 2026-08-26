@@ -7,7 +7,6 @@ private struct PersonalAssetGroupStats {
 
 struct PersonalAssetBrowser: View {
     let rows: [PersonalAssetAggregateRow]
-    var trendReport: TrendAnalysisReport?
 
     private let comparisonMaxCount = 4
 
@@ -43,7 +42,6 @@ struct PersonalAssetBrowser: View {
             )
             return presentation
         }()
-        let trendTagIndex = TrendAssetTagIndex(report: trendReport)
         let allowsInteraction = selectedDetailRow == nil
 
         VStack(alignment: .leading, spacing: 12) {
@@ -91,7 +89,6 @@ struct PersonalAssetBrowser: View {
             } else {
                 PersonalAssetGroupedTable(
                     rows: presentation.visibleRows,
-                    trendTagIndex: trendTagIndex,
                     comparisonSelection: comparisonSelection,
                     comparisonMaxCount: comparisonMaxCount,
                     allowsHoverFeedback: allowsInteraction,
@@ -103,7 +100,7 @@ struct PersonalAssetBrowser: View {
         }
         .allowsHitTesting(allowsInteraction)
         .sheet(item: $selectedDetailRow) { row in
-            PersonalAssetDetailSheet(row: row, trendSummary: trendTagIndex.summary(for: row))
+            PersonalAssetDetailSheet(row: row)
         }
         .task(id: searchText) {
             try? await Task.sleep(nanoseconds: 150_000_000)
@@ -407,7 +404,6 @@ struct PersonalAssetGroupedTable: View {
     private let onExchangeFundStats: PersonalAssetGroupStats
     let stockRows: [PersonalAssetAggregateRow]
     private let stockStats: PersonalAssetGroupStats
-    let trendTagIndex: TrendAssetTagIndex
     let comparisonSelection: [String]
     let comparisonMaxCount: Int
     let allowsHoverFeedback: Bool
@@ -416,7 +412,6 @@ struct PersonalAssetGroupedTable: View {
 
     init(
         rows: [PersonalAssetAggregateRow],
-        trendTagIndex: TrendAssetTagIndex = TrendAssetTagIndex(report: nil),
         comparisonSelection: [String] = [],
         comparisonMaxCount: Int = 4,
         allowsHoverFeedback: Bool = true,
@@ -443,7 +438,6 @@ struct PersonalAssetGroupedTable: View {
         self.onExchangeFundStats = Self.groupStats(rows: onExchangeFundRows)
         self.stockRows = stockRows
         self.stockStats = Self.groupStats(rows: stockRows)
-        self.trendTagIndex = trendTagIndex
         self.comparisonSelection = comparisonSelection
         self.comparisonMaxCount = comparisonMaxCount
         self.allowsHoverFeedback = allowsHoverFeedback
@@ -504,7 +498,6 @@ struct PersonalAssetGroupedTable: View {
             PersonalAssetTable(
                 rows: rows,
                 usesMarketTradeColumns: usesMarketTradeColumns,
-                trendTagIndex: trendTagIndex,
                 comparisonSelection: comparisonSelection,
                 comparisonMaxCount: comparisonMaxCount,
                 allowsHoverFeedback: allowsHoverFeedback,
@@ -552,7 +545,6 @@ struct PersonalAssetTableColumnLayout: Equatable {
 struct PersonalAssetTable: View {
     let rows: [PersonalAssetAggregateRow]
     let usesMarketTradeColumns: Bool
-    let trendTagIndex: TrendAssetTagIndex
     let comparisonSelection: [String]
     let comparisonMaxCount: Int
     let allowsHoverFeedback: Bool
@@ -567,7 +559,6 @@ struct PersonalAssetTable: View {
     init(
         rows: [PersonalAssetAggregateRow],
         usesMarketTradeColumns: Bool = false,
-        trendTagIndex: TrendAssetTagIndex = TrendAssetTagIndex(report: nil),
         comparisonSelection: [String] = [],
         comparisonMaxCount: Int = 4,
         allowsHoverFeedback: Bool = true,
@@ -576,7 +567,6 @@ struct PersonalAssetTable: View {
     ) {
         self.rows = rows
         self.usesMarketTradeColumns = usesMarketTradeColumns
-        self.trendTagIndex = trendTagIndex
         self.comparisonSelection = comparisonSelection
         self.comparisonMaxCount = comparisonMaxCount
         self.allowsHoverFeedback = allowsHoverFeedback
@@ -710,7 +700,6 @@ struct PersonalAssetTable: View {
                         sixthWidth: sixthColWidth(isCompact: isCompact),
                         actionWidth: actionColWidth(isCompact: isCompact),
                         labelWidth: layout.labelWidth,
-                        trendSummary: trendTagIndex.summary(for: row),
                         isSelectedForComparison: isSelectedForComparison,
                         isComparisonToggleDisabled: !isSelectedForComparison && comparisonSelection.count >= comparisonMaxCount,
                         allowsHoverFeedback: allowsHoverFeedback,

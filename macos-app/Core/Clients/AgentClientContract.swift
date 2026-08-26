@@ -1,10 +1,11 @@
 import Foundation
 
-// 阶段一：内嵌趋势研究 Agent 的传输层数据模型。
+// OpenAI-compatible chat/completions 协议契约层。
 //
-// 这些类型描述 OpenAI-compatible chat/completions 协议里的消息、工具定义、
-// 工具调用与工具结果。它们只负责协议形状，不含任何趋势分析业务规则。
-// 业务规则在 TrendResearchTool / TrendResearchAgent / Validator 中实现。
+// 这些类型描述消息、工具定义、工具调用与工具结果——只负责协议形状，
+// 不含任何业务规则。原生于 Core/TrendResearch/TrendResearchAgentModels.swift
+// （旧趋势链路），旧链路下线（WF-4）时随消费方 Core/Clients 与 V2
+// ModelGateway 迁入此处归位。
 
 // MARK: - JSON 值
 

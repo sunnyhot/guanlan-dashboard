@@ -1,3 +1,6 @@
+// AI Agent 诊断日志层（OpenAICompatibleAgentClient / V2 ModelGateway 共用）。
+// 原生于 Core/TrendResearch/AIAgentDiagnosticLog.swift（旧趋势链路），旧链路
+// 下线（WF-4）时随消费方迁入 Core/Clients 归位。API Key 等敏感信息永不进入。
 import Foundation
 
 /// 一次 AI 分析运行的非敏感元数据。API Key、Cookie 和请求头永不进入该结构。

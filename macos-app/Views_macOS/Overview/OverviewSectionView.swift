@@ -23,10 +23,6 @@ struct OverviewSectionView: View {
                     action: openBrief,
                     summaryAction: openPortfolio
                 )
-                AITrendSummaryPanel(
-                    summary: model.trendDashboardSummary,
-                    action: handleTrendDashboardAction
-                )
 
                 managerActivityPanel
             }
@@ -183,24 +179,6 @@ struct OverviewSectionView: View {
         }
     }
 
-    private func handleTrendDashboardAction(_ action: TrendDashboardAction) {
-        guard !action.isDisabled else { return }
-        switch action.kind {
-        case .configure:
-            withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
-                model.selectedSection = .settings
-            }
-        case .generate, .refresh:
-            model.startTrendAnalysis(userInitiated: true)
-        case .openReport:
-            withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
-                model.selectedSection = .enhancement
-            }
-        case .wait:
-            break
-        }
-    }
-
     private func openBrief(_ item: TodayBriefItem) {
         withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.88)) {
             switch item.destination {
@@ -220,8 +198,6 @@ struct OverviewSectionView: View {
                 model.selectedSection = .platform
             case .settings:
                 model.selectedSection = .settings
-            case .aiResearch:
-                model.selectedSection = .enhancement
             }
         }
     }

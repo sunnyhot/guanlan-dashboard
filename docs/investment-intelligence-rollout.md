@@ -1971,6 +1971,57 @@ macos-app/
 > App UI 接线（读 ArtifactQueryService 替换旧 AI 面板）随 WF-4/5
 > 下线切换一起做。
 
+> **状态（2026-08-26，WF-4 + WF-5 合并收口，M9 达成）**：
+>
+> **执行顺序调整说明（ADR-DATA009 精神：事实推翻规划假设）**：规划依赖
+> 是 WF-4 → WF-5，但实际代码依赖方向相反——V1（Core/InvestmentIntelligence/，
+> Slice 0-7）重度消费旧链路类型（TrendEvidence / TrendResearchAgent /
+> NextHourGuidanceAgent / TrendAnalysisReport 等约 12 文件），且
+> `EnhancementTodayPanel` 等面板同时是 V1 外壳与旧链路内容。先删旧链路
+> 会让 V1 无法编译——两个 story 无法各自形成可编译中间态，除非写出
+> 「活不过下一提交」的过渡代码。故 WF-4 与 WF-5 合并为一次删除收口。
+>
+> **删除清单**：
+> - **三条旧链路**：`Core/TrendResearch/`（25 文件 7.6k 行）、`Core/Trend/`
+>   （13 文件 4k 行）、`Core/NextHourGuidance.swift` + `Core/NextHourGuidance/`、
+>   AppModel 三个 controller（NextHourGuidance / TrendAnalysis / TrendTracking）
+>   与全部 @Published 状态、调度循环、深链（workbenchTrend）；
+> - **V1 Slice 0-7**：`Core/InvestmentIntelligence/`（29 文件 4.8k 行）、
+>   `Views_macOS/InvestmentIntelligence/`（15 文件 3.5k 行）、iOS 侧
+>   DecisionCase 三视图 + EnhancementSectionView、`InvestmentIntelligence
+>   FeatureFlag` 类型删除（M9 验收）；
+> - **「AI研判」板块整体下线**（AppSection.enhancement case 删除）：macOS
+>   侧栏 / 命令面板 / 菜单栏快捷键 / iOS 分段全部移除；
+> - **周边消费面**：今日简报 closeReviewMissed 项、菜单栏 AI 姿态条目
+>   （MenuBarTickerKind.aiPosture）、资产浏览器 / 详情抽屉 / 表格行的
+>   AI 趋势标签区块、设置中心 trend 分区、同步档案 trendSettings 段
+>   （API Key 改为 Keychain 本机管理，不再跨设备传输；旧 payload 多余键
+>   Codable 自动忽略）、测试约 50 文件；
+> - **救回归位（Core/Clients/，消费方仍在）**：Agent 契约层
+>   （AgentChatMessage / AgentToolCall / AgentCompletionResult 等，原
+>   TrendResearchAgentModels.swift）、AI 诊断日志层（原 AIAgentDiagnosticLog.swift）、
+>   数据源配置值类型（TrendAIProviderSettings / Tavily/SEC/AlphaVantage
+>   Settings，原 TrendAnalysisModels.swift）、Tavily 可用性阻断枚举。
+>
+> **刻意保留（说明）**：
+> - `FundLookThrough.swift` 及其测试：rollout §2.3 注明「旧代码 Epic 12
+>   删」，但它同时是**双端持仓分析 UI（穿透面板）的核心**（PortfolioAllocation
+>   Panel / IOSPortfolioLookThroughPanel 在用），不是旧 AI 链路成员——
+>   切换到 V2 PortfolioLookthroughCalculator 需要新 UI 接线，属后续
+>   UI 迁移工作（本提交不删用户可见功能）；
+> - 趋势类 JSON 数据文件（trend-analysis-report.json 等）留在用户磁盘，
+>   无代码消费（V1 flag 本就默认 false，无启用用户）——WF-5 验收的
+>   「数据迁移路径」= 明确不迁移（旧报告格式与 V2 artifact 结构无映射，
+>   清空重来）；Keychain 中的 API Key 保留（V2 Model Gateway 同一
+>   account 复用）。
+>
+> **验收复核**：三条链路与 V1 类型全局 grep 零残留（仅注释提及来源）；
+> `swift build` + `swift build --build-tests` 通过；全量 `swift test`
+> 1324 绿（环境性套件跳过同 WF-1）；CLI 构建脚本通过（其显式列表本就
+> 不含删除文件）；xcodegen 重新生成工程。App UI 读 V2 Artifact 的接线
+> （ArtifactQueryService → 新面板）属 Epic 13 Agent Runtime / 后续 UI
+> story——V2 数据面（workflows + stores + query service）已就绪。
+
 **里程碑 M9：现有 AI 链路全替换 + Slice 0-7 下线**。双轨期结束，代码库只剩 V3.1 一套。
 
 ---

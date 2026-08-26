@@ -121,15 +121,6 @@ final class ManagerWatchTimelineTests: XCTestCase {
         XCTAssertEqual(decoded.targetID, "action-id")
     }
 
-    func testTrendManagerSignalsDoNotDuplicateStructuredAdjustmentSignals() {
-        let forum = event(kind: .forumHit, title: "论坛命中")
-        let adjustment = event(kind: .platformHit, title: "调仓命中")
-
-        let signals = TrendResearchSnapshotBuilder.managerSignals(from: [forum, adjustment])
-
-        XCTAssertEqual(signals.map(\.title), ["论坛命中"])
-    }
-
     func testSummaryOrdersEventsNewestFirst() {
         let old = event(kind: .pollStarted, occurredAt: date("2026-06-12T01:00:00Z"), title: "旧")
         let new = event(kind: .platformHit, occurredAt: date("2026-06-12T02:00:00Z"), title: "新")

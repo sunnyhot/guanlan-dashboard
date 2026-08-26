@@ -76,16 +76,9 @@ struct CommandPaletteView: View {
             .init(title: "总览", icon: "square.grid.2x2", shortcut: "⌘1") { navigate(.overview) },
             .init(title: "我的持仓", icon: "chart.bar.fill", shortcut: "⌘2") { navigate(.portfolio) },
             .init(title: "调仓动态", icon: "arrow.triangle.2.circlepath", shortcut: "⌘3") { navigate(.platform) },
-            .init(title: "AI 研判", icon: "sparkles", shortcut: "⌘5") { navigate(.enhancement) },
-            .init(title: "设置", icon: "gearshape.fill", shortcut: "⌘6") { navigate(.settings) },
+            .init(title: "设置", icon: "gearshape.fill", shortcut: "⌘5") { navigate(.settings) },
             .init(title: "刷新数据", icon: "arrow.clockwise", shortcut: "⌘R") {
                 Task { try? await model.refreshLatest() }
-            },
-            .init(title: "生成趋势分析", icon: "wand.and.stars", shortcut: nil) {
-                model.startTrendAnalysis(userInitiated: true)
-            },
-            .init(title: "检测模型", icon: "antenna.radiowaves.left.and.right", shortcut: nil) {
-                Task { await model.checkTrendAIConnection() }
             },
         ]
     }

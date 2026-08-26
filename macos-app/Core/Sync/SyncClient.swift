@@ -256,7 +256,7 @@ final class SyncClient {
             plansCount: payload.investmentPlans.count,
             watchlistCount: payload.watchlist.count,
             alfaCount: payload.alfaPortfolios.count,
-            hasTrendConfig: !payload.trendSettings.provider.apiKey.isEmpty
+            hasTrendConfig: false
         )
 
         return (payload, preview, result.revision)

@@ -8,7 +8,6 @@ import SwiftUI
 enum SettingsFocus: CaseIterable, Identifiable {
     case general
     case watch
-    case trend
     case menuBar
     case valuationAlert
     case sync
@@ -21,8 +20,6 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "通用"
         case .watch:
             return "提醒与巡检"
-        case .trend:
-            return "AI 研判"
         case .menuBar:
             return "菜单栏"
         case .valuationAlert:
@@ -38,8 +35,6 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "外观、启动与更新"
         case .watch:
             return "主理人动态通知"
-        case .trend:
-            return "模型与自动分析"
         case .menuBar:
             return "摘要样式与内容"
         case .valuationAlert:
@@ -55,8 +50,6 @@ enum SettingsFocus: CaseIterable, Identifiable {
             return "gearshape"
         case .watch:
             return "bell.badge"
-        case .trend:
-            return "sparkles"
         case .menuBar:
             return "menubar.rectangle"
         case .valuationAlert:
@@ -248,12 +241,6 @@ struct SettingsSectionView: View {
             return model.managerWatchSettings.isEnabled
                 ? model.managerWatchSettings.intervalLabel
                 : "已关闭"
-        case .trend:
-            let modelName = model.trendSettings.provider.model
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return model.trendSettings.provider.isConfigured && !modelName.isEmpty
-                ? modelName
-                : "未配置"
         case .menuBar:
             return model.menuBarTickerSettings.isEnabled
                 ? "\(model.menuBarTickerVisibleEntries.count) 项"
@@ -273,8 +260,6 @@ struct SettingsSectionView: View {
             return AppPalette.brand
         case .watch:
             return model.managerWatchSettings.isEnabled ? AppPalette.positive : AppPalette.muted
-        case .trend:
-            return model.trendSettings.provider.isConfigured ? AppPalette.brand : AppPalette.muted
         case .menuBar:
             return model.menuBarTickerSettings.isEnabled ? AppPalette.info : AppPalette.muted
         case .valuationAlert:
@@ -291,8 +276,6 @@ struct SettingsSectionView: View {
             appPanel
         case .watch:
             watchPanel
-        case .trend:
-            TrendSettingsPanel()
         case .menuBar:
             menuBarPanel
         case .valuationAlert:

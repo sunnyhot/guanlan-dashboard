@@ -132,26 +132,6 @@ final class AppModel: ObservableObject {
     /// 平台无关开机自启。macOS 走 SMAppService + LaunchAgent；iOS 不支持（no-op）。
     var launchAtLoginController: any LaunchAtLoginController = makeDefaultLaunchAtLoginController()
     var fundLookThroughClient: any FundLookThroughClientProtocol = FundLookThroughClient()
-    var trendResearchAgent: any TrendResearchAgentProtocol = TrendResearchAgent()
-    var nextHourGuidanceAgent: any NextHourGuidanceAgentProtocol = NextHourGuidanceAgent()
-    var decisionCaseResearchAgent: any DecisionCaseResearchAgentProtocol = DecisionCaseResearchAgent()
-    var nextHourGuidanceNotificationSender: @Sendable (NextHourGuidanceReport) async -> Void = { report in
-        let manager = LocalNotificationManager()
-        guard await manager.requestAuthorizationIfNeeded() else { return }
-        try? await manager.send(
-            title: "下一小时买卖建议已生成",
-            subtitle: report.scope.displayName,
-            body: "\(report.headline) · 有效至 \(String(report.validUntil.suffix(5)))",
-            deepLink: NotificationDeepLinkPayload(
-                type: .workbenchTrend,
-                targetID: "next-hour-guidance"
-            )
-        )
-    }
-    /// 工具调用能力探测器；默认走真实 client，测试可替换以避免联网。
-    var trendCapabilityProbe: @Sendable (TrendAIProviderSettings) async throws -> TrendProviderCapabilities = { settings in
-        try await OpenAICompatibleAgentClient().checkToolCallingCapability(settings: settings)
-    }
     let portfolioAutoRefreshIntervalSeconds: UInt64 = 60
     let refreshThrottle = RefreshThrottle()
 
@@ -160,9 +140,6 @@ final class AppModel: ObservableObject {
     var managerWatchTask: Task<Void, Never>?
     var personalAssetAutomationTask: Task<Void, Never>?
     var portfolioAutoRefreshTask: Task<Void, Never>?
-    var trendGenerationTask: Task<Void, Never>?
-    var nextHourGuidanceSchedulerTask: Task<Void, Never>?
-    var nextHourGuidanceGenerationTask: Task<Void, Never>?
     var remoteStagingSyncTask: Task<Void, Never>?
     var activeCommentsRequestKey = ""
     var isApplyingPersonalAssetAutomation = false
@@ -359,167 +336,6 @@ final class AppModel: ObservableObject {
         set { enhancementState.portfolioInsightSnapshots = newValue }
     }
 
-    var trendReport: TrendAnalysisReport? {
-        get { enhancementState.trendReport }
-        set { enhancementState.trendReport = newValue }
-    }
-
-    var trendSettings: TrendAnalysisSettings {
-        get { enhancementState.trendSettings }
-        set { enhancementState.trendSettings = newValue }
-    }
-
-    var trendGenerationState: TrendGenerationState {
-        get { enhancementState.trendGenerationState }
-        set { enhancementState.trendGenerationState = newValue }
-    }
-
-    var trendResearchScope: TrendResearchRunScope {
-        get { enhancementState.trendResearchScope }
-        set { enhancementState.trendResearchScope = newValue }
-    }
-
-    var trendResearchRequestedScope: TrendResearchRunScope {
-        get { enhancementState.trendResearchRequestedScope }
-        set { enhancementState.trendResearchRequestedScope = newValue }
-    }
-
-    var trendResearchProgress: TrendResearchModuleProgress {
-        get { enhancementState.trendResearchProgress }
-        set { enhancementState.trendResearchProgress = newValue }
-    }
-
-    var marketCloseReviewArchive: MarketCloseReviewArchive? {
-        get { enhancementState.marketCloseReviewArchive }
-        set { enhancementState.marketCloseReviewArchive = newValue }
-    }
-
-    var trendConnectionState: TrendConnectionState {
-        get { enhancementState.trendConnectionState }
-        set { enhancementState.trendConnectionState = newValue }
-    }
-
-    var trendProviderCapabilities: TrendProviderCapabilities? {
-        get { enhancementState.trendProviderCapabilities }
-        set { enhancementState.trendProviderCapabilities = newValue }
-    }
-
-    var trendPrivacyMode: TrendPrivacyMode {
-        get { enhancementState.trendPrivacyMode }
-        set { enhancementState.trendPrivacyMode = newValue }
-    }
-
-    var lastTrendGeneratedAt: String? {
-        get { enhancementState.lastTrendGeneratedAt }
-        set { enhancementState.lastTrendGeneratedAt = newValue }
-    }
-
-    var lastTrendError: String {
-        get { enhancementState.lastTrendError }
-        set { enhancementState.lastTrendError = newValue }
-    }
-
-    var lastTrendConnectionMessage: String {
-        get { enhancementState.lastTrendConnectionMessage }
-        set { enhancementState.lastTrendConnectionMessage = newValue }
-    }
-
-    var trendProgressLogs: [TrendProgressLog] {
-        get { enhancementState.trendProgressLogs }
-        set { enhancementState.trendProgressLogs = newValue }
-    }
-
-    var nextHourGuidanceArchive: NextHourGuidanceArchive {
-        get { enhancementState.nextHourGuidanceArchive }
-        set { enhancementState.nextHourGuidanceArchive = newValue }
-    }
-
-    var nextHourGuidanceReport: NextHourGuidanceReport? {
-        nextHourGuidanceArchive.report
-    }
-
-    var nextHourGuidanceGenerationState: TrendGenerationState {
-        get { enhancementState.nextHourGuidanceGenerationState }
-        set { enhancementState.nextHourGuidanceGenerationState = newValue }
-    }
-
-    var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage {
-        get { enhancementState.nextHourGuidanceProgressStage }
-        set { enhancementState.nextHourGuidanceProgressStage = newValue }
-    }
-
-    var nextHourGuidanceError: String {
-        get { enhancementState.nextHourGuidanceError }
-        set { enhancementState.nextHourGuidanceError = newValue }
-    }
-
-    var trendTrackingItems: [TrendTrackingItem] {
-        get { enhancementState.trendTrackingItems }
-        set { enhancementState.trendTrackingItems = newValue }
-    }
-
-    var selectedTrendTrackingItemID: UUID? {
-        get { enhancementState.selectedTrendTrackingItemID }
-        set { enhancementState.selectedTrendTrackingItemID = newValue }
-    }
-
-    // 投资智能(Slice 1)proxy
-    var decisionCases: [DecisionCase] {
-        get { enhancementState.decisionCases }
-        set { enhancementState.decisionCases = newValue }
-    }
-
-    var userDecisionProfile: UserDecisionProfile {
-        get { enhancementState.userDecisionProfile }
-        set { enhancementState.userDecisionProfile = newValue }
-    }
-
-    var isRefreshingDecisionCases: Bool {
-        get { enhancementState.isRefreshingDecisionCases }
-        set { enhancementState.isRefreshingDecisionCases = newValue }
-    }
-
-    // Slice 3:专项研究 proxy
-    var decisionCaseResearchState: TrendGenerationState {
-        get { enhancementState.decisionCaseResearchState }
-        set { enhancementState.decisionCaseResearchState = newValue }
-    }
-
-    var lastDecisionCaseResearchError: String {
-        get { enhancementState.lastDecisionCaseResearchError }
-        set { enhancementState.lastDecisionCaseResearchError = newValue }
-    }
-
-    var researchingDecisionCaseID: UUID? {
-        get { enhancementState.researchingDecisionCaseID }
-        set { enhancementState.researchingDecisionCaseID = newValue }
-    }
-
-    var lastDecisionCaseResearchReports: [UUID: DecisionCaseResearchReport] {
-        get { enhancementState.lastDecisionCaseResearchReports }
-        set { enhancementState.lastDecisionCaseResearchReports = newValue }
-    }
-
-    var latestDecisionCaseResearchRuns: [UUID: DecisionCaseResearchRunRecord] {
-        get { enhancementState.latestDecisionCaseResearchRuns }
-        set { enhancementState.latestDecisionCaseResearchRuns = newValue }
-    }
-
-    var decisionCaseResearchErrors: [UUID: String] {
-        get { enhancementState.decisionCaseResearchErrors }
-        set { enhancementState.decisionCaseResearchErrors = newValue }
-    }
-
-    var decisionCaseReviews: [UUID: [DecisionReview]] {
-        get { enhancementState.decisionCaseReviews }
-        set { enhancementState.decisionCaseReviews = newValue }
-    }
-
-    var lastDecisionReviewError: String {
-        get { enhancementState.lastDecisionReviewError }
-        set { enhancementState.lastDecisionReviewError = newValue }
-    }
-
     var isPresentingCommandPalette: Bool {
         get { enhancementState.isPresentingCommandPalette }
         set { enhancementState.isPresentingCommandPalette = newValue }
@@ -607,8 +423,6 @@ final class AppModel: ObservableObject {
         managerWatchTask?.cancel()
         personalAssetAutomationTask?.cancel()
         portfolioAutoRefreshTask?.cancel()
-        nextHourGuidanceSchedulerTask?.cancel()
-        nextHourGuidanceGenerationTask?.cancel()
         remoteStagingSyncTask?.cancel()
     }
 
@@ -679,11 +493,9 @@ final class AppModel: ObservableObject {
         }
 
         await applyPersonalAssetAutomation(updateNotice: false)
-        // 每日自动分析由 ContentView.task 在 start() 之后统一触发，避免双重入口。
         restartManagerWatchLoop(immediate: managerWatchSettings.isEnabled)
         restartPersonalAssetAutomationLoop()
         restartPortfolioAutoRefreshLoop()
-        restartNextHourGuidanceSchedulerLoop(immediate: true)
         startRemoteStagingSyncLoopIfNeeded()
         scheduleAutomaticUpdateCheckIfNeeded()
     }

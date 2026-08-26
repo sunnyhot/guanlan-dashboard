@@ -51,7 +51,7 @@ enum RefreshDecision: Equatable {
                 return .skip(reason: .freshDataAvailable)
             }
             return .refreshPortfolio
-        case .enhancement, .settings:
+        case .settings:
             return .skip(reason: .unsupportedSection)
         }
     }

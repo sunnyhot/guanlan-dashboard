@@ -166,7 +166,7 @@ struct PortfolioSectionView: View {
             SectionCard(title: "资产全貌总表", subtitle: "把「已持有 + 待确认 + 计划档案」聚合到同一行", icon: "tablecells", trailing: {
                 PersonalAssetAddButtons()
             }) {
-                PersonalAssetBrowser(rows: model.personalAssetRows, trendReport: model.trendReport)
+                PersonalAssetBrowser(rows: model.personalAssetRows)
             }
 
             pendingTradesSection

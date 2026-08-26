@@ -18,8 +18,6 @@ final class DisclosureInteractionPresentationTests: XCTestCase {
 
     func testEveryAppDisclosureGroupUsesTheFullRowInteractionStyle() throws {
         try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/SettingsMenuBarPanel.swift")
-        try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/SettingsTrendPanel.swift")
-        try assertEveryDisclosureUsesFullRowStyle(in: "Views_macOS/EnhancementTrendPanel.swift")
     }
 
     func testInlineDisclosureButtonOwnsTheSharedVisualAndInteractionStyle() throws {
