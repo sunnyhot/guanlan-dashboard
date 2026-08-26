@@ -314,7 +314,7 @@ struct PortfolioResearchWorkflow: Sendable {
                 plannerInputs: materials.plannerRuns,
                 frozenNowByPlan: [:]
             )
-            let artifact = PortfolioDecisionArtifact.assemble(
+            let artifact = try PortfolioDecisionArtifact.assemble(
                 signalIDs: signals.map(\.id),
                 criterionDefinitions: Array(materials.replayerMaterials.criterionDefinitions.values),
                 factorSnapshotIDs: materials.replayerMaterials.factorSnapshots.keys

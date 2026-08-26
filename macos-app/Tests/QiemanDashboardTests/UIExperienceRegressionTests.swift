@@ -305,7 +305,14 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(source.contains("Button(\"工作台\")"))
         XCTAssertTrue(source.contains("CommandMenu(\"导航\")"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"1\")"))
-        XCTAssertFalse(source.contains(".keyboardShortcut(\"6\")"))
+        XCTAssertTrue(source.contains(".keyboardShortcut(\"6\")"))
+        // 每个快捷键唯一绑定:出现的快捷键修饰数与唯一值数一致
+        // 每个快捷键唯一绑定:提取字面 shortcut("x") 中的 x 并比对唯一性
+        let rawKeys = source
+            .components(separatedBy: "keyboardShortcut(\"")
+            .dropFirst()
+            .map { String($0.prefix(1)) }
+        XCTAssertEqual(Set(rawKeys).count, rawKeys.count, "快捷键冲突: \(rawKeys)")
         XCTAssertTrue(source.contains("NotificationCenter.default.post(name: .qiemanFocusSearch"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"f\")"))
     }

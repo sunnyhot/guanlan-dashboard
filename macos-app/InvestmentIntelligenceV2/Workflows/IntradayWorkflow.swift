@@ -199,6 +199,11 @@ struct IntradayWorkflow: Sendable {
         let actionDomain: ActionDomain
         /// 执行交易所（交易时段 / 时区判定）。
         let exchange: Exchange
+        /// 交易日历法域覆盖（十七轮 P0-2）：**场外基金组合必填中国法域**——
+        /// Exchange.otc 的默认法域是美域（NYSE 节假日表），A 股春节长假
+        /// 期间会误判可执行；nil = 沿用 exchange.jurisdiction。时段判定
+        /// 仍按 exchange（场外无盘中时段门槛）。
+        var tradingJurisdiction: Jurisdiction? = nil
 
         init(
             subject: CanonicalRef,
@@ -207,7 +212,8 @@ struct IntradayWorkflow: Sendable {
             remediationTargets: [RemediationTargetInput] = [],
             userDirectives: [UserDirectiveInput] = [],
             actionDomain: ActionDomain,
-            exchange: Exchange
+            exchange: Exchange,
+            tradingJurisdiction: Jurisdiction? = nil
         ) {
             self.subject = subject
             self.portfolio = portfolio
@@ -216,6 +222,7 @@ struct IntradayWorkflow: Sendable {
             self.userDirectives = userDirectives
             self.actionDomain = actionDomain
             self.exchange = exchange
+            self.tradingJurisdiction = tradingJurisdiction
         }
     }
 
@@ -240,6 +247,9 @@ struct IntradayWorkflow: Sendable {
             "subject": input.subject.stableKey,
             "portfolioAsOf": String(Int(input.portfolio.asOf.timeIntervalSince1970)),
             "target": input.target?.id.rawValue ?? "-",
+            "exchange": input.exchange.rawValue,
+            "tradingJurisdiction": (input.tradingJurisdiction ?? input.exchange.jurisdiction).rawValue,
+            "maxSnapshotAgeHours": String(eligibility.maxSnapshotAgeHours),
             "asOf": String(Int(asOf.timeIntervalSince1970)),
             "policy": eligibility.identityToken,
         ]
@@ -284,9 +294,9 @@ struct IntradayWorkflow: Sendable {
             // ---- Eligibility 层 ----
 
             var holdReasons: [String] = []
-            let jurisdiction = input.exchange.jurisdiction
+            let jurisdiction = input.tradingJurisdiction ?? input.exchange.jurisdiction
             if !calendar.isTradingDay(asOf, jurisdiction: jurisdiction) {
-                holdReasons.append("非交易日（\(input.exchange.rawValue) 法域）")
+                holdReasons.append("非交易日（\(input.exchange.rawValue) · \(jurisdiction.rawValue) 法域）")
             } else {
                 // 交易日还要在开市区间内——盘前 / 午休 / 收盘后 fail-closed
                 //（交易所时区判定，盘外不产执行决策）
@@ -377,11 +387,18 @@ struct IntradayWorkflow: Sendable {
                 return RunOutcome(job: job, report: report, errorDetail: nil)
             }
 
+            // execute 报告内嵌的 plan 只含**通过约束门存活的动作**（十七轮
+            // P2:下游按 plan.actions 执行,被裁剪动作进报告会被原样执行）;
+            // 裁剪明细留在 holdReasons 留证。
+            let executablePlan = PortfolioActionPlan(
+                id: plan.id, asOf: plan.asOf, targetID: plan.targetID,
+                actions: surviving, notes: plan.notes, plannerVersion: plan.plannerVersion
+            )
             let report = Self.assemble(
                 input: input, asOf: asOf, now: now,
-                decision: .executeRebalance, plan: plan, gateVerdict: verdict,
+                decision: .executeRebalance, plan: executablePlan, gateVerdict: verdict,
                 holdReasons: pruned.pruned.map {
-                    "动作 \($0.action.action.subjectKey) 被 \($0.ruleLabel) 裁剪（留证）"
+                    "动作 \($0.action.action.subjectKey) 被 \($0.ruleLabel) 裁剪（不执行,留证）"
                 },
                 signalIDs: signals.map(\.id),
                 eligibility: eligibility

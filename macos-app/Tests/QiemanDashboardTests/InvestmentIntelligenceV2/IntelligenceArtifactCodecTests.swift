@@ -81,7 +81,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
         )
     }
 
-    private func makeDecision() -> PortfolioDecisionArtifact {
+    private func makeDecision() throws -> PortfolioDecisionArtifact {
         let run = DecisionReplayer.PlannerRun(
             portfolio: PortfolioSnapshot(asOf: date(1_700_000_000_000), positions: [
                 PortfolioPosition(subjectKey: "listing|A", assetClass: .equity, weight: Ratio(value: d("0.5"))),
@@ -100,7 +100,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
             remediationTargets: run.remediationTargets, userDirectives: run.userDirectives,
             actionDomain: run.actionDomain, now: date(1_700_000_000_000)
         )
-        return .assemble(
+        return try .assemble(
             signalIDs: [SignalID(rawValue: "s1")],
             criterionDefinitions: [
                 CriterionDefinition(
@@ -180,7 +180,7 @@ final class IntelligenceArtifactCodecTests: XCTestCase {
     /// 六类 typed fetch 与 fetchDomain 等价(同一 strict 通道的便捷形态)。
     func testTypedFetchHelpersRouteThroughStrictReader() throws {
         let queue = try dbQueue
-        let decision = makeDecision()
+        let decision = try makeDecision()
         let pair = try ArtifactRow.from(decision)
         try queue.write { db in
             try ArtifactRow.write(pair, into: db)

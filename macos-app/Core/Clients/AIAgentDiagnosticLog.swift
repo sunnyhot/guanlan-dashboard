@@ -199,6 +199,25 @@ actor AIAgentDiagnosticRecorder {
 enum AIAgentDiagnosticLog {
     @TaskLocal static var recorder: AIAgentDiagnosticRecorder?
 
+    /// 进程级默认 recorder（十七轮 P2：TaskLocal 只在 withValue 作用域内
+    /// 生效——生产 App 无作用域包裹,record 全是 no-op；App 引导时
+    /// setDefaultRecorder 挂文件 recorder，TaskLocal 优先于默认）。
+    private static let defaultRecorderLock = NSLock()
+    private static var _defaultRecorder: AIAgentDiagnosticRecorder?
+
+    static func setDefaultRecorder(_ recorder: AIAgentDiagnosticRecorder) {
+        defaultRecorderLock.lock()
+        defer { defaultRecorderLock.unlock() }
+        _defaultRecorder = recorder
+    }
+
+    static var effectiveRecorder: AIAgentDiagnosticRecorder? {
+        if let recorder { return recorder }
+        defaultRecorderLock.lock()
+        defer { defaultRecorderLock.unlock() }
+        return _defaultRecorder
+    }
+
     static func record<T: Encodable>(
         _ event: String,
         turn: Int? = nil,
@@ -206,7 +225,7 @@ enum AIAgentDiagnosticLog {
         toolCallID: String? = nil,
         payload: T
     ) async {
-        guard let recorder else { return }
+        guard let recorder = effectiveRecorder else { return }
         try? await recorder.record(
             event: event,
             turn: turn,

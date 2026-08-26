@@ -19,6 +19,15 @@ enum IntelligenceV2ProviderSettings {
     static let modelKey = "qieman.v2.llm.model"
     static let alphaVantageEnabledKey = "qieman.v2.av.enabled"
 
+    /// Keychain 读写注入（默认真实 KeychainHelper；测试替换内存实现——
+    /// 单测进程的 Keychain 权限不可靠,十七轮测试稳定性）。
+    static var keychainReader: @Sendable (String) -> String? =
+        { KeychainHelper.get(account: $0) }
+    static var keychainWriter: @Sendable (String, String) -> Void =
+        { KeychainHelper.set($1, account: $0) }
+    static var keychainDeleter: @Sendable (String) -> Void =
+        { _ = KeychainHelper.delete(account: $0) }
+
     static var baseURL: String {
         UserDefaults.standard.string(forKey: baseURLKey) ?? ""
     }
@@ -28,7 +37,7 @@ enum IntelligenceV2ProviderSettings {
     }
 
     static var apiKey: String {
-        KeychainHelper.get(account: KeychainHelper.Account.openAIKey) ?? ""
+        keychainReader(KeychainHelper.Account.openAIKey) ?? ""
     }
 
     static var isConfigured: Bool {
@@ -55,12 +64,17 @@ enum IntelligenceV2ProviderSettings {
         defaults.set(model.trimmingCharacters(in: .whitespacesAndNewlines),
                      forKey: modelKey)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedKey.isEmpty {
-            KeychainHelper.delete(account: KeychainHelper.Account.openAIKey)
-        } else {
-            KeychainHelper.set(trimmedKey, account: KeychainHelper.Account.openAIKey)
+        guard !trimmedKey.isEmpty else {
+            // 留空 = 保留 Keychain 既有 Key（改 baseURL 不重输 Key 不停摆,
+            // 十七轮 P1-2）;显式清除走 deleteAPIKey()
+            return
         }
-        UserDefaults.standard.set(trimmedKey, forKey: "qieman.trend.openai.key")
+        keychainWriter(KeychainHelper.Account.openAIKey, trimmedKey)
+    }
+
+    /// 显式清除已保存的 API Key（Keychain）。
+    static func deleteAPIKey() {
+        keychainDeleter(KeychainHelper.Account.openAIKey)
     }
 }
 
@@ -72,22 +86,50 @@ struct LivePortfolioDecisionMaterials: PortfolioDecisionMaterialsProviding {
     let rows: [PersonalAssetAggregateRow]
     let now: Date
 
-    private func d(_ value: Decimal) -> Decimal { value }
-    private func dec(_ double: Double) -> Decimal { Decimal(string: String(format: "%.6f", double)) ?? Decimal.zero }
+    private func dec(_ double: Double) -> Decimal {
+        // locale 无关（String(format:) 的 %f 随 locale 出逗号）;金额精度
+        // 到分位足够构造权重比例
+        Decimal((double * 10_000).rounded() / 10_000)
+    }
 
     /// 持仓 → V2 positions（subjectKey 与 AttributionSubject.stableKey 同域）。
+    /// 权重归一（十七轮 P0-1 根治）：残差 (1 − Σothers) 归入最大仓——
+    /// Decimal 除法对非终尽小数（1/3 等）的权和 ≠ 1,下游 target 校验
+    /// 精确比对 1,不归一必然被拒。
     private var positions: [PortfolioPosition] {
-        let total = rows.reduce(Decimal.zero) {
-            $0 + dec($1.effectiveHoldingAmount)
-        }
-        guard total > 0 else { return [] }
-        return rows.compactMap { row -> PortfolioPosition? in
+        let amounts = rows.compactMap { row -> (code: String, amount: Decimal, assetClass: AssetClass)? in
             guard row.effectiveHoldingAmount > 0, let code = row.fundCode,
                   !code.isEmpty else { return nil }
-            return PortfolioPosition(
-                subjectKey: "fund|\(code)",
-                assetClass: row.assetType == .stock ? .equity : .alternative,
-                weight: Ratio(value: dec(row.effectiveHoldingAmount) / total)
+            // 资产类映射（十七轮 P2 已知限制）：股票 → equity；基金内部
+            // 细分（债/货/黄金）需穿透数据，当前统一 alternative——精确
+            // 分类属后续 FundLookThrough 接线
+            return (
+                code, dec(row.effectiveHoldingAmount),
+                row.assetType == .stock ? .equity : .alternative
+            )
+        }
+        let total = amounts.map(\.amount).reduce(Decimal.zero, +)
+        guard total > 0 else { return [] }
+        var normalized = amounts.map {
+            (code: $0.code, assetClass: $0.assetClass, weight: $0.amount / total)
+        }
+        // 残差归最大仓（和恒精确 = 1）
+        let largestIndex = normalized.indices.max(by: {
+            normalized[$0].weight == normalized[$1].weight
+                ? normalized[$0].code < normalized[$1].code
+                : normalized[$0].weight < normalized[$1].weight
+        })
+        if let largestIndex {
+            let othersSum = normalized.enumerated()
+                .filter { $0.offset != largestIndex }
+                .reduce(Decimal.zero) { $0 + $1.element.weight }
+            normalized[largestIndex].weight = Decimal(1) - othersSum
+        }
+        return normalized.map {
+            PortfolioPosition(
+                subjectKey: "fund|\($0.code)",
+                assetClass: $0.assetClass,
+                weight: Ratio(value: $0.weight)
             )
         }
     }
@@ -97,20 +139,32 @@ struct LivePortfolioDecisionMaterials: PortfolioDecisionMaterialsProviding {
         guard !snapshotPositions.isEmpty else {
             throw LiveMaterialsError.emptyPortfolio
         }
-        let portfolio = PortfolioSnapshot(asOf: now, positions: snapshotPositions)
+        let portfolio = PortfolioSnapshot(asOf: asOf, positions: snapshotPositions)
 
         // 「维持当前配置」对照 target：资产类聚合权重归一化（用户显式
         // 目标配置入口属后续 UI story——无显式目标时不发明目标，对照
         // 现状只检查漂移；带内不交易）。
+        // 归一化（十七轮 P0-1）：Decimal 除法对非终尽小数（如 1/3）的
+        // 权重和 ≠ 1，StrategicAllocationValidator 精确校验会拒——把
+        // 残差 (1 − Σothers) 归入权重最大的类，entries 权重和恒精确 = 1。
         var classTotals: [AssetClass: Decimal] = [:]
         for position in snapshotPositions {
             classTotals[position.assetClass, default: 0] += position.weight.value
         }
+        guard let largestClass = classTotals.max(by: {
+            $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value < $1.value
+        })?.key else {
+            throw LiveMaterialsError.emptyPortfolio
+        }
+        let othersSum = classTotals
+            .filter { $0.key != largestClass }
+            .values.reduce(Decimal.zero, +)
+        classTotals[largestClass] = Decimal(1) - othersSum
         let entries = classTotals
             .map { AllocationTargetEntry(assetClass: $0.key, targetWeight: Ratio(value: $0.value)) }
             .sorted { $0.assetClass.rawValue < $1.assetClass.rawValue }
         let target = try StrategicAllocationPolicy().applyUserAllocation(
-            entries: entries, note: "维持当前配置（对照检查漂移）", now: now
+            entries: entries, note: "维持当前配置（对照检查漂移）", now: asOf
         )
 
         let definition = CriterionDefinition(
@@ -244,6 +298,24 @@ extension AppModel {
     func bootstrapIntelligenceV2() {
         guard intelligenceRuntime == nil else { return }
         guard let dataDirectory = dataDirectoryURL else { return }
+        // 诊断日志挂载（十七轮 P2：record 默认 no-op,生产需显式挂文件
+        #if canImport(AppKit) || canImport(UIKit)
+        Task.detached(priority: .utility) {
+            let logsDirectory = dataDirectory.appendingPathComponent(
+                "ai-analysis-logs", isDirectory: true)
+            if let recorder = try? await AIAgentDiagnosticRecorder(
+                directoryURL: logsDirectory,
+                metadata: AIAgentDiagnosticRunMetadata(
+                    runID: UUID(), agentKind: "app-runtime", scope: "bootstrap",
+                    trigger: "launch", providerName: "-", baseURL: "-", model: "-",
+                    privacyMode: "sanitized",
+                    startedAt: Self.timestampString()
+                )
+            ) {
+                AIAgentDiagnosticLog.setDefaultRecorder(recorder)
+            }
+        }
+        #endif
         do {
             let database = try CanonicalStorePaths.openDatabase(in: dataDirectory)
             let repository = GRDBRepository(
@@ -321,21 +393,21 @@ extension AppModel {
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningIntradayDecision = false } }
             do {
-                let subject = try! CanonicalRef(
-                    entityType: "fundShareClass",
-                    entityIDRawValue: "portfolio_live"
-                )
+                let subject = CanonicalRef.fundShareClass(FundShareClassID(rawValue: "portfolio_live"))
                 let materials = LivePortfolioDecisionMaterials(rows: rows, now: now)
                 let providerMaterials = try materials.materials(asOf: now)
-                let bounds = providerMaterials.plannerRuns["current"]!.actionDomain
+                guard let plannerRun = providerMaterials.plannerRuns["current"] else {
+                    throw NSError(domain: "intelligence", code: 3,
+                                  userInfo: [NSLocalizedDescriptionKey: "决策材料缺规划输入"])
+                }
                 let input = IntradayWorkflow.Input(
                     subject: subject,
-                    portfolio: providerMaterials.plannerRuns["current"]!.portfolio,
+                    portfolio: plannerRun.portfolio,
                     target: providerMaterials.target,
-                    actionDomain: bounds,
-                    exchange: .otc   // 组合以场外基金为主——T 日任意时刻可执行
+                    actionDomain: plannerRun.actionDomain,
+                    exchange: .otc,   // 组合以场外基金为主——T 日任意时刻可执行
+                    tradingJurisdiction: .chinaMainland   // 申赎日历按 A 股（十七轮 P0-2）
                 )
-                let signals = try runtime.repository.signals(subject: subject)
                 let workflow = IntradayWorkflow(
                     signalStore: runtime.repository,
                     calendar: HolidayTableTradingCalendar.bundled
@@ -388,9 +460,7 @@ extension AppModel {
         Task.detached(priority: .userInitiated) { [weak self] in
             defer { Task { @MainActor in self?.isRunningPortfolioResearch = false } }
             do {
-                let subject = try! CanonicalRef(
-                    entityType: "fundShareClass", entityIDRawValue: "portfolio_live"
-                )
+                let subject = CanonicalRef.fundShareClass(FundShareClassID(rawValue: "portfolio_live"))
                 let harness = ResearchHarness(
                     gateway: ModelGateway(providers: [provider], policy: gatewayPolicy),
                     tools: ResearchToolRegistry().tools,

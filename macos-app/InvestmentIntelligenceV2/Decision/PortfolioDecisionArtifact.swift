@@ -487,6 +487,23 @@ struct DecisionReplayer: Sendable {
         }
     }
 
+    /// 组装错误 → ReplayError 映射（十七轮 P1-4：assemble 的 throws 化
+    /// 让 what-if/重放路径同样 fail-closed，不崩进程）。
+    static func replayError(forAssembly error: PortfolioDecisionArtifact.AssemblyError) -> ReplayError {
+        switch error {
+        case .plannerRunDomainMismatch(let artifact, let inputs):
+            return .artifactPlanDomainMismatch(artifact: artifact, inputs: inputs)
+        case .emptyCriterionDefinitions:
+            return .referenceMismatch(
+                declared: "criterion 定义集为空",
+                artifact: "D002 要求至少一条可追溯 criterion")
+        case .duplicateCriterionFingerprints(let fingerprints):
+            return .referenceMismatch(
+                declared: "criterion 指纹重复：\(fingerprints.sorted())",
+                artifact: "同 id@version 不同内容")
+        }
+    }
+
     /// Comparator 错误 → ReplayError 逐 case 映射（九轮 P3：不做
     /// String(describing:) 笼统归类——比较器将来新增 case 不会被静默
     /// 误标为 malformedPlanKey）。
@@ -601,7 +618,8 @@ struct DecisionReplayer: Sendable {
                 declared: "what-if 输入提取失败: \(error)",
                 artifact: "引用实例不可提取")
         }
-        return PortfolioDecisionArtifact.assemble(
+        do {
+            return try PortfolioDecisionArtifact.assemble(
             signalIDs: base.signalIDs,
             criterionDefinitions: materials.criterionDefinitions.values.sorted {
                 $0.fingerprint < $1.fingerprint
@@ -615,7 +633,14 @@ struct DecisionReplayer: Sendable {
             plans: outcome.plans,
             plannerRuns: base.plannerInputs,
             producedAt: producedAt
-        )
+            )
+        } catch let error as PortfolioDecisionArtifact.AssemblyError {
+            throw Self.replayError(forAssembly: error)
+        } catch {
+            throw .referenceMismatch(
+                declared: "what-if 组装失败: \(error)",
+                artifact: "引用材料非法")
+        }
     }
 
     /// 绑定校验（完整重放）：材料内部自洽（validateMaterialsConsistency）
@@ -769,12 +794,20 @@ struct DecisionReplayer: Sendable {
 // MARK: - 决策组装器（artifact 构造的便捷入口）
 
 extension PortfolioDecisionArtifact {
+    /// 组装错误（十七轮 P1-4：外部材料供给的非法形态是**可恢复的输入
+    /// 错误**——precondition 会崩进程，违反 fail-closed 不崩契约；九轮
+    /// P3 只护住了 replay 路径，首产路径在此补齐）。
+    enum AssemblyError: Error, Equatable, Sendable {
+        case plannerRunDomainMismatch(artifact: [String], inputs: [String])
+        case emptyCriterionDefinitions
+        case duplicateCriterionFingerprints([String])
+    }
+
     /// 从比较结论组装 artifact（id 确定性派生：引用层 + 内容摘要 + 冻结
     /// 规划输入 + 结果层完整语义，只排除 producedAt）。
     /// **criterion / band 的版本与摘要一律从定义/实例派生**（八轮 P1-4：
     /// 调用方不再传版本字符串——版本与内容不允许分叉）。
-    /// plannerRuns 必须恰好覆盖 plans 域（冻结内嵌的完整性前提，违反即
-    /// 编程错误 fail-fast）。
+    /// plannerRuns 必须恰好覆盖 plans 域（冻结内嵌的完整性前提）。
     static func assemble(
         signalIDs: [SignalID],
         criterionDefinitions: [CriterionDefinition],
@@ -787,16 +820,20 @@ extension PortfolioDecisionArtifact {
         plans: [String: PortfolioActionPlan],
         plannerRuns: [String: DecisionReplayer.PlannerRun],
         producedAt: Date
-    ) -> PortfolioDecisionArtifact {
-        precondition(
-            Set(plannerRuns.keys) == Set(plans.keys),
-            "assemble 的 plannerRuns 必须恰好覆盖 plans 域（冻结内嵌前提）")
-        precondition(!criterionDefinitions.isEmpty, "assemble 拒绝空 criterion 集（D002）")
+    ) throws -> PortfolioDecisionArtifact {
+        guard Set(plannerRuns.keys) == Set(plans.keys) else {
+            throw AssemblyError.plannerRunDomainMismatch(
+                artifact: plans.keys.sorted(), inputs: plannerRuns.keys.sorted())
+        }
+        guard !criterionDefinitions.isEmpty else {
+            throw AssemblyError.emptyCriterionDefinitions
+        }
         // 九轮 P3:同 id@version 两份不同内容传入会静默塌缩摘要字典
-        // (后者胜出)——重复指纹即编程错误,fail-fast
-        precondition(
-            Set(criterionDefinitions.map(\.fingerprint)).count == criterionDefinitions.count,
-            "assemble 拒绝重复 criterion 指纹（同 id@version 不同内容）")
+        // (后者胜出)——重复指纹在此拒绝
+        let fingerprints = criterionDefinitions.map(\.fingerprint)
+        guard Set(fingerprints).count == fingerprints.count else {
+            throw AssemblyError.duplicateCriterionFingerprints(fingerprints)
+        }
         let sortedDefinitions = criterionDefinitions.sorted { $0.fingerprint < $1.fingerprint }
         let criterionVersions = sortedDefinitions.map(\.fingerprint)
         // 内容摘要（确定性类型,编码失败 = 编程错误,fail-fast）

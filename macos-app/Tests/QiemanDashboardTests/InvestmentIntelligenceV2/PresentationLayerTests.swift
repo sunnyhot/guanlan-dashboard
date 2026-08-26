@@ -120,7 +120,7 @@ final class PresentationLayerTests: XCTestCase {
             plannerInputs: materials.plannerRuns,
             frozenNowByPlan: [:]
         )
-        return PortfolioDecisionArtifact.assemble(
+        return try PortfolioDecisionArtifact.assemble(
             signalIDs: [SignalID(rawValue: "sig_pres_1")],
             criterionDefinitions: Array(materials.replayerMaterials.criterionDefinitions.values),
             factorSnapshotIDs: [],

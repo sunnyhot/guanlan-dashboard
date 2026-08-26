@@ -990,13 +990,13 @@ struct QiemanDashboardApp: App {
                     model.selectedSection = .intelligence
                     appDelegate.showMainWindow()
                 }
-                .keyboardShortcut("4")
+                .keyboardShortcut("5")
 
                 Button("设置") {
                     model.selectedSection = .settings
                     appDelegate.showMainWindow()
                 }
-                .keyboardShortcut("5")
+                .keyboardShortcut("6")
             }
 
             CommandGroup(after: .textEditing) {
