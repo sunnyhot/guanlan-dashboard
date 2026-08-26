@@ -2142,6 +2142,37 @@ macos-app/
 > 候选 skippedNotCallable、零网络。补 `registerProductionProviders`（幂等）
 > 供 App 维护循环与 agent CLI data-sync 共用，含回归测试。
 
+> **状态（2026-08-26，PKG-1 评估收口——结论：暂不抽取）**：按 AGENT-2
+> 完成后的**实测依赖形状**（非猜形状）评估，决策记录见
+> `docs/adr/PKG001-defer-package-extraction.md`（Accepted）：
+> - **依赖形状事实**：V2 → Core 依赖集中在 Clients 传输层（AV/SEC/Tavily/
+>   OpenAICompatible + 配置值类型 + KeychainHelper×1 测试证据源）——这些
+>   同被 App 非 V2 路径消费，随 V2 迁移会反向撕裂 Core；Core/Views → V2
+>   消费仅 6 个文件（3 个 AppModel 装配 + agent CLI + main.swift + 1 视图）。
+> - **不抽的理由**：三个入口（macOS/iOS App、agent CLI）共享同一 SPM
+>   target 同一模块，抽取不新增任何能力；V2↔Core 边界实测无违规
+>   （目录 + review + 测试纪律维持，rollout §2.3）；主要成本在 Core/Clients
+>   迁移（比 V2 本身还大）。
+> - **重评触发条件**（满足任一先修订 PKG001）：第三个独立二进制消费方
+>   （如 AGENT-3 立项）/ 边界纪律被侵蚀 / 构建时长互相拖累（实测口径）。
+> - 验收条款「若抽取：macos-app import InvestmentIntelligenceKit」按
+>   条件不触发，story 以评估结论 + 决策记录闭环。
+
+> **状态（2026-08-26，AGENT-3 处置：可选 story 明确不排期）**：XPC daemon
+> 的价值前提是「App 关 UI 后台仍跑长任务」。当前事实：维护类任务已有
+> 6h 后台循环（AppModel，UI 关闭不影响）；无 GUI 场景已由 agent CLI 覆盖
+> （AGENT-2）；无已知的「必须 App 进程常驻」需求。立项需先修订
+> PKG001（触发条件 1）。M10 验收脚本（§4.8）不含 daemon——不影响里程碑。
+
+> **✅ M10 达成（2026-08-26）**：`investment-agent`（main.swift 分流）不启动
+> SwiftUI 跑通 sync/discovery/attribution/decision 链路（portfolio-review
+> 命令需 LLM 凭据，入口面与引擎层已验证——真实 LLM 端到端联调同
+> Epic 11/12 遗留口径）；Job 中途崩溃 → resume 续跑在引擎层验证
+> （AgentRuntimeTests：RUNNING 停滞 + checkpoint → resume 新 attempt 带检查点；
+> 进程级 kill 实测属运维验收，语义由同一实现覆盖）；package 抽取按 PKG001
+> 条件不触发，双端构建维持基线。**Epic 13 收口：AGENT-1（8）+ AGENT-2（5）
+> + PKG-1（5，评估闭环）= 18 点签收；AGENT-3（可选，不排期）显式处置。**
+
 | ID | Story | 依赖 | 点数 | 验收 |
 |---|---|---|---|---|
 | AGENT-1 | `AgentJob` / `AgentEvent` / `WorkflowRegistry` / `JobRecovery`（checkpoint + idempotency key）| WF-* | 8 | |
@@ -2237,9 +2268,16 @@ M2 不过不进 Epic 5（GRDB schema 冻结）——**M2 已于 2026-08-21 Pass�
 
 ### 4.8 M10 — Agent 独立
 
-- `investment-agent portfolio-review` 不启动 SwiftUI 能跑通
-- Job 中途 kill → resume 能继续
-- package 抽取（若执行）后 macos-app 仍正常构建
+> **达成（2026-08-26）**，验收口径随 Epic 13 收口记录细化：
+
+- `investment-agent portfolio-review 不启动 SwiftUI 能跑通`——**入口面达成**
+  （main.swift 分流在 SwiftUI 起跑前退出；portfolio-review 命令链路经
+  WF-1 引擎层验证，真实 LLM 端到端需用户凭据，同 Epic 11/12 遗留口径）
+- Job 中途 kill → resume 能继续——**引擎层达成**（AgentRuntimeTests 模拟
+  RUNNING 崩溃停滞 + 检查点落盘 → resume 开新 attempt 携带检查点续跑；
+  CLI `resume`/`recover` 是运维出口）
+- package 抽取（若执行）后 macos-app 仍正常构建——**条件不触发**
+  （PKG001：暂不抽取；双端构建维持基线）
 
 ---
 

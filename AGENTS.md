@@ -36,8 +36,9 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 #### 入口与配置
 | 文件 | 行数 | 职责 |
 |---|---|---|
-| `QiemanDashboardApp.swift` | 866 | macOS App 入口 @main |
-| `QiemanDashboardApp_iOS.swift` | 95 | iOS 入口（`#if os(iOS)`，SPM 排除） |
+| `macos-app/main.swift` | ~40 | **双模式入口（AGENT-2）**：默认 GUI（`QiemanDashboardApp.main()`）；`--agent <command>` 或已知 agent 子命令在 SwiftUI 起跑前分流到 `InvestmentAgentCLI` 并退出（普通 Finder/-psn 启动不命中命令集） |
+| `QiemanDashboardApp.swift` | 866 | macOS App（**@main 已移至 main.swift，勿加回**——加回会与 main.swift 顶层代码冲突） |
+| `QiemanDashboardApp_iOS.swift` | 95 | iOS 入口（`#if os(iOS)`，SPM 排除；iOS Xcode target 不含 main.swift） |
 | `Package.swift` | 24 | SPM 配置（仅 macOS target，排除 Views_iOS/CLI/Tests） |
 
 #### Core/ 核心逻辑（约 137 个 Swift 文件，约 36176 行）
@@ -53,7 +54,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `Core/FundLookThrough.swift` | 944 | **基金穿透计算**：披露抓取/缓存、底层证券、行业暴露、资产类别暴露、覆盖率、陈旧披露警告。返回 `PortfolioLookThroughSnapshot` |
 | `Core/AppModel.swift` | 714 | **核心状态容器**：@MainActor ObservableObject |
 | `Core/AppModel/` | — | AppModel 子功能拆分。最大几块：ManagerWatch / PortfolioCRUD / PersonalWatchlistActions / AssetAggregation / Validation / Alfa / InvestmentPlan / PortfolioRefresh / ComputedProperties / Auth / Automation / PendingTrade 等（旧 TrendAnalysis/NextHourGuidanceController/TrendTracking/InvestmentIntelligence* 已随链路下线删除）。完整清单见目录 |
-| `Core/CLI/` | 369 (2 文件) | Contract(74, snake_case encoder/decoder、NullDouble 包装) + DTOs(295, 命令输出 DTO) |
+| `Core/CLI/` | 369+ (3 文件) | Contract(74, snake_case encoder/decoder、NullDouble 包装) + DTOs(295, 命令输出 DTO) + **InvestmentAgentCLI（AGENT-2：investment-agent 无 GUI CLI，V3.1 §97 命令面；凭据走环境变量、数据目录 `--data-dir` 与 App 共库）** |
 | `Core/QiemanCommandLine.swift` | （在 Core/ 下） | 命令路由、JSON 契约与增量巡检（注：CLI 逻辑文件在 Core/ 顶层，非 Core/CLI/ 子目录） |
 | `Core/Clients/` | — | 外部数据源 + LLM API 客户端（通用基础设施，V2 Research/Provider 层复用）：AlphaVantageClient / SECOfficialSourceClient / TavilySearchClient / OpenAICompatibleAgentClient + **WF-4 迁入的契约层**（AgentClientContract.swift：AgentChatMessage/AgentToolCall 等协议形状；AIAgentDiagnosticLog.swift：诊断日志；DataSourceSettings.swift：TrendAIProvider/Tavily/SEC/AlphaVantage 配置值类型——原属旧链路，删除时随消费方救回归位）。`Core/TrendResearch/` 与 `Core/Trend/` 目录已删除 |
 | `Core/NativeSnapshotStore.swift` | 246 | 数据快照持久化（注：是规范化 Snapshot DTO 的文件 Store，**不是数据库**，不涉及 SQLite） |
@@ -218,13 +219,16 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 16. **build_macos_app.sh 走 SPM 构建** — Epic 5 引入 GRDB 后脚本已从裸 swiftc 改为 `swift build -c release` + 拷贝产物进 .app（源文件排除规则/最低系统版本以 `macos-app/Package.swift` 为单一事实源）。**新增 App 源文件不再需要动脚本**（SPM 自动发现）；但新增 SPM 外部依赖必须同步 `Package.swift` + `project.yml`（packages + 各 target dependencies，product 名为 GRDB 非 GRDB.swift）并 `xcodegen generate` 重生成工程
 17. **GRDB `SQL` 类型污染类型推断** — GRDB 的 `SQL` 遵循 ExpressibleByStringInterpolation，同模块内无显式类型的字符串字面量闭包链（`map { "\(x)" }.joined(separator:)`）可能被推断成 `SQL`（GRDB 给 Sequence 加了 `joined(separator:)` 的 SQL 版扩展）。遇到莫名的 "cannot convert 'SQL' to 'String'" 时给变量显式标注 `: String`（先例：TrendLiveLogPanel.copyLogs）
 18. **GRDB 迁移只追加不改写** — `CanonicalDatabase.makeMigrations()` 已发布的 migration id 永不改名/删除/重排（老库按 id 记账，改写 = 全量重跑破坏数据）；新增表只追加新 migration 并同步 `schemaVersion`（有测试守护两侧一致）
+19. **macOS 入口是 main.swift 双模式（AGENT-2）** — `@main` 已从 `QiemanDashboardApp` 移到 `macos-app/main.swift`（GUI 默认 + `--agent` 分流）；**不要给 QiemanDashboardApp 加回 `@main`**（与 main.swift 顶层代码冲突编译失败）。iOS Xcode target 不含 main.swift（其入口仍是 `QiemanDashboardApp_iOS.swift` 的 `@main`）。investment-agent 的实现/凭据/数据目录约定见 `Core/CLI/InvestmentAgentCLI.swift` 文件头（凭据只走环境变量；副作用命令必须经 `WorkflowRegistry` 提交，不得绕过作业纪律）
+20. **InvestmentIntelligenceV2 暂不抽独立 package** — 决策记录 `docs/adr/PKG001`（按实测依赖形状评估：V2 依赖 Core/Clients、Core/Clients 同时被 App 非 V2 路径消费）；边界靠目录 + review + 测试维持，V2 内不得引用 SwiftUI/AppKit/AppModel
 
 ## Agent 工作指南
 
 - 修改 UI 时注意涨跌颜色用 AppPalette（红涨绿跌）
 - CLI 命令修改：DTO 在 `Core/CLI/DTOs.swift`，路由/handler 在 `Core/QiemanCommandLine.swift`；新增命令需同步：① 加 DTO（或复用现有，如 `alfa-actions` 复用 `CLIPlatformActionsOutput`）② 加 case + handler ③ 加 `CLIContractSnapshotTests` 快照 ④ 若新增 Swift 文件需更新 `scripts/build_qieman_cli.sh`
 - alfa 投顾组合：客户端在 `Core/Alfa/QiemanAlfaClient.swift`，AppModel 逻辑在 `Core/AppModel/Alfa.swift`，UI 在 `Views_macOS/Platform/AlfaPlatformPanel.swift`（iOS 对应 `Views_iOS/IOSAlfaPlatformPanel.swift`）；组合持久化在 `alfa-portfolios.json`
-- Swift App 入口在 `macos-app/QiemanDashboardApp.swift`
+- Swift App 入口在 `macos-app/main.swift`（双模式：GUI / `--agent` CLI，见坑点 19；App 结构体本体在 `QiemanDashboardApp.swift`）
+- investment-agent CLI（AGENT-2）：命令实现全在 `Core/CLI/InvestmentAgentCLI.swift`（SPM + Xcode macOS target 自动编入，**不在 build_qieman_cli.sh 的显式列表里**——那是 qieman-cli 的）；启动器 `scripts/investment-agent`；测试 `InvestmentAgentCLITests`（run(arguments:) 可测入口）
 - AppModel 是全局状态中心，拆分子文件在 `macos-app/Core/AppModel/`
 - 构建必须指定版本号：`APP_VERSION=x.y.z bash scripts/build_macos_app.sh`
 - 发布流程：提交功能代码 → 打 tag（如 `v3.16.3`）→ 推送 `main` 和 tag → GitHub Actions 构建 zip、创建 Release、回写 `releases/macos/latest.json`
