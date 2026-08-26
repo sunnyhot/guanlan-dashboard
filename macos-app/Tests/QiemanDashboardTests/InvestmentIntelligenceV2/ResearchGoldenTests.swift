@@ -186,10 +186,6 @@ final class ResearchGoldenTests: XCTestCase {
         XCTAssertFalse(result.isValid)
         XCTAssertEqual(result.errors.map(\.code), ["unresolved_evidence_reference"])
         XCTAssertTrue(result.errors[0].detail.contains("EV-FORGED"))
-        // Harness 层同样拒收（提交门禁错误详情固定片段）
-        XCTAssertEqual(
-            ResearchConfidenceLabel.allCases.map(\.rawValue), ["HIGH", "MEDIUM", "LOW"]
-        )
     }
 
     func testGoldenFreshnessFailurePath() throws {
@@ -219,7 +215,7 @@ final class ResearchGoldenTests: XCTestCase {
     // MARK: 提取降级路径 golden（策略语义锁定）
 
     func testGoldenExtractionDemotionPath() throws {
-        // 无证据方向 → uncertain；rationale 降级说明固定。
+        // 无证据维度组不产信号（审查 P2-2：与 SignalStore 写入门禁对齐）。
         let notes = try ResearchNotes(
             task: goldenTask,
             notes: "n",
@@ -233,10 +229,7 @@ final class ResearchGoldenTests: XCTestCase {
             producedAt: Self.goldenClock()
         )
         let signals = SignalExtractor().extract(from: notes, now: Self.goldenClock())
-        XCTAssertEqual(signals.count, 1)
-        XCTAssertEqual(signals[0].direction, .uncertain)
-        XCTAssertEqual(signals[0].strength, .weak)
-        XCTAssertTrue(signals[0].rationale?.contains("无证据引用，方向降级 uncertain") ?? false)
+        XCTAssertTrue(signals.isEmpty, "无证据支撑的维度不产信号（不是信号，是叙述）")
     }
 }
 

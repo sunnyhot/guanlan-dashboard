@@ -99,8 +99,12 @@ struct V2LocalDataTool: ResearchTool {
                     "value": .number(point.value)
                 ]
             }
+        // 内容寻址 digest 用规范 JSON 编码（字符串插值依赖 debugDescription，
+        // 跨 Swift 版本可能漂移——审查 P3-6）
+        let firstJSON = rows.first.flatMap { Self.stableJSON($0) } ?? "null"
+        let lastJSON = rows.last.flatMap { Self.stableJSON($0) } ?? "null"
         let digest = StableDigest.digest(
-            "\(dataset)|\(subjectID)|\(rows.count)|\(rows.first ?? .null)|\(rows.last ?? .null)"
+            "\(dataset)|\(subjectID)|\(rows.count)|\(firstJSON)|\(lastJSON)"
         )
         let evidenceID = EvidenceID(rawValue: "local:\(dataset):\(digest.prefix(16))")
         let data: ModelJSONValue = [
@@ -117,12 +121,22 @@ struct V2LocalDataTool: ResearchTool {
         )
     }
 
-    private static func dayString(_ date: Date) -> String {
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func dayString(_ date: Date) -> String {
+        dayFormatter.string(from: date)
+    }
+
+    /// ModelJSONValue 的稳定 JSON 串（编码失败返回 nil，digest 退化为 null）。
+    private static func stableJSON(_ value: ModelJSONValue) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 }
 

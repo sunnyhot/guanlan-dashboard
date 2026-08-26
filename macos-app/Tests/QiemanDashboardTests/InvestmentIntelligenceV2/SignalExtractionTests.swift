@@ -45,18 +45,36 @@ final class SignalExtractionTests: XCTestCase {
         XCTAssertEqual(signals[0].derivedFromEvidenceIDs, [ev1])
     }
 
-    func testUnevidencedDirectionIsForcedUncertain() throws {
-        // 无证据的方向不进系统（铁律：自由 reasoning 不直接进系统状态）。
+    func testUnevidencedClaimProducesNoSignal() throws {
+        // 无证据的 claim（维度组去重后 evidence 为空）不产信号——与
+        // SignalStore 写入门禁对齐（审查 P2-2）：无证据支撑的不是信号，
+        // 是叙述；方向降级逻辑只对「组内其他 claim 有证据」的场景生效。
         let notes = try makeResearchNotes([
             ResearchClaim(
                 statement: "感觉要涨", evidenceReferences: [],
                 confidenceLabel: .high, dimension: .momentum, direction: .bullish
             )
         ])
+        XCTAssertTrue(SignalExtractor().extract(from: notes, now: Date()).isEmpty)
+    }
+
+    func testMixedEvidenceGroupStillExtractsWithDemotionRationale() throws {
+        // 组内混合：有证据 claim 的方向保留，无证据 claim 的方向被拒——
+        // 降级理由仍透明进 rationale。
+        let notes = try makeResearchNotes([
+            ResearchClaim(
+                statement: "有据看多", evidenceReferences: [ev1],
+                confidenceLabel: .high, dimension: .momentum, direction: .bullish
+            ),
+            ResearchClaim(
+                statement: "无据看空", evidenceReferences: [],
+                confidenceLabel: .high, dimension: .momentum, direction: .bearish
+            ),
+        ])
         let signals = SignalExtractor().extract(from: notes, now: Date())
         XCTAssertEqual(signals.count, 1)
-        XCTAssertEqual(signals[0].direction, .uncertain)
-        XCTAssertTrue(signals[0].rationale?.contains("无证据引用") ?? false)
+        XCTAssertEqual(signals[0].direction, .bullish, "有据方向不被无据 claim 冲突掉")
+        XCTAssertTrue(signals[0].rationale?.contains("无证据引用") ?? false, "无据 claim 的降级说明保留")
     }
 
     func testEvidenceCountThresholdDemotesDirection() throws {

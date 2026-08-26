@@ -99,10 +99,13 @@ struct V2WebSearchTool: ResearchTool {
                 timeoutSeconds: 30
             )
             var evidenceIDs: [EvidenceID] = []
+            var seenEvidenceIDs: Set<String> = []
             var rows: [ModelJSONValue] = []
             for result in response.results {
                 guard !result.title.isEmpty, !result.content.isEmpty else { continue }
                 let id = "web:tavily:\(StableDigest.digest("\(result.url)|\(result.title)").prefix(20))"
+                // 同 url+title 的重复结果只登记一次（审查 P3-6）
+                guard seenEvidenceIDs.insert(id).inserted else { continue }
                 evidenceIDs.append(EvidenceID(rawValue: id))
                 rows.append([
                     "title": .string(result.title),

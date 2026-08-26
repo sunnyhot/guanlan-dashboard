@@ -321,6 +321,95 @@ final class ModelGatewayTests: XCTestCase {
         )
     }
 
+    // MARK: P3-1 修复：响应携带实际 provider 身份
+
+    func testFailoverResponseCarriesActualProviderIdentity() async throws {
+        let primary = ScriptedModelProvider(providerID: "primary", steps: [
+            .error(.timedOut(providerID: "primary", seconds: 5)),
+            .error(.timedOut(providerID: "primary", seconds: 5)),
+        ])
+        let secondary = ScriptedModelProvider(providerID: "secondary", steps: [
+            .response(textResponse("recovered"))
+        ])
+        var policy = ModelGatewayPolicy()
+        policy.maxRetriesPerProvider = 1
+        policy.retryInterval = 0
+        let gateway = ModelGateway(providers: [primary, secondary], policy: policy)
+
+        let response = try await gateway.complete(makeRequest())
+        XCTAssertEqual(response.resolvedProvider?.providerID, "secondary",
+                       "failover 后 resolvedProvider 是实际完成请求的 provider")
+        // 直构响应不带身份（回退路径语义）
+        let direct = textResponse("x")
+        XCTAssertNil(direct.resolvedProvider)
+    }
+
+    // MARK: P3-3 修复：未声明输出上限按估算占预算 + 重试间复查
+
+    func testUnspecifiedOutputTokensChargedAgainstBudgetByEstimate() async {
+        let provider = ScriptedModelProvider(providerID: "p", steps: [
+            .response(textResponse("never"))
+        ])
+        let ledger = ModelUsageLedger()
+        // 已消耗 100 + 估算 4096 > 预算 4000 → 拒绝（nil 不再按 0 计）。
+        await ledger.record(usage: ModelTokenUsage(promptTokens: 40, completionTokens: 60, totalTokens: 100))
+        var policy = ModelGatewayPolicy()
+        policy.tokenBudget = 4000
+        let gateway = ModelGateway(providers: [provider], policy: policy, ledger: ledger)
+
+        do {
+            _ = try await gateway.complete(makeRequest())
+            XCTFail("100 + 4096 > 4000 应拒绝")
+        } catch let error as ModelGatewayError {
+            guard case .tokenBudgetExhausted(_, let requested, let budget) = error else {
+                return XCTFail("错误类型不对: \(error)")
+            }
+            XCTAssertEqual(requested, 4096, "未声明上限按估算值占预算")
+            XCTAssertEqual(budget, 4000)
+        } catch {
+            XCTFail("错误类型不对: \(error)")
+        }
+        XCTAssertTrue(provider.calls.isEmpty)
+    }
+
+    func testBudgetRecheckedBetweenRetries() async {
+        // 入口 0 + 10 < 1000 通过；第一次尝试超时后在重试间隔里另一路调用
+        // 记账 995 → 重试前复查 995 + 10 > 1000 → 拒绝（第二次尝试不发生）。
+        let provider = ScriptedModelProvider(providerID: "p", steps: [
+            .error(.timedOut(providerID: "p", seconds: 1)),
+            .error(.timedOut(providerID: "p", seconds: 1)),
+        ])
+        let ledger = ModelUsageLedger()
+        var policy = ModelGatewayPolicy()
+        policy.tokenBudget = 1000
+        policy.maxRetriesPerProvider = 3
+        policy.retryInterval = 0
+        let gateway = ModelGateway(
+            providers: [provider], policy: policy, ledger: ledger,
+            sleeper: { _ in
+                await ledger.record(usage: ModelTokenUsage(
+                    promptTokens: 900, completionTokens: 95, totalTokens: 995
+                ))
+            }
+        )
+
+        do {
+            _ = try await gateway.complete(makeRequest(maxOutputTokens: 10))
+            XCTFail("重试间复查应拒绝")
+        } catch let error as ModelGatewayError {
+            guard case .tokenBudgetExhausted(let consumed, let requested, _) = error else {
+                return XCTFail("错误类型不对: \(error)")
+            }
+            XCTAssertEqual(consumed, 995)
+            XCTAssertEqual(requested, 10)
+        } catch {
+            XCTFail("错误类型不对: \(error)")
+        }
+        // 复查只能看到已发生的记账：sleeper 注入发生在第一次复查之后，
+        // 第二次尝试照常进行、第三次尝试前的复查拦截。
+        XCTAssertEqual(provider.calls.count, 2, "第三次尝试在复查处被拦截")
+    }
+
     func testConfigurationFingerprintStableAndKeySensitive() {
         let a = LLMProviderConfiguration(providerID: "p", baseURL: "https://x", model: "m", apiKey: "k1")
         let b = LLMProviderConfiguration(providerID: "p", baseURL: "https://x", model: "m", apiKey: "k1")

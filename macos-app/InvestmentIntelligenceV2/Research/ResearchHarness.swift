@@ -225,7 +225,7 @@ struct ResearchHarness: Sendable {
                 guard !response.toolCalls.isEmpty else {
                     plainTextResponses += 1
                     if plainTextResponses > policy.maxPlainTextResponses {
-                        return await fail("模型连续 \(plainTextResponses) 次未发起工具调用", at: Date())
+                        return await fail("模型连续 \(plainTextResponses) 次未发起工具调用", at: clock())
                     }
                     messages.append(ModelChatMessage(
                         role: .user,
@@ -247,7 +247,7 @@ struct ResearchHarness: Sendable {
                             let remaining = policy.maxInvalidSubmissions - invalidSubmissions
                             await events(.submissionRejected(detail: detail, remainingAttempts: max(0, remaining)))
                             if invalidSubmissions >= policy.maxInvalidSubmissions {
-                                return await fail("提交多次未通过校验：\(detail)", at: Date())
+                                return await fail("提交多次未通过校验：\(detail)", at: clock())
                             }
                             messages.append(ModelChatMessage(
                                 role: .tool,
@@ -259,12 +259,14 @@ struct ResearchHarness: Sendable {
                                 task: task,
                                 notes: submission.notes,
                                 claims: submission.claims,
-                                producedBy: producedByDescriptor ?? ModelProviderDescriptor(
-                                    providerID: "unknown", model: "unknown", fingerprint: ""
-                                ),
+                                producedBy: response.resolvedProvider
+                                    ?? producedByDescriptor
+                                    ?? ModelProviderDescriptor(
+                                        providerID: "unknown", model: "unknown", fingerprint: ""
+                                    ),
                                 producedAt: clock()
                             )
-                            try job.transition(to: .completed, at: Date(), detail: notes.contentFingerprint)
+                            try job.transition(to: .completed, at: clock(), detail: notes.contentFingerprint)
                             await events(.notesAccepted(
                                 claimCount: notes.claims.count,
                                 evidenceCount: Set(notes.claims.flatMap { $0.evidenceReferences.map(\.rawValue) }).count
@@ -290,7 +292,7 @@ struct ResearchHarness: Sendable {
 
                     toolCallCount += 1
                     if toolCallCount > policy.maxToolCalls {
-                        return await fail("工具调用次数超限（\(policy.maxToolCalls)）", at: Date())
+                        return await fail("工具调用次数超限（\(policy.maxToolCalls)）", at: clock())
                     }
 
                     let result = await tool.execute(
@@ -310,30 +312,35 @@ struct ResearchHarness: Sendable {
 
                     var content = Self.toolResultJSON(result)
                     if content.utf8.count > policy.maxToolResultBytes {
-                        content = """
-                        {"truncated": true, "notice": "工具结果超过回灌上限被截断，完整 evidence 已登记，可换更小范围参数重试", "prefix": "\(String(content.prefix(policy.maxToolResultBytes)))"}
-                        """
+                        // 截断前缀含任意字符（引号/反斜杠/换行），必须经 JSONEncoder
+                        // 转义——字符串插值拼 JSON 会产出非法 tool message。
+                        let envelope: ModelJSONValue = [
+                            "truncated": true,
+                            "notice": .string("工具结果超过回灌上限被截断，完整 evidence 已登记，可换更小范围参数重试"),
+                            "prefix": .string(String(content.prefix(policy.maxToolResultBytes)))
+                        ]
+                        content = Self.toolResultJSON(ResearchToolResult.content(envelope))
                     }
                     messages.append(ModelChatMessage(role: .tool, content: content, toolCallID: call.id))
                 }
 
                 compactContextIfNeeded(&messages)
             }
-            return await fail("轮次耗尽（\(policy.maxTurns)）仍未提交有效研究笔记", at: Date())
+            return await fail("轮次耗尽（\(policy.maxTurns)）仍未提交有效研究笔记", at: clock())
         } catch is CancellationError {
-            try? job.transition(to: .cancelled, at: Date(), detail: nil)
+            try? job.transition(to: .cancelled, at: clock(), detail: nil)
             await events(.cancelled)
             throw CancellationError()
         } catch {
-            return await fail(String(describing: error), at: Date())
+            return await fail(String(describing: error), at: clock())
         }
     }
 
     // MARK: - 私有
 
-    /// Gateway 响应不携带 provider 身份（Gateway 编排层可能 failover）；
-    /// producedBy 取首个候选 provider 的 descriptor（研究产出的溯源口径：
-    /// 「由哪个 provider 完成」，Gateway 的 per-attempt 细节在 trace 里）。
+    /// 产出溯源回退（审查 P3-1 修复后的兜底路径）：Gateway 已在响应里回填
+    /// resolvedProvider（实际完成请求的 provider，failover 后准确）；
+    /// 仅当响应缺失该字段（非经 Gateway 构造）时退回首选候选。
     private var producedByDescriptor: ModelProviderDescriptor? {
         gateway.providers.first?.descriptor
     }

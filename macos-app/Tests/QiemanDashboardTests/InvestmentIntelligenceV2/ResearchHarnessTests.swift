@@ -274,10 +274,18 @@ final class ResearchHarnessTests: XCTestCase {
         ])
         let harness = ResearchHarness(gateway: gateway(provider: provider), tools: [StubResearchTool()])
 
+        // 事件驱动取消（审查 P3-6：创建即 cancel 存在理论竞态——改为在首个
+        // turnStarted 事件后取消，取消点确定在第二轮循环开头的检查处）。
+        // 间接持有：闭包不能捕获声明中的 task 自身
+        var cancelHook: (@Sendable () -> Void)?
         let task = Task<ResearchRunOutcome, Error> {
-            try await harness.run(task: try makeResearchTask())
+            try await harness.run(task: try makeResearchTask()) { event in
+                if case .turnStarted = event {
+                    cancelHook?()
+                }
+            }
         }
-        task.cancel()
+        cancelHook = { task.cancel() }
         do {
             _ = try await task.value
             XCTFail("取消应 rethrow CancellationError")
@@ -291,7 +299,9 @@ final class ResearchHarnessTests: XCTestCase {
     // MARK: 上下文治理
 
     func testOversizedToolResultIsTruncatedInContext() async throws {
-        let big = String(repeating: "x", count: 1024)
+        // 审查 P2-1 回归：截断前缀含引号/反斜杠/换行时，回灌内容必须仍是
+        // 合法 JSON（字符串插值拼 JSON 会注入破损）。
+        let big = String(repeating: "\"quote\nbackslash\\", count: 64)
         let valid = """
         {"notes": "n", "claims": [{"statement": "s", "evidence_ids": ["EV-1"], "confidence_label": "HIGH"}]}
         """
@@ -308,6 +318,12 @@ final class ResearchHarnessTests: XCTestCase {
         XCTAssertTrue(outcome.succeeded, "截断不终止运行")
         let toolMessage = outcome.transcript.first { $0.role == .tool && $0.content?.contains("truncated") == true }
         XCTAssertNotNil(toolMessage, "回灌内容带 truncated 标记")
+        let content = try XCTUnwrap(toolMessage?.content)
+        XCTAssertNotNil(
+            try? JSONSerialization.jsonObject(with: Data(content.utf8)),
+            "截断信封必须是合法 JSON（恶意字符被转义）"
+        )
+        XCTAssertTrue(content.contains("\\\"quote"), "前缀内容经转义保留")
     }
 
     func testContextCompactionReplacesOldToolMessages() async throws {

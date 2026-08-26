@@ -73,6 +73,10 @@ struct SignalExtractor: Sendable {
     /// ResearchNotes → InvestmentSignals。
     ///
     /// - dimension 为 nil 的 claim 无法归入信号维度：跳过（叙述仍留在 notes）
+    /// - **去重后 evidence 为空的维度组同样跳过**（审查 P2-2）：无证据支撑的
+    ///   不是信号、是叙述——与 SignalStore 写入门禁（空 evidence = malformed）
+    ///   对齐，「validate(默认 warning) → extract → write」合法流程不会在
+    ///   写库处爆 malformed
     /// - 同 dimension 的 claims 合并为一个 signal（evidence 并集、方向冲突降级）
     /// - 产出信号的 rationale 携带 policy 身份与降级原因（审计可见）
     func extract(from notes: ResearchNotes, now: Date) -> [InvestmentSignal] {
@@ -95,12 +99,13 @@ struct SignalExtractor: Sendable {
         claims: [ResearchClaim],
         notes: ResearchNotes,
         now: Date
-    ) -> InvestmentSignal {
-        // 独立 evidence 并集（排序保证 ID 稳定）
+    ) -> InvestmentSignal? {
+        // 独立 evidence 并集（排序保证 ID 稳定）；空组不产信号（P2-2，见 extract 注释）
         let evidence = claims
             .flatMap { $0.evidenceReferences }
             .map(\.rawValue)
             .sorted()
+        guard !evidence.isEmpty else { return nil }
         var evidenceIDs = Array(Set(evidence)).map { EvidenceID(rawValue: $0) }
         evidenceIDs.sort { $0.rawValue < $1.rawValue }
 

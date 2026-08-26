@@ -243,6 +243,23 @@ struct ModelCompletionResponse: Sendable, Hashable {
     let toolCalls: [ModelToolCall]
     let stopReason: ModelStopReason
     let usage: ModelTokenUsage?
+    /// 实际完成本次请求的 provider 身份（Gateway 在 failover 后回填；
+    /// 直接构造的响应为 nil——产出溯源用，审查 P3-1）。
+    var resolvedProvider: ModelProviderDescriptor? = nil
+
+    init(
+        assistantMessage: ModelChatMessage,
+        toolCalls: [ModelToolCall],
+        stopReason: ModelStopReason,
+        usage: ModelTokenUsage?,
+        resolvedProvider: ModelProviderDescriptor? = nil
+    ) {
+        self.assistantMessage = assistantMessage
+        self.toolCalls = toolCalls
+        self.stopReason = stopReason
+        self.usage = usage
+        self.resolvedProvider = resolvedProvider
+    }
 }
 
 // MARK: - ModelProvider 协议
@@ -301,6 +318,9 @@ struct ModelGatewayPolicy: Sendable, Hashable {
     var retryInterval: TimeInterval = 1
     /// 运行级 token 预算（上报 usage 之和；fail-closed）。
     var tokenBudget: Int = 2_000_000
+    /// 请求未声明 maxOutputTokens 时的预算占位估算（审查 P3-3：
+    /// 未声明不能按 0 计，否则预算检查形同虚设）。
+    var perRequestOutputEstimate: Int = 4096
     /// 是否允许 failover 到下一 provider（关闭 = 只用首个可用 provider）。
     var failoverEnabled: Bool = true
 }
@@ -414,12 +434,8 @@ struct ModelGateway: Sendable {
             throw ModelGatewayError.noProvidersConfigured
         }
 
-        let consumed = await ledger.consumedTokens()
-        let requested = request.maxOutputTokens ?? 0
-        if consumed + requested > policy.tokenBudget {
-            throw ModelGatewayError.tokenBudgetExhausted(
-                consumed: consumed, requested: requested, budget: policy.tokenBudget
-            )
+        if let (violation, _) = try await budgetViolation(request) {
+            throw violation
         }
 
         var totalAttempts = 0
@@ -434,7 +450,8 @@ struct ModelGateway: Sendable {
                 let requestID = requestIDFactory()
                 let startedAt = clock()
                 do {
-                    let response = try await provider.complete(request, timeout: policy.requestTimeout)
+                    var response = try await provider.complete(request, timeout: policy.requestTimeout)
+                    response.resolvedProvider = provider.descriptor
                     await ledger.record(usage: response.usage)
                     await recordTrace(
                         requestID, request, provider, providerIndex, attempt,
@@ -458,6 +475,10 @@ struct ModelGateway: Sendable {
                     )
                     // 重试只对可重试错误；不可重试直接换下一 provider。
                     guard error.isRetryable, attempt <= policy.maxRetriesPerProvider else { break }
+                    // 重试前复查预算（前次尝试可能已记账消耗）。
+                    if let (violation, _) = try await budgetViolation(request) {
+                        throw violation
+                    }
                     await sleeper(policy.retryInterval)
                 }
             }
@@ -477,6 +498,24 @@ struct ModelGateway: Sendable {
     /// usage 快照（运行摘要）。
     func usageSnapshot() async -> ModelUsageSnapshot {
         await ledger.snapshot()
+    }
+
+    /// 预算检查（审查 P3-3）：未声明输出上限的请求按估算值占预算
+    ///（fail-closed 保守）；返回 nil = 通过，否则携带待抛的错误与 requested。
+    private func budgetViolation(
+        _ request: ModelCompletionRequest
+    ) async throws -> (ModelGatewayError, Int)? {
+        let consumed = await ledger.consumedTokens()
+        let requested = request.maxOutputTokens ?? policy.perRequestOutputEstimate
+        if consumed + requested > policy.tokenBudget {
+            return (
+                .tokenBudgetExhausted(
+                    consumed: consumed, requested: requested, budget: policy.tokenBudget
+                ),
+                requested
+            )
+        }
+        return nil
     }
 
     /// 一次尝试的 trace 记录（成功 / 失败同一出口）。
