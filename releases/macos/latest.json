@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.0/QiemanDashboard-4.4.0.zip",
-    "name" : "QiemanDashboard-4.4.0.zip",
-    "sha256" : "bf6640e26d80ade5418415bb8607e56eab83bdccaead40c3f6d0ce0f01d23e84",
-    "size" : 10275655
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.1/QiemanDashboard-4.4.1.zip",
+    "name" : "QiemanDashboard-4.4.1.zip",
+    "sha256" : "59da19ef18f5a5df173a27ac7a3e625f229674165f984c9278708bcf9fdb9590",
+    "size" : 10283103
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.0/QiemanDashboard-4.4.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.1/QiemanDashboard-4.4.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.4.0.zip",
-      "size" : 10275655
+      "name" : "QiemanDashboard-4.4.1.zip",
+      "size" : 10283103
     }
   ],
-  "body" : "版本号同步 v4.4.0（投资智能 V2 产品展示层重构）\nAGENTS.md 补记 V2 用户意图 Store 与产品展示层架构（产品重构 P0-P4）\n盘中快照携带报告/目标 ID 供详情技术区使用\n补齐双端体验回归（P2-P4 收尾）\n同步投资智能 V2 产品展示层（P4）\n迁移投资智能模型与数据源配置（P3）\n重构投资智能产品主页（P2）\n增加统一 dashboard presentation snapshot（P1）\n接入真实战略目标与持仓资产分类（P0）",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.4.0",
-  "name" : "QiemanDashboard v4.4.0",
-  "notes" : "版本号同步 v4.4.0（投资智能 V2 产品展示层重构）\nAGENTS.md 补记 V2 用户意图 Store 与产品展示层架构（产品重构 P0-P4）\n盘中快照携带报告/目标 ID 供详情技术区使用\n补齐双端体验回归（P2-P4 收尾）\n同步投资智能 V2 产品展示层（P4）\n迁移投资智能模型与数据源配置（P3）\n重构投资智能产品主页（P2）\n增加统一 dashboard presentation snapshot（P1）\n接入真实战略目标与持仓资产分类（P0）",
+  "body" : "版本号同步 v4.4.1（修复 AI 配置写入与持仓分类保存）\nAI 配置写入失败静默 + 持仓分类无法保存（v4.4.1）",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.4.1",
+  "name" : "QiemanDashboard v4.4.1",
+  "notes" : "版本号同步 v4.4.1（修复 AI 配置写入与持仓分类保存）\nAI 配置写入失败静默 + 持仓分类无法保存（v4.4.1）",
   "published_at" : "",
-  "sha256" : "bf6640e26d80ade5418415bb8607e56eab83bdccaead40c3f6d0ce0f01d23e84",
-  "tag" : "v4.4.0",
-  "tag_name" : "v4.4.0",
-  "version" : "4.4.0"
+  "sha256" : "59da19ef18f5a5df173a27ac7a3e625f229674165f984c9278708bcf9fdb9590",
+  "tag" : "v4.4.1",
+  "tag_name" : "v4.4.1",
+  "version" : "4.4.1"
 }
