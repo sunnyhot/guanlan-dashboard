@@ -23,17 +23,20 @@ jobs:
       - name: Run Swift tests
         working-directory: macos-app
         run: |
-          set -o pipefail
+          # runner 默认 bash -e：swift test 失败即退出步骤，摘录代码不可达。
+          # 显式关闭 -e 捕获退出码后再走摘录与评论。
+          set +e
           swift test 2>&1 | tee /tmp/test-output.log
           status=${PIPESTATUS[0]}
+          set -e
           if [ "$status" -ne 0 ]; then
             {
               echo "## 失败的测试（自动摘录）"
-              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -40 || echo "（无 XCTest 失败行——可能是编译/崩溃，查完整日志）"
+              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -40 || echo "（无 XCTest 失败行——可能是编译/崩溃，见下方日志尾）"
             } >> "$GITHUB_STEP_SUMMARY"
-            # 失败摘录评论到 commit（公开可读，便于无登录排查）
+            # 失败摘录 + 日志尾评论到 commit（公开可读，便于无登录排查）
             {
-              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -20
+              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -20 || true
               echo ""
               echo "—— 日志尾 100 行 ——"
               tail -100 /tmp/test-output.log
