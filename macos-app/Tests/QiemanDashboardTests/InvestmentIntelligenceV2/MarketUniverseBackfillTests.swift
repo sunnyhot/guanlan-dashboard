@@ -52,7 +52,7 @@ final class MarketUniverseBackfillTests: XCTestCase {
         let backfill = HistoricalBackfill(
             pipeline: pipeline, repository: repository,
             requiredTradingDays: requiredTradingDays,
-            now: { self.est(2026, 8, 19).addingTimeInterval(20 * 3600) }
+            now: { () -> Date in self.est(2026, 8, 19).addingTimeInterval(72_000) }
         )
         stub.fullCoverageDays = requiredTradingDays
         return MarketUniverseBackfill(
@@ -61,7 +61,7 @@ final class MarketUniverseBackfillTests: XCTestCase {
                 ProviderFallbackChain(adapters: [stub] as [any ProviderAdapter])
             },
             maxTargetsPerRound: maxTargetsPerRound,
-            now: { self.est(2026, 8, 19).addingTimeInterval(20 * 3600) }
+            now: { () -> Date in self.est(2026, 8, 19).addingTimeInterval(72_000) }
         )
     }
 
