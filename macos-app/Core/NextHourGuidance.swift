@@ -789,7 +789,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     private static let totalTimeoutSeconds: Double = 300
 
     init(
-        client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
+        client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "next-hour-guidance"),
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared,

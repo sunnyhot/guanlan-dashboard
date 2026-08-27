@@ -74,7 +74,7 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
     let registry: TrendResearchToolRegistry
 
     init(
-        client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
+        client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "decision-case-research"),
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared

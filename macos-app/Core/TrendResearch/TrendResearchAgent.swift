@@ -239,7 +239,12 @@ struct TrendResearchAgent: Sendable {
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
 
     init(
-        client: any TrendResearchAgentClient = OpenAICompatibleAgentClient(),
+        // 经 LLM 网关：预算 / 记账 / trace 立即生效；重试关闭（本 Agent 自带
+        // 超时恢复循环，网关级重试会造成双重等待）。
+        client: any TrendResearchAgentClient = GatewayAgentClient(
+            purpose: "trend-research",
+            policy: ModelGatewayPolicy(maxRetriesPerProvider: 0)
+        ),
         webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         webSearchCache: TrendWebSearchResponseCache = .shared,
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
