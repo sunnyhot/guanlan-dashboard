@@ -57,7 +57,9 @@ final class MarketUniverseBackfillTests: XCTestCase {
         stub.fullCoverageDays = requiredTradingDays
         return MarketUniverseBackfill(
             backfill: backfill,
-            makeChain: { [stub] _ in ProviderFallbackChain(adapters: [stub]) },
+            makeChain: { [stub] (_ entry: MarketUniverseEntry) in
+                ProviderFallbackChain(adapters: [stub] as [any ProviderAdapter])
+            },
             maxTargetsPerRound: maxTargetsPerRound,
             now: { self.est(2026, 8, 19).addingTimeInterval(20 * 3600) }
         )
@@ -158,7 +160,7 @@ final class MarketUniverseBackfillTests: XCTestCase {
 
         let engine = MarketUniverseBackfill(
             backfill: backfill,
-            makeChain: { _ in
+            makeChain: { (_ entry: MarketUniverseEntry) in
                 XCTFail("remote 通道标的不应构造降级链调用（fetchDirectly=false 不抓取）")
                 return ProviderFallbackChain(adapters: [])
             },
@@ -188,7 +190,7 @@ final class MarketUniverseBackfillTests: XCTestCase {
 
         let engine = MarketUniverseBackfill(
             backfill: backfill,
-            makeChain: { _ in ProviderFallbackChain(adapters: []) },
+            makeChain: { (_ entry: MarketUniverseEntry) in ProviderFallbackChain(adapters: []) },
             maxTargetsPerRound: 3,
             now: { self.cst(2026, 8, 19).addingTimeInterval(20 * 3600) }
         )
