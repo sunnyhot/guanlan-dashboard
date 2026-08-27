@@ -208,15 +208,21 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         XCTAssertEqual(result.finishReason, "tool_calls")
     }
 
-    func testClientEmitsContentDeltasWhileStreaming() async throws {
+    func testClientEmitsStreamDeltasForReasoningContentAndToolCalls() async throws {
         let stream = """
-        data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"先读取"},"finish_reason":null}]}
+        data: {"choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"先想想"},"finish_reason":null}]}
 
-        data: {"choices":[{"index":0,"delta":{"content":"数据"},"finish_reason":null}]}
+        data: {"choices":[{"index":0,"delta":{"reasoning_content":"再想想"},"finish_reason":null}]}
+
+        data: {"choices":[{"index":0,"delta":{"content":"先读取"},"finish_reason":null}]}
+
+        data: {"choices":[{"index":0,"delta":{"content":"数据","tool_calls":[{"index":0,"id":"call_stream_1","type":"function","function":{"name":"web_search","arguments":"{\\\"query\\":"}}]},"finish_reason":null}]}
+
+        data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\\"最新政策\\\"}"}}]},"finish_reason":null}]}
 
         data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5}}
 
-        data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+        data: {"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
 
         data: [DONE]
 
@@ -230,16 +236,30 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         }
 
         let client = OpenAICompatibleAgentClient(session: Self.mockSession())
-        let collector = ContentDeltaCollector()
+        let collector = StreamDeltaCollector()
         _ = try await client.complete(
             messages: [AgentChatMessage(role: .user, content: "u")],
             tools: [],
             toolChoice: .auto,
             settings: providerSettings(),
-            onContentDelta: { delta in collector.append(delta) }
+            onStreamDelta: { delta in collector.append(delta) }
         )
 
-        XCTAssertEqual(collector.deltas, ["先读取", "数据"])
+        // 思考/正文/工具转写三类增量按流内顺序透出
+        let joined = collector.deltas.map { "\($0.kind.rawValue)|\($0.text)" }.joined(separator: "\n")
+        XCTAssertTrue(joined.contains("reasoning|先想想"), "实际：\(joined)")
+        XCTAssertTrue(joined.contains("reasoning|再想想"), "实际：\(joined)")
+        XCTAssertTrue(joined.contains("content|先读取"), "实际：\(joined)")
+        XCTAssertTrue(joined.contains("toolCall|\n[调用工具 web_search] {\"query\":"), "实际：\(joined)")
+        XCTAssertTrue(joined.contains("toolCall|\"最新政策\""), "实际：\(joined)")
+        XCTAssertEqual(
+            collector.deltas.filter { $0.kind == .content }.map(\.text).joined(),
+            "先读取数据"
+        )
+        XCTAssertEqual(
+            collector.deltas.filter { $0.kind == .reasoning }.map(\.text).joined(),
+            "先想想再想想"
+        )
     }
 
     func testClientEmitsFullContentOnceForJSONResponse() async throws {
@@ -252,16 +272,16 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         }
 
         let client = OpenAICompatibleAgentClient(session: Self.mockSession())
-        let collector = ContentDeltaCollector()
+        let collector = StreamDeltaCollector()
         _ = try await client.complete(
             messages: [AgentChatMessage(role: .user, content: "u")],
             tools: [],
             toolChoice: .auto,
             settings: providerSettings(),
-            onContentDelta: { delta in collector.append(delta) }
+            onStreamDelta: { delta in collector.append(delta) }
         )
 
-        XCTAssertEqual(collector.deltas, ["整段输出"])
+        XCTAssertEqual(collector.deltas.map { "\($0.kind)|\($0.text)" }, ["content|整段输出"])
     }
 
     func testClientDetectsEventStreamWhenProxyOmitsSSEContentType() async throws {
@@ -566,18 +586,18 @@ private final class MockAgentURLProtocol: URLProtocol {
     override func stopLoading() {}
 }
 
-/// 线程安全的正文增量收集器（onContentDelta 断言用）。
-final class ContentDeltaCollector: @unchecked Sendable {
+/// 线程安全的流式增量收集器（onStreamDelta 断言用）。
+final class StreamDeltaCollector: @unchecked Sendable {
     private let lock = NSLock()
-    private var items: [String] = []
+    private var items: [AgentStreamDelta] = []
 
-    func append(_ delta: String) {
+    func append(_ delta: AgentStreamDelta) {
         lock.lock()
         items.append(delta)
         lock.unlock()
     }
 
-    var deltas: [String] {
+    var deltas: [AgentStreamDelta] {
         lock.lock()
         defer { lock.unlock() }
         return items

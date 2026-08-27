@@ -168,22 +168,30 @@ extension EnhancementCenterView {
                 )
             }
         ) {
+            // 生成中恒显进度卡（含「已有报告时的更新」场景）；旧报告保留在下方。
+            if isGeneratingLongTermResearch {
+                TrendResearchProgressCard(
+                    message: model.trendProgressLogs.last?.message,
+                    progress: model.trendResearchProgress,
+                    subtitle: "研判引擎正在多轮读取持仓、检索与生成报告，模型输出实时显示在下方。",
+                    liveOutput: model.liveModelOutput?.text
+                )
+            }
             if let report = model.trendReport {
                 portfolioLongTermReportView(report)
-            } else if model.trendGenerationState == .generating {
-                HStack(spacing: AppPalette.spaceS) {
-                    ProgressView().controlSize(.small)
-                    Text("正在分析…")
-                        .font(AppPalette.appFont(.subheadline, weight: .medium))
-                        .foregroundStyle(AppPalette.muted)
-                }
-                .padding(.vertical, AppPalette.spaceS)
-            } else if model.trendSettings.provider.isConfigured {
+            } else if !isGeneratingLongTermResearch && model.trendSettings.provider.isConfigured {
                 trendEmptyState("等待生成", detail: "组合研判只展示持仓方向、周期判断、重点风险和行动候选。")
-            } else {
+            } else if !isGeneratingLongTermResearch {
                 trendEmptyState("未配置模型", detail: "在「设置」里配置 AI 模型后即可生成趋势研判。")
             }
         }
+    }
+
+    /// 长期研判生成中：longTerm 或 full scope 在跑。
+    private var isGeneratingLongTermResearch: Bool {
+        guard model.trendGenerationState == .generating else { return false }
+        let scope = model.trendResearchScope
+        return scope == .longTerm || scope == .full
     }
 
     private var portfolioLongTermSubtitle: String {

@@ -143,6 +143,8 @@ struct MarketCloseReviewSection: View {
 struct TrendResearchProgressCard: View {
     let message: String?
     let progress: TrendResearchModuleProgress
+    /// 副标题文案（默认收盘复盘口径；长期研判等其他入口传入各自说明）。
+    var subtitle: String? = nil
     /// 模型实时输出（流式正文增量拼接；nil/空时不显示该区块）。
     var liveOutput: String? = nil
 
@@ -157,7 +159,7 @@ struct TrendResearchProgressCard: View {
                         .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(2)
-                    Text("收盘行情、冻结持仓和逐只归因完成后，这里会生成组合复盘。")
+                    Text(subtitle ?? "收盘行情、冻结持仓和逐只归因完成后，这里会生成组合复盘。")
                         .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                 }

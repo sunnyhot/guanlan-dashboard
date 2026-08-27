@@ -331,6 +331,8 @@ extension ModelProvider {
 enum ModelStreamEvent: Sendable, Hashable {
     case firstChunk(elapsed: Double)
     case contentDelta(String)
+    case reasoningDelta(String)
+    case toolCallDelta(String)
     case active(chunkCount: Int, elapsed: Double)
     case finished(chunkCount: Int, elapsed: Double, finishReason: String?)
 }

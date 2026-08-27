@@ -27,6 +27,8 @@ enum TrendConnectionState: String, Codable, Hashable {
 struct TrendLiveModelOutput: Equatable {
     let turn: Int
     var text: String
+    /// 最近一次增量的种类（种类切换时插入分隔标记）。
+    var lastKind: AgentStreamDeltaKind?
 }
 
 struct TrendProgressLog: Identifiable, Hashable {

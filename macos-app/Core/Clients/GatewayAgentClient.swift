@@ -159,6 +159,8 @@ extension GatewayAgentClient {
         switch event {
         case .firstChunk(let elapsed): return .firstChunk(elapsed: elapsed)
         case .contentDelta(let text): return .contentDelta(text)
+        case .reasoningDelta(let text): return .reasoningDelta(text)
+        case .toolCallDelta(let text): return .toolCallDelta(text)
         case .active(let chunkCount, let elapsed): return .active(chunkCount: chunkCount, elapsed: elapsed)
         case .finished(let chunkCount, let elapsed, let finishReason):
             return .finished(chunkCount: chunkCount, elapsed: elapsed, finishReason: finishReason)

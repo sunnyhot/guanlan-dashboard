@@ -89,8 +89,8 @@ struct OpenAICompatibleModelProvider: ModelProvider {
                 streamProgress: { progress in
                     await onEvent(Self.domainStreamEvent(progress))
                 },
-                onContentDelta: { delta in
-                    await onEvent(.contentDelta(delta))
+                onStreamDelta: { delta in
+                    await onEvent(Self.domainStreamDelta(delta))
                 }
             )
             return Self.domainResponse(result)
@@ -200,6 +200,16 @@ extension OpenAICompatibleModelProvider {
         case .finished(let chunkCount, let elapsed, let finishReason):
             return .finished(chunkCount: chunkCount, elapsed: elapsed, finishReason: finishReason)
         case .contentDelta(let text): return .contentDelta(text)
+        case .reasoningDelta(let text): return .reasoningDelta(text)
+        case .toolCallDelta(let text): return .toolCallDelta(text)
+        }
+    }
+
+    static func domainStreamDelta(_ delta: AgentStreamDelta) -> ModelStreamEvent {
+        switch delta.kind {
+        case .reasoning: return .reasoningDelta(delta.text)
+        case .content: return .contentDelta(delta.text)
+        case .toolCall: return .toolCallDelta(delta.text)
         }
     }
 

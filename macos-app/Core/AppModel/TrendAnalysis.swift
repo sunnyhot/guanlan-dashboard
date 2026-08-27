@@ -993,7 +993,11 @@ extension AppModel {
         case .modelStreamProgress(let turn, let progress):
             switch progress {
             case .contentDelta(let text):
-                updateLiveModelOutput(turn: turn, delta: text)
+                updateLiveModelOutput(turn: turn, kind: .content, delta: text)
+            case .reasoningDelta(let text):
+                updateLiveModelOutput(turn: turn, kind: .reasoning, delta: text)
+            case .toolCallDelta(let text):
+                updateLiveModelOutput(turn: turn, kind: .toolCall, delta: text)
             case .firstChunk(let elapsed):
                 appendTrendProgress(
                     "已收到首个流式分片",
@@ -1095,21 +1099,41 @@ extension AppModel {
     }
 
     /// 模型实时输出：同轮增量拼接，换轮重置；超长只保留尾部（UI 展示用）。
-    private func updateLiveModelOutput(turn: Int, delta: String) {
+    /// 种类切换时插入分隔/标记行——思考、正文、工具调用三类增量交替到达。
+    private func updateLiveModelOutput(turn: Int, kind: AgentStreamDeltaKind, delta: String) {
         let maximumLength = 8000
+        let prefix: String
+        if let lastKind = liveModelOutput?.lastKind, lastKind == kind {
+            prefix = ""
+        } else {
+            switch kind {
+            case .reasoning:
+                prefix = liveModelOutput == nil || liveModelOutput?.text.isEmpty == true ? "〔思考〕" : "\n〔思考〕"
+            case .content:
+                prefix = liveModelOutput == nil || liveModelOutput?.text.isEmpty == true ? "" : "\n"
+            case .toolCall:
+                // 工具转写自带「\n[调用工具 …」前缀，这里不再额外加标记。
+                prefix = ""
+            }
+        }
         if let current = liveModelOutput, current.turn == turn {
             var updated = current
-            var text = updated.text + delta
+            var text = updated.text + prefix + delta
             if text.count > maximumLength {
                 text = String(text.suffix(maximumLength))
             }
             updated.text = text
+            updated.lastKind = kind
             liveModelOutput = updated
         } else {
-            liveModelOutput = TrendLiveModelOutput(
-                turn: turn,
-                text: String(delta.suffix(maximumLength))
-            )
+            var fresh = TrendLiveModelOutput(turn: turn, text: "")
+            var text = prefix + delta
+            if text.count > maximumLength {
+                text = String(text.suffix(maximumLength))
+            }
+            fresh.text = text
+            fresh.lastKind = kind
+            liveModelOutput = fresh
         }
     }
 

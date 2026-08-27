@@ -291,6 +291,22 @@ enum AgentStreamProgress: Sendable, Hashable {
     case finished(chunkCount: Int, elapsed: Double, finishReason: String?)
     /// 流式正文增量（仅 UI 实时展示；与运行日志无关——日志刻意不记正文）。
     case contentDelta(String)
+    /// 思考型模型的思考文本增量（reasoning_content 流）。
+    case reasoningDelta(String)
+    /// 工具调用的可读转写增量（名称 + 参数流）。
+    case toolCallDelta(String)
+}
+
+/// 流式增量种类：思考 / 正文 / 工具调用，实时展示用。
+enum AgentStreamDeltaKind: String, Sendable, Hashable {
+    case reasoning
+    case content
+    case toolCall
+}
+
+struct AgentStreamDelta: Sendable, Hashable {
+    let kind: AgentStreamDeltaKind
+    let text: String
 }
 
 enum AgentStopReason: Sendable, Hashable {

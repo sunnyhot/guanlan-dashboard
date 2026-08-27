@@ -180,8 +180,10 @@ final class GatewayAgentClientTests: XCTestCase {
     func testStreamEventsFlowThroughAdapterIncludingContentDeltas() async throws {
         let provider = EventEmittingProvider(events: [
             .firstChunk(elapsed: 0.4),
-            .contentDelta("正在"),
-            .contentDelta("分析"),
+            .reasoningDelta("先想想"),
+            .contentDelta("正在分析"),
+            .toolCallDelta("\n[调用工具 web_search] {\"query\":"),
+            .toolCallDelta("\"最新政策\"}"),
             .active(chunkCount: 5, elapsed: 1.2),
             .finished(chunkCount: 9, elapsed: 2.0, finishReason: "stop"),
         ])
@@ -200,14 +202,16 @@ final class GatewayAgentClientTests: XCTestCase {
 
         XCTAssertEqual(result.assistantMessage.content, "done")
         let events = collector.progress
-        guard events.count == 5 else {
-            return XCTFail("期望 5 个事件，实际 \(events)")
+        guard events.count == 7 else {
+            return XCTFail("期望 7 个事件，实际 \(events)")
         }
         XCTAssertEqual(events[0], .firstChunk(elapsed: 0.4))
-        XCTAssertEqual(events[1], .contentDelta("正在"))
-        XCTAssertEqual(events[2], .contentDelta("分析"))
-        XCTAssertEqual(events[3], .active(chunkCount: 5, elapsed: 1.2))
-        XCTAssertEqual(events[4], .finished(chunkCount: 9, elapsed: 2.0, finishReason: "stop"))
+        XCTAssertEqual(events[1], .reasoningDelta("先想想"))
+        XCTAssertEqual(events[2], .contentDelta("正在分析"))
+        XCTAssertEqual(events[3], .toolCallDelta("\n[调用工具 web_search] {\"query\":"))
+        XCTAssertEqual(events[4], .toolCallDelta("\"最新政策\"}"))
+        XCTAssertEqual(events[5], .active(chunkCount: 5, elapsed: 1.2))
+        XCTAssertEqual(events[6], .finished(chunkCount: 9, elapsed: 2.0, finishReason: "stop"))
     }
 
     func testNoStreamCallbackMeansNoEventWiring() async throws {

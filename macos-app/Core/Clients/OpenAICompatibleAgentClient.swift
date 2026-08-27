@@ -103,7 +103,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         settings: TrendAIProviderSettings,
         timeout: Double? = nil,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil,
-        onContentDelta: (@Sendable (String) async -> Void)? = nil
+        onStreamDelta: (@Sendable (AgentStreamDelta) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
         guard settings.isConfigured else {
             throw OpenAICompatibleAgentClientError.missingConfiguration
@@ -170,7 +170,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                     startedAt: requestStartedAt,
                     timeoutSeconds: effectiveTimeout,
                     progressHandler: streamProgress,
-                    contentHandler: onContentDelta
+                    deltaHandler: onStreamDelta
                 )
             } else {
                 // 部分 OpenAI-compatible 服务会忽略 stream=true，仍返回普通 JSON；
@@ -187,7 +187,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                 }
                 // 非流式路径没有增量可发，整段正文一次性透出（UI 仍能看到输出）。
                 if let text = result.assistantMessage.content, !text.isEmpty {
-                    await onContentDelta?(text)
+                    await onStreamDelta?(AgentStreamDelta(kind: .content, text: text))
                 }
             }
             // usage 缺失（服务不支持 include_usage / JSON 响应未带）时按
@@ -401,7 +401,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         startedAt: Date,
         timeoutSeconds: Double,
         progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?,
-        contentHandler: (@Sendable (String) async -> Void)? = nil
+        deltaHandler: (@Sendable (AgentStreamDelta) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
         var accumulator = AgentStreamingResponseAccumulator()
         var eventDataLines: [String] = []
@@ -411,13 +411,27 @@ struct OpenAICompatibleAgentClient: Sendable {
         var lastProgressReportedAt = startedAt
         var lastActivityAt = startedAt
         var lastEmittedContentLength = 0
+        var lastEmittedReasoningLength = 0
+        var lastEmittedToolTranscriptLength = 0
 
-        // 正文增量透出：content 只增不减，按已发长度切出本次增量。
-        func emitPendingContentDelta() async {
-            guard let contentHandler, accumulator.content.count > lastEmittedContentLength else { return }
-            let delta = String(accumulator.content.dropFirst(lastEmittedContentLength))
-            lastEmittedContentLength = accumulator.content.count
-            await contentHandler(delta)
+        // 增量透出：正文/思考/工具转写各自只增不减，按已发长度切出本次增量。
+        func emitPendingStreamDeltas() async {
+            guard let deltaHandler else { return }
+            if accumulator.reasoning.count > lastEmittedReasoningLength {
+                let text = String(accumulator.reasoning.dropFirst(lastEmittedReasoningLength))
+                lastEmittedReasoningLength = accumulator.reasoning.count
+                await deltaHandler(AgentStreamDelta(kind: .reasoning, text: text))
+            }
+            if accumulator.content.count > lastEmittedContentLength {
+                let text = String(accumulator.content.dropFirst(lastEmittedContentLength))
+                lastEmittedContentLength = accumulator.content.count
+                await deltaHandler(AgentStreamDelta(kind: .content, text: text))
+            }
+            if accumulator.toolTranscript.count > lastEmittedToolTranscriptLength {
+                let text = String(accumulator.toolTranscript.dropFirst(lastEmittedToolTranscriptLength))
+                lastEmittedToolTranscriptLength = accumulator.toolTranscript.count
+                await deltaHandler(AgentStreamDelta(kind: .toolCall, text: text))
+            }
         }
 
         // 不使用 AsyncBytes.lines：它会忽略 SSE 事件之间的空行，进而把相邻
@@ -472,7 +486,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                     lastReportedChunkCount = accumulator.receivedChunkCount
                 }
             }
-            await emitPendingContentDelta()
+            await emitPendingStreamDeltas()
             if reachedDone {
                 break
             }
@@ -494,7 +508,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                 statusCode: statusCode
             )
         }
-        await emitPendingContentDelta()
+        await emitPendingStreamDeltas()
         if reachedDone {
             await progressHandler?(
                 .finished(
@@ -734,11 +748,14 @@ private struct AgentChatCompletionStreamChunk: Decodable {
     struct Delta: Decodable {
         let role: AgentChatRole?
         let content: String?
+        /// 思考型模型（GLM 等）的思考文本流；非思考模型不发送该字段。
+        let reasoningContent: String?
         let toolCalls: [ToolCallDelta]?
 
         enum CodingKeys: String, CodingKey {
             case role
             case content
+            case reasoningContent = "reasoning_content"
             case toolCalls = "tool_calls"
         }
     }
@@ -766,6 +783,9 @@ private struct AgentStreamingResponseAccumulator {
 
     private var role: AgentChatRole = .assistant
     private(set) var content = ""
+    private(set) var reasoning = ""
+    /// 工具调用过程的可读转写（名称 + 参数流），实时展示用。
+    private(set) var toolTranscript = ""
     private var receivedContent = false
     private var pendingToolCalls: [Int: PendingToolCall] = [:]
     private(set) var finishReason: String?
@@ -805,6 +825,9 @@ private struct AgentStreamingResponseAccumulator {
             content += fragment
             receivedContent = true
         }
+        if let fragment = delta.reasoningContent {
+            reasoning += fragment
+        }
         for (position, fragment) in (delta.toolCalls ?? []).enumerated() {
             let index = fragment.index ?? position
             var pending = pendingToolCalls[index] ?? PendingToolCall()
@@ -815,9 +838,19 @@ private struct AgentStreamingResponseAccumulator {
                 pending.type = type
             }
             if let name = fragment.function?.name {
+                if pending.name.isEmpty {
+                    toolTranscript += "\n[调用工具 \(name)"
+                } else {
+                    // 少数服务会把工具名拆成多段流式下发。
+                    toolTranscript += name
+                }
                 pending.name += name
             }
             if let arguments = fragment.function?.arguments {
+                if pending.arguments.isEmpty, !pending.name.isEmpty {
+                    toolTranscript += "] "
+                }
+                toolTranscript += arguments
                 pending.arguments += arguments
             }
             pendingToolCalls[index] = pending
