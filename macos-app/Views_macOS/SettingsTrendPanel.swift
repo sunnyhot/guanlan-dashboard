@@ -8,6 +8,8 @@ struct TrendSettingsPanel: View {
     /// W1.5:预设应用反馈 Toast;W1.4:剪贴板预填也复用这条 Toast。
     @State private var presetFeedbackText = ""
     @State private var didAttemptClipboardPrefill = false
+    /// W1.1:配置向导入口(未配置 → 引导;已配置 → 重新配置)。
+    @State private var isShowingWizard = false
 
     var body: some View {
         SettingsPanel(
@@ -166,6 +168,28 @@ struct TrendSettingsPanel: View {
             tint: AppPalette.brand
         ) {
             VStack(alignment: .leading, spacing: 12) {
+                // W1.1:向导入口——未配置时引导,已配置时提供「重新配置」。
+                HStack(spacing: AppPalette.spaceS) {
+                    if model.trendSettings.provider.isConfigured {
+                        Button {
+                            isShowingWizard = true
+                        } label: {
+                            Label("重新配置(向导)", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.appSecondary)
+                        .controlSize(.small)
+                    } else {
+                        Button {
+                            isShowingWizard = true
+                        } label: {
+                            Label("打开配置向导,一步步完成", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.appPrimary)
+                        .tint(AppPalette.brand)
+                    }
+                    Spacer(minLength: 0)
+                }
+
                 // 隐私说明按当前模式如实描述:脱敏不发送金额,完整明细包含金额。
                 Text(
                     model.trendPrivacyMode == .sanitized
@@ -233,6 +257,10 @@ struct TrendSettingsPanel: View {
         }
         .onAppear {
             attemptClipboardPrefill()
+        }
+        .sheet(isPresented: $isShowingWizard) {
+            TrendSetupWizardSheet()
+                .environmentObject(model)
         }
     }
 

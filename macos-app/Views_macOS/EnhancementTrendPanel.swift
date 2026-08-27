@@ -704,16 +704,5 @@ private extension TrendExternalSignalStatus {
     }
 }
 
-private extension TrendHorizon {
-    var displayText: String {
-        switch self {
-        case .short:
-            return "短期"
-        case .medium:
-            return "中期"
-        case .long:
-            return "长期"
-        }
-    }
-}
+// TrendDirection / TrendHorizon 的展示映射已迁至 VerdictCard.swift 共用。
 

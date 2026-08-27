@@ -114,6 +114,25 @@ struct EnhancementSectionView: View {
     private var intelligenceViewpointContent: some View {
         let review = model.marketCloseReview
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            // W1.8/W1.2 对齐:未配置模型时,先在 AI 页给出向导引导,不空着。
+            if !model.trendSettings.provider.isConfigured {
+                VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+                    Label("AI 研判尚未配置", systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.bold))
+                    Text("配置模型后可生成盘中指引、收盘复盘、长期研判与全市场雷达。")
+                        .font(.footnote)
+                        .foregroundStyle(IOSDesign.muted)
+                    Button("开始配置模型") {
+                        model.selectedSection = .settings
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+
             Text(model.marketCloseReviewTitle)
                 .font(.caption.weight(.bold))
                 .tracking(0.8)

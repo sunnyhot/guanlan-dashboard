@@ -63,6 +63,10 @@ struct InvestmentTodaySummaryCard: View {
     @Environment(\.investmentSectionAnchors) private var anchors
     @AppStorage(AppStorageKey.researchReadingGuideShown) private var hasSeenReadingGuide = false
     @State private var isShowingGuide = false
+    /// W1.2:空态能力清单 → 向导/示例入口。
+    @State private var isShowingWizard = false
+    @State private var wizardStep: TrendSetupWizardSheet.Step = .provider
+    @State private var isShowingDemoPreview = false
 
     var body: some View {
         let summary = model.investmentTodayResearchSummary
@@ -98,21 +102,70 @@ struct InvestmentTodaySummaryCard: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-                    InvestmentEmptyState(
-                        icon: "sparkles",
-                        title: "还没有任何研判",
-                        detail: "配置 AI 模型并生成第一份研判后，这里会出现今日摘要。"
-                    )
-                    Button("去设置配置模型", systemImage: "gearshape") {
-                        model.selectedSection = .settings
+                    // W1.2:空态先讲「会得到什么、缺什么怎么补」,再给入口。
+                    VStack(spacing: AppPalette.spaceS) {
+                        capabilityRow(
+                            title: "盘中实时指引",
+                            icon: "clock.arrow.circlepath",
+                            status: model.trendSettings.provider.isConfigured ? .available : .missingModel
+                        )
+                        capabilityRow(
+                            title: "今日收盘复盘",
+                            icon: "sunset.fill",
+                            status: model.trendSettings.provider.isConfigured ? .available : .missingModel
+                        )
+                        capabilityRow(
+                            title: "我的组合长期研判",
+                            icon: "briefcase.fill",
+                            status: model.trendSettings.provider.isConfigured ? .available : .missingModel
+                        )
+                        capabilityRow(
+                            title: "全市场机会雷达",
+                            icon: "scope",
+                            status: radarCapabilityStatus
+                        )
                     }
-                    .buttonStyle(.appSecondary)
-                    .controlSize(.small)
+                    HStack(spacing: AppPalette.spaceS) {
+                        if !model.trendSettings.provider.isConfigured {
+                            Button("开始配置模型", systemImage: "wand.and.stars") {
+                                wizardStep = .provider
+                                isShowingWizard = true
+                            }
+                            .buttonStyle(.appPrimary)
+                            .controlSize(.small)
+                        } else if !model.trendSettings.webSearch.isConfigured {
+                            Button("补上 Tavily,解锁雷达", systemImage: "plus.circle") {
+                                wizardStep = .extras
+                                isShowingWizard = true
+                            }
+                            .buttonStyle(.appPrimary)
+                            .controlSize(.small)
+                        } else {
+                            Button("生成第一份研判", systemImage: "sparkles") {
+                                model.startTrendAnalysisFromUser(withExpectation: .full)
+                            }
+                            .buttonStyle(.appPrimary)
+                            .controlSize(.small)
+                        }
+                        Button("预览示例研判", systemImage: "eye") {
+                            isShowingDemoPreview = true
+                        }
+                        .buttonStyle(.appSecondary)
+                        .controlSize(.small)
+                    }
                 }
             }
         }
         .sheet(isPresented: $isShowingGuide) {
             ResearchReadingGuideSheet()
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $isShowingWizard) {
+            TrendSetupWizardSheet(initialStep: wizardStep)
+                .environmentObject(model)
+        }
+        .sheet(isPresented: $isShowingDemoPreview) {
+            DemoTrendReportPreviewSheet()
                 .environmentObject(model)
         }
         .onChange(of: summary.hasAnyContent) { _, hasContent in
@@ -121,6 +174,83 @@ struct InvestmentTodaySummaryCard: View {
             guard hasContent, !hasSeenReadingGuide else { return }
             isShowingGuide = true
             hasSeenReadingGuide = true
+        }
+    }
+
+    // MARK: - W1.2 空态能力清单
+
+    private enum CapabilityStatus {
+        case available
+        case missingModel
+        case missingTavily
+
+        var icon: String {
+            switch self {
+            case .available: return "checkmark.circle.fill"
+            case .missingModel: return "xmark.circle.fill"
+            case .missingTavily: return "exclamationmark.triangle.fill"
+            }
+        }
+
+        var text: String {
+            switch self {
+            case .available: return "可用"
+            case .missingModel: return "未配置模型,点此开始"
+            case .missingTavily: return "缺 Tavily,点此补上"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .available: return AppPalette.positive
+            case .missingModel: return AppPalette.muted
+            case .missingTavily: return AppPalette.warning
+            }
+        }
+
+        var isActionable: Bool {
+            switch self {
+            case .available: return false
+            case .missingModel, .missingTavily: return true
+            }
+        }
+    }
+
+    private var radarCapabilityStatus: CapabilityStatus {
+        guard model.trendSettings.provider.isConfigured else { return .missingModel }
+        guard model.trendSettings.webSearch.isConfigured else { return .missingTavily }
+        return .available
+    }
+
+    @ViewBuilder
+    private func capabilityRow(title: String, icon: String, status: CapabilityStatus) -> some View {
+        let row = HStack(spacing: AppPalette.spaceS) {
+            Image(systemName: icon)
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                .foregroundStyle(AppPalette.brand)
+                .frame(width: 22)
+            Text(title)
+                .font(AppPalette.appFont(.subheadline, weight: .medium))
+                .foregroundStyle(AppPalette.ink)
+            Spacer(minLength: AppPalette.spaceS)
+            Label(status.text, systemImage: status.icon)
+                .font(AppPalette.appFont(.caption, weight: .medium))
+                .foregroundStyle(status.tint)
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, AppPalette.spaceS)
+        .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+
+        if status.isActionable {
+            Button {
+                wizardStep = status == .missingTavily ? .extras : .provider
+                isShowingWizard = true
+            } label: {
+                row
+            }
+            .buttonStyle(.plain)
+        } else {
+            row
         }
     }
 

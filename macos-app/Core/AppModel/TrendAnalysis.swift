@@ -603,6 +603,26 @@ extension AppModel {
         trendGenerationTask?.cancel()
     }
 
+    /// W3.2:手动入口触发时给预期(时长 + 成本同场提示),走全局 Toast;
+    /// 自动调度不经过这里。四个手动按钮统一走此入口。
+    func startTrendAnalysisFromUser(withExpectation scope: TrendResearchRunScope) {
+        noticeMessage = Self.trendRunExpectationText(scope: scope)
+        startTrendAnalysis(userInitiated: true, scope: scope)
+    }
+
+    static func trendRunExpectationText(scope: TrendResearchRunScope) -> String {
+        switch scope {
+        case .full:
+            return "完整研判通常需要 5–15 分钟,期间可正常使用,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        case .marketRadar:
+            return "市场雷达通常需要 5–15 分钟,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        case .closeReview:
+            return "收盘复盘通常需要 5–15 分钟,期间可正常使用,完成后会通知你。"
+        case .longTerm:
+            return "长期研判通常需要 5–15 分钟,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        }
+    }
+
     func runDailyTrendAnalysisIfNeeded(createdAt: String? = nil) async {
         guard trendSettings.dailyAutoAnalysisEnabled else { return }
         guard trendSettings.provider.isConfigured else { return }

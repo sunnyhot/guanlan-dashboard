@@ -81,6 +81,12 @@ extension AppModel {
         await generateNextHourGuidance(slot: slot, generatedAt: timestamp, userInitiated: false)
     }
 
+    /// W3.2:盘中手动入口给预期(轻量链路,约 1–3 分钟)。
+    func startNextHourGuidanceFromUser() {
+        noticeMessage = "盘中研判约 1–3 分钟,完成后会通知你。"
+        startNextHourGuidance()
+    }
+
     func startNextHourGuidance() {
         guard trendSettings.provider.isConfigured else {
             nextHourGuidanceError = NextHourGuidanceAgentError.missingConfiguration.localizedDescription

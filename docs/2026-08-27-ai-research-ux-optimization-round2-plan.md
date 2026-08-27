@@ -313,13 +313,21 @@
 > - UIExperienceRegressionTests/TrendDashboardSummaryTests 三处源码断言随结构同步更新(等高 reservedSpace、雷达副标题回退文案、板块卡 VerdictCard 渲染),冻结意图不变。
 
 ### R2-P2 · 上手旅程(向导与空态)
-| 条目 | 内容 |
-|---|---|
-| W1.1 | 六步配置向导(macOS) |
-| W1.2 + W1.3 | 空态能力清单 + 示例演示报告 |
-| W1.6 + W1.7 | 失败救援清单 + 成本预期文案 |
-| W3.2 | 触发时给预期 |
-| W1.8 | iOS 简化向导(Views_iOS,Xcode 验证) |
+| 条目 | 内容 | 状态 |
+|---|---|---|
+| W1.1 | 六步配置向导(macOS) | ✅ 2026-08-27 |
+| W1.2 + W1.3 | 空态能力清单 + 示例演示报告 | ✅ 2026-08-27 |
+| W1.6 + W1.7 | 失败救援清单 + 成本预期文案 | ✅ 2026-08-27 |
+| W3.2 | 触发时给预期 | ✅ 2026-08-27 |
+| W1.8 | iOS 简化向导(Views_iOS,Xcode 验证) | ✅ 2026-08-27 |
+
+> **R2-P2 落地记录(2026-08-27,分支 pre-intelligence-v2)**:704 个测试全绿。
+> - 向导直接写 `model.trendSettings` 并逐步保存(与设置面板同模式),崩溃不丢进度;检测步成功才放行。
+> - `DemoTrendReport`(Core/InvestmentIntelligence)一次通过当前 Validator,防腐测试 `DemoTrendReportTests` 锁住;预览复用 VerdictCard 同套视觉。
+> - W3.2 统一入口 `startTrendAnalysisFromUser(withExpectation:)` / `startNextHourGuidanceFromUser()`,时长+费用量级同场提示。
+> - iOS 向导为 4+1 步简化版(可选增强收敛为完成页提示,不写占位 Key);已配置用户仍进完整表单。
+> - **Views_iOS 验证**:xcodebuild `-sdk iphonesimulator26.5 CODE_SIGNING_ALLOWED=NO` 编译通过(执行者:ZCode agent,2026-08-27);Xcode 工程经 `xcodegen generate` 同步新增文件。
+> - 本机模拟器运行时未安装(iOS 26.5 platform 缺 destination 运行时),真机/模拟器运行级验证待后续具备环境时补做。
 
 ### R2-P3 · 触达闭环(派生与调度层)
 | 条目 | 内容 |

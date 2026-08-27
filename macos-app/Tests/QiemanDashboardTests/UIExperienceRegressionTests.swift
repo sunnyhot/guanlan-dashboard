@@ -621,10 +621,14 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(dashboard.contains("InvestmentTodaySummaryCard()"))
         XCTAssertTrue(dashboard.contains("investmentSectionAnchor(.closeReview)"))
 
-        // 摘要卡:指南入口、未生成引导态、锚点点击、首弹一次
+        // 摘要卡:指南入口、W1.2 能力清单空态(向导/示例入口)、锚点点击、首弹一次
         XCTAssertTrue(card.contains("怎么读"))
         XCTAssertTrue(card.contains("ResearchReadingGuideSheet"))
-        XCTAssertTrue(card.contains("去设置配置模型"))
+        // W1.2:空态改为「能力清单 + 配置向导 + 示例研判」入口,不再跳设置页裸表单。
+        XCTAssertTrue(card.contains("开始配置模型"))
+        XCTAssertTrue(card.contains("预览示例研判"))
+        XCTAssertTrue(card.contains("TrendSetupWizardSheet(initialStep:"))
+        XCTAssertTrue(card.contains("DemoTrendReportPreviewSheet"))
         XCTAssertTrue(card.contains("anchors?.scrollTo = row.kind"))
         XCTAssertTrue(card.contains("hasSeenReadingGuide"))
 

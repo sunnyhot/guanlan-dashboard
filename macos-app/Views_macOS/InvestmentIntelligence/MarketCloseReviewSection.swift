@@ -22,7 +22,7 @@ struct MarketCloseReviewSection: View {
                     )
                 }
                 Button {
-                    model.startTrendAnalysis(userInitiated: true, scope: .closeReview)
+                    model.startTrendAnalysisFromUser(withExpectation: .closeReview)
                 } label: {
                     Label(
                         isGeneratingCloseReview ? "复盘中…" : freshness.actionTitle,

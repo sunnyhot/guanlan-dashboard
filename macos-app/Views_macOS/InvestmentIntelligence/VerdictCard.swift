@@ -1,5 +1,19 @@
 import SwiftUI
 
+// W4.4:TrendHorizon 展示映射同样从 EnhancementTrendPanel 迁出共用。
+extension TrendHorizon {
+    var displayText: String {
+        switch self {
+        case .short:
+            return "短期"
+        case .medium:
+            return "中期"
+        case .long:
+            return "长期"
+        }
+    }
+}
+
 // W4.4:TrendDirection 展示映射从 EnhancementTrendPanel 的私有扩展迁出,
 // 供结论卡与各研判卡共用。W4.5 统一「不确定→暂不明确」文案时在此收敛。
 extension TrendDirection {

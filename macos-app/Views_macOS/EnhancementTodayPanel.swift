@@ -29,7 +29,7 @@ extension EnhancementCenterView {
             trailing: {
                 Spacer()
                 Button {
-                    model.startNextHourGuidance()
+                    model.startNextHourGuidanceFromUser()
                 } label: {
                     Label(
                         model.nextHourGuidanceGenerationState == .generating ? "研判中…" : "更新盘中研判",
@@ -113,7 +113,7 @@ extension EnhancementCenterView {
             trailing: {
                 Spacer()
                 Button {
-                    model.startTrendAnalysis(userInitiated: true, scope: .marketRadar)
+                    model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
                 } label: {
                     Label(
                         isGeneratingMarketRadar ? "扫描中…" : "更新市场雷达",
@@ -158,7 +158,7 @@ extension EnhancementCenterView {
             trailing: {
                 Spacer()
                 Button {
-                    model.startTrendAnalysis(userInitiated: true, scope: .longTerm)
+                    model.startTrendAnalysisFromUser(withExpectation: .longTerm)
                 } label: {
                     Label(model.trendGenerationState == .generating ? "更新中…" : "更新长期研判", systemImage: "arrow.clockwise")
                 }
