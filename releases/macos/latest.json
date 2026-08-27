@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.2/QiemanDashboard-4.4.2.zip",
-    "name" : "QiemanDashboard-4.4.2.zip",
-    "sha256" : "00bd34de5e87478344ddfa85d688e54288cbc2fd732ccf76ad8460a0ff3b03c6",
-    "size" : 10283016
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.0/QiemanDashboard-4.5.0.zip",
+    "name" : "QiemanDashboard-4.5.0.zip",
+    "sha256" : "a87c847ddfcf7ff5bcac3fb1911ea9f2a3af5db0dd4b5c8a183e63cd216024d9",
+    "size" : 10746358
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.2/QiemanDashboard-4.4.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.0/QiemanDashboard-4.5.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.4.2.zip",
-      "size" : 10283016
+      "name" : "QiemanDashboard-4.5.0.zip",
+      "size" : 10746358
     }
   ],
-  "body" : "版本号同步 v4.4.2（修复 macOS 钥匙串密钥写入）\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement（v4.4.2）",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.4.2",
-  "name" : "QiemanDashboard v4.4.2",
-  "notes" : "版本号同步 v4.4.2（修复 macOS 钥匙串密钥写入）\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement（v4.4.2）",
+  "body" : "版本号同步 v4.5.0（投资智能 V2 补回收盘复盘与决策事项）\n补回 V1→V2 审计缺失功能——收盘复盘、决策事项、证据明细、自动调度（v4.5.0）",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.5.0",
+  "name" : "QiemanDashboard v4.5.0",
+  "notes" : "版本号同步 v4.5.0（投资智能 V2 补回收盘复盘与决策事项）\n补回 V1→V2 审计缺失功能——收盘复盘、决策事项、证据明细、自动调度（v4.5.0）",
   "published_at" : "",
-  "sha256" : "00bd34de5e87478344ddfa85d688e54288cbc2fd732ccf76ad8460a0ff3b03c6",
-  "tag" : "v4.4.2",
-  "tag_name" : "v4.4.2",
-  "version" : "4.4.2"
+  "sha256" : "a87c847ddfcf7ff5bcac3fb1911ea9f2a3af5db0dd4b5c8a183e63cd216024d9",
+  "tag" : "v4.5.0",
+  "tag_name" : "v4.5.0",
+  "version" : "4.5.0"
 }
