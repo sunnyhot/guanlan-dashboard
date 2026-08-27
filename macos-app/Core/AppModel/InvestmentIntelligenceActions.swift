@@ -258,11 +258,27 @@ extension AppModel {
 
     /// 行动候选是否已有对应决策案例(新键或旧迁移键任一命中)。
     func hasDecisionCase(for action: TrendActionCandidate, report: TrendAnalysisReport) -> Bool {
+        decisionCase(for: action, report: report) != nil
+    }
+
+    /// 行动候选对应的既有决策案例;「加入关注」后当场设复查时间用。
+    func decisionCase(for action: TrendActionCandidate, report: TrendAnalysisReport) -> DecisionCase? {
         let row = Self.matchedRow(for: action, in: personalAssetRows)
         let assetName = row?.fundName ?? action.targetName ?? action.title
         let subjectID = (row?.fundCode ?? assetName).lowercased()
         let keys = Self.decisionCaseKeys(actionKind: action.kind, subjectID: subjectID)
-        return decisionCases.contains { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }
+        return decisionCases.first { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }
+    }
+
+    /// W5.1:加入关注后当场设定/调整复查时间;`days` 传 nil 清除(暂不提醒)。
+    /// 默认建议 watch 状态 7 天(与 `DecisionReview.computeReviewDueAt` 对齐)。
+    @discardableResult
+    func setDecisionCaseReviewDue(caseID: UUID, daysFromNow days: Int?) -> Bool {
+        guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return false }
+        decisionCases[index].reviewDueAt = days.map { Self.timestampString(addingDays: $0) }
+        decisionCases[index].updatedAt = Self.timestampString()
+        persistDecisionCases()
+        return true
     }
 
     // MARK: - 刷新(集中度评估)

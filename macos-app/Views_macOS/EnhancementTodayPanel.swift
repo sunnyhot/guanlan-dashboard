@@ -9,9 +9,10 @@ extension EnhancementCenterView {
             InvestmentIntelligenceDashboardView {
                 intradaySection
                     .investmentSectionAnchor(.intraday)
+            } radarContent: {
                 marketOpportunitySection
                     .investmentSectionAnchor(.marketRadar)
-            } trendContent: {
+            } longTermContent: {
                 portfolioLongTermSection
                     .investmentSectionAnchor(.longTerm)
             }
@@ -23,7 +24,7 @@ extension EnhancementCenterView {
     var intradaySection: some View {
         SectionCard(
             title: "盘中实时指引",
-            subtitle: model.nextHourGuidanceScheduleText,
+            subtitle: model.nextHourGuidanceFreshnessText,
             icon: "clock.arrow.circlepath",
             trailing: {
                 Spacer()
@@ -31,7 +32,7 @@ extension EnhancementCenterView {
                     model.startNextHourGuidance()
                 } label: {
                     Label(
-                        model.nextHourGuidanceGenerationState == .generating ? "研判中…" : "立即研判",
+                        model.nextHourGuidanceGenerationState == .generating ? "研判中…" : "更新盘中研判",
                         systemImage: "arrow.clockwise"
                     )
                 }
@@ -106,7 +107,8 @@ extension EnhancementCenterView {
 
         return SectionCard(
             title: "全市场机会雷达",
-            subtitle: "市场强弱主线、触发条件与失效信号",
+            subtitle: moduleFreshnessText(.marketRadar, cadence: "每日 09:00 自动")
+                ?? "市场强弱主线、触发条件与失效信号",
             icon: "scope",
             trailing: {
                 Spacer()
@@ -114,7 +116,7 @@ extension EnhancementCenterView {
                     model.startTrendAnalysis(userInitiated: true, scope: .marketRadar)
                 } label: {
                     Label(
-                        isGeneratingMarketRadar ? "扫描中…" : "扫描市场",
+                        isGeneratingMarketRadar ? "扫描中…" : "更新市场雷达",
                         systemImage: "globe.asia.australia"
                     )
                 }
@@ -130,8 +132,9 @@ extension EnhancementCenterView {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
                 if isGeneratingMarketRadar {
                     TrendResearchProgressCard(
-                        message: model.trendProgressLogs.last?.message,
-                        progress: model.trendResearchProgress
+                        narrative: TrendRunProgressNarrative.derive(from: model.trendProgressLogs),
+                        progress: model.trendResearchProgress,
+                        sectionName: "市场雷达"
                     )
                 }
 
@@ -157,7 +160,7 @@ extension EnhancementCenterView {
                 Button {
                     model.startTrendAnalysis(userInitiated: true, scope: .longTerm)
                 } label: {
-                    Label(model.trendGenerationState == .generating ? "更新中…" : "更新研判", systemImage: "arrow.clockwise")
+                    Label(model.trendGenerationState == .generating ? "更新中…" : "更新长期研判", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.appSecondary)
                 .controlSize(.small)
@@ -186,11 +189,35 @@ extension EnhancementCenterView {
     }
 
     private var portfolioLongTermSubtitle: String {
-        if let generated = model.trendSettings.moduleGeneratedAt(.longTerm)
-            ?? model.trendReport?.generatedAt {
+        // W3.4:优先「上次生成时间 + 更新节奏」;从未生成过时退回内容说明。
+        if let freshness = moduleFreshnessText(.longTerm, cadence: "每周日 20:00 自动") {
+            return freshness
+        }
+        if let generated = model.trendReport?.generatedAt {
             return "生成于 \(String(generated.prefix(16)))"
         }
         return "持仓方向、组合风险、行动候选"
+    }
+
+    /// W3.4:模块「上次 X 生成 · 更新节奏」副标题;今天只显示时分,更早带上日期。
+    private func moduleFreshnessText(
+        _ scope: TrendResearchRunScope,
+        cadence: String
+    ) -> String? {
+        guard let generated = model.trendSettings.moduleGeneratedAt(scope) else { return nil }
+        let day = String(generated.prefix(10))
+        let time = String(generated.dropFirst(11).prefix(5))
+        let today = Self.todayDateString()
+        let when = day == today ? time : "\(day) \(time)"
+        let auto = model.trendSettings.dailyAutoAnalysisEnabled ? cadence : "手动更新"
+        return "上次 \(when) 生成 · \(auto)"
+    }
+
+    private static func todayDateString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: Date())
     }
 
     /// 全市场机会雷达生成中：marketRadar 或 full scope 在跑。
@@ -224,20 +251,51 @@ extension EnhancementCenterView {
         }
     }
 
-    // 行动候选（最多 3 条）：原因/触发/失效/置信度 + 加入跟踪
+    // 行动候选:默认收起为 3 条,「还有 N 条」展开;原因/触发/失效/置信度 + 加入跟踪
     func todayActionCandidates(_ report: TrendAnalysisReport) -> some View {
-        let actions = Array(report.actions.prefix(3))
+        let actions = showsAllActionCandidates
+            ? report.actions
+            : Array(report.actions.prefix(3))
+        let hiddenCount = report.actions.count - actions.count
         return VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             trendReportSectionTitle("行动候选", icon: "checklist")
-            if actions.isEmpty {
+            if report.actions.isEmpty {
                 trendEmptyState("暂无行动候选", detail: "当前报告没有建议新增观察、调仓复核或计划调整动作。")
             } else {
                 VStack(spacing: AppPalette.spaceS) {
                     ForEach(actions) { action in
                         todayActionCard(action, report: report)
                     }
+                    // W5.1:不再静默截断——收起时给出「还有 N 条」的显式入口。
+                    if hiddenCount > 0 {
+                        Button {
+                            withAnimation(AppPalette.motionStandard) {
+                                showsAllActionCandidates = true
+                            }
+                        } label: {
+                            Label("还有 \(hiddenCount) 条,查看全部行动候选", systemImage: "chevron.down")
+                                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appSecondary)
+                    } else if report.actions.count > 3 {
+                        Button {
+                            withAnimation(AppPalette.motionStandard) {
+                                showsAllActionCandidates = false
+                            }
+                        } label: {
+                            Label("收起,只看前 3 条", systemImage: "chevron.up")
+                                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appSecondary)
+                    }
                 }
             }
+        }
+        .onDisappear {
+            // 切换报告区段时复位收起态,避免旧展开状态影响新报告的默认体验。
+            if showsAllActionCandidates { showsAllActionCandidates = false }
         }
     }
 
@@ -274,6 +332,11 @@ extension EnhancementCenterView {
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
                 .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+
+            // W5.1:关注后当场可设复查时间,消除「关注后再去别处设时间」的断点。
+            if tracked, let caseItem = model.decisionCase(for: action, report: report) {
+                reviewDueRow(caseItem, tint: tint)
+            }
 
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: AppPalette.spaceS) {
@@ -331,6 +394,47 @@ extension EnhancementCenterView {
             .font(AppPalette.appFont(.body, weight: .semibold))
             .tint(AppPalette.info)
         }
+    }
+
+    /// W5.1:已关注行动的复查时间行——默认建议 7 天,当场可选/可改/可清除。
+    @ViewBuilder
+    private func reviewDueRow(_ caseItem: DecisionCase, tint: Color) -> some View {
+        HStack(spacing: AppPalette.spaceS) {
+            Image(systemName: "calendar.badge.clock")
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+                .foregroundStyle(tint)
+            if let due = caseItem.reviewDueAt {
+                Text("复查时间:\(String(due.prefix(10)))")
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
+                    .foregroundStyle(AppPalette.ink)
+            } else {
+                Text("已加入判断与复盘 · 建议 7 天后复查")
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
+                    .foregroundStyle(AppPalette.muted)
+            }
+            Spacer(minLength: AppPalette.spaceS)
+            Menu {
+                ForEach([3, 7, 14, 30], id: \.self) { days in
+                    Button("\(days) 天后复查\(days == 7 ? "(建议)" : "")") {
+                        model.setDecisionCaseReviewDue(caseID: caseItem.id, daysFromNow: days)
+                    }
+                }
+                if caseItem.reviewDueAt != nil {
+                    Divider()
+                    Button("暂不提醒") {
+                        model.setDecisionCaseReviewDue(caseID: caseItem.id, daysFromNow: nil)
+                    }
+                }
+            } label: {
+                Label(caseItem.reviewDueAt == nil ? "设复查时间" : "调整", systemImage: "calendar")
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
+            }
+            .controlSize(.small)
+            .menuIndicator(.visible)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
     }
 
     func todayActionTint(_ kind: TrendActionKind) -> Color {

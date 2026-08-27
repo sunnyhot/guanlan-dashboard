@@ -532,6 +532,10 @@ extension AppModel {
             selectedSection = .portfolio
         case .portfolioValuationAlert:
             selectedSection = .portfolio
+        case .investmentIntelligenceSection:
+            // W3.1 链路 A 完成通知深链:进 AI 研判页并滚动到对应区段锚点。
+            selectedSection = .enhancement
+            pendingInvestmentSectionAnchor = InvestmentTodayResearchRow.Kind(rawValue: payload.targetID)
         }
     }
 

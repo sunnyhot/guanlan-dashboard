@@ -61,6 +61,28 @@ final class DecisionCaseTrackingTransitionTests: XCTestCase {
         XCTAssertTrue(model.hasDecisionCase(for: candidate(), report: report()))
     }
 
+    // MARK: - W5.1 关注后当场设复查时间
+
+    func testSetDecisionCaseReviewDueSetsAndClears() {
+        let model = AppModel()
+        XCTAssertTrue(model.addDecisionCase(from: candidate(), report: report()))
+        let created = model.decisionCases[0]
+        XCTAssertNil(created.reviewDueAt)
+
+        // 设 7 天(默认建议,与 watch 状态的 computeReviewDueAt 对齐)。
+        XCTAssertTrue(model.setDecisionCaseReviewDue(caseID: created.id, daysFromNow: 7))
+        let updated = model.decisionCase(for: candidate(), report: report())
+        XCTAssertNotNil(updated?.reviewDueAt)
+        XCTAssertNotNil(updated?.reviewDueAt?.hasPrefix("20"), "复查时间是 ISO 时间戳")
+
+        // 清除(「暂不提醒」)。
+        XCTAssertTrue(model.setDecisionCaseReviewDue(caseID: created.id, daysFromNow: nil))
+        XCTAssertNil(model.decisionCase(for: candidate(), report: report())?.reviewDueAt)
+
+        // 未知案例返回 false。
+        XCTAssertFalse(model.setDecisionCaseReviewDue(caseID: UUID(), daysFromNow: 3))
+    }
+
     func testNewKeyDeduplicatesAgainstMigratedLegacyKey() {
         // 场景:旧跟踪项已迁移成 legacy: 案例;用户再按同一动作的「加入关注」不得重复建案。
         let model = AppModel()

@@ -527,7 +527,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(card.contains("dynamicTypeSize"))
         XCTAssertFalse(card.contains("minHeight:"))
         XCTAssertFalse(card.contains("portfolioWeightPct"))
-        XCTAssertTrue(card.contains(".lineLimit(2, reservesSpace: true)"))
+        // W4.4:机会卡改为「结论一句 + 理由一句」两行等高结构,reservedSpace 保持卡片高度一致。
+        XCTAssertTrue(card.contains(".lineLimit(1, reservesSpace: true)"))
+        XCTAssertTrue(card.contains("TrendVerdictPresentation.split"))
         XCTAssertTrue(card.contains(".frame(maxWidth: .infinity, alignment: .topLeading)"))
         XCTAssertTrue(card.contains("查看详情"))
         XCTAssertTrue(detail.contains("ScrollView"))
@@ -563,7 +565,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         )
 
         XCTAssertTrue(today.contains("title: \"全市场机会雷达\""))
-        XCTAssertTrue(today.contains("subtitle: \"市场强弱主线、触发条件与失效信号\""))
+        // W3.4:雷达副标题优先显示「上次生成时间 + 节奏」,无记录时回退这句内容说明。
+        XCTAssertTrue(today.contains("市场强弱主线、触发条件与失效信号"))
+        XCTAssertTrue(today.contains("moduleFreshnessText(.marketRadar"))
         XCTAssertTrue(today.contains("title: \"我的组合长期研判\""))
         XCTAssertTrue(today.contains("portfolioLongTermReportView(report)"))
 

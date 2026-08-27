@@ -51,8 +51,9 @@ struct MarketCloseReviewSection: View {
 
                 if isGeneratingCloseReview {
                     TrendResearchProgressCard(
-                        message: model.trendProgressLogs.last?.message,
-                        progress: model.trendResearchProgress
+                        narrative: TrendRunProgressNarrative.derive(from: model.trendProgressLogs),
+                        progress: model.trendResearchProgress,
+                        sectionName: "收盘复盘"
                     )
                 }
 
@@ -138,25 +139,43 @@ struct MarketCloseReviewSection: View {
     }
 }
 
-/// 复盘/雷达等 trend 管线生成进度卡：风格与 NextHourGuidanceProgressView 对齐。
+/// 复盘/雷达等 trend 管线生成进度卡(W3.3 叙事化):
+/// 五步阶段条 + 当前步骤人话,替代裸日志术语;风格与 NextHourGuidanceProgressView 对齐。
 struct TrendResearchProgressCard: View {
-    let message: String?
+    let narrative: TrendRunProgressNarrative
     let progress: TrendResearchModuleProgress
+    /// 区段名,用于 accessibility 与完成前的说明文案。
+    var sectionName: String = "研判"
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             HStack(alignment: .top, spacing: AppPalette.spaceS) {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("收盘复盘正在进行")
+                    .accessibilityLabel("\(sectionName)正在进行")
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(message ?? "正在整理今天的持仓收盘数据")
+                    Text(narrative.statusText)
                         .font(AppPalette.appFont(.subheadline, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(2)
-                    Text("收盘行情、冻结持仓和逐只归因完成后，这里会生成组合复盘。")
+                    Text("通常需要 5–15 分钟，期间可正常使用；完成后会通知你。")
                         .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
+                }
+            }
+
+            HStack(spacing: AppPalette.spaceS) {
+                ForEach(TrendRunProgressNarrative.Stage.allCases, id: \.rawValue) { stage in
+                    VStack(spacing: 3) {
+                        RoundedRectangle(cornerRadius: AppPalette.swatchRadius)
+                            .fill(segmentTint(for: stage))
+                            .frame(height: 4)
+                        Text(stage.shortText)
+                            .font(AppPalette.appFont(.caption2))
+                            .foregroundStyle(
+                                narrative.stage == stage ? AppPalette.info : AppPalette.muted
+                            )
+                    }
                 }
             }
 
@@ -178,5 +197,15 @@ struct TrendResearchProgressCard: View {
             RoundedRectangle(cornerRadius: AppPalette.cardRadius)
                 .stroke(AppPalette.info.opacity(AppPalette.strokeSubtle), lineWidth: 1)
         )
+    }
+
+    private func segmentTint(for stage: TrendRunProgressNarrative.Stage) -> Color {
+        if stage.rawValue < narrative.stage.rawValue {
+            return AppPalette.info.opacity(0.55)
+        }
+        if stage == narrative.stage {
+            return AppPalette.info
+        }
+        return AppPalette.hairline.opacity(0.5)
     }
 }

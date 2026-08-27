@@ -5,6 +5,23 @@ extension AppModel {
         "交易日 09:15、10:15、11:15、13:15、14:15；场外基金仅 14:50"
     }
 
+    /// W3.4:盘中区段副标题——上次研判时间 + 有效性;无报告时退回排班说明。
+    var nextHourGuidanceFreshnessText: String {
+        guard let report = nextHourGuidanceReport else {
+            return nextHourGuidanceScheduleText
+        }
+        let validText: String
+        if InvestmentTodayResearchSummary.isIntradayExpired(
+            validUntil: report.validUntil,
+            currentTimestamp: Self.timestampString()
+        ) {
+            validText = "已过期,可重新研判"
+        } else {
+            validText = "有效至 \(String(report.validUntil.suffix(5)))"
+        }
+        return "上次 \(String(report.generatedAt.suffix(5))) 研判 · \(validText)"
+    }
+
     func loadNextHourGuidanceState() {
         guard let nextHourGuidanceFileURL else { return }
         do {

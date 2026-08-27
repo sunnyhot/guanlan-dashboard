@@ -126,6 +126,9 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         let model = AppModel()
         model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
         installSupportingProbe(model)
+        // W3.1:默认偏好下 closeReview 成功会发通知;注入 spy 避免触达系统通知中心。
+        let notificationSpy = TrendCompletionNotificationSpy()
+        notificationSpy.install(on: model)
         let agent = FakeTrendResearchAgent(result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-22 09:30:00", externalSignalStatus: .partial)))
         model.trendResearchAgent = agent
 
@@ -144,12 +147,18 @@ final class TrendAnalysisAppModelTests: XCTestCase {
             "2026-06-22 21:00"
         )
         XCTAssertEqual(model.trendProgressLogs.first?.message, "完整 AI 分析已启动")
+        // 雷达通知默认关、复盘通知默认开:只应收到一条 closeReview 成功通知。
+        XCTAssertEqual(notificationSpy.notices.count, 1)
+        XCTAssertEqual(notificationSpy.notices.first?.scope, .closeReview)
+        XCTAssertEqual(notificationSpy.notices.first?.outcome, .succeeded)
     }
 
     func testFailedAutomaticModuleIsNotRetriedByPollingOrNextLaunchCheck() async {
         let model = AppModel()
         model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
         installSupportingProbe(model)
+        let notificationSpy = TrendCompletionNotificationSpy()
+        notificationSpy.install(on: model)
         let agent = FakeTrendResearchAgent(
             result: .failure(TrendResearchAgentError.turnLimitExceeded)
         )
@@ -163,6 +172,56 @@ final class TrendAnalysisAppModelTests: XCTestCase {
             model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue],
             "2026-06-22 09:00"
         )
+        // 自动失败默认通知(手动失败不打扰)。
+        XCTAssertEqual(notificationSpy.notices.count, 1)
+        XCTAssertEqual(notificationSpy.notices.first?.outcome, .failed)
+    }
+
+    // MARK: - W3.1 链路 A 完成通知
+
+    func testManualFailureDoesNotNotify() async {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings()
+        installSupportingProbe(model)
+        let notificationSpy = TrendCompletionNotificationSpy()
+        notificationSpy.install(on: model)
+        model.trendResearchAgent = FakeTrendResearchAgent(
+            result: .failure(TrendResearchAgentError.turnLimitExceeded)
+        )
+
+        await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 12:00:00")
+
+        XCTAssertEqual(model.trendGenerationState, .failed)
+        XCTAssertTrue(notificationSpy.notices.isEmpty, "手动失败用户在场,不发通知")
+    }
+
+    func testFirstReportNotificationOnlyWhenPreferenceEnabled() async {
+        func makeModel() -> (AppModel, TrendCompletionNotificationSpy) {
+            let model = AppModel()
+            model.trendSettings = makeProviderSettings()
+            installSupportingProbe(model)
+            let spy = TrendCompletionNotificationSpy()
+            spy.install(on: model)
+            model.trendResearchAgent = FakeTrendResearchAgent(
+                result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-22 12:00:00", externalSignalStatus: .partial))
+            )
+            return (model, spy)
+        }
+
+        // 默认偏好:首份研判通知关。
+        let (offModel, offSpy) = makeModel()
+        await offModel.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 12:00:00")
+        XCTAssertTrue(offSpy.notices.isEmpty)
+
+        // 打开偏好:手动首份成功收到「第一份研判」通知;第二次运行不再发。
+        let (onModel, onSpy) = makeModel()
+        onModel.trendSettings.notifications.firstReportEnabled = true
+        await onModel.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 12:00:00")
+        XCTAssertEqual(onSpy.notices.count, 1)
+        XCTAssertTrue(onSpy.notices[0].isFirstReport)
+        XCTAssertEqual(onSpy.notices[0].title, "你的第一份研判已生成")
+        await onModel.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-22 13:00:00")
+        XCTAssertEqual(onSpy.notices.count, 1, "非首份的手动成功不再通知")
     }
 
     func testProgressLogsReflectAgentEvents() async {
@@ -222,8 +281,7 @@ final class TrendAnalysisAppModelTests: XCTestCase {
 }
 
 /// 记录调用次数、按预设结果返回的假 Agent。
-private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @unchecked Sendable {
-    private let lock = NSLock()
+private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @unchecked Sendable {    private let lock = NSLock()
     private(set) var runCount = 0
     let result: Result<TrendAnalysisReport, Error>
     let emitsFailureEvent: Bool
@@ -260,6 +318,21 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
                 await eventHandler(.failed(message: error.localizedDescription))
             }
             throw error
+        }
+    }
+}
+
+/// W3.1:记录链路 A 完成通知的假 sender,避免测试触达系统通知中心。
+private final class TrendCompletionNotificationSpy: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var notices: [TrendCompletionNotification] = []
+
+    @MainActor
+    func install(on model: AppModel) {
+        model.trendAnalysisNotificationSender = { [self] notice in
+            lock.lock()
+            notices.append(notice)
+            lock.unlock()
         }
     }
 }

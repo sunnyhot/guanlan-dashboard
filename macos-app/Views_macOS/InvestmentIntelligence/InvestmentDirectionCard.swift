@@ -41,11 +41,8 @@ struct InvestmentDirectionCard: View {
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
 
-                Text(signal.rationale)
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineLimit(2, reservesSpace: true)
-                    .multilineTextAlignment(.leading)
+                // W4.4:结论先行——首句做结论,其余做理由;旧数据无拆分时整段为结论。
+                directionRationale(signal.rationale)
 
                 HStack(spacing: AppPalette.spaceS) {
                     Label("\(signal.evidenceCount) 条依据", systemImage: "doc.text.magnifyingglass")
@@ -76,7 +73,23 @@ struct InvestmentDirectionCard: View {
             }
             .contentShape(RoundedRectangle(cornerRadius: AppPalette.controlRadius))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("打开完整判断依据、触发条件和反向证据")
+            .buttonStyle(.plain)
+            .accessibilityHint("打开完整判断依据、触发条件和反向证据")
+    }
+
+    private func directionRationale(_ rationale: String) -> some View {
+        let verdict = TrendVerdictPresentation.split(rationale: rationale)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(verdict.headline.isEmpty ? rationale : verdict.headline)
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .lineLimit(1)
+                .multilineTextAlignment(.leading)
+            Text(verdict.reasoning.isEmpty ? " " : verdict.reasoning)
+                .font(AppPalette.appFont(.caption))
+                .foregroundStyle(AppPalette.muted)
+                .lineLimit(1, reservesSpace: true)
+                .multilineTextAlignment(.leading)
+        }
     }
 }

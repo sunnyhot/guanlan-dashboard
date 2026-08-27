@@ -273,6 +273,8 @@ extension AppModel {
         lastTrendError = ""
         trendProgressLogs = []
         trendSettings.defaultPrivacyMode = trendPrivacyMode
+        // W3.1:成功后判断「第一份研判」用;必须在覆盖 trendReport 前捕获。
+        let hadExistingReport = trendReport != nil
         let triggerText = userInitiated ? "手动更新" : scope.triggerDescription
         if let trendAgentRunLogFileURL {
             try? TrendAgentRunLogStore().beginRun(
@@ -533,6 +535,16 @@ extension AppModel {
             saveTrendAnalysisSettings()
             trendGenerationState = .succeeded
             appendTrendProgress("\(scope.displayName)完成", level: .success)
+            await dispatchTrendCompletionNotification(
+                TrendCompletionNotification(
+                    scope: requestedScope,
+                    outcome: .succeeded,
+                    userInitiated: userInitiated,
+                    isFirstReport: !hadExistingReport,
+                    opportunityCount: report.opportunities.count,
+                    failureSummary: nil
+                )
+            )
         } catch is CancellationError {
             telemetryResult = "cancelled"
             trendGenerationState = .failed
@@ -550,6 +562,19 @@ extension AppModel {
                     "趋势分析失败",
                     detail: error.localizedDescription,
                     level: .error
+                )
+            }
+            // W3.1:自动运行的失败用户不在场,发通知提醒补做;手动失败不打扰。
+            if !userInitiated {
+                await dispatchTrendCompletionNotification(
+                    TrendCompletionNotification(
+                        scope: requestedScope,
+                        outcome: .failed,
+                        userInitiated: userInitiated,
+                        isFirstReport: !hadExistingReport,
+                        opportunityCount: 0,
+                        failureSummary: error.localizedDescription
+                    )
                 )
             }
         }
@@ -1084,6 +1109,13 @@ extension AppModel {
     }
 
     // MARK: - 进度与工具方法
+
+    /// W3.1:按通知偏好发送链路 A 完成/失败通知;偏好未开启时静默跳过,
+    /// 避免无谓的系统权限请求。
+    private func dispatchTrendCompletionNotification(_ notice: TrendCompletionNotification) async {
+        guard trendSettings.notifications.wants(notice) else { return }
+        await trendAnalysisNotificationSender(notice)
+    }
 
     private func trendDayString(from timestamp: String) -> String {
         let trimmed = timestamp.trimmingCharacters(in: .whitespacesAndNewlines)

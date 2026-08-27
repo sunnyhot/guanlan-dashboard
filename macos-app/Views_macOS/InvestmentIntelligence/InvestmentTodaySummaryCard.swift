@@ -73,6 +73,14 @@ struct InvestmentTodaySummaryCard: View {
             icon: "sparkles",
             trailing: {
                 Spacer()
+                if let pct = model.portfolioLookThroughSnapshot?.disclosedSecurityCoveragePct,
+                   pct < 70 {
+                    // W2.2:低覆盖警示角标——读结论前先知道「判断基础有限」。
+                    Label("穿透 \(Int(pct))%", systemImage: "exclamationmark.triangle.fill")
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
+                        .foregroundStyle(AppPalette.warning)
+                        .help("穿透覆盖率 \(Int(pct))%,判断基础有限;详见下方「研判基础」。")
+                }
                 Button {
                     isShowingGuide = true
                 } label: {

@@ -5,14 +5,19 @@ import SwiftUI
 
 /// AI 分析工作台内的实时日志。
 ///
-/// 仅随增强中心页面渲染；Agent 运行时自动展开，新事件到达后滚动到最底部。
-/// 运行结束后保留本次记录，便于复制或定位日志文件。
+/// 仅随增强中心页面渲染；W3.3 后生成中默认收起为首行进度叙事
+/// (五步阶段 + 当前步骤人话,无内部术语),点「查看运行详情」才展开术语日志;
+/// 新事件到达后滚动到最底部。运行结束后保留本次记录，便于复制或定位日志文件。
 struct TrendLiveLogPanel: View {
     @EnvironmentObject private var model: AppModel
     @State private var isExpanded = true
     @State private var isDismissed = false
 
     private let bottomAnchor = "trend-live-log-bottom"
+
+    private var narrative: TrendRunProgressNarrative {
+        TrendRunProgressNarrative.derive(from: model.trendProgressLogs)
+    }
 
     var body: some View {
         Group {
@@ -38,12 +43,10 @@ struct TrendLiveLogPanel: View {
         .onChange(of: model.trendGenerationState) { _, state in
             if state == .generating {
                 isDismissed = false
-                isExpanded = true
-            } else {
-                // 运行结束自动收起为单行状态条;想回看再点展开。
-                withAnimation(AppPalette.motionStandard) {
-                    isExpanded = false
-                }
+            }
+            // W3.3:生成中与结束时都默认收起为首行进度叙事;术语日志需手动展开。
+            withAnimation(AppPalette.motionStandard) {
+                isExpanded = false
             }
         }
     }
@@ -110,6 +113,12 @@ struct TrendLiveLogPanel: View {
                         .font(AppPalette.appFont(.footnote, weight: .medium))
                         .foregroundStyle(AppPalette.danger)
                         .lineLimit(2)
+                } else if model.trendGenerationState == .generating {
+                    // W3.3:首屏只见人话叙事,内部术语在展开的日志详情里。
+                    Text(narrative.statusText)
+                        .font(AppPalette.appFont(.footnote, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                        .lineLimit(1)
                 } else {
                     Text(latestLog?.message ?? "正在准备分析")
                         .font(AppPalette.appFont(.footnote, weight: .medium))
@@ -168,9 +177,25 @@ struct TrendLiveLogPanel: View {
                 }
             }
 
-            iconButton(isExpanded ? "收起实时日志" : "展开实时日志", systemImage: isExpanded ? "chevron.up" : "chevron.down") {
-                withAnimation(AppPalette.motionStandard) {
-                    isExpanded.toggle()
+            if model.trendGenerationState == .generating {
+                Button {
+                    withAnimation(AppPalette.motionStandard) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Label(
+                        isExpanded ? "收起运行详情" : "查看运行详情",
+                        systemImage: isExpanded ? "chevron.up" : "chevron.down"
+                    )
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+            } else {
+                iconButton(isExpanded ? "收起实时日志" : "展开实时日志", systemImage: isExpanded ? "chevron.up" : "chevron.down") {
+                    withAnimation(AppPalette.motionStandard) {
+                        isExpanded.toggle()
+                    }
                 }
             }
 

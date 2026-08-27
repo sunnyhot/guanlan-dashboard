@@ -133,6 +133,9 @@ final class EnhancementState: ObservableObject {
     @Published var nextHourGuidanceError = ""
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
+    /// W3.1 通知深链:链路 A 完成通知点击后要滚动到的研判区段;
+    /// EnhancementCenterView 消费后清空。
+    @Published var pendingInvestmentSectionAnchor: InvestmentTodayResearchRow.Kind?
     @Published var isPresentingCommandPalette = false
 
     // 投资智能(Slice 1):DecisionCase + UserDecisionProfile。

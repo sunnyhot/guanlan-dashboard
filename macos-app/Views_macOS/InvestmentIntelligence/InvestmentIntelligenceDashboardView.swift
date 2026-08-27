@@ -2,38 +2,42 @@ import SwiftUI
 
 /// 投资智能单页通览。
 ///
-/// 原 AI 观点 / 我的组合 / 决策中心 / 决策记录 四个 tab 内容都很薄且彼此重复，
-/// 合并为一个纵向长滚动页：实时进度 → 收盘复盘 → 盘中指引 → 全市场机会 → 组合长期研判 → 判断记录。
+/// 区段按紧迫度排列(W2.1):今日研判摘要 → 研判基础(W2.2 上移,读结论先看基础)
+/// → 实时进度 → 盘中指引 → 全市场机会 → 收盘复盘 → 组合长期研判 → 判断记录。
 /// 顶部只复盘全市场，不展示持仓收益、DecisionCase 或组合画像。
 /// 分区统一使用全站 `SectionCard` 容器，与总览/持仓/平台板块保持同一视觉系统。
-struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
+struct InvestmentIntelligenceDashboardView<Intraday: View, Radar: View, LongTerm: View>: View {
     @EnvironmentObject private var model: AppModel
 
     @State private var selectedCase: DecisionCase?
     @State private var reviewCase: DecisionCase?
     @State private var isShowingProfile = false
-    /// 插入收盘复盘之后的实时指引与投资方向，以及长期趋势内容。
+    /// 按紧迫度注入的三个内容区段(盘中 / 全市场雷达 / 组合长期)。
     let intradayContent: Intraday
-    let trendContent: Trend
+    let radarContent: Radar
+    let longTermContent: LongTerm
 
     init(
         @ViewBuilder intradayContent: () -> Intraday,
-        @ViewBuilder trendContent: () -> Trend
+        @ViewBuilder radarContent: () -> Radar,
+        @ViewBuilder longTermContent: () -> LongTerm
     ) {
         self.intradayContent = intradayContent()
-        self.trendContent = trendContent()
+        self.radarContent = radarContent()
+        self.longTermContent = longTermContent()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             InvestmentTodaySummaryCard()
+            credibilitySection
             TrendLiveLogPanel()
+            intradayContent
+            radarContent
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
-            intradayContent
-            trendContent
+            longTermContent
             recordsSection
-            credibilitySection
         }
         .sheet(item: $selectedCase) { decisionCase in
             DecisionCaseDetailSheet(caseID: decisionCase.id)
