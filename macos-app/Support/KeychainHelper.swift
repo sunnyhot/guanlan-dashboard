@@ -38,18 +38,15 @@ enum KeychainHelper {
         var attributes = query
         attributes[kSecValueData as String] = data
         #if os(macOS)
-        // macOS 非沙盒 app:用 SecAccessControl 设置「不弹窗」的访问策略。
-        let access = SecAccessControlCreateWithFlags(
-            kCFAllocatorDefault,
-            kSecAttrAccessibleAfterFirstUnlock,
-            [],
-            nil
-        )
-        if let access {
-            attributes[kSecAttrAccessControl as String] = access
-        } else {
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        }
+        // v4.4.2 根因修复：此前用 SecAccessControlCreateWithFlags 产
+        // kSecAttrAccessControl——该属性需要 keychain entitlement，本 App
+        // 走 GitHub Actions ad-hoc 签名（无 entitlement），SecItemAdd 恒返
+        // errSecMissingEntitlement(-34018)，**macOS 上 Key 从未写入成功过**
+        // （旧版静默吞掉 =「AI 模型配置不生效」）。
+        // 正确组合（双 binary 实验验证）：legacy keychain + kSecAttrAccessible
+        // ——无 ACL 绑定，ad-hoc 重签（自动更新）后跨 binary 读写均成功。
+        // 显式不设 kSecUseDataProtectionKeychain（同样缺 entitlement 会 -34018）。
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         #else
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         #endif

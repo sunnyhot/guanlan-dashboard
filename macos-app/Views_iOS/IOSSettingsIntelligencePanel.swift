@@ -115,7 +115,7 @@ struct IOSSettingsIntelligencePanel: View {
         model.refreshIntelligenceDashboard()
         keySaveError = keyStored
             ? nil
-            : "API Key 写入本机钥匙串失败（可能存在访问受限的旧密钥条目）。可先清除密钥后重新保存。"
+            : "API Key 写入本机钥匙串失败（系统拒绝了访问）。可先清除密钥后重新保存；若仍失败，请重启 App 后重试。"
     }
 
     private var dataSourcesSection: some View {

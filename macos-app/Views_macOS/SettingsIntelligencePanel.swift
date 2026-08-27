@@ -180,7 +180,7 @@ struct SettingsIntelligencePanel: View {
             toastMessage = IntelligenceV2ProviderSettings.isConfigured
                 ? "已保存" : "已保存（还需填写 API Key）"
         } else {
-            keySaveError = "API Key 写入本机钥匙串失败（可能存在访问受限的旧密钥条目）。\n可先点「清除密钥…」再重新保存；若仍失败，请在钥匙串访问中删除「\(KeychainHelper.Account.openAIKey)」条目后重试。"
+            keySaveError = "API Key 写入本机钥匙串失败（系统拒绝了访问）。\n可先点「清除密钥…」再重新保存；若仍失败，请重启 App 后重试。"
         }
     }
 
