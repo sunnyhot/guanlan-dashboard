@@ -63,6 +63,8 @@ struct InvestmentTodaySummaryCard: View {
     @Environment(\.investmentSectionAnchors) private var anchors
     @AppStorage(AppStorageKey.researchReadingGuideShown) private var hasSeenReadingGuide = false
     @State private var isShowingGuide = false
+    /// W2.4(缩窄版):详细模式开关(证据账本/风险边界显隐),全局记忆。
+    @AppStorage(AppStorageKey.researchDetailMode) private var showsResearchDetailMode = false
     /// W1.2:空态能力清单 → 向导/示例入口。
     @State private var isShowingWizard = false
     @State private var wizardStep: TrendSetupWizardSheet.Step = .provider
@@ -93,6 +95,20 @@ struct InvestmentTodaySummaryCard: View {
                 }
                 .buttonStyle(.appSecondary)
                 .controlSize(.small)
+                Button {
+                    showsResearchDetailMode.toggle()
+                } label: {
+                    Image(systemName: showsResearchDetailMode ? "eye.fill" : "eye")
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+                .help(
+                    showsResearchDetailMode
+                        ? "详细模式已开:长期研判展示完整证据与风险边界。点击切回简洁。"
+                        : "简洁模式:长期研判隐藏完整证据与风险边界。点击开启详细。"
+                )
+                .accessibilityLabel(showsResearchDetailMode ? "切换到简洁模式" : "切换到详细模式")
             }
         ) {
             if summary.hasAnyContent {

@@ -33,7 +33,10 @@ struct DemoTrendReportPreviewSheet: View {
                                     direction: horizon.direction,
                                     confidence: horizon.confidence,
                                     rationale: horizon.rationale,
-                                    counterSignals: horizon.counterSignals
+                                    whatWouldChange: horizon.whatWouldChange,
+                                    counterSignals: horizon.counterSignals,
+                                    supportingCount: horizon.claimEvidence.supportingEvidenceIDs.count,
+                                    counterCount: horizon.claimEvidence.counterEvidenceIDs.count
                                 )
                             }
                             .padding(12)
@@ -64,6 +67,7 @@ struct DemoTrendReportPreviewSheet: View {
                                 direction: sector.direction,
                                 confidence: sector.confidence,
                                 rationale: sector.rationale,
+                                whatWouldChange: sector.whatWouldChange,
                                 counterSignals: sector.counterSignals
                             )
                         }
@@ -76,6 +80,7 @@ struct DemoTrendReportPreviewSheet: View {
                             direction: opportunity.direction,
                             confidence: opportunity.confidence,
                             rationale: opportunity.rationale,
+                            whatWouldChange: opportunity.whatWouldChange,
                             counterSignals: opportunity.counterSignals
                         )
                     }
@@ -171,6 +176,7 @@ struct DemoTrendReportPreviewSheet: View {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         counterSignals: [String]
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -186,6 +192,7 @@ struct DemoTrendReportPreviewSheet: View {
                 direction: direction,
                 confidence: confidence,
                 rationale: rationale,
+                whatWouldChange: whatWouldChange,
                 counterSignals: counterSignals
             )
         }

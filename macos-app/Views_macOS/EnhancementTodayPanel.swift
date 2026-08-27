@@ -399,7 +399,9 @@ extension EnhancementCenterView {
 
     @ViewBuilder
     private func portfolioVerificationSection(_ report: TrendAnalysisReport) -> some View {
-        if !report.portfolioEvidence.isEmpty || !report.warnings.isEmpty {
+        // W2.4(缩窄版):简洁模式默认隐藏完整证据账本与风险边界,
+        // 「怎么读」旁的眼睛开关切换并全局记忆;证据入口仍可经结论卡查看。
+        if showsResearchDetailMode, !report.portfolioEvidence.isEmpty || !report.warnings.isEmpty {
             DisclosureGroup("证据与风险边界") {
                 VStack(alignment: .leading, spacing: AppPalette.spaceM) {
                     trendEvidenceList(report.portfolioEvidence)

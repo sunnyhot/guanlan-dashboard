@@ -85,7 +85,8 @@ extension EnhancementCenterView {
                     confidence: outlook.confidence,
                     rationale: outlook.rationale,
                     counterSignals: outlook.counterSignals,
-                    evidenceCount: evidenceDetail.items.count
+                    supportingCount: outlook.claimEvidence.supportingEvidenceIDs.count,
+                    counterCount: outlook.claimEvidence.counterEvidenceIDs.count
                 )
             }
             .padding(12)
@@ -337,7 +338,10 @@ extension EnhancementCenterView {
                 direction: horizon.direction,
                 confidence: horizon.confidence,
                 rationale: horizon.rationale,
-                counterSignals: horizon.counterSignals
+                whatWouldChange: horizon.whatWouldChange,
+                counterSignals: horizon.counterSignals,
+                supportingCount: horizon.claimEvidence.supportingEvidenceIDs.count,
+                counterCount: horizon.claimEvidence.counterEvidenceIDs.count
             )
         }
         .padding(12)
@@ -382,8 +386,10 @@ extension EnhancementCenterView {
                     direction: sector.direction,
                     confidence: sector.confidence,
                     rationale: sector.rationale,
+                    whatWouldChange: sector.whatWouldChange,
                     counterSignals: sector.counterSignals,
-                    evidenceCount: evidenceDetail.items.count
+                    supportingCount: sector.claimEvidence.supportingEvidenceIDs.count,
+                    counterCount: sector.claimEvidence.counterEvidenceIDs.count
                 )
             }
             .padding(12)

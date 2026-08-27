@@ -5,6 +5,8 @@ struct EnhancementCenterView: View {
     @State var selectedTrendEvidenceDetail: TrendEvidenceDetailSelection?
     /// W5.1:行动候选默认收起为 3 条,点「还有 N 条」展开全部。
     @State var showsAllActionCandidates = false
+    /// W2.4(缩窄版):详细模式开关——控制证据账本/风险边界块显隐,全局记忆。
+    @AppStorage(AppStorageKey.researchDetailMode) var showsResearchDetailMode = false
 
     /// 通知深链(旧跟踪项 UUID)命中时,直接打开对应决策案例详情。
     /// 迁移保持了 ID 稳定,旧跟踪项的深链因此仍可路由到迁移后的案例。

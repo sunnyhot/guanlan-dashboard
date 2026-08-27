@@ -18,6 +18,8 @@ enum ResearchTerm: String, CaseIterable, Identifiable {
     case lookThroughCoverage
     /// 姿态（防御/均衡/选择/进取的总体倾向）
     case posture
+    /// 把握档位怎么用（W4.6:高/中/低各自该怎么对待）
+    case confidenceAnchor
 
     var id: String { rawValue }
 
@@ -29,6 +31,7 @@ enum ResearchTerm: String, CaseIterable, Identifiable {
         case .independentSources: return "独立来源"
         case .lookThroughCoverage: return "穿透覆盖"
         case .posture: return "姿态"
+        case .confidenceAnchor: return "把握档位怎么用"
         }
     }
 
@@ -46,6 +49,8 @@ enum ResearchTerm: String, CaseIterable, Identifiable {
             return "组合里有多大比例的持仓能查到基金底层的股票和债券明细。比例越高，行业和风险判断的依据越完整。"
         case .posture:
             return "当前一小时整体的进攻或防守倾向：防御最保守，进取最积极。它是氛围判断，不是具体买卖指令。"
+        case .confidenceAnchor:
+            return "把握高（≥75）可以直接参考；中（45-74）需要结合自己的判断再看；低（<45）仅供参考，先别据此动仓。"
         }
     }
 
@@ -63,6 +68,8 @@ enum ResearchTerm: String, CaseIterable, Identifiable {
             return "例：覆盖 83% = 每 100 元持仓里约 83 元查得到底层明细，其余按未知处理、判断会更谨慎。"
         case .posture:
             return "例：姿态「均衡偏防守」时，AI 倾向建议持有或观望，而不是追加买入。"
+        case .confidenceAnchor:
+            return "例：把握 80 的「偏强」可以直接参考；把握 40 的「偏强」先别动，等证据更充分再说。"
         }
     }
 }
