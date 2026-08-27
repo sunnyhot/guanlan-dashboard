@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.0/QiemanDashboard-4.5.0.zip",
-    "name" : "QiemanDashboard-4.5.0.zip",
-    "sha256" : "a87c847ddfcf7ff5bcac3fb1911ea9f2a3af5db0dd4b5c8a183e63cd216024d9",
-    "size" : 10746358
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.1/QiemanDashboard-4.5.1.zip",
+    "name" : "QiemanDashboard-4.5.1.zip",
+    "sha256" : "3b7debd57aa1fa218e16b46597825f0ffc2a00489ad5db0cc34cbdaf8737f6fe",
+    "size" : 10746530
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.0/QiemanDashboard-4.5.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.5.1/QiemanDashboard-4.5.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.5.0.zip",
-      "size" : 10746358
+      "name" : "QiemanDashboard-4.5.1.zip",
+      "size" : 10746530
     }
   ],
-  "body" : "版本号同步 v4.5.0（投资智能 V2 补回收盘复盘与决策事项）\n补回 V1→V2 审计缺失功能——收盘复盘、决策事项、证据明细、自动调度（v4.5.0）",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.5.0",
-  "name" : "QiemanDashboard v4.5.0",
-  "notes" : "版本号同步 v4.5.0（投资智能 V2 补回收盘复盘与决策事项）\n补回 V1→V2 审计缺失功能——收盘复盘、决策事项、证据明细、自动调度（v4.5.0）",
+  "body" : "makeEngine 彻底拆解——旧求解器在嵌套 init 上超时的根治\nnow 闭包显式返回类型 + 单字面量——旧工具链类型求解器兜底\n修复 MarketUniverseBackfillTests 闭包类型推断歧义——CI 编译失败真根因\nci: 诊断摘录改为抓编译 error 行及其上下文\nci: 诊断通道改 issue（commit 评论对 GITHUB_TOKEN 常被 403）\nci: 修复摘录代码不可达——bash -e 在 swift test 失败时直接退出步骤\nci: 失败时贴日志尾 100 行到 commit 评论\nci: 失败行自动评论到 commit（无登录可读的诊断通道）\nci: 失败测试自动摘录到 Step Summary（免登录可读）\nM2 真 gate 改为显式开启——CI 不再依赖外网数据源\nCI 修复——时区敏感测试在 UTC runner 上的 11 处失败",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.5.1",
+  "name" : "QiemanDashboard v4.5.1",
+  "notes" : "makeEngine 彻底拆解——旧求解器在嵌套 init 上超时的根治\nnow 闭包显式返回类型 + 单字面量——旧工具链类型求解器兜底\n修复 MarketUniverseBackfillTests 闭包类型推断歧义——CI 编译失败真根因\nci: 诊断摘录改为抓编译 error 行及其上下文\nci: 诊断通道改 issue（commit 评论对 GITHUB_TOKEN 常被 403）\nci: 修复摘录代码不可达——bash -e 在 swift test 失败时直接退出步骤\nci: 失败时贴日志尾 100 行到 commit 评论\nci: 失败行自动评论到 commit（无登录可读的诊断通道）\nci: 失败测试自动摘录到 Step Summary（免登录可读）\nM2 真 gate 改为显式开启——CI 不再依赖外网数据源\nCI 修复——时区敏感测试在 UTC runner 上的 11 处失败",
   "published_at" : "",
-  "sha256" : "a87c847ddfcf7ff5bcac3fb1911ea9f2a3af5db0dd4b5c8a183e63cd216024d9",
-  "tag" : "v4.5.0",
-  "tag_name" : "v4.5.0",
-  "version" : "4.5.0"
+  "sha256" : "3b7debd57aa1fa218e16b46597825f0ffc2a00489ad5db0cc34cbdaf8737f6fe",
+  "tag" : "v4.5.1",
+  "tag_name" : "v4.5.1",
+  "version" : "4.5.1"
 }
