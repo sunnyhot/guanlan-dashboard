@@ -14,7 +14,7 @@ struct IntelligenceSkeletonContent: View {
                         HStack {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("正在加载投资智能结果…")
+                            Text("正在加载 AI研判结果…")
                                 .font(AppPalette.appFont(.footnote))
                                 .foregroundStyle(AppPalette.muted)
                         }

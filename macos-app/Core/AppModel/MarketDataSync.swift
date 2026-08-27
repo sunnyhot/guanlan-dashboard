@@ -310,18 +310,10 @@ extension AppModel {
         }
         switch box.result {
         case .success(let summary):
-            // 产品重构 §11.3：散置 UI 字段收敛——维护摘要只进诊断日志
-            Task {
-                await AIAgentDiagnosticLog.record(
-                    "market-data-maintenance", message: summary)
-            }
+            latestMarketDataSyncSummary = summary
         case .failure(let error):
             // 维护失败不阻断任何读取面（库是本地积累的派生物）——只记诊断
-            Task {
-                await AIAgentDiagnosticLog.record(
-                    "market-data-maintenance",
-                    message: "市场数据维护失败：\(error.localizedDescription)")
-            }
+            latestMarketDataSyncSummary = "市场数据维护失败：\(error.localizedDescription)"
         case nil:
             break   // gate.run 已等待完成，不可达
         }

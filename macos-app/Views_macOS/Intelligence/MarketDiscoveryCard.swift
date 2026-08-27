@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 市场机会卡（产品重构 §8.5）
+// MARK: - 全市场机会雷达（V1 产品语义，V2 本地因子筛选）
 //
 // 「无候选」与「数据不足」是两个状态；覆盖缺口收纳进折叠组；主页面文案
 // 不出现配置文件名；操作名「更新市场机会」（维护数据 + 运行筛选）。
@@ -16,12 +16,12 @@ struct MarketDiscoveryCard: View {
 
     var body: some View {
         SectionCard(
-            title: "市场机会",
-            subtitle: "本地因子筛选，只为少数标的消耗研究预算",
+            title: "全市场机会雷达",
+            subtitle: "市场强弱主线、候选与失效条件",
             icon: "dot.radiowaves.left.and.right",
             trailing: {
                 Button(
-                    model.discoveryOperationState.isRunning ? "更新中…" : "更新市场机会"
+                    model.discoveryOperationState.isRunning ? "扫描中…" : "扫描市场"
                 ) {
                     model.runMarketDiscovery()
                 }
@@ -77,13 +77,17 @@ struct MarketDiscoveryCard: View {
                         .font(AppPalette.appFont(.caption, weight: .bold, design: .rounded))
                         .foregroundStyle(AppPalette.brand)
                         .frame(width: 26, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(candidate.name)
                             .font(AppPalette.appFont(.subheadline, weight: .medium))
                             .lineLimit(1)
                         Text(candidate.factorsSummary)
                             .font(AppPalette.appFont(.caption))
                             .foregroundStyle(AppPalette.muted)
+                        Text("失效：\(candidate.invalidationNote)")
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.warning)
+                            .lineLimit(2)
                     }
                     Spacer(minLength: 0)
                     Text(scoreText(candidate.score))

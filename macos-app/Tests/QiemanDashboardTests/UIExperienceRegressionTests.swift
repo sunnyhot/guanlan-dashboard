@@ -302,8 +302,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     func testMainNavigationHasKeyboardShortcuts() throws {
         let source = try source(at: "QiemanDashboardApp.swift")
 
-        // 旧「AI研判」板块已随链路下线(WF-4/5)——四板块 + ⌘1-4
-        XCTAssertFalse(source.contains("Button(\"AI研判\")"))
+        // V1 产品入口已恢复，底层继续调用 V2 workflow；导航保持 ⌘1-6。
+        XCTAssertTrue(source.contains("Button(\"AI研判\")"))
         XCTAssertFalse(source.contains("Button(\"工作台\")"))
         XCTAssertTrue(source.contains("CommandMenu(\"导航\")"))
         XCTAssertTrue(source.contains(".keyboardShortcut(\"1\")"))
@@ -334,6 +334,7 @@ final class UIExperienceRegressionTests: XCTestCase {
             AppSection.allCases.map(\.rawValue),
             ["总览", "我的持仓", "平台动态", "投资智能", "设置"]
         )
+        XCTAssertEqual(AppSection.intelligence.macOSDisplayName, "AI研判")
         XCTAssertEqual(PlatformActivityTab.allCases.map(\.rawValue), ["调仓动态", "论坛发言"])
         XCTAssertTrue(content.contains("PlatformActivitySectionView()"))
         XCTAssertFalse(content.contains("case .forum:"))
@@ -609,12 +610,44 @@ extension UIExperienceRegressionTests {
 
     /// macOS / iOS 均引用统一 Dashboard DTO（同一 Artifact 同一结论语义）。
     func testBothPlatformsConsumeUnifiedDashboardDTO() throws {
-        let mac = try source(at: "Views_macOS/Intelligence/IntelligenceSectionView.swift")
+        let mac = try sourceTree(at: "Views_macOS/Intelligence")
         let ios = try source(at: "Views_iOS/IOSIntelligenceSectionView.swift")
         XCTAssertTrue(mac.contains("model.intelligenceDashboard"))
         XCTAssertTrue(ios.contains("model.intelligenceDashboard"))
         XCTAssertTrue(mac.contains("IntelligencePresentationFormatter"))
         XCTAssertTrue(ios.contains("IntelligencePresentationFormatter"))
+    }
+
+    func testIntelligenceRestoresV1JourneyOnTheV2PresentationLayer() throws {
+        let section = try source(at: "Views_macOS/Intelligence/IntelligenceSectionView.swift")
+        let tree = try sourceTree(at: "Views_macOS/Intelligence")
+
+        let orderedViews = [
+            "IntelligenceTodaySummaryCard(",
+            "IntradayDecisionCard(",
+            "MarketDiscoveryCard(",
+            "PortfolioResearchCard(",
+            "MarketCloseReviewCard(",
+            "DecisionCaseCard(",
+            "IntelligenceDataAndSystemCard(",
+        ]
+        let positions = try orderedViews.map { viewName in
+            try XCTUnwrap(section.range(of: viewName)?.lowerBound)
+        }
+        for (earlier, later) in zip(positions, positions.dropFirst()) {
+            XCTAssertLessThan(earlier, later)
+        }
+
+        for title in [
+            "今日研判", "盘中实时指引", "全市场机会雷达",
+            "我的组合长期研判", "收盘复盘", "关注与复核", "数据与系统",
+        ] {
+            XCTAssertTrue(tree.contains(title), "缺少 V1 产品区段：\(title)")
+        }
+        XCTAssertTrue(tree.contains("InvestmentIntelligenceDashboardSnapshot"))
+        XCTAssertTrue(tree.contains("model.runPortfolioResearch()"))
+        XCTAssertTrue(tree.contains("model.runIntradayDecision()"))
+        XCTAssertTrue(tree.contains("model.runMarketDiscovery()"))
     }
 
     /// 页面壳不得直接查库（GRDB Repository / queue.read 禁止出现在 View 层）。

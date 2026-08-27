@@ -23,11 +23,11 @@ struct IntelligenceTodayCard: View {
         _ snapshot: InvestmentIntelligenceDashboardSnapshot
     ) -> some View {
         SectionCard(
-            title: "投资智能 · 今日结论",
-            subtitle: "只读摘要，完整结果在「投资智能」板块",
+            title: "AI研判 · 今日结论",
+            subtitle: "只读摘要，完整结果在「AI研判」板块",
             icon: "sparkles.rectangle.stack",
             trailing: {
-                Button("查看投资智能") {
+                Button("查看 AI研判") {
                     model.selectedSection = .intelligence
                 }
                 .buttonStyle(.appSecondary)

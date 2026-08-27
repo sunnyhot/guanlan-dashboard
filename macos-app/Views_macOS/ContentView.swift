@@ -159,7 +159,7 @@ struct ContentView: View {
 
     private var toolbarTitleBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(model.selectedSection.rawValue)
+            Text(model.selectedSection.macOSDisplayName)
                 .font(AppPalette.appFont(.title2, weight: .bold))
                 .foregroundStyle(colorSchemeContrast == .increased ? .primary : AppPalette.ink)
         }
@@ -313,7 +313,7 @@ private struct SidebarSectionButton: View {
                     .fill(isSelected ? AppPalette.brand : .clear)
                     .frame(width: AppPalette.selectionRailWidth, height: 24)
 
-                Image(systemName: section.systemImage)
+                Image(systemName: section.macOSSystemImage)
                     .font(AppPalette.appFont(.headline, weight: .semibold))
                     .foregroundStyle(activeTint)
                     .frame(width: 26, height: 26)
@@ -322,7 +322,7 @@ private struct SidebarSectionButton: View {
                         in: RoundedRectangle(cornerRadius: AppPalette.iconBoxRadius)
                     )
 
-                Text(section.rawValue)
+                Text(section.macOSDisplayName)
                     .font(AppPalette.appFont(.headline, weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(isSelected ? AppPalette.ink : activeTint)
                     .lineLimit(1)
@@ -356,10 +356,10 @@ private struct SidebarSectionButton: View {
             .contentShape(RoundedRectangle(cornerRadius: AppPalette.sidebarRowRadius))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(section.rawValue)
+        .accessibilityLabel(section.macOSDisplayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .contextMenu {
-            Button("前往「\(section.rawValue)」") {
+            Button("前往「\(section.macOSDisplayName)」") {
                 if model.selectedSection != section {
                     model.selectedSection = section
                 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 盘中执行建议卡（产品重构 §8.4）
+// MARK: - 盘中实时指引（V1 产品语义，V2 决策数据）
 //
 // HOLD/EXECUTE 的产品文案（不显示 enum raw value）；EXECUTE 展示每个真实
 // 持仓的增减方向 + 人话 provenance；过期标注「已过期」+ 重新评估；
@@ -17,13 +17,14 @@ struct IntradayDecisionCard: View {
 
     var body: some View {
         SectionCard(
-            title: "盘中执行建议",
-            subtitle: "对照战略目标的执行决策",
+            title: "盘中实时指引",
+            subtitle: "交易时段内判断现在该做什么，以及为什么",
             icon: "clock.arrow.circlepath",
             trailing: {
                 HStack(spacing: AppPalette.spaceS) {
                     Button(
-                        model.intradayOperationState.isRunning ? "评估中…" : "重新评估"
+                        model.intradayOperationState.isRunning
+                            ? "研判中…" : (summary == nil ? "立即研判" : "更新研判")
                     ) {
                         model.runIntradayDecision()
                     }
@@ -50,7 +51,7 @@ struct IntradayDecisionCard: View {
             if let summary {
                 content(summary)
             } else if snapshot.readiness.blocker == nil {
-                emptyHint("尚未运行盘中评估——点击「重新评估」对照战略目标检查偏差。")
+                emptyHint("尚未生成盘中指引——点击「立即研判」检查当前配置与行动窗口。")
             } else {
                 emptyHint(blockerHint)
             }
@@ -90,7 +91,7 @@ struct IntradayDecisionCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
-                ForEach(summary.moves, id: \.subjectKey) { move in
+                ForEach(summary.moves.prefix(3), id: \.subjectKey) { move in
                     HStack(spacing: AppPalette.spaceS) {
                         Image(systemName: move.direction == .increase
                             ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
@@ -107,6 +108,11 @@ struct IntradayDecisionCard: View {
                             .foregroundStyle(AppPalette.muted)
                     }
                     .accessibilityElement(children: .combine)
+                }
+                if summary.moves.count > 3 {
+                    Text("还有 \(summary.moves.count - 3) 条计划动作，可在“查看详情”中核对完整清单。")
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.muted)
                 }
             }
         }

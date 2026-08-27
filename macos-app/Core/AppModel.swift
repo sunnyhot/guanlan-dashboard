@@ -111,9 +111,14 @@ final class AppModel: ObservableObject {
     @Published var isRunningMarketDiscovery = false
     @Published var isRunningIntradayDecision = false
     @Published var isRunningPortfolioResearch = false
-    /// 最新发现报告（研究链路 top-K 输入；产品重构 §5.3 后 UI 读面统一走
-    /// intelligenceDashboard，此字段不再直接驱动 UI）
+    @Published var latestIntelligenceError: String?
     @Published var latestDiscoveryReport: MarketDiscoveryReport?
+    @Published var latestIntradayReport: IntradayExecutionReport?
+    @Published var latestResearchArtifactID: String?
+    /// 最新决策概要（重启恢复 / 研究完成后续一读面；View body 不查库）
+    @Published var latestPortfolioDecisionSummary: PortfolioDecisionSummary?
+    /// 市场数据维护摘要（市场发现卡诊断面）
+    @Published var latestMarketDataSyncSummary: String?
     /// 旧 AI 数据一次性迁移告知（WF-5；展示后由 UI 清空）
     @Published var legacyAIMigrationNotice: String?
     // 投资智能 V2 产品展示层状态（产品重构 §5.3；定义见 InvestmentIntelligenceV2Dashboard.swift）

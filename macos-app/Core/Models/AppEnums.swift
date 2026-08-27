@@ -23,6 +23,15 @@ enum AppSection: String, CaseIterable, Identifiable {
             return "brain.head.profile"
         }
     }
+
+    /// macOS 继续沿用 V1 的产品命名；iOS 保持当前导航文案不变。
+    var macOSDisplayName: String {
+        self == .intelligence ? "AI研判" : rawValue
+    }
+
+    var macOSSystemImage: String {
+        self == .intelligence ? "sparkles" : systemImage
+    }
 }
 
 /// 设置中心分区路由（macOS / iOS 共用；产品重构 §9——跨板块精确跳转）。

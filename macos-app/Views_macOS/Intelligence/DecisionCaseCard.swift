@@ -16,8 +16,8 @@ struct DecisionCaseCard: View {
 
     var body: some View {
         SectionCard(
-            title: "决策事项",
-            subtitle: "风险跟踪 · 复盘闭环",
+            title: "关注与复核",
+            subtitle: "风险跟踪 · 行动验证 · 复盘闭环",
             icon: "checklist",
             trailing: {
                 HStack(spacing: AppPalette.spaceS) {

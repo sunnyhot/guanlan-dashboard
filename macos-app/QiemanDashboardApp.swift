@@ -542,7 +542,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         refreshItem.target = self
         menu.addItem(.separator())
         for section in AppSection.allCases {
-            let item = menu.addItem(withTitle: section.rawValue, action: #selector(dockNavigate(_:)), keyEquivalent: "")
+            let item = menu.addItem(withTitle: section.macOSDisplayName, action: #selector(dockNavigate(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = section.rawValue
         }
@@ -1010,7 +1010,7 @@ struct QiemanDashboardApp: App {
                 }
                 .keyboardShortcut("4")
 
-                Button("投资智能") {
+                Button("AI研判") {
                     model.selectedSection = .intelligence
                     appDelegate.showMainWindow()
                 }
@@ -1023,8 +1023,8 @@ struct QiemanDashboardApp: App {
                 .keyboardShortcut("6")
             }
 
-            // 投资智能动作菜单（产品重构 §8.8：按 readiness 动态禁用）
-            CommandMenu("投资智能") {
+            // AI 研判动作菜单：V1 产品命名，底层继续调用 V2 workflow。
+            CommandMenu("AI研判") {
                 Button("刷新结果") {
                     model.selectedSection = .intelligence
                     appDelegate.showMainWindow()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 组合研究卡（产品重构 §8.6 + 审计 A6/B3）
+// MARK: - 我的组合长期研判（V1 产品语义，V2 研究与决策数据）
 //
 // 相比基础形态新增：
 // - 信号行可点开「判断依据」证据明细 Sheet（A6）
@@ -18,12 +18,12 @@ struct PortfolioResearchCard: View {
 
     var body: some View {
         SectionCard(
-            title: "组合研究",
-            subtitle: "证据 → 论点 → 信号 → 决策，全程可溯",
+            title: "我的组合长期研判",
+            subtitle: "持仓方向、组合风险、行动候选",
             icon: "sparkles",
             trailing: {
                 Button(
-                    model.researchOperationState.isRunning ? "研究中…" : (hasResult ? "重新研究" : "开始研究")
+                    model.researchOperationState.isRunning ? "更新中…" : (hasResult ? "更新研判" : "生成研判")
                 ) {
                     model.runPortfolioResearch()
                 }
@@ -55,7 +55,7 @@ struct PortfolioResearchCard: View {
             } else if let research, hasResult {
                 researchContent(research)
             } else {
-                Text("尚未运行组合研究——配置 AI 模型后，系统将收集证据并产出论点与信号。")
+                Text("尚未生成组合长期研判——配置 AI 模型后，系统将结合持仓收集证据并产出论点、风险与行动候选。")
                     .font(AppPalette.appFont(.subheadline))
                     .foregroundStyle(AppPalette.muted)
                     .padding(.vertical, AppPalette.spaceS)
