@@ -10,7 +10,9 @@ final class PortfolioIdentityCoverageTests: XCTestCase {
 
     private struct WeekdayCalendar: TradingCalendar {
         func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
-            let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+            let weekday = cal.component(.weekday, from: date)
             return (2...6).contains(weekday)
         }
 

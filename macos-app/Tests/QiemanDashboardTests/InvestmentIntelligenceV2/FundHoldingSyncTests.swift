@@ -47,7 +47,8 @@ final class FundHoldingSyncTests: XCTestCase {
         XCTAssertEqual(FundReportPeriod(year: 2026, quarter: 4).next, FundReportPeriod(year: 2027, quarter: 1))
         XCTAssertEqual(FundReportPeriod(year: 2027, quarter: 1).previous, FundReportPeriod(year: 2026, quarter: 4))
         // periodEnd：Q1=03-31 / Q2=06-30 / Q3=09-30 / Q4=12-31
-        let cal = Calendar(identifier: .gregorian)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         XCTAssertEqual(FundReportPeriod(year: 2026, quarter: 2).periodEnd(in: cal), cst(2026, 6, 30))
         XCTAssertEqual(FundReportPeriod(year: 2026, quarter: 4).periodEnd(in: cal), cst(2026, 12, 31))
     }

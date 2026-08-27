@@ -13,7 +13,9 @@ final class AvailabilityPolicyTests: XCTestCase {
     // tradingDay(after:offset:) 返回从 base 起第 N 个交易日（不含 base 当日）。
     private struct WeekdayOnlyCalendar: TradingCalendar {
         func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
-            let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+            let weekday = cal.component(.weekday, from: date)
             return weekday >= 2 && weekday <= 6   // Monday(2)..Friday(6)
         }
 

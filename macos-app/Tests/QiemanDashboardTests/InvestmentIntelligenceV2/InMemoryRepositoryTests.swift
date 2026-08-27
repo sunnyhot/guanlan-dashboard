@@ -9,7 +9,9 @@ final class InMemoryRepositoryTests: XCTestCase {
     // 桩日历：周一周五交易日，tradingDay(after:offset:) 跳周末
     private struct WeekdayCalendar: TradingCalendar {
         func isTradingDay(_ date: Date, jurisdiction: Jurisdiction) -> Bool {
-            let w = Calendar(identifier: .gregorian).component(.weekday, from: date)
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+            let w = cal.component(.weekday, from: date)
             return w >= 2 && w <= 6
         }
         func tradingDay(after date: Date, offset: Int, jurisdiction: Jurisdiction) -> Date {

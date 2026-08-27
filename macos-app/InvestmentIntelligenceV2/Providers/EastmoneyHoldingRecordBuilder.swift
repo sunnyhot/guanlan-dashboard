@@ -90,7 +90,9 @@ struct EastmoneyHoldingRecordBuilder: Sendable {
     private static func parseShanghaiDay(_ rawValue: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
+        var shanghaiCalendar = Calendar(identifier: .gregorian)
+        shanghaiCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        formatter.calendar = shanghaiCalendar
         formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         formatter.dateFormat = "yyyy-MM-dd"
         guard let date = formatter.date(from: String(rawValue.prefix(10))) else { return nil }

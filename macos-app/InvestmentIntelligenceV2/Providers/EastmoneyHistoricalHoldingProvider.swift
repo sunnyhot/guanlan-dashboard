@@ -75,7 +75,9 @@ struct EastmoneyFundAnnouncementParser: Sendable {
     private static func parseShanghaiDay(_ value: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
+        var shanghaiCalendar = Calendar(identifier: .gregorian)
+        shanghaiCalendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        formatter.calendar = shanghaiCalendar
         formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: String(value.prefix(10)))
