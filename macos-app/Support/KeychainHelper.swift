@@ -29,7 +29,10 @@ enum KeychainHelper {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-        // 先删旧值
+        // 先删旧值（旧条目 ACL 拒删时 fallback 走 SecItemUpdate，
+        // 否则 SecItemAdd 会撞 errSecDuplicateItem 静默失败——v4.4.0
+        // 「AI 模型配置不生效」的根因：ad-hoc 签名随构建变化，旧条目
+        // 的访问控制不认新 binary）
         SecItemDelete(query as CFDictionary)
 
         var attributes = query
@@ -52,7 +55,16 @@ enum KeychainHelper {
         #endif
 
         let status = SecItemAdd(attributes as CFDictionary, nil)
-        return status == errSecSuccess
+        if status == errSecSuccess { return true }
+        if status == errSecDuplicateItem {
+            // 旧条目删不掉但可以原地更新（同 service+account 定位，
+            // 只改 value）——比「删失败即放弃」多一条活路
+            let update: [String: Any] = [kSecValueData as String: data]
+            return SecItemUpdate(
+                query as CFDictionary, update as CFDictionary
+            ) == errSecSuccess
+        }
+        return false
     }
 
     // MARK: - 取

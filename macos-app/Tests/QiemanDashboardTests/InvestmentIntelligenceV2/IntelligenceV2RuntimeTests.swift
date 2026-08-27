@@ -270,9 +270,10 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
                 lock.lock(); defer { lock.unlock() }
                 return storage[key]
             }
-            func write(_ key: String, _ value: String) {
+            func write(_ key: String, _ value: String) -> Bool {
                 lock.lock(); defer { lock.unlock() }
                 storage[key] = value
+                return true
             }
             func delete(_ key: String) {
                 lock.lock(); defer { lock.unlock() }
@@ -398,5 +399,74 @@ final class IntelligenceV2RuntimeTests: XCTestCase {
             reportOrFailed = false
         }
         XCTAssertTrue(reportOrFailed, "动作必须收敛:产出报告或显式错误")
+    }
+    // MARK: - v4.4.1 回归（用户反馈：AI 配置不生效 / 分类不能保存）
+
+    func testProviderSavePropagatesKeychainWriteFailure() {
+        let savedReader = IntelligenceV2ProviderSettings.keychainReader
+        let savedWriter = IntelligenceV2ProviderSettings.keychainWriter
+        let savedDeleter = IntelligenceV2ProviderSettings.keychainDeleter
+        IntelligenceV2ProviderSettings.keychainReader = { _ in nil }
+        IntelligenceV2ProviderSettings.keychainWriter = { _, _ in false }
+        IntelligenceV2ProviderSettings.keychainDeleter = { _ in }
+        defer {
+            IntelligenceV2ProviderSettings.keychainReader = savedReader
+            IntelligenceV2ProviderSettings.keychainWriter = savedWriter
+            IntelligenceV2ProviderSettings.keychainDeleter = savedDeleter
+        }
+
+        // Key 写入失败必须回传 false（此前返回 Void 静默吞掉——UI 报
+        // 「已保存」但 isConfigured 恒 false，「AI 模型配置不生效」根因）
+        XCTAssertFalse(
+            IntelligenceV2ProviderSettings.save(
+                baseURL: "https://api.example.com", model: "m1", apiKey: "sk-x"),
+            "Keychain 写失败时 save 必须返回 false")
+        // Key 留空（保留语义）恒 true
+        XCTAssertTrue(
+            IntelligenceV2ProviderSettings.save(
+                baseURL: "https://api.example.com", model: "m1", apiKey: " "))
+    }
+
+    @MainActor
+    func testAssetClassAssignmentFailureSurfacesWhenRuntimeNotReady() {
+        // runtime 未就绪时保存必须返回可展示错误（此前编辑器吞结果，
+        // 用户感知为「不能保存」且无提示）
+        let model = AppModel()
+        let result = model.saveAssetClassAssignment(
+            subjectKey: "fund|000001", assetClass: .equity)
+        guard case .failure(let error) = result else {
+            return XCTFail("runtime 未就绪时应返回 failure")
+        }
+        XCTAssertEqual(error.diagnosticCode, "INTL-RUNTIME-NOT-READY")
+        XCTAssertFalse(error.message.isEmpty)
+    }
+
+    @MainActor
+    func testAssetClassAssignmentPersistsUserEventAndRefreshesDashboard() async throws {
+        let model = AppModel()
+        let directory = try makeTempDirectory()
+        model.dataDirectoryURL = directory
+        model.marketDataChainFactoryOverride = { _ in ProviderFallbackChain(adapters: []) }
+        model.bootstrapIntelligenceV2()
+        try await waitForRuntime(model)
+
+        let result = model.saveAssetClassAssignment(
+            subjectKey: "fund|000001", assetClass: .fixedIncome)
+        guard case .success = result else {
+            return XCTFail("runtime 就绪时保存应成功")
+        }
+        // 事件落盘可回读（用户桶）
+        let store = StrategicAssetClassAssignmentStore(
+            workDirectory: CanonicalStorePaths.workDirectory(in: directory))
+        let current = try store.currentAssignments()
+        XCTAssertEqual(current["fund|000001"]?.assetClass, .fixedIncome)
+        XCTAssertEqual(current["fund|000001"]?.source, .user)
+
+        // 重启恢复（新 Store 实例）
+        let reopened = StrategicAssetClassAssignmentStore(
+            workDirectory: CanonicalStorePaths.workDirectory(in: directory))
+        XCTAssertEqual(
+            try reopened.currentAssignments()["fund|000001"]?.assetClass,
+            .fixedIncome)
     }
 }

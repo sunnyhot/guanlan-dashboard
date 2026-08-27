@@ -14,15 +14,23 @@ struct AssetClassAssignmentEditor: View {
         let name: String
         let code: String
         let assetType: PersonalAssetType
-        let current: StrategicAssetClassification
+        var current: StrategicAssetClassification
     }
 
     @State private var rows: [Row] = []
     @State private var expandedUnresolved = true
+    @State private var saveError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             header
+            if let saveError {
+                Label(saveError, systemImage: "exclamationmark.triangle")
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: AppPalette.spaceS) {
                     ForEach(rows) { row in
@@ -91,20 +99,27 @@ struct AssetClassAssignmentEditor: View {
                     .foregroundStyle(originTint(row.current))
             }
             Spacer(minLength: 0)
+            // v4.4.1 修复：selection 用 Optional——未归类显示「待归类」而不是
+            // 默认「股票」（旧实现里 unresolved 默认 .equity，再选「股票」不触发
+            // set，表现为「不能保存」）
             Picker(
                 "资产类",
                 selection: Binding(
-                    get: { row.current.assetClass ?? .equity },
-                    set: { newValue in save(row: row, assetClass: newValue) }
+                    get: { resolvedSelection(row) },
+                    set: { newValue in
+                        guard let newValue else { return }   // 选「待归类」不写事件
+                        save(row: row, assetClass: newValue)
+                    }
                 )
             ) {
+                Text("待归类").tag(AssetClass?.none)
                 ForEach(AssetClass.allCases, id: \.self) { assetClass in
                     Text(IntelligencePresentationFormatter.assetClassName(assetClass))
-                        .tag(assetClass)
+                        .tag(AssetClass?.some(assetClass))
                 }
             }
             .labelsHidden()
-            .frame(width: 112)
+            .frame(width: 124)
             .disabled(row.assetType == .stock)
         }
         .padding(.vertical, 3)
@@ -115,10 +130,28 @@ struct AssetClassAssignmentEditor: View {
             in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
     }
 
+    /// 股票行按规则恒为股票（分类是事实不是选择）。
+    private func resolvedSelection(_ row: Row) -> AssetClass? {
+        if row.assetType == .stock { return .equity }
+        return row.current.assetClass
+    }
+
     private func save(row: Row, assetClass: AssetClass) {
-        _ = model.saveAssetClassAssignment(
-            subjectKey: row.id, assetClass: assetClass)
-        reload()
+        // v4.4.1 修复：失败必须可见（此前 _ = 吞结果，runtime 未就绪 /
+        // 写入失败时用户毫无感知，表现为「不能保存」）
+        switch model.saveAssetClassAssignment(
+            subjectKey: row.id, assetClass: assetClass
+        ) {
+        case .success:
+            saveError = nil
+            // 乐观更新本地行（不等异步 reload——picker 立即反映选择）
+            if let index = rows.firstIndex(where: { $0.id == row.id }) {
+                rows[index].current = .resolved(assetClass, origin: .user)
+            }
+            reload()
+        case .failure(let error):
+            saveError = "\(error.title)：\(error.message)（诊断码 \(error.diagnosticCode)）"
+        }
     }
 
     // MARK: - 数据装配（AppModel published → 行快照）

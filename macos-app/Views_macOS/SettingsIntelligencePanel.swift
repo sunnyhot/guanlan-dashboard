@@ -17,6 +17,7 @@ struct SettingsIntelligencePanel: View {
     @State private var apiKeyInput = ""
     @State private var isConfirmingKeyDeletion = false
     @State private var toastMessage: String?
+    @State private var keySaveError: String?
     @State private var isAdvancedDiagnosticsExpanded = false
 
     private struct ProviderPreset: Identifiable {
@@ -124,6 +125,13 @@ struct SettingsIntelligencePanel: View {
                         .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.warning)
                 }
+                if let keySaveError {
+                    Label(keySaveError, systemImage: "exclamationmark.triangle")
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.warning)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
             }
         }
         .confirmationDialog(
@@ -161,12 +169,19 @@ struct SettingsIntelligencePanel: View {
     }
 
     private func saveConfiguration() {
-        IntelligenceV2ProviderSettings.save(
+        // Key 写入结果必须呈现（v4.4.1：写失败不再假报「已保存」）
+        let keyStored = IntelligenceV2ProviderSettings.save(
             baseURL: baseURL, model: modelName, apiKey: apiKeyInput)
         apiKeyInput = ""
         model.objectWillChange.send()
         model.refreshIntelligenceDashboard()
-        toastMessage = "已保存"
+        if keyStored {
+            keySaveError = nil
+            toastMessage = IntelligenceV2ProviderSettings.isConfigured
+                ? "已保存" : "已保存（还需填写 API Key）"
+        } else {
+            keySaveError = "API Key 写入本机钥匙串失败（可能存在访问受限的旧密钥条目）。\n可先点「清除密钥…」再重新保存；若仍失败，请在钥匙串访问中删除「\(KeychainHelper.Account.openAIKey)」条目后重试。"
+        }
     }
 
     // MARK: - 研究数据源

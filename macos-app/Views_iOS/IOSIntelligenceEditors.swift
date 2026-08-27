@@ -144,10 +144,11 @@ struct IOSAssetClassAssignmentEditor: View {
         let name: String
         let code: String
         let assetType: PersonalAssetType
-        let current: StrategicAssetClassification
+        var current: StrategicAssetClassification
     }
 
     @State private var rows: [Row] = []
+    @State private var saveError: String?
 
     var body: some View {
         NavigationStack {
@@ -169,20 +170,22 @@ struct IOSAssetClassAssignmentEditor: View {
                             if row.assetType == .stock {
                                 LabeledContent("分类") { Text("股票（规则）") }
                             } else {
+                                // v4.4.1：Optional selection——未归类显示「待归类」
+                                // 而不是默认「股票」（旧实现再选「股票」不触发保存）
                                 Picker(
                                     "分类",
                                     selection: Binding(
-                                        get: { row.current.assetClass ?? .equity },
+                                        get: { row.current.assetClass },
                                         set: { newValue in
-                                            _ = model.saveAssetClassAssignment(
-                                                subjectKey: row.id, assetClass: newValue)
-                                            reload()
+                                            guard let newValue else { return }
+                                            save(row: row, assetClass: newValue)
                                         }
                                     )
                                 ) {
+                                    Text("待归类").tag(AssetClass?.none)
                                     ForEach(AssetClass.allCases, id: \.self) { assetClass in
                                         Text(IntelligencePresentationFormatter.assetClassName(assetClass))
-                                            .tag(assetClass)
+                                            .tag(AssetClass?.some(assetClass))
                                     }
                                 }
                             }
@@ -196,7 +199,13 @@ struct IOSAssetClassAssignmentEditor: View {
                 } header: {
                     Text("持仓归类")
                 } footer: {
-                    Text("待归类的持仓完成前不生成执行计划；你的选择不会被系统识别覆盖。")
+                    if let saveError {
+                        Text(saveError)
+                            .foregroundStyle(AppPalette.warning)
+                            .textSelection(.enabled)
+                    } else {
+                        Text("待归类的持仓完成前不生成执行计划；你的选择不会被系统识别覆盖。")
+                    }
                 }
             }
             .navigationTitle("持仓归类")
@@ -207,6 +216,22 @@ struct IOSAssetClassAssignmentEditor: View {
                 }
             }
             .onAppear(perform: reload)
+        }
+    }
+
+    /// v4.4.1：失败可见 + 成功乐观更新本地行。
+    private func save(row: Row, assetClass: AssetClass) {
+        switch model.saveAssetClassAssignment(
+            subjectKey: row.id, assetClass: assetClass
+        ) {
+        case .success:
+            saveError = nil
+            if let index = rows.firstIndex(where: { $0.id == row.id }) {
+                rows[index].current = .resolved(assetClass, origin: .user)
+            }
+            reload()
+        case .failure(let error):
+            saveError = "\(error.title)：\(error.message)（诊断码 \(error.diagnosticCode)）"
         }
     }
 

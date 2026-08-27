@@ -24,7 +24,9 @@ enum IntelligenceV2ProviderSettings {
     /// 单测进程的 Keychain 权限不可靠,十七轮测试稳定性）。
     static var keychainReader: @Sendable (String) -> String? =
         { KeychainHelper.get(account: $0) }
-    static var keychainWriter: @Sendable (String, String) -> Void =
+    /// 写入结果必须回传（v4.4.1：写失败不得静默——否则 UI 报「已保存」
+    /// 而 Key 实际未存，isConfigured 恒 false）。
+    static var keychainWriter: @Sendable (String, String) -> Bool =
         { KeychainHelper.set($1, account: $0) }
     static var keychainDeleter: @Sendable (String) -> Void =
         { _ = KeychainHelper.delete(account: $0) }
@@ -58,7 +60,16 @@ enum IntelligenceV2ProviderSettings {
         )
     }
 
-    static func save(baseURL: String, model: String, apiKey: String) {
+    /// 保存 Provider 配置。返回 Key 写入结果（v4.4.1 修复：此前 Keychain
+    /// 写失败被静默吞掉——UI 报「已保存」但 Key 实际未存，isConfigured 恒
+    /// false，表现为「AI 模型配置不生效」）。
+    ///
+    /// - baseURL / model 始终尽力写入 UserDefaults（非凭据）。
+    /// - apiKey 非空时写 Keychain，返回 false = 写入失败（如旧条目 ACL
+    ///   拒访问）——调用方必须向用户呈现失败，不得假装保存成功。
+    /// - apiKey 留空 = 保留既有 Key（返回 true——没有要写的 Key）。
+    @discardableResult
+    static func save(baseURL: String, model: String, apiKey: String) -> Bool {
         let defaults = UserDefaults.standard
         defaults.set(baseURL.trimmingCharacters(in: .whitespacesAndNewlines),
                      forKey: baseURLKey)
@@ -68,9 +79,9 @@ enum IntelligenceV2ProviderSettings {
         guard !trimmedKey.isEmpty else {
             // 留空 = 保留 Keychain 既有 Key（改 baseURL 不重输 Key 不停摆,
             // 十七轮 P1-2）;显式清除走 deleteAPIKey()
-            return
+            return true
         }
-        keychainWriter(KeychainHelper.Account.openAIKey, trimmedKey)
+        return keychainWriter(KeychainHelper.Account.openAIKey, trimmedKey)
     }
 
     /// 显式清除已保存的 API Key（Keychain）。

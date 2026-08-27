@@ -12,6 +12,7 @@ struct IOSSettingsIntelligencePanel: View {
     @State private var modelName = IntelligenceV2ProviderSettings.model
     @State private var apiKeyInput = ""
     @State private var isConfirmingKeyDeletion = false
+    @State private var keySaveError: String?
 
     var body: some View {
         Form {
@@ -72,6 +73,12 @@ struct IOSSettingsIntelligencePanel: View {
             }
             Button("保存") { saveConfiguration() }
                 .disabled(!formIsValid)
+            if let keySaveError {
+                Text(keySaveError)
+                    .font(.caption)
+                    .foregroundStyle(AppPalette.warning)
+                    .textSelection(.enabled)
+            }
             if !IntelligenceV2ProviderSettings.apiKey.isEmpty {
                 Button("清除密钥…", role: .destructive) {
                     isConfirmingKeyDeletion = true
@@ -100,11 +107,15 @@ struct IOSSettingsIntelligencePanel: View {
     }
 
     private func saveConfiguration() {
-        IntelligenceV2ProviderSettings.save(
+        // Key 写入结果必须呈现（v4.4.1：写失败不再假报成功）
+        let keyStored = IntelligenceV2ProviderSettings.save(
             baseURL: baseURL, model: modelName, apiKey: apiKeyInput)
         apiKeyInput = ""
         model.objectWillChange.send()
         model.refreshIntelligenceDashboard()
+        keySaveError = keyStored
+            ? nil
+            : "API Key 写入本机钥匙串失败（可能存在访问受限的旧密钥条目）。可先清除密钥后重新保存。"
     }
 
     private var dataSourcesSection: some View {
