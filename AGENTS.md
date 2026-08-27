@@ -234,7 +234,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 - 构建必须指定版本号：`APP_VERSION=x.y.z bash scripts/build_macos_app.sh`
 - 发布流程：提交功能代码 → 打 tag（如 `v3.16.3`）→ 推送 `main` 和 tag → GitHub Actions 构建 zip、创建 Release、回写 `releases/macos/latest.json`
 - 发布后本地执行 `git pull --ff-only`，拉回 Actions 自动提交的 `release: update vX.Y.Z`
-- 新增功能优先补 XCTest；当前基线以 `swift test` 全绿为准
+- 新增功能优先补 XCTest；当前基线以 `swift test` 全绿为准（CI 在 UTC 时区 runner 上运行——测试内构造/比较日期一律显式 `Asia/Shanghai`，勿用无时区 `Calendar.current` 类默认值）。唯一例外：`M2LiveAcceptanceTests` 是打真实外网数据源的真 gate，默认跳过，需 `M2_LIVE_TESTS=1` 显式开启（本地联调/发布前跑一次；CI 不依赖外部数据源可用性）
 - 新增持仓分析能力优先放 Core 纯计算模型，再由 SwiftUI 面板展示
 - 不要把 `.claude/`、`.agents/`、本地统计日志等个人工作区文件提交进项目
 - 参考 `PROJECT_MAP.md` 获取更详细的架构说明
