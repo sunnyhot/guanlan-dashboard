@@ -330,14 +330,20 @@
 > - 本机模拟器运行时未安装(iOS 26.5 platform 缺 destination 运行时),真机/模拟器运行级验证待后续具备环境时补做。
 
 ### R2-P3 · 触达闭环(派生与调度层)
-| 条目 | 内容 |
-|---|---|
-| W3.5 | 错过的自动窗口主动问(TodayBrief 新 kind) |
-| W3.6 | 边栏角标「AI 有新研判」 |
-| W2.3 | 「今天一句话」hero |
-| W3.7 | 手动请求排队(单独提交 + 互斥回归) |
-| W5.3 | 每日回指展示强化 |
-| W7.1 + W7.2 | iOS 结构对齐 + 推送(单独批次,Xcode 验证) |
+| 条目 | 内容 | 状态 |
+|---|---|---|
+| W3.5 | 错过的自动窗口主动问(TodayBrief 新 kind) | ✅ 2026-08-27 |
+| W3.6 | 边栏角标「AI 有新研判」 | ✅ 2026-08-27 |
+| W2.3 | 「今天一句话」hero | ✅ 2026-08-27 |
+| W3.7 | 手动请求排队(单独提交 + 互斥回归) | ✅ 2026-08-27 |
+| W5.3 | 每日回指展示强化 | ✅ 2026-08-27 |
+| W7.1 + W7.2 | iOS 结构对齐 + 推送(单独批次,Xcode 验证) | ✅ 2026-08-27 |
+
+> **R2-P3 落地记录(2026-08-27,分支 pre-intelligence-v2,三个提交)**:
+> - **089119c(呈现+派生)**:横幅时机按合并后的规则实现(距下一班自动运行 ≤2h 不提示,自动分析关闭恒提示);连击计数存 `trendSettings.autoFailureStreaks`(宽容解码);TodayBrief 新增 marketRadarMissed/longTermMissed/autoAnalysisRepeatedFailure 三 kind;角标按链路生成时间晚于 `AppStorageKey.aiResearchLastSeen` 计数,进出 AI 页清零(替代已 sunset 的旧跟踪计数);hero 纯派生 `TodayVerdictDerivation`(冲突用固定对照措辞,测试覆盖);回指视图上移盘中区段第一条。
+> - **9193ce8(W3.7,单独提交)**:排队状态 `queuedUserRequestedScope`,当前任务结束自动出队;取消连排队的请求一并清空;按钮三态「运行中/已排队/空闲」;可阻塞假 Agent 驱动的排队/取消/互斥回归 ×2。
+> - **W7 批次**:iOS 从「观点/组合/决策/记录」四段改为与 macOS 同构的纵向单页(今日研判摘要+hero → 研判基础 → 收盘复盘 → AI 眼中的组合 → 判断与复盘);通知深链经共享 handler 落到 AI 页并消费锚点(W7.2)。iOS 验证:xcodebuild `-sdk iphonesimulator26.5` 全部源码编译通过,唯一失败为本机未安装模拟器运行时导致的资产目录编译(环境限制,执行者:ZCode agent 2026-08-27);CoreSimulator 目标解析不稳定,验证时用 `-target QiemanDashboard-iOS` 绕过 destination 解析。
+> - 全量测试 726 全绿。
 
 ### R2-P4 · 明确性(行为契约,单独基线流程)
 | 条目 | 内容 |
