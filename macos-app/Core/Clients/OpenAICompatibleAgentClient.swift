@@ -75,6 +75,10 @@ enum OpenAICompatibleAgentClientError: Error, LocalizedError {
 }
 
 struct OpenAICompatibleAgentClient: Sendable {
+    /// finish_reason 后等待 usage 尾包的短空闲窗口（秒）——等不到说明
+    /// 该服务不支持 include_usage，交由保守估算兜底。
+    static let postFinishUsageGraceSeconds: Double = 5
+
     let session: URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
@@ -95,6 +99,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice = .auto,
         temperature: Double = 0.2,
+        maxOutputTokens: Int? = nil,
         settings: TrendAIProviderSettings,
         timeout: Double? = nil,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil
@@ -118,7 +123,9 @@ struct OpenAICompatibleAgentClient: Sendable {
                 tools: tools.isEmpty ? nil : tools,
                 toolChoice: tools.isEmpty ? nil : toolChoice,
                 temperature: temperature,
-                stream: true
+                maxTokens: maxOutputTokens,
+                stream: true,
+                streamOptions: ["include_usage": true]
             )
         )
         let requestStartedAt = Date()
@@ -177,14 +184,20 @@ struct OpenAICompatibleAgentClient: Sendable {
                     result = try Self.decodeCompletion(data, decoder: decoder)
                 }
             }
+            // usage 缺失（服务不支持 include_usage / JSON 响应未带）时按
+            // 保守估算记账——宁可高估不漏记，tokenBudget 不因缺计量而失效
+            //（十五轮审查 P1-2）。
+            let resultWithUsage = Self.ensureUsage(
+                result, messages: messages, tools: tools
+            )
             await AIAgentDiagnosticLog.record(
                 "model_response",
                 payload: AIAgentModelResponseTrace(
-                    result: result,
+                    result: resultWithUsage,
                     durationSeconds: Date().timeIntervalSince(requestStartedAt)
                 )
             )
-            return result
+            return resultWithUsage
         } catch let error as URLError where error.code == .timedOut {
             let mapped = OpenAICompatibleAgentClientError.timedOut(effectiveTimeout)
             await AIAgentDiagnosticLog.record(
@@ -329,7 +342,50 @@ struct OpenAICompatibleAgentClient: Sendable {
             assistantMessage: message,
             toolCalls: toolCalls,
             stopReason: AgentStopReason(finishReason: choice.finishReason),
-            finishReason: choice.finishReason
+            finishReason: choice.finishReason,
+            usage: completion.usage
+        )
+    }
+
+    /// usage 缺失时的保守估算：输入（messages + tools 声明）与输出（正文 +
+    /// 工具参数）按字符数 / 2 折算 token（中英混合偏高估——保守方向），
+    /// 标注 estimated=true 供台账 / 审计区分真实计量与估算。
+    private static func ensureUsage(
+        _ result: AgentCompletionResult,
+        messages: [AgentChatMessage],
+        tools: [AgentToolDefinition]
+    ) -> AgentCompletionResult {
+        if result.usage != nil { return result }
+        var promptChars = 0
+        for message in messages {
+            promptChars += message.content?.utf16.count ?? 0
+            for call in message.toolCalls ?? [] {
+                promptChars += call.function.name.utf16.count
+                promptChars += call.function.arguments.utf16.count
+            }
+        }
+        for tool in tools {
+            promptChars += tool.function.name.utf16.count
+            promptChars += tool.function.description.utf16.count
+        }
+        var completionChars = result.assistantMessage.content?.utf16.count ?? 0
+        for call in result.toolCalls {
+            completionChars += call.function.name.utf16.count
+            completionChars += call.function.arguments.utf16.count
+        }
+        let promptTokens = max((promptChars + 1) / 2, 1)
+        let completionTokens = max((completionChars + 1) / 2, 1)
+        return AgentCompletionResult(
+            assistantMessage: result.assistantMessage,
+            toolCalls: result.toolCalls,
+            stopReason: result.stopReason,
+            finishReason: result.finishReason,
+            usage: AgentTokenUsage(
+                promptTokens: promptTokens,
+                completionTokens: completionTokens,
+                totalTokens: promptTokens + completionTokens,
+                estimated: true
+            )
         )
     }
 
@@ -356,11 +412,19 @@ struct OpenAICompatibleAgentClient: Sendable {
                 lineBuffer.append(byte)
                 continue
             }
-            // 流式超时改为“分片间空闲”：收到字节即续期，超过 timeoutSeconds 无新数据才判超时。
+            // 流式超时改为“分片间空闲”：收到字节即续期，超过空闲上限无新数据才收工。
             // 这样推理模型(GLM 等)的长流式响应只要持续吐片就能完成；彻底无字节的卡死由
             // URLSession 的 timeoutInterval 兜底，整体上限由 Agent 整次运行总预算保证。
+            // finish_reason 已到但 usage 未到时，只等一个短窗口（尾包紧跟语义
+            // 终包，等不到说明该服务不发 usage——保守估算兜底，不耗满全超时）。
+            let idleLimit = accumulator.isFinished
+                ? min(timeoutSeconds, Self.postFinishUsageGraceSeconds)
+                : timeoutSeconds
             let now = Date()
-            if now.timeIntervalSince(lastActivityAt) >= timeoutSeconds {
+            if now.timeIntervalSince(lastActivityAt) >= idleLimit {
+                if accumulator.isFinished {
+                    break
+                }
                 throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
             }
             lastActivityAt = now
@@ -528,9 +592,13 @@ struct OpenAICompatibleAgentClient: Sendable {
         do {
             let chunk = try decoder.decode(AgentChatCompletionStreamChunk.self, from: data)
             accumulator.append(chunk)
-            // finish_reason 已经代表本轮语义响应结束。部分兼容服务不会及时补
-            // `[DONE]` 或关闭连接，继续等待只会触发无意义的空闲超时。
-            return accumulator.isFinished
+            // 完成条件（十五轮审查 P1-2）：[DONE]，或 finish_reason 已到**且**
+            // usage 尾包已收（include_usage 协议下 usage 位于 finish_reason
+            // 之后的空 choices 块——收到 finish_reason 就停会永远读不到它）。
+            // 只收到 finish_reason 而 usage 未到时继续消费：不支持
+            // include_usage 的服务由流 EOF / [DONE] / finish 后短空闲兜底
+            // （见 decodeStreamingResponse 的 postFinishUsageGrace）。
+            return accumulator.isFinished && accumulator.hasUsage
         } catch {
             throw OpenAICompatibleAgentClientError.invalidResponse(
                 "无法解析流式数据块。\(decodingSummary(error, data: data))"
@@ -595,7 +663,12 @@ private struct AgentChatCompletionRequest: Encodable {
     let tools: [AgentToolDefinition]?
     let toolChoice: AgentToolChoice?
     let temperature: Double
+    let maxTokens: Int?
     let stream: Bool
+    /// stream_options（仅 stream=true 有意义）：include_usage 让供应商在
+    /// finish_reason 之后的空 choices 尾包里携带 usage——预算台账的计量
+    /// 来源（OpenAI 官方流式协议；十五轮审查 P1-2）。
+    let streamOptions: [String: Bool]?
 
     enum CodingKeys: String, CodingKey {
         case model
@@ -603,12 +676,15 @@ private struct AgentChatCompletionRequest: Encodable {
         case tools
         case toolChoice = "tool_choice"
         case temperature
+        case maxTokens = "max_tokens"
         case stream
+        case streamOptions = "stream_options"
     }
 }
 
 private struct AgentChatCompletionResponse: Decodable {
     let choices: [AgentChatChoice]
+    let usage: AgentTokenUsage?
 }
 
 private struct AgentChatChoice: Decodable {
@@ -623,6 +699,7 @@ private struct AgentChatChoice: Decodable {
 
 private struct AgentChatCompletionStreamChunk: Decodable {
     let choices: [Choice]
+    let usage: AgentTokenUsage?
 
     struct Choice: Decodable {
         let index: Int?
@@ -676,13 +753,23 @@ private struct AgentStreamingResponseAccumulator {
     private(set) var finishReason: String?
     private var receivedChoice = false
     private(set) var receivedChunkCount = 0
+    private var usage: AgentTokenUsage?
 
     var isFinished: Bool {
         finishReason != nil
     }
 
+    /// 已收到 usage 尾包（include_usage 的最终计量块）。
+    var hasUsage: Bool {
+        usage != nil
+    }
+
     mutating func append(_ chunk: AgentChatCompletionStreamChunk) {
-        // choices 为空通常是 include_usage 的尾包，直接忽略。
+        // usage 尾包（choices 为空、只带 usage 的块）也要收集，不能随 choices 一起丢。
+        if let chunkUsage = chunk.usage {
+            usage = chunkUsage
+        }
+        // choices 为空通常是 include_usage 的尾包，delta 部分直接忽略。
         guard let choice = chunk.choices.first(where: { $0.index == 0 }) ?? chunk.choices.first else {
             return
         }
@@ -754,7 +841,8 @@ private struct AgentStreamingResponseAccumulator {
             assistantMessage: message,
             toolCalls: toolCalls,
             stopReason: AgentStopReason(finishReason: resolvedFinishReason),
-            finishReason: resolvedFinishReason
+            finishReason: resolvedFinishReason,
+            usage: usage
         )
     }
 }

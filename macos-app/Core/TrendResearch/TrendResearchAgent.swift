@@ -37,7 +37,30 @@ protocol TrendResearchAgentClient: Sendable {
     ) async throws -> AgentCompletionResult
 }
 
-extension OpenAICompatibleAgentClient: TrendResearchAgentClient {}
+extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
+    // 协议见证：客户端 complete 新增了 maxOutputTokens 参数（带默认值），
+    // 与协议签名不再逐字匹配，这里显式桥接；旧链路语义不变（不限输出长度）。
+    func complete(
+        messages: [AgentChatMessage],
+        tools: [AgentToolDefinition],
+        toolChoice: AgentToolChoice,
+        temperature: Double,
+        settings: TrendAIProviderSettings,
+        timeout: Double?,
+        streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
+    ) async throws -> AgentCompletionResult {
+        try await complete(
+            messages: messages,
+            tools: tools,
+            toolChoice: toolChoice,
+            temperature: temperature,
+            maxOutputTokens: nil,
+            settings: settings,
+            timeout: timeout,
+            streamProgress: streamProgress
+        )
+    }
+}
 
 // MARK: - 运行策略与事件
 
