@@ -19,7 +19,17 @@ jobs:
 
       - name: Run Swift tests
         working-directory: macos-app
-        run: swift test
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee /tmp/test-output.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "## 失败的测试（自动摘录）"
+              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -40 || echo "（无 XCTest 失败行——可能是编译/崩溃，查完整日志）"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$status"
+          fi
 
       - name: Build native Qieman CLI
         run: bash scripts/build_qieman_cli.sh
