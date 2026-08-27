@@ -7,6 +7,34 @@
 
 ---
 
+## 处置结果（2026-08-27 同日落地）
+
+用户拍板后已全部实施（仅 macOS UI，iOS 后续单独处理）：
+
+| 项 | 处置 | 落地 |
+|---|---|---|
+| A1 收盘复盘 | 补回（计算 + LLM 增强） | `InvestmentIntelligenceV2/Workflows/MarketCloseReviewWorkflow.swift`（artifact kind MARKET_CLOSE_REVIEW，LLM 失败降级本地因子）+ `MarketCloseNarrativeSynthesizer` + `Core/AppModel/MarketCloseReviewV2.swift` + 复盘卡/详情 sheet + 菜单命令 |
+| A2 决策事项跟踪 | 补回 | `InvestmentIntelligenceV2/Decision/DecisionCaseModels/Policy/Engine.swift`（四类建案 + 生命周期状态机 + 六选一复盘）+ `Persistence/DecisionCaseStore.swift`（user-intent 一案一文件）+ `Core/AppModel/DecisionCases.swift` + 决策事项卡/详情/复盘 sheet + 通知深链（NotificationDeepLinkType.intelligence） |
+| A3 集中度接线 | 补回 | 随 A2 引擎落地（directHolding/lookThrough/overlap/sector 四维 + 覆盖不足降级）；V2 Risk/ConcentrationCalculator 保持原样（其输入链路 EXP 未接线，本期用 App 侧穿透快照映射） |
+| A4 用户画像 | 暂缓（不急） | 用 V1 默认阈值表（DecisionCasePolicy），旧 user-decision-profile.json 保留不动 |
+| A5 阅读指南 | 放弃 UI → 文档 | `docs/research-reading-guide.md` |
+| A6 逐条证据查看 | 补回 | `ArtifactQueryService.researchEvidence`（最新 vintage）+ `ResearchEvidenceDigest` + `EvidenceDetailSheet`（研究卡信号可点「依据」） |
+| B1 盘中调度 | 补回调度、放弃姿态语言 | `Core/IntelligenceAutomation.swift` + `Core/AppModel/IntelligenceAutomationLoop.swift`（60s 轮询、先标记后运行）；维持 HOLD/EXECUTE 语义 |
+| B2 失效条件 | 补（反向信号与独立性展示仍暂缓） | 发现候选 `invalidationNote`（本地因子派生）+ 决策事项/行动案 trigger/invalidation 字段 |
+| B3 行动候选承接 | 补回 | ResearchSummary.actionCandidates（最新决策胜者计划派生）→ 研究卡「加入跟踪」→ `addCaseFromActionCandidate` 建案 kind actionMigration |
+| B4 双轨归因对照 | 放弃 | 持仓板块纯计算归因未删，维持现状 |
+| B5 生成过程可见 | 补回 | runPortfolioResearch 接 RunEvent → 阶段推进（研究卡复用 IntelligenceRunningRow） |
+| C1 总览浅链卡 | 补回 | `Views_macOS/Overview/IntelligenceTodayCard.swift`（只读 headline + 跳转） |
+| C2 菜单栏姿态条目 | 不做 | 依赖姿态语言，随 B1 拍板放弃 |
+| C3 资产浏览器 AI 观点 | 暂缓 | 等 V2 研究覆盖单资产 |
+| C4 简报复盘警示 | 补回 | TodayBriefKind.closeReview + destination .intelligence（21:30 后未生成触发） |
+| C5 分模块调度 | 补回 | 设置面板「自动运行」卡（总开关默认关 + 分模块开关；时刻表 09:00/盘中 6 槽/21:00/周日 20:00） |
+| E 数据处置 | 随实施落地 | decision-cases.json（legacy-ai-backup/ 或根部）经 `LegacyDecisionCaseImport` 导入开放案；journals 手写复盘导入为复制语义、原文件保留；其余旧链路产物维持 LegacyAIDataMigration 归档；user-decision-profile.json 不动 |
+
+语义演进（相对 V1，已在代码注释标注）：targetDeviation 从「单标的 vs 画像上限」改为「资产类占比 vs 战略目标」（V2 有真实用户意图 Target Store）；trendAction → actionMigration（来源改为 V2 决策产物）；exitReview 状态删除（引擎从不产出）；决策事项时间戳 String → Date、id UUID → 确定性摘要。
+
+---
+
 ## A. 整功能域丢失（V2 完全无对应物）
 
 | # | 丢失功能 | V1 能做什么 | V2 现状 | 建议处置 |

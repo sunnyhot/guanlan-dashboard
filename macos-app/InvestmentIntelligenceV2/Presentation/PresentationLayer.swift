@@ -166,6 +166,7 @@ struct ArtifactQueryService: Sendable {
         case marketDiscovery
         case intradayExecution
         case dailyAttribution
+        case marketCloseReview
 
         var rowKind: String {
             switch self {
@@ -173,6 +174,7 @@ struct ArtifactQueryService: Sendable {
             case .marketDiscovery: return ArtifactRow.marketDiscoveryKind
             case .intradayExecution: return ArtifactRow.intradayExecutionKind
             case .dailyAttribution: return ArtifactRow.dailyAttributionKind
+            case .marketCloseReview: return ArtifactRow.marketCloseReviewKind
             }
         }
     }
@@ -202,6 +204,10 @@ struct ArtifactQueryService: Sendable {
                 return nil
             }
         }
+    }
+
+    func marketCloseReview(id: String) throws -> MarketCloseReview? {
+        try repository.marketCloseReview(id: id)
     }
 
     // MARK: 最新列表（producedAt 降序；默认只返回仍有效的产物）
@@ -256,6 +262,61 @@ struct ArtifactQueryService: Sendable {
         }
         guard !includeInvalid else { return reports }
         return reports.filter { $0.validityPolicy.isStillValid(at: now) }
+    }
+
+    /// 最新收盘复盘列表（immutableHistorical 恒有效——新鲜度语义由
+    /// MarketCloseReviewFreshness 按日界派生，列表不假装判断）。
+    func latestMarketCloseReviews(
+        limit: Int = 10, now: Date = Date()
+    ) throws -> [MarketCloseReview] {
+        let ids = try latestArtifactIDs(kind: .marketCloseReview, limit: limit)
+        return try repository.database.queue.read { db in
+            try ids.compactMap {
+                try ArtifactRow.fetchMarketCloseReview(id: $0, from: db)
+            }
+        }
+    }
+
+    // MARK: - 研究证据明细（审计 A6：UI 逐条证据查看的唯一读面）
+
+    /// 按 EvidenceID 列表取证据摘要（每个 ID 取最新未废弃 vintage）。
+    /// 未入库的 ID 静默跳过（引用完整性由写入侧保证，读面不报假错）。
+    func researchEvidence(evidenceIDs: [String]) throws -> [ResearchEvidenceDigest] {
+        guard !evidenceIDs.isEmpty else { return [] }
+        return try repository.database.queue.read { db in
+            try evidenceIDs.compactMap { evidenceID in
+                guard let row = try EvidenceRow.fetchOne(
+                    db,
+                    sql: """
+                    SELECT * FROM evidence
+                    WHERE evidence_id = ? AND is_superseded = 0
+                    ORDER BY ingested_at DESC
+                    LIMIT 1
+                    """,
+                    arguments: [evidenceID])
+                else { return nil }
+                return ResearchEvidenceDigest(
+                    id: row.id,
+                    evidenceID: row.evidenceID,
+                    sourceName: Self.sourceLabel(row.source),
+                    subjectText: "\(row.subjectEntityType):\(row.subjectEntityID)",
+                    contentExcerpt: String(row.content.prefix(240)),
+                    publishedAt: try? CanonicalColumnCodec.decodeTimestamp(row.envelope.publishedAt),
+                    availableAt: try? CanonicalColumnCodec.decodeTimestamp(row.envelope.availableAt))
+            }
+        }
+    }
+
+    /// 证据来源人话（raw value → 稳定文案）。
+    private static func sourceLabel(_ raw: String) -> String {
+        switch raw {
+        case "SEC_FILING": return "SEC 官方文件"
+        case "PROVIDER_ANNOUNCEMENT": return "数据源公告"
+        case "WEB_SEARCH": return "网络检索"
+        case "NEWS": return "新闻"
+        case "RESEARCH": return "研究工具"
+        default: return raw
+        }
     }
 
     // MARK: 私有

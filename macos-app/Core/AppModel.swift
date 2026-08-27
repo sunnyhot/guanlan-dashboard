@@ -121,6 +121,16 @@ final class AppModel: ObservableObject {
     @Published var intradayOperationState: AppModel.IntelligenceOperationState = .idle
     @Published var discoveryOperationState: AppModel.IntelligenceOperationState = .idle
     @Published var researchOperationState: AppModel.IntelligenceOperationState = .idle
+    // 决策事项（审计 A2；定义见 Core/AppModel/DecisionCases.swift）
+    @Published var decisionCases: [DecisionCase] = []
+    @Published var isRefreshingDecisionCases = false
+    /// 通知深链 / UI 请求打开详情的事项（IntelligenceSectionView 消费后清空）
+    @Published var selectedDecisionCaseID: String?
+    // 收盘复盘（审计 A1；定义见 Core/AppModel/MarketCloseReviewV2.swift）
+    @Published var closeReviewOperationState: AppModel.IntelligenceOperationState = .idle
+    @Published var isRunningCloseReview = false
+    // 自动调度（审计 B1/C5；定义见 Core/IntelligenceAutomation.swift）
+    @Published var intelligenceScheduleSettings = IntelligenceScheduleSettings()
     /// 待跳转的设置分区（消费方：Settings View，消费后清空；产品重构 §9）
     @Published var pendingSettingsSection: AppSettingsSection?
 
@@ -160,6 +170,8 @@ final class AppModel: ObservableObject {
     var portfolioAutoRefreshTask: Task<Void, Never>?
     var remoteStagingSyncTask: Task<Void, Never>?
     var marketDataSyncTask: Task<Void, Never>?
+    /// 投资智能自动调度循环（审计 B1/C5）
+    var intelligenceAutomationTask: Task<Void, Never>?
     /// 维护轮串行门（十九轮 P3-1：6h 循环与扫描前维护互斥执行）
     let marketDataMaintenanceGate = MarketDataMaintenanceGate()
     /// V2 开库进行中标记（bootstrap 异步化后的幂等守护）
@@ -454,6 +466,7 @@ final class AppModel: ObservableObject {
         portfolioAutoRefreshTask?.cancel()
         remoteStagingSyncTask?.cancel()
         marketDataSyncTask?.cancel()
+        intelligenceAutomationTask?.cancel()
     }
 
     func start() async {
@@ -534,6 +547,12 @@ final class AppModel: ObservableObject {
         restartPortfolioAutoRefreshLoop()
         startRemoteStagingSyncLoopIfNeeded()
         startMarketDataSyncLoopIfNeeded()
+        // 投资智能自动调度（审计 B1/C5）：设置从数据目录加载后启动循环
+        if let dataDirectory = dataDirectoryURL {
+            intelligenceScheduleSettings = IntelligenceScheduleSettings.load(
+                dataDirectory: dataDirectory)
+        }
+        restartIntelligenceAutomationLoop()
         scheduleAutomaticUpdateCheckIfNeeded()
     }
 

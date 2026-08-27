@@ -530,6 +530,11 @@ extension AppModel {
             selectedSection = .portfolio
         case .portfolioValuationAlert:
             selectedSection = .portfolio
+        case .intelligence:
+            selectedSection = .intelligence
+            if !payload.targetID.isEmpty {
+                selectedDecisionCaseID = payload.targetID
+            }
         }
     }
 

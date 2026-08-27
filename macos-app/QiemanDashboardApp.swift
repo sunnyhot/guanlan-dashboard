@@ -1051,6 +1051,15 @@ struct QiemanDashboardApp: App {
                 .disabled(model.intradayOperationState.isRunning
                           || !model.intelligenceIntradayReady)
 
+                Button("生成收盘复盘") {
+                    model.selectedSection = .intelligence
+                    appDelegate.showMainWindow()
+                    model.runMarketCloseReview()
+                }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(model.closeReviewOperationState.isRunning
+                          || model.intelligenceRuntime == nil)
+
                 Button("运行组合研究") {
                     model.selectedSection = .intelligence
                     appDelegate.showMainWindow()

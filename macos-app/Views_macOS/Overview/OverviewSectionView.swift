@@ -24,6 +24,8 @@ struct OverviewSectionView: View {
                     summaryAction: openPortfolio
                 )
 
+                IntelligenceTodayCard(model: model)
+
                 managerActivityPanel
             }
             .padding(14)
@@ -198,6 +200,8 @@ struct OverviewSectionView: View {
                 model.selectedSection = .platform
             case .settings:
                 model.selectedSection = .settings
+            case .intelligence:
+                model.selectedSection = .intelligence
             }
         }
     }

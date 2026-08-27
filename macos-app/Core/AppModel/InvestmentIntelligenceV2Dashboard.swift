@@ -123,6 +123,15 @@ extension AppModel {
         return snapshot.readiness.blocker == nil
     }
 
+    // MARK: - 证据明细加载（审计 A6：UI 逐条证据查看）
+
+    /// 按证据 ID 加载证据摘要（失败回空数组——读面降级，不弹错误）。
+    @MainActor
+    func loadResearchEvidence(evidenceIDs: [String]) async -> [ResearchEvidenceDigest] {
+        guard let runtime = intelligenceRuntime else { return [] }
+        return (try? runtime.queryService.researchEvidence(evidenceIDs: evidenceIDs)) ?? []
+    }
+
     // MARK: - 用户意图写入（编辑器入口；D000——Target 永远只从用户动作产生）
 
     /// 请求跳转到设置中心的指定分区（跨板块深链；Settings View 消费后清空）。

@@ -30,6 +30,8 @@ extension ArtifactRow {
     static let dailyAttributionKind = "DAILY_ATTRIBUTION"
     /// 市场发现报告（WF-2：universe + 本地因子 + 打分排序的候选清单）。
     static let marketDiscoveryKind = "MARKET_DISCOVERY_REPORT"
+    /// 收盘复盘（审计 A1：当日组合表现 + 逐持仓影响 + 市场叙述 + 明日关注）。
+    static let marketCloseReviewKind = "MARKET_CLOSE_REVIEW"
     /// 盘中执行报告（WF-3：Signal + Eligibility + Rebalance execution）。
     static let intradayExecutionKind = "INTRADAY_EXECUTION_REPORT"
     /// 旧决策 kind（七轮前 payload：无 plannerInputs / 内容摘要字段）。
@@ -247,6 +249,9 @@ extension ArtifactRow {
     static func fetchMarketDiscoveryReport(id: String, from db: Database) throws -> MarketDiscoveryReport {
         try fetchDomain(MarketDiscoveryReport.self, id: id, expectedKind: marketDiscoveryKind, from: db)
     }
+    static func fetchMarketCloseReview(id: String, from db: Database) throws -> MarketCloseReview {
+        try fetchDomain(MarketCloseReview.self, id: id, expectedKind: marketCloseReviewKind, from: db)
+    }
     static func fetchIntradayExecutionReport(id: String, from db: Database) throws -> IntradayExecutionReport {
         try fetchDomain(IntradayExecutionReport.self, id: id, expectedKind: intradayExecutionKind, from: db)
     }
@@ -275,6 +280,9 @@ extension ArtifactRow {
     }
     static func from(_ domain: MarketDiscoveryReport) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
         try from(domain, kind: marketDiscoveryKind)
+    }
+    static func from(_ domain: MarketCloseReview) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
+        try from(domain, kind: marketCloseReviewKind)
     }
     static func from(_ domain: IntradayExecutionReport) throws -> (row: ArtifactRow, dependencies: [ArtifactDependencyRow]) {
         try from(domain, kind: intradayExecutionKind)

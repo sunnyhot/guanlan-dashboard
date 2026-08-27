@@ -108,7 +108,7 @@ extension AppModel {
 
     /// 「yyyy-MM-dd」→ 上海时区日界；解析失败 / nil 用上海时区**当日零点**
     /// （固定日界，同一天内不随访问时刻漂移——审查 P2-9）。
-    private static func attributionV2Date(latestChangeDate: String?) -> Date {
+    static func attributionV2Date(latestChangeDate: String?) -> Date {
         let shanghai = TimeZone(identifier: "Asia/Shanghai") ?? .current
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = shanghai

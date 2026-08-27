@@ -19,6 +19,7 @@ struct InvestmentIntelligenceDashboardSnapshot: Sendable, Equatable {
     let intraday: IntradaySummary?
     let discovery: DiscoverySummary?
     let research: ResearchSummary?
+    let closeReview: CloseReviewSummary?
     let history: [HistoryItem]
 }
 
@@ -163,6 +164,8 @@ extension InvestmentIntelligenceDashboardSnapshot {
             let score: Decimal
             /// 关键因子方向摘要（如「动量 ↑ · 回撤 ↓」）。
             let factorsSummary: String
+            /// 失效条件（审计 B2：本地因子派生的自然语言条件，人工复核）。
+            let invalidationNote: String
         }
 
         let state: State
@@ -183,9 +186,86 @@ extension InvestmentIntelligenceDashboardSnapshot {
         let portfolioStatement: String
         /// 主要风险 / 信号摘要（前 3 条）。
         let topSignals: [String]
+        /// 信号明细（审计 A6：每条信号可点开看证据）。
+        let signalDetails: [SignalDigest]
+        /// 行动候选（审计 B3：来自最新决策 artifact 的胜者计划动作，
+        /// 可「加入跟踪」直通决策事项）。
+        let actionCandidates: [ActionCandidate]
         let evidenceCount: Int
         let signalCount: Int
         let producedAt: Date?
+    }
+
+    /// 单条信号的展示摘要（含证据引用，供证据明细 Sheet）。
+    struct SignalDigest: Sendable, Equatable, Identifiable {
+        let id: String
+        /// 人话信号描述（维度 · 方向 · 强度 + 理由）。
+        let text: String
+        /// 引用的 EvidenceID（原始值——查询证据明细用）。
+        let evidenceIDs: [String]
+    }
+
+    /// 研究行动候选（「加入跟踪」建案素材）。
+    struct ActionCandidate: Sendable, Equatable, Identifiable {
+        var id: String { "\(artifactID)|\(subjectKey)|\(directionText)" }
+        let subjectKey: String
+        /// 方向人话（增持 / 减持）。
+        let directionText: String
+        /// 建案理由（Δw + provenance 人话）。
+        let rationaleText: String
+        let artifactID: String
+    }
+}
+
+// MARK: - 研究证据摘要（审计 A6：证据明细读面 DTO）
+
+/// 单条证据的用户可见摘要（来源 / 数据截至 / 内容节选）。
+struct ResearchEvidenceDigest: Sendable, Equatable, Identifiable {
+    /// 行主键 ObservationID（最新 vintage 的那一行）。
+    let id: String
+    let evidenceID: String
+    /// 来源人话（SEC 文件 / 网络检索 / Provider 公告…）。
+    let sourceName: String
+    /// 关联主体（如招商银行 / portfolio_live）。
+    let subjectText: String
+    /// 内容节选（前 240 字）。
+    let contentExcerpt: String
+    /// 数据发布时间（nil = 未知）。
+    let publishedAt: Date?
+    /// 可用时间（抓取/入库参考）。
+    let availableAt: Date?
+}
+
+// MARK: - 收盘复盘（审计 A1）
+
+extension InvestmentIntelligenceDashboardSnapshot {
+
+    struct CloseReviewSummary: Sendable, Equatable {
+        enum State: Sendable, Equatable {
+            /// 今日复盘已生成
+            case todayDone
+            /// 今日 21:00 未到（最近复盘是往日的）
+            case awaitingTonight
+            /// 今日 21:00 已过仍未生成（待补做）
+            case overdue
+            /// 从未生成
+            case neverGenerated
+        }
+
+        let state: State
+        let producedAt: Date
+        /// 复盘覆盖的交易日。
+        let reviewDate: Date
+        let dailyChangeAmount: Double?
+        let dailyChangePct: Double?
+        let holdingCount: Int
+        let coveredHoldingCount: Int
+        /// 逐持仓影响（|changeAmount| 降序）。
+        let topImpacts: [MarketCloseReview.PortfolioReview.HoldingImpact]
+        let tomorrowWatch: [String]
+        let narrativeSource: CloseReviewNarrativeSource
+        /// 报告 artifact id（详情入口用）。
+        let artifactID: String
     }
 }
 
@@ -198,6 +278,7 @@ extension InvestmentIntelligenceDashboardSnapshot {
             case intraday
             case decision
             case discovery
+            case closeReview
         }
 
         /// 稳定内部 id（artifact id——首页不显示，详情/复制诊断用）。

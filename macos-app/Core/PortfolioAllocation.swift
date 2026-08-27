@@ -127,6 +127,7 @@ extension AppModel {
             portfolioLookThroughSourceWarnings = []
             portfolioLookThroughLoadedRequestKey = requestKey
             isRefreshingPortfolioLookThrough = false
+            refreshDecisionCases()
             return
         }
         guard force
@@ -156,5 +157,7 @@ extension AppModel {
         )
         portfolioLookThroughSourceWarnings = batch.warnings
         portfolioLookThroughLoadedRequestKey = requestKey
+        // 持仓 + 穿透数据落地后评估决策事项（审计 A2/A3 接线点）
+        refreshDecisionCases()
     }
 }

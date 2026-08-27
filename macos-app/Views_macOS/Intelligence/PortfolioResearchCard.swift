@@ -1,10 +1,16 @@
 import SwiftUI
 
-// MARK: - 组合研究卡（产品重构 §8.6）
+// MARK: - 组合研究卡（产品重构 §8.6 + 审计 A6/B3）
+//
+// 相比基础形态新增：
+// - 信号行可点开「判断依据」证据明细 Sheet（A6）
+// - 行动候选区：最新决策 artifact 胜者计划的动作可「加入跟踪」直通
+//   决策事项（B3，V1「加入关注」的 V2 对应物）
 
 struct PortfolioResearchCard: View {
     let snapshot: InvestmentIntelligenceDashboardSnapshot
     @ObservedObject var model: AppModel
+    @State private var evidenceQuery: EvidenceDetailSheet.Query?
 
     private var research: InvestmentIntelligenceDashboardSnapshot.ResearchSummary? {
         snapshot.research
@@ -25,9 +31,9 @@ struct PortfolioResearchCard: View {
                 .controlSize(.small)
                 .disabled(
                     model.researchOperationState.isRunning
-                        || !snapshot.readiness.providerConfigured
-                        || model.intelligenceRuntime == nil
-                        || snapshot.readiness.blocker != nil)
+                    || !snapshot.readiness.providerConfigured
+                    || model.intelligenceRuntime == nil
+                    || snapshot.readiness.blocker != nil)
                 .help(researchHelp)
             }
         ) {
@@ -55,6 +61,9 @@ struct PortfolioResearchCard: View {
                     .padding(.vertical, AppPalette.spaceS)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .sheet(item: $evidenceQuery) { query in
+            EvidenceDetailSheet(query: query)
         }
     }
 
@@ -85,7 +94,19 @@ struct PortfolioResearchCard: View {
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !research.topSignals.isEmpty {
+            if !research.signalDetails.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("关键信号（点击查看依据）")
+                        .font(AppPalette.appFont(.caption, weight: .medium))
+                        .foregroundStyle(AppPalette.muted)
+                    ForEach(
+                        Array(research.signalDetails.prefix(5).enumerated()),
+                        id: \.element.id
+                    ) { index, signal in
+                        signalRow(signal, rank: index + 1)
+                    }
+                }
+            } else if !research.topSignals.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("关键信号")
                         .font(AppPalette.appFont(.caption, weight: .medium))
@@ -97,9 +118,78 @@ struct PortfolioResearchCard: View {
                     }
                 }
             }
+            if !research.actionCandidates.isEmpty {
+                actionCandidatesSection(research.actionCandidates)
+            }
             Text("证据 \(research.evidenceCount) 条 · 信号 \(research.signalCount) 条 · \(IntelligencePresentationFormatter.dateTimeText(research.producedAt))")
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
+        }
+    }
+
+    /// 信号行：文本 + 有证据引用时可点开判断依据（审计 A6）。
+    private func signalRow(
+        _ signal: InvestmentIntelligenceDashboardSnapshot.SignalDigest, rank: Int
+    ) -> some View {
+        Button {
+            guard !signal.evidenceIDs.isEmpty else { return }
+            evidenceQuery = EvidenceDetailSheet.Query(
+                signalText: signal.text,
+                evidenceIDs: signal.evidenceIDs)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: AppPalette.spaceS) {
+                Text("· \(signal.text)")
+                    .font(AppPalette.appFont(.footnote))
+                    .foregroundStyle(AppPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !signal.evidenceIDs.isEmpty {
+                    Label("依据", systemImage: "doc.text.magnifyingglass")
+                        .font(AppPalette.appFont(.caption))
+                        .foregroundStyle(AppPalette.info)
+                }
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(signal.evidenceIDs.isEmpty ? "" : "查看判断依据")
+        }
+        .disabled(signal.evidenceIDs.isEmpty)
+    }
+
+    /// 行动候选（审计 B3）：研究/决策产物 →「加入跟踪」直通决策事项。
+    @ViewBuilder
+    private func actionCandidatesSection(
+        _ candidates: [InvestmentIntelligenceDashboardSnapshot.ActionCandidate]
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("行动候选")
+                .font(AppPalette.appFont(.caption, weight: .medium))
+                .foregroundStyle(AppPalette.muted)
+            ForEach(candidates) { candidate in
+                HStack(spacing: AppPalette.spaceS) {
+                    Image(systemName: candidate.directionText == "增持"
+                        ? "arrow.up.right.circle" : "arrow.down.right.circle")
+                        .foregroundStyle(AppPalette.info)
+                    Text(candidate.rationaleText)
+                        .font(AppPalette.appFont(.footnote))
+                        .foregroundStyle(AppPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Button("加入跟踪") {
+                        model.addCaseFromActionCandidate(
+                            subjectName: candidate.subjectKey,
+                            subjectCode: nil,
+                            directionText: candidate.directionText,
+                            rationale: candidate.rationaleText,
+                            trigger: nil,
+                            invalidation: nil,
+                            sourceArtifactID: candidate.artifactID)
+                    }
+                    .buttonStyle(.appSecondary)
+                    .controlSize(.small)
+                }
+                .accessibilityElement(children: .combine)
+            }
         }
     }
 }

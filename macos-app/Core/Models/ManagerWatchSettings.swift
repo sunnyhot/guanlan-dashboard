@@ -259,6 +259,8 @@ enum NotificationDeepLinkType: String {
     case forumRecord = "forum_record"
     case personalWatchlist = "personal_watchlist"
     case portfolioValuationAlert = "portfolio_valuation_alert"
+    /// 投资智能（决策事项详情；targetID = case id，审计 A2）
+    case intelligence = "intelligence"
 }
 
 struct NotificationDeepLinkPayload: Hashable {

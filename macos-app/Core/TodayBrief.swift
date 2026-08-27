@@ -9,6 +9,7 @@ enum TodayBriefKind: String, Hashable {
     case platformAction
     case forumRecord
     case managerWatch
+    case closeReview
 }
 
 enum TodayBriefDestination: Hashable {
@@ -16,6 +17,7 @@ enum TodayBriefDestination: Hashable {
     case platform
     case forum
     case settings
+    case intelligence
 }
 
 enum TodayBriefTone: Hashable {
@@ -60,6 +62,8 @@ struct TodayBriefContext: Hashable {
     let managerWatchEnabled: Bool
     let managerWatchScopeText: String
     let managerWatchError: String?
+    /// 收盘复盘未完成（审计 C4：自动调度开启 && 今日 21:00 后未生成）。
+    let closeReviewMissed: Bool
 
     init(
         hasPersonalPortfolio: Bool,
@@ -79,7 +83,7 @@ struct TodayBriefContext: Hashable {
         managerWatchEnabled: Bool = false,
         managerWatchScopeText: String = "",
         managerWatchError: String? = nil,
-        closeReviewAutoMissed: Bool = false
+        closeReviewMissed: Bool = false
     ) {
         self.hasPersonalPortfolio = hasPersonalPortfolio
         self.pendingActionCount = pendingActionCount
@@ -98,6 +102,7 @@ struct TodayBriefContext: Hashable {
         self.managerWatchEnabled = managerWatchEnabled
         self.managerWatchScopeText = managerWatchScopeText
         self.managerWatchError = managerWatchError
+        self.closeReviewMissed = closeReviewMissed
     }
 }
 
@@ -149,6 +154,21 @@ enum TodayBriefBuilder {
                     tone: .warning,
                     destination: .portfolio,
                     priority: 30
+                )
+            )
+        }
+
+        if context.closeReviewMissed {
+            items.append(
+                TodayBriefItem(
+                    kind: .closeReview,
+                    title: "收盘复盘待补做",
+                    detail: "今日 21:00 后未生成收盘复盘",
+                    metric: "补做",
+                    iconName: "moon.zzz",
+                    tone: .warning,
+                    destination: .intelligence,
+                    priority: 35
                 )
             )
         }
@@ -315,7 +335,22 @@ extension AppModel {
             latestForumDate: latestForum?.createdAt,
             managerWatchEnabled: managerWatchSettings.isEnabled,
             managerWatchScopeText: managerWatchScopeText,
-            managerWatchError: managerWatchSettings.lastErrorMessage
+            managerWatchError: managerWatchSettings.lastErrorMessage,
+            closeReviewMissed: closeReviewMissedForBrief
         )
+    }
+
+    /// 收盘复盘未完成警示（审计 C4）：有持仓 + 快照已加载 + 今日 21:30 后
+    /// 仍无当日复盘（未生成或仍是往日复盘）。
+    private var closeReviewMissedForBrief: Bool {
+        guard userPortfolioSnapshot?.rows.isEmpty == false else { return false }
+        guard let snapshot = intelligenceDashboardSnapshot else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        let deadline = calendar.date(
+            bySettingHour: 21, minute: 30, second: 0, of: Date()) ?? Date()
+        guard Date() >= deadline else { return false }
+        guard let closeReview = snapshot.closeReview else { return true }
+        return closeReview.state != .todayDone
     }
 }

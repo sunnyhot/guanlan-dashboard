@@ -35,8 +35,9 @@ struct SettingsIntelligencePanel: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppPalette.spaceL) {
+        VStack(spacing: AppPalette.spaceL) {
             modelSection
+            autoRunSection
             dataSourcesSection
             privacySection
         }
@@ -181,6 +182,90 @@ struct SettingsIntelligencePanel: View {
                 ? "已保存" : "已保存（还需填写 API Key）"
         } else {
             keySaveError = "API Key 写入本机钥匙串失败（系统拒绝了访问）。\n可先点「清除密钥…」再重新保存；若仍失败，请重启 App 后重试。"
+        }
+    }
+
+    // MARK: - 自动运行（审计 B1/C5）
+
+    private var autoRunSection: some View {
+        SectionCard(
+            title: "自动运行",
+            subtitle: "按产品模块错峰生成，同一窗口至多自动尝试一次",
+            icon: "clock.badge.checkmark"
+        ) {
+            VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                Toggle(isOn: autoRunTotalBinding) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("启用自动运行")
+                            .font(AppPalette.appFont(.subheadline, weight: .medium))
+                        Text(IntelligenceScheduleEvaluator.scheduleSummaryText)
+                            .font(AppPalette.appFont(.caption))
+                            .foregroundStyle(AppPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .toggleStyle(.switch)
+
+                if model.intelligenceScheduleSettings.isAutoRunEnabled {
+                    Divider()
+                    autoRunModuleRow(
+                        title: "市场发现",
+                        detail: "每日 09:00",
+                        binding: autoRunModuleBinding(\.marketDiscoveryEnabled))
+                    autoRunModuleRow(
+                        title: "盘中评估",
+                        detail: "09:15 / 10:15 / 11:15 / 13:15 / 14:15 / 14:50",
+                        binding: autoRunModuleBinding(\.intradayEnabled))
+                    autoRunModuleRow(
+                        title: "收盘复盘",
+                        detail: "每日 21:00（错过可手动补做）",
+                        binding: autoRunModuleBinding(\.closeReviewEnabled))
+                    autoRunModuleRow(
+                        title: "组合研究",
+                        detail: "周日 20:00（需 AI 模型已配置）",
+                        binding: autoRunModuleBinding(\.portfolioResearchEnabled))
+                }
+            }
+        }
+    }
+
+    private var autoRunTotalBinding: Binding<Bool> {
+        Binding(
+            get: { model.intelligenceScheduleSettings.isAutoRunEnabled },
+            set: { enabled in
+                model.updateIntelligenceSchedule { settings in
+                    settings.isAutoRunEnabled = enabled
+                }
+            })
+    }
+
+    private func autoRunModuleBinding(
+        _ keyPath: WritableKeyPath<IntelligenceScheduleSettings, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { model.intelligenceScheduleSettings[keyPath: keyPath] },
+            set: { enabled in
+                model.updateIntelligenceSchedule { settings in
+                    settings[keyPath: keyPath] = enabled
+                }
+            })
+    }
+
+    private func autoRunModuleRow(
+        title: String, detail: String, binding: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: AppPalette.spaceS) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(AppPalette.appFont(.footnote, weight: .medium))
+                Text(detail)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+            }
+            Spacer(minLength: 0)
+            Toggle("", isOn: binding)
+                .labelsHidden()
+                .toggleStyle(.switch)
         }
     }
 

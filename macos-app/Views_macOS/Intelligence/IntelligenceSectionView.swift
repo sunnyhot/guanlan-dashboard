@@ -10,11 +10,20 @@ import SwiftUI
 struct IntelligenceSectionView: View {
     @EnvironmentObject var model: AppModel
     @State private var activeSheet: IntelligenceSheet?
+    @State private var detailCase: DecisionCaseBox?
+
+    /// 详情 sheet 的 Identifiable 包装（selectedDecisionCaseID 深链消费）。
+    struct DecisionCaseBox: Identifiable {
+        let caseID: String
+        var id: String { caseID }
+    }
 
     enum IntelligenceSheet: String, Identifiable {
         case editTarget
         case classifyHoldings
         case intradayDetail
+        case decisionCases
+        case closeReviewDetail
 
         var id: String { rawValue }
     }
@@ -38,7 +47,21 @@ struct IntelligenceSectionView: View {
                 AssetClassAssignmentEditor()
             case .intradayDetail:
                 IntradayDecisionDetailSheet()
+            case .decisionCases:
+                DecisionCaseListSheet()
+            case .closeReviewDetail:
+                MarketCloseReviewDetailSheet()
             }
+        }
+        .sheet(item: $detailCase) { box in
+            if let decisionCase = model.decisionCases.first(where: { $0.id == box.caseID }) {
+                DecisionCaseDetailSheet(decisionCase: decisionCase)
+            }
+        }
+        .onChange(of: model.selectedDecisionCaseID) { _, caseID in
+            guard let caseID else { return }
+            detailCase = DecisionCaseBox(caseID: caseID)
+            model.selectedDecisionCaseID = nil
         }
         .alert("旧版 AI 数据已归档", isPresented: legacyNoticeBinding) {
             Button("知道了", role: .cancel) {}
@@ -160,6 +183,9 @@ private struct IntelligenceLoadedContent: View {
                 MarketDiscoveryCard(snapshot: snapshot, model: model)
                     .frame(width: 320)
             }
+            MarketCloseReviewCard(
+                snapshot: snapshot, model: model, activeSheet: $activeSheet)
+            DecisionCaseCard(model: model, activeSheet: $activeSheet)
             PortfolioResearchCard(snapshot: snapshot, model: model)
             IntelligenceHistoryCard(history: snapshot.history)
         }
@@ -171,6 +197,8 @@ private struct IntelligenceLoadedContent: View {
             IntelligenceStatusCard(snapshot: snapshot, activeSheet: $activeSheet, model: model)
             IntradayDecisionCard(snapshot: snapshot, activeSheet: $activeSheet, model: model)
             MarketDiscoveryCard(snapshot: snapshot, model: model)
+            MarketCloseReviewCard(snapshot: snapshot, model: model, activeSheet: $activeSheet)
+            DecisionCaseCard(model: model, activeSheet: $activeSheet)
             PortfolioResearchCard(snapshot: snapshot, model: model)
             IntelligenceHistoryCard(history: snapshot.history)
         }

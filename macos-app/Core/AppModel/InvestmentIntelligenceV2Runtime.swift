@@ -182,6 +182,8 @@ extension AppModel {
         let targetStore: StrategicAllocationTargetStore
         /// 持仓战略资产分类 Store（user-intent/asset-class-assignments）。
         let assignmentStore: StrategicAssetClassAssignmentStore
+        /// 决策事项 Store（user-intent/decision-cases；审计 A2）。
+        let decisionCaseStore: DecisionCaseStore
     }
 
     /// 引导 V2 运行时（十八轮 P2：开库含迁移，移出主线程——原先 start()
@@ -220,12 +222,14 @@ extension AppModel {
                     repository: repository,
                     queryService: ArtifactQueryService(repository: repository),
                     targetStore: StrategicAllocationTargetStore(workDirectory: workDirectory),
-                    assignmentStore: StrategicAssetClassAssignmentStore(workDirectory: workDirectory)
+                    assignmentStore: StrategicAssetClassAssignmentStore(workDirectory: workDirectory),
+                    decisionCaseStore: DecisionCaseStore(workDirectory: workDirectory)
                 )
                 await MainActor.run { [weak self] in
                     self?.intelligenceRuntime = runtime
                     self?.isBootstrappingIntelligence = false
                     self?.restoreLatestIntelligenceArtifacts(runtime: runtime)
+                    self?.loadDecisionCasesAndImportLegacy(runtime: runtime, dataDirectory: dataDirectory)
                     // 产品重构 §5.3：bootstrap 完成后自动加载最新快照（只读库）
                     self?.refreshIntelligenceDashboard()
                 }
@@ -397,6 +401,24 @@ extension AppModel {
         IntelligenceV2ProviderSettings.isConfigured
     }
 
+    /// 研究事件 → 阶段推进（审计 B5：研究卡复用盘中卡的阶段进度样式）。
+    @MainActor
+    private func applyResearchStageEvent(_ event: PortfolioResearchWorkflow.RunEvent) {
+        guard case let .running(startedAt, _) = researchOperationState else { return }
+        let stage: IntelligenceOperationState.Stage
+        switch event {
+        case .researchStarted, .researchTaskCompleted, .evidencePersisted:
+            stage = .collecting
+        case .signalsExtracted, .thesesWritten:
+            stage = .synthesizing
+        case .decisionAssembled:
+            stage = .evaluating
+        case .failed:
+            return
+        }
+        researchOperationState = .running(startedAt: startedAt, stage: stage)
+    }
+
     @MainActor
     func runPortfolioResearch() {
         guard let runtime = intelligenceRuntime else {
@@ -468,7 +490,12 @@ extension AppModel {
                         objective: "评估组合当前配置的动量、估值与主要风险"
                     )
                 )
-                let outcome = try await workflow.run(input: input)
+                let outcome = try await workflow.run(input: input) { [weak self] event in
+                    // 生成过程可见性（审计 B5）：workflow 事件 → 阶段推进
+                    await MainActor.run {
+                        self?.applyResearchStageEvent(event)
+                    }
+                }
                 await MainActor.run {
                     if outcome.succeeded {
                         // 概要统一读面刷新（十八轮 P2-5：View body 不查库；

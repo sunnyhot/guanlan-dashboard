@@ -24,6 +24,7 @@ extension ArtifactQueryService {
         let readiness = Self.readinessSummary(
             from: userMaterials, marketCoverage: discovery?.coverage)
         let research = try latestResearchSummary(now: now)
+        let closeReview = try latestCloseReviewSummary(now: now)
         let history = try historyItems(
             limit: 20,
             resolvableTargetIDs: userMaterials.resolvableTargetIDs, now: now)
@@ -38,6 +39,7 @@ extension ArtifactQueryService {
             intraday: intraday,
             discovery: discovery,
             research: research,
+            closeReview: closeReview,
             history: history
         )
     }
@@ -193,7 +195,8 @@ extension ArtifactQueryService {
                     rank: candidate.rank,
                     name: candidate.displayName,
                     score: candidate.score,
-                    factorsSummary: Self.factorsSummary(candidate.metrics))
+                    factorsSummary: Self.factorsSummary(candidate.metrics),
+                    invalidationNote: Self.invalidationNote(candidate.metrics))
             }
         return InvestmentIntelligenceDashboardSnapshot.DiscoverySummary(
             state: state,
@@ -219,12 +222,14 @@ extension ArtifactQueryService {
         return ratio >= Self.discoveryCoverageSufficiencyRatio
     }
 
-    /// metric 键前缀 → 人话因子方向（|值| 最大的前两个）。
+    /// 因子键前缀 → 人话因子名（|值| 最大的前两个）。
+    private static let factorNamesByKeyPrefix: [(String, String)] = [
+        ("momentum", "动量"), ("trend", "趋势"),
+        ("volatility", "波动"), ("drawdown", "回撤"),
+    ]
+
+    /// 因子键前缀 → 人话因子方向（|值| 最大的前两个）。
     private static func factorsSummary(_ metrics: [String: Decimal]) -> String {
-        let nameByKeyPrefix: [(String, String)] = [
-            ("momentum", "动量"), ("trend", "趋势"),
-            ("volatility", "波动"), ("drawdown", "回撤"),
-        ]
         let parts = metrics
             .sorted {
                 abs($0.value) == abs($1.value)
@@ -232,12 +237,33 @@ extension ArtifactQueryService {
             }
             .prefix(2)
             .compactMap { key, value -> String? in
-                guard let name = nameByKeyPrefix.first(where: { key.hasPrefix($0.0) })?.1 else {
+                guard let name = factorNamesByKeyPrefix.first(where: { key.hasPrefix($0.0) })?.1 else {
                     return nil
                 }
                 return "\(name) \(value >= 0 ? "↑" : "↓")"
             }
         return parts.joined(separator: " · ")
+    }
+
+    /// 失效条件（审计 B2）：主导因子方向反转时候选失效——本地阈值派生的
+    /// 自然语言条件（人工复核，不自动触发）。
+    private static func invalidationNote(_ metrics: [String: Decimal]) -> String {
+        let dominant = metrics
+            .sorted {
+                abs($0.value) == abs($1.value)
+                    ? $0.key < $1.key : abs($0.value) > abs($1.value)
+            }
+            .prefix(2)
+            .compactMap { key, value -> String? in
+                guard let name = factorNamesByKeyPrefix.first(where: { key.hasPrefix($0.0) })?.1 else {
+                    return nil
+                }
+                return "\(name)\(value >= 0 ? "转弱" : "修复")"
+            }
+        guard !dominant.isEmpty else {
+            return "综合评分显著回落时失效（人工复核）"
+        }
+        return "当\(dominant.joined(separator: "或"))或综合评分显著回落时失效（人工复核）"
     }
 
     // MARK: - 组合研究（Narrator 只解释）
@@ -251,6 +277,8 @@ extension ArtifactQueryService {
         var narrativeHeadline = "尚无组合研究结论"
         var portfolioStatement = ""
         var topSignals: [String] = []
+        var signalDetails: [InvestmentIntelligenceDashboardSnapshot.SignalDigest] = []
+        var actionCandidates: [InvestmentIntelligenceDashboardSnapshot.ActionCandidate] = []
         var evidenceCount = 0
         var signalCount = 0
         var producedAt: Date?
@@ -261,6 +289,27 @@ extension ArtifactQueryService {
             if let artifact = try portfolioDecision(id: summary.artifactID) {
                 let narrative = DecisionNarrator().narrate(artifact)
                 narrativeHeadline = narrative.headline
+                // 行动候选（审计 B3）：胜者计划的动作 →「加入跟踪」素材
+                if let winnerID = artifact.decision.admissiblePlans.sorted().first,
+                   let plan = artifact.plans[winnerID] {
+                    actionCandidates = plan.actions.prefix(5).map { planned in
+                        InvestmentIntelligenceDashboardSnapshot.ActionCandidate(
+                            subjectKey: planned.action.subjectKey,
+                            directionText: planned.action.deltaWeight.value >= 0 ? "增持" : "减持",
+                            rationaleText: IntelligencePresentationFormatter.plannedMoveText(
+                                subjectKey: planned.action.subjectKey,
+                                directionUp: planned.action.deltaWeight.value >= 0,
+                                weightChange: planned.action.deltaWeight.value,
+                                provenanceKind: {
+                                    switch planned.provenance {
+                                    case .targetRebalance: return .targetFollow
+                                    case .remediation: return .remediation
+                                    case .userDirective: return .userDirective
+                                    }
+                                }()),
+                            artifactID: artifact.id.rawValue)
+                    }
+                }
             }
         }
 
@@ -282,13 +331,66 @@ extension ArtifactQueryService {
         }
         topSignals = Array(researchNarrative.signalDigest.prefix(3))
 
+        // 信号明细（审计 A6）：与 ResearchNarrator.signalDigest 同序，带证据引用
+        let sortedSignals = signals.sorted {
+            if $0.subjectCanonical.stableKey != $1.subjectCanonical.stableKey {
+                return $0.subjectCanonical.stableKey < $1.subjectCanonical.stableKey
+            }
+            return $0.dimension.rawValue < $1.dimension.rawValue
+        }
+        signalDetails = sortedSignals.map { signal in
+            var text = "\(signal.subjectCanonical.entityIDRawValue) · \(signal.dimension.rawValue)：\(signal.direction.rawValue)（\(signal.strength.rawValue)，\(signal.derivedFromEvidenceIDs.count) 条证据）"
+            if let rationale = signal.rationale, !rationale.isEmpty {
+                text += "——\(rationale)"
+            }
+            return InvestmentIntelligenceDashboardSnapshot.SignalDigest(
+                id: signal.id.rawValue,
+                text: text,
+                evidenceIDs: signal.derivedFromEvidenceIDs.map(\.rawValue))
+        }
+
         return InvestmentIntelligenceDashboardSnapshot.ResearchSummary(
             narrativeHeadline: narrativeHeadline,
             portfolioStatement: portfolioStatement,
             topSignals: topSignals,
+            signalDetails: signalDetails,
+            actionCandidates: actionCandidates,
             evidenceCount: evidenceCount,
             signalCount: signalCount,
             producedAt: producedAt)
+    }
+
+    // MARK: - 收盘复盘（新鲜度按上海日界派生，不落盘）
+
+    private func latestCloseReviewSummary(
+        now: Date
+    ) throws -> InvestmentIntelligenceDashboardSnapshot.CloseReviewSummary? {
+        guard let review = try latestMarketCloseReviews(limit: 1, now: now).first else {
+            return nil
+        }
+        let freshness = MarketCloseReviewFreshness.evaluate(
+            latestReviewDate: review.reviewDate,
+            producedAt: review.producedAt,
+            now: now)
+        let state: InvestmentIntelligenceDashboardSnapshot.CloseReviewSummary.State
+        switch freshness {
+        case .todayDone: state = .todayDone
+        case .awaitingTonight: state = .awaitingTonight
+        case .overdue: state = .overdue
+        case .neverGenerated: state = .neverGenerated
+        }
+        return InvestmentIntelligenceDashboardSnapshot.CloseReviewSummary(
+            state: state,
+            producedAt: review.producedAt,
+            reviewDate: review.reviewDate,
+            dailyChangeAmount: review.portfolioReview?.dailyChangeAmount,
+            dailyChangePct: review.portfolioReview?.dailyChangePct,
+            holdingCount: review.portfolioReview?.holdingCount ?? 0,
+            coveredHoldingCount: review.portfolioReview?.coveredHoldingCount ?? 0,
+            topImpacts: review.portfolioReview?.topImpacts ?? [],
+            tomorrowWatch: review.tomorrowWatch,
+            narrativeSource: review.narrativeSource,
+            artifactID: review.id.rawValue)
     }
 
     // MARK: - 最近记录（跨 kind 时间倒序）
@@ -340,6 +442,22 @@ extension ArtifactQueryService {
                 producedAt: report.producedAt,
                 isValid: report.validityPolicy.isStillValid(at: now),
                 artifactID: report.id.rawValue,
+                targetResolvable: true))
+        }
+
+        for review in try latestMarketCloseReviews(limit: limit, now: now) {
+            let changeText: String
+            if let amount = review.portfolioReview?.dailyChangeAmount {
+                changeText = amount >= 0 ? "当日盈余" : "当日回撤"
+            } else {
+                changeText = "已冻结"
+            }
+            items.append(.init(
+                kind: .closeReview,
+                conclusionText: changeText,
+                producedAt: review.producedAt,
+                isValid: true,  // immutableHistorical：历史事实恒有效
+                artifactID: review.id.rawValue,
                 targetResolvable: true))
         }
 

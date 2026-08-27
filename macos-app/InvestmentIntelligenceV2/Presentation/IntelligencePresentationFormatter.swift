@@ -149,9 +149,22 @@ enum IntelligencePresentationFormatter {
     static func plannedMoveText(
         _ move: InvestmentIntelligenceDashboardSnapshot.IntradaySummary.PlannedMove
     ) -> String {
-        let direction = move.direction == .increase ? "增持" : "减持"
-        let delta = abs(move.weightChange)
-        return "\(direction) \(move.subjectKey) · \(percentText(delta))（\(provenanceText(move.provenanceKind))）"
+        plannedMoveText(
+            subjectKey: move.subjectKey,
+            directionUp: move.direction == .increase,
+            weightChange: move.weightChange,
+            provenanceKind: move.provenanceKind)
+    }
+
+    /// 参数化版本（行动候选等非 PlannedMove 形态复用同一文案）。
+    static func plannedMoveText(
+        subjectKey: String,
+        directionUp: Bool,
+        weightChange: Decimal,
+        provenanceKind: InvestmentIntelligenceDashboardSnapshot.IntradaySummary.PlannedMove.ProvenanceKind
+    ) -> String {
+        let direction = directionUp ? "增持" : "减持"
+        return "\(direction) \(subjectKey) · \(percentText(abs(weightChange)))（\(provenanceText(provenanceKind))）"
     }
 
     // MARK: - 市场机会
@@ -181,11 +194,64 @@ enum IntelligencePresentationFormatter {
         case .intraday: return "盘中评估"
         case .decision: return "组合决策"
         case .discovery: return "市场发现"
+        case .closeReview: return "收盘复盘"
         }
     }
 
     static func historyValidityLabel(_ isValid: Bool) -> String {
         isValid ? "有效" : "已过期"
+    }
+
+    // MARK: - 收盘复盘（审计 A1）
+
+    static func closeReviewStateLabel(
+        _ state: InvestmentIntelligenceDashboardSnapshot.CloseReviewSummary.State
+    ) -> String {
+        switch state {
+        case .todayDone: return "今日已复盘"
+        case .awaitingTonight: return "今晚 21:00 生成"
+        case .overdue: return "今日复盘待补做"
+        case .neverGenerated: return "尚未生成"
+        }
+    }
+
+    /// 状态徽章色性（View 据此映射 AppPalette，不在 Formatter 引色）。
+    enum CloseReviewBadgeTone {
+        case positive
+        case warning
+        case muted
+    }
+
+    static func closeReviewStateBadgeTone(
+        _ state: InvestmentIntelligenceDashboardSnapshot.CloseReviewSummary.State
+    ) -> CloseReviewBadgeTone {
+        switch state {
+        case .todayDone: return .positive
+        case .awaitingTonight, .neverGenerated: return .muted
+        case .overdue: return .warning
+        }
+    }
+
+    static func narrativeSourceLabel(_ source: CloseReviewNarrativeSource) -> String {
+        switch source {
+        case .llm: return "AI 叙述"
+        case .localFactors: return "本地因子"
+        }
+    }
+
+    static func pulseDirectionLabel(_ direction: MarketPulseDirection) -> String {
+        switch direction {
+        case .up: return "偏强"
+        case .down: return "偏弱"
+        case .flat: return "震荡"
+        }
+    }
+
+    static func themeDirectionLabel(_ direction: MarketThemeDirection) -> String {
+        switch direction {
+        case .strong: return "强势"
+        case .weak: return "弱势"
+        }
     }
 }
 

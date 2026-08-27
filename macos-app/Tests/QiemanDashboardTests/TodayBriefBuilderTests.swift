@@ -43,4 +43,33 @@ final class TodayBriefBuilderTests: XCTestCase {
         XCTAssertEqual(items.first?.destination, .portfolio)
     }
 
+    func testMakeItemsIncludesCloseReviewMissedWarning() {
+        // 审计 C4：收盘复盘未完成 → 高优警示 + 深链投资智能板块
+        let context = TodayBriefContext(
+            hasPersonalPortfolio: true,
+            pendingActionCount: 1,
+            pendingCashAmount: 100,
+            closeReviewMissed: true
+        )
+
+        let items = TodayBriefBuilder.makeItems(context: context, maxCount: 4)
+
+        XCTAssertTrue(items.contains { $0.kind == .closeReview })
+        let closeReviewItem = items.first { $0.kind == .closeReview }
+        XCTAssertEqual(closeReviewItem?.destination, .intelligence)
+        XCTAssertEqual(closeReviewItem?.tone, .warning)
+        XCTAssertEqual(closeReviewItem?.priority, 35)
+    }
+
+    func testMakeItemsOmitsCloseReviewWhenDone() {
+        let context = TodayBriefContext(
+            hasPersonalPortfolio: true,
+            closeReviewMissed: false
+        )
+
+        let items = TodayBriefBuilder.makeItems(context: context, maxCount: 8)
+
+        XCTAssertFalse(items.contains { $0.kind == .closeReview })
+    }
+
 }
