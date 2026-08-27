@@ -49,19 +49,26 @@ final class MarketUniverseBackfillTests: XCTestCase {
     private func makeEngine(
         requiredTradingDays: Int = 252, maxTargetsPerRound: Int = 3
     ) -> MarketUniverseBackfill {
+        // 旧工具链的类型求解器在多层闭包嵌套的 init 调用上会超时报
+        // ambiguous——全部拆成显式类型的局部变量（勿改回内联闭包）
+        let anchor: Date = est(2026, 8, 19).addingTimeInterval(72_000)
+        let now: @Sendable () -> Date = { anchor }
+        let adapter: any ProviderAdapter = stub
+        let chain: @Sendable (MarketUniverseEntry) -> ProviderFallbackChain = { _ in
+            ProviderFallbackChain(adapters: [adapter])
+        }
         let backfill = HistoricalBackfill(
-            pipeline: pipeline, repository: repository,
+            pipeline: pipeline,
+            repository: repository,
             requiredTradingDays: requiredTradingDays,
-            now: { () -> Date in self.est(2026, 8, 19).addingTimeInterval(72_000) }
+            now: now
         )
         stub.fullCoverageDays = requiredTradingDays
         return MarketUniverseBackfill(
             backfill: backfill,
-            makeChain: { [stub] (_ entry: MarketUniverseEntry) in
-                ProviderFallbackChain(adapters: [stub] as [any ProviderAdapter])
-            },
+            makeChain: chain,
             maxTargetsPerRound: maxTargetsPerRound,
-            now: { () -> Date in self.est(2026, 8, 19).addingTimeInterval(72_000) }
+            now: now
         )
     }
 
