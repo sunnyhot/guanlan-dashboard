@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.1/QiemanDashboard-4.4.1.zip",
-    "name" : "QiemanDashboard-4.4.1.zip",
-    "sha256" : "59da19ef18f5a5df173a27ac7a3e625f229674165f984c9278708bcf9fdb9590",
-    "size" : 10283103
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.2/QiemanDashboard-4.4.2.zip",
+    "name" : "QiemanDashboard-4.4.2.zip",
+    "sha256" : "00bd34de5e87478344ddfa85d688e54288cbc2fd732ccf76ad8460a0ff3b03c6",
+    "size" : 10283016
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.1/QiemanDashboard-4.4.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.4.2/QiemanDashboard-4.4.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.4.1.zip",
-      "size" : 10283103
+      "name" : "QiemanDashboard-4.4.2.zip",
+      "size" : 10283016
     }
   ],
-  "body" : "版本号同步 v4.4.1（修复 AI 配置写入与持仓分类保存）\nAI 配置写入失败静默 + 持仓分类无法保存（v4.4.1）",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.4.1",
-  "name" : "QiemanDashboard v4.4.1",
-  "notes" : "版本号同步 v4.4.1（修复 AI 配置写入与持仓分类保存）\nAI 配置写入失败静默 + 持仓分类无法保存（v4.4.1）",
+  "body" : "版本号同步 v4.4.2（修复 macOS 钥匙串密钥写入）\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement（v4.4.2）",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.4.2",
+  "name" : "QiemanDashboard v4.4.2",
+  "notes" : "版本号同步 v4.4.2（修复 macOS 钥匙串密钥写入）\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement（v4.4.2）",
   "published_at" : "",
-  "sha256" : "59da19ef18f5a5df173a27ac7a3e625f229674165f984c9278708bcf9fdb9590",
-  "tag" : "v4.4.1",
-  "tag_name" : "v4.4.1",
-  "version" : "4.4.1"
+  "sha256" : "00bd34de5e87478344ddfa85d688e54288cbc2fd732ccf76ad8460a0ff3b03c6",
+  "tag" : "v4.4.2",
+  "tag_name" : "v4.4.2",
+  "version" : "4.4.2"
 }
