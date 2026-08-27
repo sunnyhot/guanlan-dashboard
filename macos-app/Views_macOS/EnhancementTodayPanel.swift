@@ -46,6 +46,12 @@ extension EnhancementCenterView {
             }
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                // W5.3:昨日关注回指做成盘中区段第一条可见内容——
+                // 「昨晚说今天要盯的事」是打开盘中最先该核对的。
+                if let report = model.nextHourGuidanceReport, !report.followupReviews.isEmpty {
+                    NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
+                }
+
                 if model.trendSettings.provider.isConfigured,
                    !model.trendSettings.webSearch.isConfigured {
                     Label(

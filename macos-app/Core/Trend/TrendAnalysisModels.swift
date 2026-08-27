@@ -586,6 +586,10 @@ struct TrendAnalysisSettings: Codable, Hashable {
     var lastModuleAutoAnalysisKeys: [String: String]
     var lastModuleGeneratedAt: [String: String]
     var notifications: TrendNotificationPreferences
+    /// W3.5 连续失败升级:scope → 连续未成功的自动窗口数(成功即清零)。
+    var autoFailureStreaks: [String: Int]
+    /// W3.5:scope → 最近一次自动失败的错误文案(TodayBrief 人话化用)。
+    var lastAutoFailureMessages: [String: String]
 
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
@@ -599,7 +603,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoAnalysisSlotKey: nil,
         lastModuleAutoAnalysisKeys: [:],
         lastModuleGeneratedAt: [:],
-        notifications: .default
+        notifications: .default,
+        autoFailureStreaks: [:],
+        lastAutoFailureMessages: [:]
     )
 
     init(
@@ -614,7 +620,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoAnalysisSlotKey: String? = nil,
         lastModuleAutoAnalysisKeys: [String: String] = [:],
         lastModuleGeneratedAt: [String: String] = [:],
-        notifications: TrendNotificationPreferences = .default
+        notifications: TrendNotificationPreferences = .default,
+        autoFailureStreaks: [String: Int] = [:],
+        lastAutoFailureMessages: [String: String] = [:]
     ) {
         self.provider = provider
         self.webSearch = webSearch
@@ -628,6 +636,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         self.lastModuleAutoAnalysisKeys = lastModuleAutoAnalysisKeys
         self.lastModuleGeneratedAt = lastModuleGeneratedAt
         self.notifications = notifications
+        self.autoFailureStreaks = autoFailureStreaks
+        self.lastAutoFailureMessages = lastAutoFailureMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -665,6 +675,14 @@ struct TrendAnalysisSettings: Codable, Hashable {
             TrendNotificationPreferences.self,
             forKey: .notifications
         ) ?? .default
+        autoFailureStreaks = try container.decodeIfPresent(
+            [String: Int].self,
+            forKey: .autoFailureStreaks
+        ) ?? [:]
+        lastAutoFailureMessages = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .lastAutoFailureMessages
+        ) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -681,6 +699,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         try container.encode(lastModuleAutoAnalysisKeys, forKey: .lastModuleAutoAnalysisKeys)
         try container.encode(lastModuleGeneratedAt, forKey: .lastModuleGeneratedAt)
         try container.encode(notifications, forKey: .notifications)
+        try container.encode(autoFailureStreaks, forKey: .autoFailureStreaks)
+        try container.encode(lastAutoFailureMessages, forKey: .lastAutoFailureMessages)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -697,6 +717,8 @@ struct TrendAnalysisSettings: Codable, Hashable {
         case lastModuleAutoAnalysisKeys
         case lastModuleGeneratedAt
         case notifications
+        case autoFailureStreaks
+        case lastAutoFailureMessages
     }
 
     var dailyAutoAnalysisSchedule: TrendAutoAnalysisSchedule {
@@ -753,6 +775,26 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     func moduleGeneratedAt(_ scope: TrendResearchRunScope) -> String? {
         lastModuleGeneratedAt[scope.rawValue]
+    }
+
+    /// W3.5:成功生成后清零对应模块的连续失败计数(full 同时清三个模块)。
+    mutating func clearAutoFailureStreak(scope: TrendResearchRunScope) {
+        let scopes = scope == .full
+            ? [TrendResearchRunScope.marketRadar, .closeReview, .longTerm]
+            : [scope]
+        for moduleScope in scopes {
+            autoFailureStreaks[moduleScope.rawValue] = nil
+            lastAutoFailureMessages[moduleScope.rawValue] = nil
+        }
+    }
+
+    /// W3.5:自动运行失败后累加连击并记录错误文案;返回新的连击数。
+    mutating func recordAutoFailure(scope: TrendResearchRunScope, message: String) -> Int {
+        let key = scope.rawValue
+        let next = (autoFailureStreaks[key] ?? 0) + 1
+        autoFailureStreaks[key] = next
+        lastAutoFailureMessages[key] = message
+        return next
     }
 }
 

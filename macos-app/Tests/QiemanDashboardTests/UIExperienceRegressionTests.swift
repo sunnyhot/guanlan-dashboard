@@ -756,6 +756,7 @@ final class UIExperienceRegressionTests: XCTestCase {
             at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceDecisionConsole.swift"
         )
         let subAgents = try source(at: "Core/NextHourGuidance/NextHourGuidanceSubAgents.swift")
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
 
         // V1 system prompt 与 V2 决策 user message 都带回指指令
         XCTAssertTrue(core.contains("followup_reviews 中逐条回指"))
@@ -772,8 +773,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         // V2 子 Agent 主动核对:行情看量能,新闻做针对性检索
         XCTAssertTrue(subAgents.contains("逐条核对其中与行情、量能、指数表现相关的事项"))
         XCTAssertTrue(subAgents.contains("至少为每条做一次针对性搜索"))
-        // UI:决策台底部回顾块(评审定:靠下)
-        XCTAssertTrue(console.contains("NextHourGuidanceFollowupReviewsView"))
+        // W5.3:昨日关注回指上移为盘中区段第一条可见内容(决策台内不再重复)。
+        XCTAssertTrue(today.contains("NextHourGuidanceFollowupReviewsView"))
+        XCTAssertFalse(console.contains("NextHourGuidanceFollowupReviewsView"))
     }
 
     private func source(at relativePath: String) throws -> String {

@@ -70,6 +70,7 @@ struct InvestmentTodaySummaryCard: View {
 
     var body: some View {
         let summary = model.investmentTodayResearchSummary
+        let verdict = todayVerdictText
 
         SectionCard(
             title: "今日研判",
@@ -96,6 +97,21 @@ struct InvestmentTodaySummaryCard: View {
         ) {
             if summary.hasAnyContent {
                 VStack(spacing: AppPalette.spaceS) {
+                    // W2.3:「今天一句话」hero——纯派生,冲突时双短句,无内容不显示。
+                    if let verdict {
+                        HStack(spacing: AppPalette.spaceS) {
+                            Image(systemName: "quote.opening")
+                                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                                .foregroundStyle(AppPalette.brand)
+                            Text("今天:\(verdict)")
+                                .font(AppPalette.appFont(.subheadline, weight: .bold))
+                                .foregroundStyle(AppPalette.ink)
+                            Spacer(minLength: 4)
+                        }
+                        .padding(.horizontal, AppPalette.spaceS)
+                        .padding(.vertical, 6)
+                        .background(AppPalette.brand.opacity(0.08), in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
+                    }
                     ForEach(summary.rows) { row in
                         summaryRow(row)
                     }
@@ -178,6 +194,21 @@ struct InvestmentTodaySummaryCard: View {
     }
 
     // MARK: - W1.2 空态能力清单
+
+    /// W2.3:hero 输入装配(纯派生在 Core,可测)。
+    private var todayVerdictText: String? {
+        let topSignal = model.marketOpportunities.flatMap {
+            InvestmentTodayResearchSummary.topSignal($0)
+        }
+        return TodayVerdictDerivation.derive(
+            TodayVerdictDerivation.Input(
+                intradayPosture: model.nextHourGuidanceReport?.posture,
+                topRadarSignalName: topSignal?.name,
+                topRadarRecommendation: topSignal?.recommendation,
+                mediumDirection: model.trendReport?.horizons.first { $0.horizon == .medium }?.direction
+            )
+        )
+    }
 
     private enum CapabilityStatus {
         case available

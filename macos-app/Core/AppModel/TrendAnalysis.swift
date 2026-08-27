@@ -510,6 +510,7 @@ extension AppModel {
                 scope: requestedScope,
                 generatedAt: report.generatedAt
             )
+            trendSettings.clearAutoFailureStreak(scope: requestedScope)
             if requestedScope == .closeReview {
                 let snapshot = MarketCloseReviewSnapshot.make(
                     report: report,
@@ -565,7 +566,13 @@ extension AppModel {
                 )
             }
             // W3.1:自动运行的失败用户不在场,发通知提醒补做;手动失败不打扰。
+            // W3.5:同时累加连击计数,连续失败时 TodayBrief 升级提示根因。
             if !userInitiated {
+                trendSettings.recordAutoFailure(
+                    scope: requestedScope,
+                    message: error.localizedDescription
+                )
+                saveTrendAnalysisSettings()
                 await dispatchTrendCompletionNotification(
                     TrendCompletionNotification(
                         scope: requestedScope,
@@ -1129,6 +1136,101 @@ extension AppModel {
     }
 
     // MARK: - 进度与工具方法
+
+    // MARK: - W3.5/W3.6 触达派生
+
+    /// W3.5:当前应该主动提示补做的错过窗口。
+    /// 已过滤「距下一班自动运行 ≤ 2 小时」的情形——那会自动补上,不让用户花冤枉钱。
+    var missedTrendWindowsForPrompt: [TrendMissedWindow] {
+        guard trendSettings.provider.isConfigured else { return [] }
+        let now = Self.timestampString()
+        let missed = TrendMissedWindowCheck.missedScopes(
+            lastModuleAutoAnalysisKeys: trendSettings.lastModuleAutoAnalysisKeys,
+            lastModuleGeneratedAt: trendSettings.lastModuleGeneratedAt,
+            now: now
+        )
+        return missed.filter {
+            TrendMissedWindowCheck.shouldPromptManualCatchUp(
+                $0,
+                autoAnalysisEnabled: trendSettings.dailyAutoAnalysisEnabled,
+                now: now
+            )
+        }
+    }
+
+    /// W3.5:连续失败最严重的模块(连击 ≥ 2 才升级提示),附人话原因。
+    var worstAutoFailureStreak: (scope: TrendResearchRunScope, streak: Int, reasonText: String?)? {
+        guard let worst = trendSettings.autoFailureStreaks.max(by: { $0.value < $1.value }),
+              worst.value >= 2,
+              let scope = TrendResearchRunScope(rawValue: worst.key) else { return nil }
+        let reasonText = trendSettings.lastAutoFailureMessages[worst.key]
+            .map { TrendErrorTriage.explain($0).reasonText }
+        return (scope, worst.value, reasonText.flatMap { $0.isEmpty ? nil : $0 })
+    }
+
+    /// W3.6:未读研判数——最近一次链路成功生成晚于「上次访问 AI 页」的链路条数;
+    /// 访问(出现/离开页面)即清零。从未访问过但有内容时算 1,引导进去看一次。
+    var unreadAIResearchCount: Int {
+        let chains = latestResearchTimestampPerChain
+        guard !chains.isEmpty else { return 0 }
+        guard let lastSeen = Self.aiResearchLastSeenDate else { return 1 }
+        return chains.values.filter {
+            Self.researchDate(from: $0).map { $0 > lastSeen } ?? false
+        }.count
+    }
+
+    private var latestResearchTimestampPerChain: [String: String] {
+        func best(_ a: String?, _ b: String?) -> String? {
+            switch (a, b) {
+            case let (a?, b?): return a >= b ? a : b
+            case let (a?, nil): return a
+            case let (nil, b?): return b
+            default: return nil
+            }
+        }
+        var chains: [String: String] = [:]
+        if let intraday = nextHourGuidanceReport?.generatedAt {
+            chains["intraday"] = intraday
+        }
+        if let radar = trendSettings.moduleGeneratedAt(.marketRadar) {
+            chains["marketRadar"] = radar
+        }
+        if let close = best(
+            trendSettings.moduleGeneratedAt(.closeReview),
+            marketCloseReviewArchive?.generatedAt
+        ) {
+            chains["closeReview"] = close
+        }
+        if let long = best(
+            trendSettings.moduleGeneratedAt(.longTerm),
+            trendReport?.generatedAt
+        ) {
+            chains["longTerm"] = long
+        }
+        return chains
+    }
+
+    /// W3.6:访问即清零(出现与离开页面都记录,页面内实时完成的研判不算未读)。
+    static func markAIResearchSeen() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: AppStorageKey.aiResearchLastSeen)
+    }
+
+    private static var aiResearchLastSeenDate: Date? {
+        (UserDefaults.standard.object(forKey: AppStorageKey.aiResearchLastSeen) as? Double)
+            .map { Date(timeIntervalSince1970: $0) }
+    }
+
+    private static func researchDate(from timestamp: String) -> Date? {
+        guard timestamp.count >= 16 else { return nil }
+        return researchTimestampFormatter.date(from: String(timestamp.prefix(16)))
+    }
+
+    private static let researchTimestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     /// W3.1:按通知偏好发送链路 A 完成/失败通知;偏好未开启时静默跳过,
     /// 避免无谓的系统权限请求。

@@ -249,6 +249,54 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         }
     }
 
+    // MARK: - W3.5/W3.6 连击与未读角标
+
+    func testAutoFailureStreakIncrementsAndClearsOnSuccess() async {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings()
+        installSupportingProbe(model)
+        let notificationSpy = TrendCompletionNotificationSpy()
+        notificationSpy.install(on: model)
+        model.trendResearchAgent = FakeTrendResearchAgent(
+            result: .failure(TrendResearchAgentError.turnLimitExceeded)
+        )
+
+        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-22 09:00:00", scope: .marketRadar)
+        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue], 1)
+        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-23 09:00:00", scope: .marketRadar)
+        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue], 2)
+        XCTAssertNotNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.marketRadar.rawValue])
+
+        // 成功即清零(手动成功也算——证明了链路本身可用)。
+        model.trendResearchAgent = FakeTrendResearchAgent(
+            result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-24 09:30:00", externalSignalStatus: .partial))
+        )
+        await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-24 09:00:00", scope: .marketRadar)
+        XCTAssertNil(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue])
+        XCTAssertNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.marketRadar.rawValue])
+    }
+
+    func testUnreadAIResearchCountClearsAfterSeen() {
+        let key = AppStorageKey.aiResearchLastSeen
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let model = AppModel()
+        XCTAssertTrue(model.unreadAIResearchCount == 0, "无任何内容时不提示")
+
+        // 从未访问过,但有内容 → 算 1 条未读,引导进去看一次。
+        model.trendSettings.markModuleGenerated(scope: .marketRadar, generatedAt: "2026-06-22 09:30:00")
+        XCTAssertEqual(model.unreadAIResearchCount, 1)
+
+        // 访问后清零。
+        AppModel.markAIResearchSeen()
+        XCTAssertEqual(model.unreadAIResearchCount, 0)
+
+        // 之后又有新链路生成 → 再次计数(用未来时间戳保证晚于 seen)。
+        model.trendSettings.markModuleGenerated(scope: .closeReview, generatedAt: "2099-01-01 21:05:00")
+        XCTAssertEqual(model.unreadAIResearchCount, 1)
+    }
+
     // MARK: - 辅助
 
     private func makeProviderSettings(dailyAutoAnalysisEnabled: Bool = false) -> TrendAnalysisSettings {
