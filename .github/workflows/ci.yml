@@ -38,10 +38,14 @@ jobs:
             # 失败摘录 + 日志尾发到诊断 issue（公开可读；commit 评论对
             # GITHUB_TOKEN 常被 403，issue 是可靠通道）
             {
-              grep -E "error: -\[|failed \([0-9]" /tmp/test-output.log | head -20 || true
+              echo "== 编译/测试错误行 =="
+              grep -E ": error:|error: -\[" /tmp/test-output.log | grep -v "warning" | head -40 || echo "（无 error 行）"
               echo ""
-              echo "—— 日志尾 120 行 ——"
-              tail -120 /tmp/test-output.log
+              echo "== error 首现处上下文 =="
+              grep -n -m1 ": error:" /tmp/test-output.log | cut -d: -f1 | xargs -I{} sh -c 'sed -n "$(({}-15)),$(({}+25))p" /tmp/test-output.log' || true
+              echo ""
+              echo "—— 日志尾 60 行 ——"
+              tail -60 /tmp/test-output.log
             } > /tmp/failures.txt
             BODY=$(jq -Rs --arg title "CI 失败诊断 ${{ github.sha }}" \
               '{title: $title, body: .}' < /tmp/failures.txt)
