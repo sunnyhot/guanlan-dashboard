@@ -119,6 +119,8 @@ final class EnhancementState: ObservableObject {
     @Published var trendResearchScope: TrendResearchRunScope = .full
     @Published var trendResearchRequestedScope: TrendResearchRunScope = .full
     @Published var trendResearchProgress: TrendResearchModuleProgress = .idle
+    /// W3.7:链路 A 运行中排队的手动请求;当前任务结束后自动执行。
+    @Published var queuedUserRequestedScope: TrendResearchRunScope?
     @Published var marketCloseReviewArchive: MarketCloseReviewArchive?
     @Published var trendConnectionState: TrendConnectionState = .idle
     @Published var trendProviderCapabilities: TrendProviderCapabilities?

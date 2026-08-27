@@ -587,13 +587,20 @@ extension AppModel {
         }
     }
 
-    // MARK: - 生成任务管理（支持取消）
+    // MARK: - 生成任务管理（支持取消与 W3.7 手动排队）
 
     /// 由 UI 触发：取消上一次（若有）并启动新的趋势分析任务。
+    /// W3.7:链路 A 正在运行时,手动请求进入队列(替代按钮置灰),当前任务
+    /// 结束后自动执行;互斥契约不变——A/B 任何时刻仍只有一个任务在跑。
     func startTrendAnalysis(
         userInitiated: Bool,
         scope: TrendResearchRunScope = .full
     ) {
+        if userInitiated, trendGenerationState == .generating {
+            queuedUserRequestedScope = scope
+            noticeMessage = "当前有 AI 任务在运行,「\(scope.displayName)」已排队,完成后自动开始"
+            return
+        }
         trendGenerationTask?.cancel()
         trendGenerationTask = Task { [weak self] in
             await self?.generateTrendAnalysis(
@@ -602,12 +609,24 @@ extension AppModel {
                 scope: scope
             )
             self?.trendGenerationTask = nil
+            await self?.runQueuedUserTrendRequestIfNeeded()
         }
     }
 
     /// 取消正在进行的趋势分析；Agent 循环会在下一个取消点停止，并保留上一次报告。
+    /// W3.7:取消意味着「停下来」,排队中的手动请求一并清空。
     func cancelTrendAnalysis() {
         trendGenerationTask?.cancel()
+        if queuedUserRequestedScope != nil {
+            queuedUserRequestedScope = nil
+            noticeMessage = "已取消当前任务与排队请求。"
+        }
+    }
+
+    private func runQueuedUserTrendRequestIfNeeded() {
+        guard trendGenerationState != .generating, let queued = queuedUserRequestedScope else { return }
+        queuedUserRequestedScope = nil
+        startTrendAnalysis(userInitiated: true, scope: queued)
     }
 
     /// W3.2:手动入口触发时给预期(时长 + 成本同场提示),走全局 Toast;

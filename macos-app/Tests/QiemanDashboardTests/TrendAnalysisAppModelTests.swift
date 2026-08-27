@@ -297,6 +297,73 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         XCTAssertEqual(model.unreadAIResearchCount, 1)
     }
 
+    // MARK: - W3.7 手动请求排队
+
+    func testManualRequestQueuesWhileBusyAndRunsAfterCompletion() async throws {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings()
+        installSupportingProbe(model)
+        let notificationSpy = TrendCompletionNotificationSpy()
+        notificationSpy.install(on: model)
+        let agent = BlockingTrendResearchAgent()
+        model.trendResearchAgent = agent
+
+        // 手动雷达运行中再点复盘 → 排队,不打断当前任务(互斥契约不变)。
+        model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
+        try await waitUntil { agent.suspendedCount >= 1 }
+        model.startTrendAnalysisFromUser(withExpectation: .closeReview)
+        XCTAssertEqual(model.queuedUserRequestedScope, .closeReview)
+        XCTAssertEqual(agent.runCount, 1, "排队不得打断当前任务")
+
+        // 放行第一个任务 → 队列中的复盘自动开始并挂起等待放行。
+        agent.resume(with: .success(
+            TrendAnalysisReport.fixture(generatedAt: "2026-06-22 09:30:00", externalSignalStatus: .partial)
+        ))
+        try await waitUntil {
+            agent.suspendedCount >= 2 && model.trendResearchRequestedScope == .closeReview
+        }
+        XCTAssertNil(model.queuedUserRequestedScope, "出队后清空")
+        XCTAssertEqual(agent.runCount, 2)
+
+        agent.resume(with: .success(
+            TrendAnalysisReport.fixture(generatedAt: "2026-06-22 21:30:00", externalSignalStatus: .partial)
+        ))
+        try await waitUntil { model.trendGenerationState == .succeeded && model.trendGenerationTask == nil }
+        XCTAssertEqual(model.trendReport?.generatedAt, "2026-06-22 21:30:00", "排队任务的结果最终落盘")
+    }
+
+    func testCancelClearsQueuedRequest() async throws {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings()
+        installSupportingProbe(model)
+        let agent = BlockingTrendResearchAgent()
+        model.trendResearchAgent = agent
+
+        model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
+        try await waitUntil { agent.suspendedCount >= 1 }
+        model.startTrendAnalysisFromUser(withExpectation: .closeReview)
+        XCTAssertEqual(model.queuedUserRequestedScope, .closeReview)
+
+        // 取消 =「停下来」:当前任务与排队请求一并清空。
+        model.cancelTrendAnalysis()
+        XCTAssertNil(model.queuedUserRequestedScope)
+        agent.resume(with: .failure(CancellationError()))
+        try await waitUntil { model.trendGenerationTask == nil }
+        XCTAssertEqual(agent.runCount, 1, "取消后排队请求不得再执行")
+    }
+
+    private func waitUntil(
+        _ condition: @escaping () -> Bool,
+        timeout: TimeInterval = 5
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTFail("等待条件超时")
+    }
+
     // MARK: - 辅助
 
     private func makeProviderSettings(dailyAutoAnalysisEnabled: Bool = false) -> TrendAnalysisSettings {
@@ -381,6 +448,68 @@ private final class TrendCompletionNotificationSpy: @unchecked Sendable {
             lock.lock()
             notices.append(notice)
             lock.unlock()
+        }
+    }
+}
+
+/// W3.7:可阻塞的假 Agent——测试手动放行,用于排队/取消等并发场景。
+/// 以 `suspendedCount` 为同步点:测试等它 ≥ N 再放行第 N 个。
+private final class BlockingTrendResearchAgent: TrendResearchAgentProtocol, @unchecked Sendable {
+    private let lock = NSLock()
+    private var runCountStorage = 0
+    private var suspendedCountStorage = 0
+    private var continuations: [CheckedContinuation<TrendAnalysisReport, Error>] = []
+
+    var runCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return runCountStorage
+    }
+
+    var suspendedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return suspendedCountStorage
+    }
+
+    func run(
+        snapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        webSearchSettings: TavilySearchSettings = .empty,
+        officialSourceSettings: OfficialSourceSettings = .empty,
+        alphaVantageSettings: AlphaVantageSettings = .empty,
+        scope: TrendResearchRunScope = .full,
+        baselineReport: TrendAnalysisReport? = nil,
+        eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
+    ) async throws -> TrendAnalysisReport {
+        lock.lock()
+        runCountStorage += 1
+        lock.unlock()
+        await eventHandler(.started(runID: snapshot.runID))
+        let report = try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            suspendedCountStorage += 1
+            continuations.append(continuation)
+            lock.unlock()
+        }
+        await eventHandler(.completed(duration: 0.1))
+        return report
+    }
+
+    /// 放行最早一个挂起的 run。
+    func resume(with result: Result<TrendAnalysisReport, Error>) {
+        lock.lock()
+        guard let continuation = continuations.first else {
+            lock.unlock()
+            return
+        }
+        continuations.removeFirst()
+        lock.unlock()
+        switch result {
+        case .success(let report):
+            continuation.resume(returning: report)
+        case .failure(let error):
+            continuation.resume(throwing: error)
         }
     }
 }

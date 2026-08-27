@@ -25,16 +25,13 @@ struct MarketCloseReviewSection: View {
                     model.startTrendAnalysisFromUser(withExpectation: .closeReview)
                 } label: {
                     Label(
-                        isGeneratingCloseReview ? "复盘中…" : freshness.actionTitle,
+                        closeReviewButtonTitle(freshness),
                         systemImage: "arrow.clockwise"
                     )
                 }
                 .buttonStyle(.appSecondary)
                 .controlSize(.small)
-                .disabled(
-                    !model.trendSettings.provider.isConfigured
-                    || model.trendGenerationState == .generating
-                )
+                .disabled(!model.trendSettings.provider.isConfigured)
             }
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
@@ -113,6 +110,13 @@ struct MarketCloseReviewSection: View {
     private var isGeneratingCloseReview: Bool {
         guard model.trendGenerationState == .generating else { return false }
         return model.trendResearchRequestedScope == .closeReview
+    }
+
+    /// W3.7:复盘按钮三态——运行中 / 已排队 / 语义化空闲标题。
+    private func closeReviewButtonTitle(_ freshness: MarketCloseReviewFreshness) -> String {
+        if isGeneratingCloseReview { return "复盘中…" }
+        if model.queuedUserRequestedScope == .closeReview { return "已排队" }
+        return freshness.actionTitle
     }
 
     /// 今日已复盘 = 正向；等待晚间/即将自动 = 中性信息；自动尝试未成功或未开启 = 弱化/警示。

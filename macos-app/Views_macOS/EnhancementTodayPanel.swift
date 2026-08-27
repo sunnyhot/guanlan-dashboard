@@ -122,7 +122,7 @@ extension EnhancementCenterView {
                     model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
                 } label: {
                     Label(
-                        isGeneratingMarketRadar ? "扫描中…" : "更新市场雷达",
+                        marketRadarButtonTitle,
                         systemImage: "globe.asia.australia"
                     )
                 }
@@ -131,7 +131,6 @@ extension EnhancementCenterView {
                 .disabled(
                     !model.trendSettings.provider.isConfigured
                         || !model.trendSettings.webSearch.isConfigured
-                        || model.trendGenerationState == .generating
                 )
             }
         ) {
@@ -166,14 +165,11 @@ extension EnhancementCenterView {
                 Button {
                     model.startTrendAnalysisFromUser(withExpectation: .longTerm)
                 } label: {
-                    Label(model.trendGenerationState == .generating ? "更新中…" : "更新长期研判", systemImage: "arrow.clockwise")
+                    Label(longTermButtonTitle, systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.appSecondary)
                 .controlSize(.small)
-                .disabled(
-                    !model.trendSettings.provider.isConfigured
-                        || model.trendGenerationState == .generating
-                )
+                .disabled(!model.trendSettings.provider.isConfigured)
             }
         ) {
             if let report = model.trendReport {
@@ -231,6 +227,20 @@ extension EnhancementCenterView {
         guard model.trendGenerationState == .generating else { return false }
         let scope = model.trendResearchScope
         return scope == .marketRadar || scope == .full
+    }
+
+    /// W3.7:雷达按钮三态——运行中 / 已排队 / 空闲。
+    private var marketRadarButtonTitle: String {
+        if isGeneratingMarketRadar { return "扫描中…" }
+        if model.queuedUserRequestedScope == .marketRadar { return "已排队" }
+        return "更新市场雷达"
+    }
+
+    /// W3.7:长期研判按钮三态。
+    private var longTermButtonTitle: String {
+        if model.trendGenerationState == .generating { return "更新中…" }
+        if model.queuedUserRequestedScope == .longTerm { return "已排队" }
+        return "更新长期研判"
     }
 
     func portfolioLongTermReportView(_ report: TrendAnalysisReport) -> some View {

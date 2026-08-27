@@ -400,6 +400,12 @@ final class AppModel: ObservableObject {
         set { enhancementState.trendResearchProgress = newValue }
     }
 
+    /// W3.7:链路 A 运行中排队的手动请求;当前任务结束后自动执行。
+    var queuedUserRequestedScope: TrendResearchRunScope? {
+        get { enhancementState.queuedUserRequestedScope }
+        set { enhancementState.queuedUserRequestedScope = newValue }
+    }
+
     var marketCloseReviewArchive: MarketCloseReviewArchive? {
         get { enhancementState.marketCloseReviewArchive }
         set { enhancementState.marketCloseReviewArchive = newValue }
