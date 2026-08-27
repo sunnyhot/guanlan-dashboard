@@ -42,6 +42,7 @@ enum DemoTrendReport {
                     direction: .neutralNegative,
                     confidence: Self.confidence(58),
                     rationale: "短期偏谨慎,量能不足且外部信号仅部分可用。缩量震荡阶段追高性价比低,以持有和观察为主。",
+                    whatWouldChange: "成交额连续两日站上万亿并放量突破趋势线时,短期转中性。",
                     counterSignals: ["成交额连续两日回升至万亿以上"],
                     claimEvidence: claim(["demo:portfolio:snapshot", "demo:market:csi300"])
                 ),
@@ -50,6 +51,7 @@ enum DemoTrendReport {
                     direction: .neutral,
                     confidence: Self.confidence(62),
                     rationale: "中期中性,估值处于近五年中位附近。盈利修复斜率待确认,维持既有配置不动。",
+                    whatWouldChange: "季报盈利一致预期上修时,中期判断转偏强。",
                     counterSignals: ["季报披露后企业盈利一致预期下修"],
                     claimEvidence: claim(["demo:portfolio:snapshot"])
                 ),
@@ -58,6 +60,7 @@ enum DemoTrendReport {
                     direction: .neutralPositive,
                     confidence: Self.confidence(71),
                     rationale: "长期偏乐观,股债性价比仍偏向权益。适合按计划分批投入,不因短期波动停投。",
+                    whatWouldChange: "股债性价比回到中性以下时,长期判断转中性。",
                     counterSignals: ["长期利率中枢显著上行"],
                     claimEvidence: claim(["demo:portfolio:snapshot"])
                 )
@@ -69,7 +72,7 @@ enum DemoTrendReport {
                     category: "index",
                     direction: .neutral,
                     confidence: Self.confidence(60),
-                    rationale: "宽基震荡格局未变。指数处于区间中段,突破需要量能与政策信号配合,当前更适合定投而非单笔加仓。",
+                    rationale: "中性,宽基震荡格局未变,指数处于区间中段。突破需要量能与政策信号配合,当前更适合定投而非单笔加仓。",
                     evidenceIDs: ["demo:market:csi300"],
                     counterSignals: ["单日成交额突破 1.2 万亿并持续三日"],
                     claimEvidence: claim(["demo:market:csi300"])
@@ -82,7 +85,8 @@ enum DemoTrendReport {
                     exposureText: "示例:占组合约 8%,行业景气与国产替代逻辑并行",
                     direction: .bullish,
                     confidence: Self.confidence(66),
-                    rationale: "板块景气上行,设备与材料环节订单能见度改善。估值不低,适合持有而非追高,回调时分批关注。",
+                    rationale: "偏强,板块景气上行,设备与材料环节订单能见度改善。估值不低,适合持有而非追高,回调时分批关注。",
+                    whatWouldChange: "设备订单环比连续两季下滑时,板块判断转中性。",
                     evidenceIDs: ["demo:sector:semiconductor"],
                     counterSignals: ["下游消费电子需求二次走弱"],
                     claimEvidence: claim(["demo:sector:semiconductor"])
@@ -96,7 +100,8 @@ enum DemoTrendReport {
                     scope: .marketWide,
                     direction: .neutralPositive,
                     confidence: Self.confidence(64),
-                    rationale: "红利资产在震荡市里防御属性突出。股息率相对无风险利率的利差仍在高位,适合作为组合稳定器。",
+                    rationale: "防御,红利资产在震荡市里防御属性突出。股息率相对无风险利率的利差仍在高位,适合作为组合稳定器。",
+                    whatWouldChange: "股息率利差收窄至近五年 30% 分位以下时,机会评级下调。",
                     triggerConditions: ["利差收窄至近五年 30% 分位以下时停止加仓"],
                     invalidatingConditions: ["分红政策集中下调"],
                     evidenceIDs: ["demo:market:dividend"],
@@ -114,6 +119,7 @@ enum DemoTrendReport {
                     detail: "示例行动:把「中证红利」加入观察,若回调 3% 以上再评估是否分批增持,单次不超过组合 2%。",
                     targetName: "中证红利",
                     confidence: Self.confidence(68),
+                    whatWouldChange: "分红政策集中下调或利差快速收窄时,撤销该关注。",
                     triggerConditions: ["指数回调 3% 以上且利差仍在高位"],
                     invalidatingConditions: ["分红政策集中下调或利差快速收窄"],
                     claimEvidence: claim(["demo:market:dividend", "demo:portfolio:snapshot"])

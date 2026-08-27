@@ -287,6 +287,8 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 | 文件 | 路径 | 编码 | 权限 | schemaVersion | 历史 | Store |
 |---|---|---|---|---|---|---|
 | 趋势报告 | `trend-analysis-report.json` | prettyPrinted + sortedKeys | **0o600** | `currentSchemaVersion=2`,解码宽容 | **单文件覆盖写,无历史** | `TrendAnalysisReportStore` |
+
+> 2026-08-27(W4.2):TrendHorizonView/TrendSectorView/TrendOpportunity/TrendActionCandidate 新增 `whatWouldChange: String`,旧报告 `decodeIfPresent ?? ""` 兜底,**未 bump schemaVersion**;UI 对空值降级用 counterSignals 首条。
 | 收盘复盘冻结快照 | `market-close-review.json` | prettyPrinted + sortedKeys | **0o600** | 3 | 单文件覆盖，只保留最近一次成功复盘 | `MarketCloseReviewArchiveStore` |
 | 趋势设置 | `trend-analysis-settings.json` | prettyPrinted | **0o600** | 无 | 单文件覆盖 | `TrendAnalysisSettingsStore`(API Key 在 Keychain) |
 | Agent 日志 | `trend-agent.log` | 文本 | **0o600** | 无 | 每次运行覆盖写 header + append 进度 | `TrendAgentRunLogStore` |
@@ -392,6 +394,14 @@ execute(argumentsJSON, context)
 - 所有 `expectedFundCodes` 必须出现在 assetTrends
 - 行动候选必须有 trigger/invalidating 条件
 - **禁用绝对化措辞**:`必须买入/必须卖出/一定上涨/一定卖出/保证上涨/保证收益`
+- **W4 结论明确性契约(2026-08-27 起)**:
+  1. horizons/sectors/marketOutlook/opportunities 的 rationale 首句必须命中 `TrendAnalysisValidator.directionLeadWords`(看多/看空/看涨/看跌/看淡/看好/偏强/偏弱/偏乐观/偏谨慎/偏防守/偏进攻/中性/观望/防御/防守/进攻/择机/暂不明确),零信息量开头拒批;
+  2. `direction==uncertain` 的 rationale 必须含「待观察信号:…」出口;
+  3. horizons/sectors/opportunities/actions 的 `whatWouldChange`(作废/升级条件)非空(marketOutlook 无此字段)。
+  配套机制:
+  - **App 强制降级补写**:`SubmitTrendReportTool.normalized(forceShortUncertainReasons:)` 把短期降为 uncertain 时,由 App 在 rationale 末尾追加「待观察信号:…」并在 whatWouldChange 为空时兜底——降级场景不依赖模型补写。
+  - **基线复用补丁**:`TrendBaselineContractPatch`(增量运行复用旧基线数据时,由 App 补方向词前缀/待观察信号/作废条件),防止旧报告把增量运行的新报告整份拒批;模型本次提交的新数据不做静默修补。
+  - prompt 侧契约(`TrendResearchPromptBuilder.clarityContract`)同步注入 full 与增量 scope 的提交契约,含 hedge 禁表(可能有机会/不排除/有待观察/建议关注/需持续跟踪/需密切关注/视情况而定)与首句 ≤40 字、全文 ≤120 字约束(长度仅 prompt 约束,Validator 不校验)。
 
 ---
 

@@ -840,6 +840,8 @@ struct TrendHorizonView: Codable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级(用户可读短句);旧报告解码为空,UI 降级用反证首条。
+    let whatWouldChange: String
     let counterSignals: [String]
     let claimEvidence: TrendClaimEvidence
 
@@ -848,6 +850,7 @@ struct TrendHorizonView: Codable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         counterSignals: [String],
         claimEvidence: TrendClaimEvidence = .empty
     ) {
@@ -855,6 +858,7 @@ struct TrendHorizonView: Codable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.counterSignals = counterSignals
         self.claimEvidence = claimEvidence
     }
@@ -865,6 +869,7 @@ struct TrendHorizonView: Codable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decodeIfPresent(String.self, forKey: .rationale) ?? ""
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
         claimEvidence = try container.decodeIfPresent(
             TrendClaimEvidence.self,
@@ -877,6 +882,7 @@ struct TrendHorizonView: Codable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case counterSignals
         case claimEvidence
     }
@@ -889,6 +895,8 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let evidenceIDs: [String]
     let counterSignals: [String]
     let claimEvidence: TrendClaimEvidence
@@ -900,6 +908,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         evidenceIDs: [String],
         counterSignals: [String],
         claimEvidence: TrendClaimEvidence = .empty
@@ -910,6 +919,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.evidenceIDs = evidenceIDs
         self.counterSignals = counterSignals
         self.claimEvidence = claimEvidence
@@ -923,6 +933,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decode(String.self, forKey: .rationale)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
         claimEvidence = try container.decodeIfPresent(
@@ -938,6 +949,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case evidenceIDs
         case counterSignals
         case claimEvidence
@@ -1097,6 +1109,8 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let triggerConditions: [String]
     let invalidatingConditions: [String]
     let evidenceIDs: [String]
@@ -1111,6 +1125,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         triggerConditions: [String],
         invalidatingConditions: [String],
         evidenceIDs: [String],
@@ -1124,6 +1139,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.triggerConditions = triggerConditions
         self.invalidatingConditions = invalidatingConditions
         self.evidenceIDs = evidenceIDs
@@ -1145,6 +1161,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decode(String.self, forKey: .rationale)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         triggerConditions = try container.decodeIfPresent([String].self, forKey: .triggerConditions) ?? []
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
@@ -1163,6 +1180,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case triggerConditions
         case invalidatingConditions
         case evidenceIDs
@@ -1178,6 +1196,8 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
     let detail: String
     let targetName: String?
     let confidence: TrendConfidence
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let triggerConditions: [String]
     let invalidatingConditions: [String]
     let claimEvidence: TrendClaimEvidence
@@ -1189,6 +1209,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         detail: String,
         targetName: String?,
         confidence: TrendConfidence,
+        whatWouldChange: String = "",
         triggerConditions: [String],
         invalidatingConditions: [String],
         claimEvidence: TrendClaimEvidence = .empty
@@ -1199,6 +1220,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         self.detail = detail
         self.targetName = targetName
         self.confidence = confidence
+        self.whatWouldChange = whatWouldChange
         self.triggerConditions = triggerConditions
         self.invalidatingConditions = invalidatingConditions
         self.claimEvidence = claimEvidence
@@ -1212,6 +1234,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         detail = try container.decode(String.self, forKey: .detail)
         targetName = try container.decodeIfPresent(String.self, forKey: .targetName)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         triggerConditions = try container.decodeIfPresent([String].self, forKey: .triggerConditions) ?? []
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
         claimEvidence = try container.decodeIfPresent(
@@ -1227,6 +1250,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         case detail
         case targetName
         case confidence
+        case whatWouldChange
         case triggerConditions
         case invalidatingConditions
         case claimEvidence
