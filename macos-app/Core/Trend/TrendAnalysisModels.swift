@@ -23,6 +23,12 @@ enum TrendConnectionState: String, Codable, Hashable {
     case failed
 }
 
+/// 研判运行中模型当前轮次的实时输出（仅 UI 实时展示；刻意不落运行日志）。
+struct TrendLiveModelOutput: Equatable {
+    let turn: Int
+    var text: String
+}
+
 struct TrendProgressLog: Identifiable, Hashable {
     enum Level: String, Hashable {
         case info

@@ -23,7 +23,7 @@ final class GatewayAgentClientTests: XCTestCase {
     }
 
     private func makeClient(
-        provider: ScriptedModelProvider,
+        provider: any ModelProvider,
         policy: ModelGatewayPolicy = ModelGatewayPolicy(retryInterval: 0),
         trace: TraceCollector = TraceCollector()
     ) -> GatewayAgentClient {
@@ -177,6 +177,56 @@ final class GatewayAgentClientTests: XCTestCase {
         XCTAssertEqual(provider.calls.count, 1, "配置类错误不重试")
     }
 
+    func testStreamEventsFlowThroughAdapterIncludingContentDeltas() async throws {
+        let provider = EventEmittingProvider(events: [
+            .firstChunk(elapsed: 0.4),
+            .contentDelta("正在"),
+            .contentDelta("分析"),
+            .active(chunkCount: 5, elapsed: 1.2),
+            .finished(chunkCount: 9, elapsed: 2.0, finishReason: "stop"),
+        ])
+        let client = makeClient(provider: provider)
+        let collector = AgentStreamProgressCollector()
+
+        let result = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "q", toolCalls: nil, toolCallID: nil)],
+            tools: [],
+            toolChoice: .auto,
+            temperature: 0.2,
+            settings: self.settings(),
+            timeout: nil,
+            streamProgress: { progress in collector.append(progress) }
+        )
+
+        XCTAssertEqual(result.assistantMessage.content, "done")
+        let events = collector.progress
+        guard events.count == 5 else {
+            return XCTFail("期望 5 个事件，实际 \(events)")
+        }
+        XCTAssertEqual(events[0], .firstChunk(elapsed: 0.4))
+        XCTAssertEqual(events[1], .contentDelta("正在"))
+        XCTAssertEqual(events[2], .contentDelta("分析"))
+        XCTAssertEqual(events[3], .active(chunkCount: 5, elapsed: 1.2))
+        XCTAssertEqual(events[4], .finished(chunkCount: 9, elapsed: 2.0, finishReason: "stop"))
+    }
+
+    func testNoStreamCallbackMeansNoEventWiring() async throws {
+        // streamProgress 为 nil（盘中研判/专项研究路径）：不接线事件，行为不变。
+        let provider = EventEmittingProvider(events: [.contentDelta("不应被消费")])
+        let client = makeClient(provider: provider)
+
+        let result = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "q", toolCalls: nil, toolCallID: nil)],
+            tools: [],
+            toolChoice: .auto,
+            temperature: 0.2,
+            settings: self.settings(),
+            timeout: nil,
+            streamProgress: nil
+        )
+        XCTAssertEqual(result.assistantMessage.content, "done")
+    }
+
     func testToolSpecMapsRoundtrip() {
         let tool = AgentToolDefinition.function(
             name: "submit",
@@ -194,6 +244,52 @@ final class GatewayAgentClientTests: XCTestCase {
 }
 
 // MARK: - 辅助
+
+/// 依次发事件再返回响应的 provider（网关/适配器事件透传测试）。
+final class EventEmittingProvider: ModelProvider, @unchecked Sendable {
+    let descriptor = ModelProviderDescriptor(providerID: "event-provider", model: "m", fingerprint: "fp")
+    private let events: [ModelStreamEvent]
+
+    init(events: [ModelStreamEvent]) {
+        self.events = events
+    }
+
+    func complete(
+        _ request: ModelCompletionRequest,
+        timeout: TimeInterval
+    ) async throws -> ModelCompletionResponse {
+        textResponse("未发事件")
+    }
+
+    func complete(
+        _ request: ModelCompletionRequest,
+        timeout: TimeInterval,
+        onEvent: @escaping @Sendable (ModelStreamEvent) async -> Void
+    ) async throws -> ModelCompletionResponse {
+        for event in events {
+            await onEvent(event)
+        }
+        return textResponse("done")
+    }
+}
+
+/// 线程安全的流式进度收集器（streamProgress 断言用）。
+final class AgentStreamProgressCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [AgentStreamProgress] = []
+
+    func append(_ progress: AgentStreamProgress) {
+        lock.lock()
+        items.append(progress)
+        lock.unlock()
+    }
+
+    var progress: [AgentStreamProgress] {
+        lock.lock()
+        defer { lock.unlock() }
+        return items
+    }
+}
 
 private extension Array {
     var single: Element? {

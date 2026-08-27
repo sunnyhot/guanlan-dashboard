@@ -131,7 +131,8 @@ extension EnhancementCenterView {
                 if isGeneratingMarketRadar {
                     TrendResearchProgressCard(
                         message: model.trendProgressLogs.last?.message,
-                        progress: model.trendResearchProgress
+                        progress: model.trendResearchProgress,
+                        liveOutput: model.liveModelOutput?.text
                     )
                 }
 

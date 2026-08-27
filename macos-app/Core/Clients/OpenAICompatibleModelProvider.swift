@@ -59,6 +59,14 @@ struct OpenAICompatibleModelProvider: ModelProvider {
         _ request: ModelCompletionRequest,
         timeout: TimeInterval
     ) async throws -> ModelCompletionResponse {
+        try await complete(request, timeout: timeout, onEvent: { _ in })
+    }
+
+    func complete(
+        _ request: ModelCompletionRequest,
+        timeout: TimeInterval,
+        onEvent: @escaping @Sendable (ModelStreamEvent) async -> Void
+    ) async throws -> ModelCompletionResponse {
         guard configuration.isConfigured else {
             throw ModelProviderError.missingConfiguration(providerID: configuration.providerID)
         }
@@ -77,7 +85,13 @@ struct OpenAICompatibleModelProvider: ModelProvider {
                 temperature: request.temperature,
                 maxOutputTokens: request.maxOutputTokens,
                 settings: settings,
-                timeout: timeout
+                timeout: timeout,
+                streamProgress: { progress in
+                    await onEvent(Self.domainStreamEvent(progress))
+                },
+                onContentDelta: { delta in
+                    await onEvent(.contentDelta(delta))
+                }
             )
             return Self.domainResponse(result)
         } catch let error as OpenAICompatibleAgentClientError {
@@ -177,6 +191,16 @@ extension OpenAICompatibleModelProvider {
             },
             toolCallID: message.toolCallID
         )
+    }
+
+    static func domainStreamEvent(_ progress: AgentStreamProgress) -> ModelStreamEvent {
+        switch progress {
+        case .firstChunk(let elapsed): return .firstChunk(elapsed: elapsed)
+        case .active(let chunkCount, let elapsed): return .active(chunkCount: chunkCount, elapsed: elapsed)
+        case .finished(let chunkCount, let elapsed, let finishReason):
+            return .finished(chunkCount: chunkCount, elapsed: elapsed, finishReason: finishReason)
+        case .contentDelta(let text): return .contentDelta(text)
+        }
     }
 
     static func domainStopReason(_ reason: AgentStopReason) -> ModelStopReason {

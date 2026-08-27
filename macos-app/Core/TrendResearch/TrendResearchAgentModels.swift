@@ -289,6 +289,8 @@ enum AgentStreamProgress: Sendable, Hashable {
     case firstChunk(elapsed: Double)
     case active(chunkCount: Int, elapsed: Double)
     case finished(chunkCount: Int, elapsed: Double, finishReason: String?)
+    /// 流式正文增量（仅 UI 实时展示；与运行日志无关——日志刻意不记正文）。
+    case contentDelta(String)
 }
 
 enum AgentStopReason: Sendable, Hashable {

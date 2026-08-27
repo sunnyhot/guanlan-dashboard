@@ -208,6 +208,62 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         XCTAssertEqual(result.finishReason, "tool_calls")
     }
 
+    func testClientEmitsContentDeltasWhileStreaming() async throws {
+        let stream = """
+        data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"先读取"},"finish_reason":null}]}
+
+        data: {"choices":[{"index":0,"delta":{"content":"数据"},"finish_reason":null}]}
+
+        data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":5}}
+
+        data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """
+
+        MockAgentURLProtocol.requestHandler = { request in
+            (
+                Self.okResponse(for: request, contentType: "text/event-stream; charset=utf-8"),
+                Data(stream.utf8)
+            )
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        let collector = ContentDeltaCollector()
+        _ = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings(),
+            onContentDelta: { delta in collector.append(delta) }
+        )
+
+        XCTAssertEqual(collector.deltas, ["先读取", "数据"])
+    }
+
+    func testClientEmitsFullContentOnceForJSONResponse() async throws {
+        let body = """
+        {"choices":[{"message":{"role":"assistant","content":"整段输出"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}
+        """
+
+        MockAgentURLProtocol.requestHandler = { request in
+            (Self.okResponse(for: request), Data(body.utf8))
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        let collector = ContentDeltaCollector()
+        _ = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings(),
+            onContentDelta: { delta in collector.append(delta) }
+        )
+
+        XCTAssertEqual(collector.deltas, ["整段输出"])
+    }
+
     func testClientDetectsEventStreamWhenProxyOmitsSSEContentType() async throws {
         let stream = """
         data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"兼容成功"},"finish_reason":"stop"}]}
@@ -508,4 +564,22 @@ private final class MockAgentURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+/// 线程安全的正文增量收集器（onContentDelta 断言用）。
+final class ContentDeltaCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String] = []
+
+    func append(_ delta: String) {
+        lock.lock()
+        items.append(delta)
+        lock.unlock()
+    }
+
+    var deltas: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return items
+    }
 }

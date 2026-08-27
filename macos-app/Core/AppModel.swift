@@ -426,6 +426,11 @@ final class AppModel: ObservableObject {
         set { enhancementState.trendProgressLogs = newValue }
     }
 
+    var liveModelOutput: TrendLiveModelOutput? {
+        get { enhancementState.liveModelOutput }
+        set { enhancementState.liveModelOutput = newValue }
+    }
+
     var nextHourGuidanceArchive: NextHourGuidanceArchive {
         get { enhancementState.nextHourGuidanceArchive }
         set { enhancementState.nextHourGuidanceArchive = newValue }

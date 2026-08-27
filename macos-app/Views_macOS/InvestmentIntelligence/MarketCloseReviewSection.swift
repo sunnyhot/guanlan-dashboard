@@ -52,7 +52,8 @@ struct MarketCloseReviewSection: View {
                 if isGeneratingCloseReview {
                     TrendResearchProgressCard(
                         message: model.trendProgressLogs.last?.message,
-                        progress: model.trendResearchProgress
+                        progress: model.trendResearchProgress,
+                        liveOutput: model.liveModelOutput?.text
                     )
                 }
 
@@ -142,13 +143,15 @@ struct MarketCloseReviewSection: View {
 struct TrendResearchProgressCard: View {
     let message: String?
     let progress: TrendResearchModuleProgress
+    /// 模型实时输出（流式正文增量拼接；nil/空时不显示该区块）。
+    var liveOutput: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             HStack(alignment: .top, spacing: AppPalette.spaceS) {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("收盘复盘正在进行")
+                    .accessibilityLabel("研判正在进行")
                 VStack(alignment: .leading, spacing: 2) {
                     Text(message ?? "正在整理今天的持仓收盘数据")
                         .font(AppPalette.appFont(.subheadline, weight: .semibold))
@@ -170,6 +173,10 @@ struct TrendResearchProgressCard: View {
                     .foregroundStyle(AppPalette.muted)
                     .lineLimit(1)
             }
+
+            if let liveOutput, !liveOutput.isEmpty {
+                liveOutputBlock(liveOutput)
+            }
         }
         .padding(AppPalette.spaceM)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -178,5 +185,34 @@ struct TrendResearchProgressCard: View {
             RoundedRectangle(cornerRadius: AppPalette.cardRadius)
                 .stroke(AppPalette.info.opacity(AppPalette.strokeSubtle), lineWidth: 1)
         )
+    }
+
+    /// 模型实时输出：等宽字体滚动区，随内容增长自动滚到底部。
+    private func liveOutputBlock(_ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("模型实时输出")
+                .font(AppPalette.appFont(.caption, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(text)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(AppPalette.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                    Color.clear
+                        .frame(height: 0)
+                        .id("liveOutputTail")
+                }
+                .frame(maxHeight: 160)
+                .onChange(of: text) { _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("liveOutputTail", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .padding(AppPalette.spaceS)
+        .background(AppPalette.card.opacity(0.75), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius - 2))
     }
 }

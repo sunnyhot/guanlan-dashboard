@@ -272,6 +272,7 @@ extension AppModel {
         trendResearchProgress = .idle
         lastTrendError = ""
         trendProgressLogs = []
+        liveModelOutput = nil
         trendSettings.defaultPrivacyMode = trendPrivacyMode
         let triggerText = userInitiated ? "手动更新" : scope.triggerDescription
         if let trendAgentRunLogFileURL {
@@ -991,6 +992,8 @@ extension AppModel {
             )
         case .modelStreamProgress(let turn, let progress):
             switch progress {
+            case .contentDelta(let text):
+                updateLiveModelOutput(turn: turn, delta: text)
             case .firstChunk(let elapsed):
                 appendTrendProgress(
                     "已收到首个流式分片",
@@ -1089,6 +1092,25 @@ extension AppModel {
         let trimmed = timestamp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 10 else { return trimmed }
         return String(trimmed.prefix(10))
+    }
+
+    /// 模型实时输出：同轮增量拼接，换轮重置；超长只保留尾部（UI 展示用）。
+    private func updateLiveModelOutput(turn: Int, delta: String) {
+        let maximumLength = 8000
+        if let current = liveModelOutput, current.turn == turn {
+            var updated = current
+            var text = updated.text + delta
+            if text.count > maximumLength {
+                text = String(text.suffix(maximumLength))
+            }
+            updated.text = text
+            liveModelOutput = updated
+        } else {
+            liveModelOutput = TrendLiveModelOutput(
+                turn: turn,
+                text: String(delta.suffix(maximumLength))
+            )
+        }
     }
 
     private func appendTrendProgress(

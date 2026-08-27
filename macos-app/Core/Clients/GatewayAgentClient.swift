@@ -10,8 +10,8 @@ import Foundation
 // 已知取舍：
 // - 候选列表：旧设置模型是单服务商，多服务商 failover 要等配置层扩展后
 //   才生效；重试 / 预算 / 记账 / trace 立即生效。
-// - 流式进度：网关不透传流式分片，streamProgress 回调不会被调用（各
-//   Agent 的请求开始 / 结束事件不受影响）。
+// - 流式进度/正文增量经网关透传（streamProgress 非 nil 时）；事件以一次
+//   尝试为单位，网关重试/切换后事件从头开始。
 
 struct GatewayAgentClient: TrendResearchAgentClient {
     /// trace 的 purpose 标注（如 "trend-research"），进运行日志便于区分链路。
@@ -72,7 +72,12 @@ struct GatewayAgentClient: TrendResearchAgentClient {
             purpose: purpose
         )
         do {
-            let response = try await gateway.complete(request)
+            let eventForwarder: (@Sendable (ModelStreamEvent) async -> Void)? = streamProgress.map { callback in
+                { event in
+                    await callback(Self.transportStreamEvent(event))
+                }
+            }
+            let response = try await gateway.complete(request, onEvent: eventForwarder)
             return Self.transportResult(response)
         } catch let error as ModelProviderError {
             throw Self.transportError(error)
@@ -145,6 +150,18 @@ extension GatewayAgentClient {
                 completionTokens: $0.completionTokens,
                 totalTokens: $0.totalTokens
             )
+        }
+    }
+
+    /// 网关流式事件 → 旧协议进度（含正文增量；事件以「一次尝试」为单位，
+    /// 网关重试/切换后从头开始——UI 侧表现为输出重置重新生成）。
+    static func transportStreamEvent(_ event: ModelStreamEvent) -> AgentStreamProgress {
+        switch event {
+        case .firstChunk(let elapsed): return .firstChunk(elapsed: elapsed)
+        case .contentDelta(let text): return .contentDelta(text)
+        case .active(let chunkCount, let elapsed): return .active(chunkCount: chunkCount, elapsed: elapsed)
+        case .finished(let chunkCount, let elapsed, let finishReason):
+            return .finished(chunkCount: chunkCount, elapsed: elapsed, finishReason: finishReason)
         }
     }
 

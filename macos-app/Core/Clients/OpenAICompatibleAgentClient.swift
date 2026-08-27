@@ -102,7 +102,8 @@ struct OpenAICompatibleAgentClient: Sendable {
         maxOutputTokens: Int? = nil,
         settings: TrendAIProviderSettings,
         timeout: Double? = nil,
-        streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil
+        streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil,
+        onContentDelta: (@Sendable (String) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
         guard settings.isConfigured else {
             throw OpenAICompatibleAgentClientError.missingConfiguration
@@ -168,7 +169,8 @@ struct OpenAICompatibleAgentClient: Sendable {
                     statusCode: http.statusCode,
                     startedAt: requestStartedAt,
                     timeoutSeconds: effectiveTimeout,
-                    progressHandler: streamProgress
+                    progressHandler: streamProgress,
+                    contentHandler: onContentDelta
                 )
             } else {
                 // 部分 OpenAI-compatible 服务会忽略 stream=true，仍返回普通 JSON；
@@ -182,6 +184,10 @@ struct OpenAICompatibleAgentClient: Sendable {
                     result = try Self.decodeBufferedEventStream(data, statusCode: http.statusCode)
                 } else {
                     result = try Self.decodeCompletion(data, decoder: decoder)
+                }
+                // 非流式路径没有增量可发，整段正文一次性透出（UI 仍能看到输出）。
+                if let text = result.assistantMessage.content, !text.isEmpty {
+                    await onContentDelta?(text)
                 }
             }
             // usage 缺失（服务不支持 include_usage / JSON 响应未带）时按
@@ -394,7 +400,8 @@ struct OpenAICompatibleAgentClient: Sendable {
         statusCode: Int,
         startedAt: Date,
         timeoutSeconds: Double,
-        progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?
+        progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?,
+        contentHandler: (@Sendable (String) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
         var accumulator = AgentStreamingResponseAccumulator()
         var eventDataLines: [String] = []
@@ -403,6 +410,15 @@ struct OpenAICompatibleAgentClient: Sendable {
         var lastReportedChunkCount = 0
         var lastProgressReportedAt = startedAt
         var lastActivityAt = startedAt
+        var lastEmittedContentLength = 0
+
+        // 正文增量透出：content 只增不减，按已发长度切出本次增量。
+        func emitPendingContentDelta() async {
+            guard let contentHandler, accumulator.content.count > lastEmittedContentLength else { return }
+            let delta = String(accumulator.content.dropFirst(lastEmittedContentLength))
+            lastEmittedContentLength = accumulator.content.count
+            await contentHandler(delta)
+        }
 
         // 不使用 AsyncBytes.lines：它会忽略 SSE 事件之间的空行，进而把相邻
         // `data: {...}\n\ndata: {...}` 错误拼成同一个 JSON。这里直接按原始字节
@@ -456,6 +472,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                     lastReportedChunkCount = accumulator.receivedChunkCount
                 }
             }
+            await emitPendingContentDelta()
             if reachedDone {
                 break
             }
@@ -477,6 +494,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                 statusCode: statusCode
             )
         }
+        await emitPendingContentDelta()
         if reachedDone {
             await progressHandler?(
                 .finished(
@@ -747,7 +765,7 @@ private struct AgentStreamingResponseAccumulator {
     }
 
     private var role: AgentChatRole = .assistant
-    private var content = ""
+    private(set) var content = ""
     private var receivedContent = false
     private var pendingToolCalls: [Int: PendingToolCall] = [:]
     private(set) var finishReason: String?

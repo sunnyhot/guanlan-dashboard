@@ -127,6 +127,7 @@ final class EnhancementState: ObservableObject {
     @Published var lastTrendError = ""
     @Published var lastTrendConnectionMessage = ""
     @Published var trendProgressLogs: [TrendProgressLog] = []
+    @Published var liveModelOutput: TrendLiveModelOutput?
     @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
     @Published var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage = .idle

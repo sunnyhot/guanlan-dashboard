@@ -304,6 +304,35 @@ protocol ModelProvider: Sendable {
         _ request: ModelCompletionRequest,
         timeout: TimeInterval
     ) async throws -> ModelCompletionResponse
+
+    /// 带流式事件透传的变体：支持的 provider 在传输层收到事件时回调
+    /// （首片 / 正文增量 / 进度 / 结束）。不支持的 provider 用协议扩展的
+    /// 默认实现（丢弃事件，行为与无事件一致）。
+    func complete(
+        _ request: ModelCompletionRequest,
+        timeout: TimeInterval,
+        onEvent: @escaping @Sendable (ModelStreamEvent) async -> Void
+    ) async throws -> ModelCompletionResponse
+}
+
+extension ModelProvider {
+    func complete(
+        _ request: ModelCompletionRequest,
+        timeout: TimeInterval,
+        onEvent: @escaping @Sendable (ModelStreamEvent) async -> Void
+    ) async throws -> ModelCompletionResponse {
+        try await complete(request, timeout: timeout)
+    }
+}
+
+/// 流式事件（网关中立形态；由 provider 从传输层转发，经 Gateway 原样
+/// 透传给调用方）。事件按「一次尝试」为单位——重试/换供应商后事件从头
+/// 开始，调用方自行决定重置或累计展示。
+enum ModelStreamEvent: Sendable, Hashable {
+    case firstChunk(elapsed: Double)
+    case contentDelta(String)
+    case active(chunkCount: Int, elapsed: Double)
+    case finished(chunkCount: Int, elapsed: Double, finishReason: String?)
 }
 
 // MARK: - Gateway 策略 / 记账 / 追踪
@@ -429,10 +458,16 @@ struct ModelGateway: Sendable {
     }
 
     /// 一次补全（含预算检查、failover、重试、记账、追踪）。
-    func complete(_ request: ModelCompletionRequest) async throws -> ModelCompletionResponse {
+    /// onEvent 非空时透传当前尝试的流式事件（重试/切换后事件从头开始）。
+    func complete(
+        _ request: ModelCompletionRequest,
+        onEvent: (@Sendable (ModelStreamEvent) async -> Void)? = nil
+    ) async throws -> ModelCompletionResponse {
         guard !providers.isEmpty else {
             throw ModelGatewayError.noProvidersConfigured
         }
+
+        let eventHandler: (@Sendable (ModelStreamEvent) async -> Void) = onEvent ?? { _ in }
 
         if let violation = await budgetViolation(request) {
             throw violation
@@ -450,7 +485,11 @@ struct ModelGateway: Sendable {
                 let requestID = requestIDFactory()
                 let startedAt = clock()
                 do {
-                    var response = try await provider.complete(request, timeout: policy.requestTimeout)
+                    var response = try await provider.complete(
+                        request,
+                        timeout: policy.requestTimeout,
+                        onEvent: eventHandler
+                    )
                     response.resolvedProvider = provider.descriptor
                     await ledger.record(usage: response.usage)
                     await recordTrace(
