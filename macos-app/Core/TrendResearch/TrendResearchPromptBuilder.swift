@@ -60,7 +60,7 @@ struct TrendResearchPromptBuilder: Sendable {
         case .marketRadar:
             mission = "只更新全市场机会雷达。不得读取、评价或推断个人持仓；上一份报告中的组合、持仓与行动模块由 App 原样复用。"
             flow = """
-先调用 get_market_snapshot 读取主要指数，可用 get_market_breadth 补充全市场涨跌/涨停/成交额广度。大盘与大盘/大类资产观点基于本地行情与广度数据判断；联网搜索源已下线，opportunities 本次留空（App 会强制清空），不得用记忆填充。完成后只调用 submit_trend_market_module。
+先调用 get_market_snapshot 读取主要指数，用 get_market_breadth 补充全市场涨跌/涨停/成交额广度，可用 get_financial_headlines 获取热榜快讯佐证消息面。大盘/大类资产观点基于行情、广度与快讯判断；opportunities 本次留空（App 会强制清空），不得用记忆填充。完成后只调用 submit_trend_market_module。
 """
             contract = """
 submit_trend_market_module JSON：
@@ -167,6 +167,7 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
 5. official_sec_research：直接查询 SEC EDGAR 官方 Submissions 和 XBRL Company Facts。只用于当前直接持仓或基金穿透出的美股；有可识别标的且已配置时为必调。
 6. alpha_vantage_research：第三方结构化市场数据补充。只能研究当前直接持仓或基金穿透标的；它不是官方一手来源。已配置且有可识别标的时至少调用一次。美股先查 SEC。
 7. get_market_breadth：全市场涨跌家数、涨停跌停与成交额广度（本地计算）。判断市场情绪时优先引用它，不得用单只标的涨跌推断整体。
+8. get_financial_headlines：财经热榜快讯（财联社/雪球/见闻/金十，免费源）。为市场情绪与消息面提供最新佐证；标题级信息不构成单只标的的因果归因证据。
 8. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
    - submit_trend_overview_module：组合总判断 + short/medium/long 三周期。
    - submit_trend_market_module：大盘/大类资产 + 行业板块 + 机会。

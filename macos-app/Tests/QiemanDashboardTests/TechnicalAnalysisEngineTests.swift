@@ -250,3 +250,15 @@ final class MarketDataToolRegistrationTests: XCTestCase {
         XCTAssertFalse(kline?.function.description.isEmpty ?? true)
     }
 }
+
+extension MarketDataToolRegistrationTests {
+    func testRegistryExposesFinancialHeadlinesTool() {
+        let registry = TrendResearchToolRegistry()
+        XCTAssertTrue(registry.tools.keys.contains("get_financial_headlines"), "热榜工具已注册")
+        let definition = registry.definitions.first { $0.function.name == "get_financial_headlines" }
+        XCTAssertNotNil(definition)
+        XCTAssertTrue(definition?.function.description.contains("热榜") ?? false)
+        let item = NewsFeedItem(itemID: "cls-hot:abc-1", title: "t", url: nil, sourceID: "cls-hot", sourceName: "财联社热榜")
+        XCTAssertEqual(FinancialHeadlinesTool.evidenceID(item), "newsnow:cls-hot:abc-1")
+    }
+}

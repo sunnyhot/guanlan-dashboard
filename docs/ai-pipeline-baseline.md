@@ -405,6 +405,9 @@ execute(argumentsJSON, context)
   配套机制:
   - **App 强制降级补写**:`SubmitTrendReportTool.normalized(forceShortUncertainReasons:)` 把短期降为 uncertain 时,由 App 在 rationale 末尾追加「待观察信号:…」并在 whatWouldChange 为空时兜底——降级场景不依赖模型补写。
   - **基线复用补丁**:`TrendBaselineContractPatch`(增量运行复用旧基线数据时,由 App 补方向词前缀/待观察信号/作废条件),防止旧报告把增量运行的新报告整份拒批;模型本次提交的新数据不做静默修补。
+  - **2026-08-28 拒批死循环双修复(v4.7.0 线上实证,基金 000369/019524)**:
+    1. `storeAssetBatch` 一批内全部基金错误一次性返回(首错即 throw 时期每轮只报一只,整批重交每轮 2-3.5 分钟);
+    2. 「涨跌归因：」+无因果证据(`market:stock:`/`vendor:alphavantage:` 前缀)→ App 入库前自动降级为「原因待确认：(缺少可佐证的底层证券当日行情或外部研究证据。原描述：…)」——Tavily 下线后 40 只行情上限外的基金零路径通关,结构性拒批必然复发,此兜底为治本。
   - **v4.6.1 待确认边界 App 兜底(2026-08-28 真实运行实证)**:`TrendAssetDailyAttributionPolicy` 的六词边界表(缺少/未取得/未提供/无法/不足/没有)曾把语义合规的「原因待确认」拒到修复预算耗尽;现在 `TrendReportDraftStore.storeAssetBatch` 入库前经 `appendingMissingEvidenceBoundaryIfNeeded` 补写缺失证据说明(前缀不变、不宣称因果),不再拒批。
   - prompt 侧契约(`TrendResearchPromptBuilder.clarityContract`)同步注入 full 与增量 scope 的提交契约,含 hedge 禁表(可能有机会/不排除/有待观察/建议关注/需持续跟踪/需密切关注/视情况而定)与首句 ≤40 字、全文 ≤120 字约束(长度仅 prompt 约束,Validator 不校验)。
 

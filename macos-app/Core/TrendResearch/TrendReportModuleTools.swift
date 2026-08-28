@@ -220,28 +220,37 @@ actor TrendReportDraftStore {
         }
         // v4.6.1:「原因待确认」缺边界措辞时由 App 补写而不是拒批
         // (真实运行实证的拒批死循环修复,详见 policy 注释)。
-        let assetTrends = module.assetTrends.map(Self.assetWithAttributionBoundary)
+        // 2026-08-28 死循环修复二连:①无因果证据的「涨跌归因：」先降级为「原因待确认：」
+        // (首错即 throw 时期,排在 40 只行情上限外的基金必然拒批且修不完);
+        // ②一批内全部基金的问题一次性返回,消灭「每轮只报一只」的打地鼠循环。
+        let assetTrends = module.assetTrends
+            .map(Self.assetWithAttributionDowngrade)
+            .map(Self.assetWithAttributionBoundary)
 
         var submittedCodes = Set<String>()
+        var batchErrors: [String] = []
         for asset in assetTrends {
             guard let normalized = Self.normalizedCode(asset.code) else {
-                throw TrendReportDraftError.invalidModule(
-                    "持仓基金「\(asset.name)」缺少有效 code。"
-                )
+                batchErrors.append("持仓基金「\(asset.name)」缺少有效 code。")
+                continue
             }
             guard expectedFundCodesByNormalized[normalized] != nil else {
-                throw TrendReportDraftError.invalidModule(
-                    "基金 \(asset.code ?? asset.name) 不在本次待覆盖持仓中。"
-                )
+                batchErrors.append("基金 \(asset.code ?? asset.name) 不在本次待覆盖持仓中。")
+                continue
             }
             guard assetTrendsByCode[normalized] == nil, submittedCodes.insert(normalized).inserted else {
-                throw TrendReportDraftError.invalidModule(
-                    "基金 \(asset.code ?? asset.name) 已提交，请只提交 remaining_fund_codes 中的基金。"
-                )
+                batchErrors.append("基金 \(asset.code ?? asset.name) 已提交，请只提交 remaining_fund_codes 中的基金。")
+                continue
             }
             if let message = TrendAssetDailyAttributionPolicy.validationMessage(for: asset) {
-                throw TrendReportDraftError.invalidModule(message)
+                batchErrors.append(message)
             }
+        }
+        if !batchErrors.isEmpty {
+            throw TrendReportDraftError.invalidModule(
+                "本批 \(batchErrors.count) 个问题（已一次性全部列出，请全部修正后整批重新提交）：\n"
+                    + batchErrors.joined(separator: "\n")
+            )
         }
 
         for asset in assetTrends {
@@ -251,15 +260,27 @@ actor TrendReportDraftStore {
         }
     }
 
+    /// 2026-08-28:无因果证据的「涨跌归因：」降级为「原因待确认：」（App 兜底，不拒批）。
+    private static func assetWithAttributionDowngrade(_ asset: TrendAssetView) -> TrendAssetView {
+        guard let downgraded = TrendAssetDailyAttributionPolicy.downgradedAttributionText(asset) else {
+            return asset
+        }
+        return replaceImpactText(downgraded, on: asset)
+    }
+
     private static func assetWithAttributionBoundary(_ asset: TrendAssetView) -> TrendAssetView {
         let patched = TrendAssetDailyAttributionPolicy.appendingMissingEvidenceBoundaryIfNeeded(asset.impactText)
         guard patched != asset.impactText else { return asset }
-        return TrendAssetView(
+        return replaceImpactText(patched, on: asset)
+    }
+
+    private static func replaceImpactText(_ text: String, on asset: TrendAssetView) -> TrendAssetView {
+        TrendAssetView(
             id: asset.id,
             name: asset.name,
             code: asset.code,
             sector: asset.sector,
-            impactText: patched,
+            impactText: text,
             horizons: asset.horizons,
             rationale: asset.rationale,
             counterSignals: asset.counterSignals,

@@ -325,3 +325,79 @@ final class TrendReportModuleToolsTests: XCTestCase {
         )
     }
 }
+
+// MARK: - 2026-08-28 死循环修复：批次全错收集 + 归因自动降级
+
+final class AssetBatchRejectionLoopFixTests: XCTestCase {
+    private func asset(
+        code: String,
+        impactText: String,
+        supportingEvidenceIDs: [String] = []
+    ) -> TrendAssetView {
+        TrendAssetView(
+            id: "asset-\(code)",
+            name: "基金\(code)",
+            code: code,
+            sector: "A股",
+            impactText: impactText,
+            horizons: [],
+            rationale: "观察。",
+            counterSignals: ["若行情变化则重新评估。"],
+            claimEvidence: TrendClaimEvidence(supportingEvidenceIDs: supportingEvidenceIDs)
+        )
+    }
+
+    func testBatchCollectsAllFundErrorsAtOnce() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001", "000002", "000003"])
+        let batch = [
+            asset(code: "000001", impactText: "市值较高，持仓集中。"),          // 错前缀
+            asset(code: "000002", impactText: "涨跌归因：跟随板块上涨。"),      // 无证据 → 自动降级（不再报错）
+            asset(code: "000003", impactText: "组合核心，长期持有。"),          // 错前缀
+        ]
+        do {
+            try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: batch))
+            XCTFail("两只错前缀基金应整批拒收")
+        } catch let error as TrendReportDraftError {
+            let message = error.localizedDescription
+            XCTAssertTrue(message.contains("2 个问题"), "一次性列出全部问题，实际：\(message)")
+            XCTAssertTrue(message.contains("000001"))
+            XCTAssertTrue(message.contains("000003"))
+        }
+    }
+
+    func testBatchWithAttributionButNoEvidenceIsAutoDowngradedAndAccepted() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000369", "019524"])
+        let batch = [
+            asset(
+                code: "000369",
+                impactText: "涨跌归因：当日盘中估值跌0.31%，跟随港股科技回调。",
+                supportingEvidenceIDs: ["manager:forumHit:86149"]
+            ),
+            asset(
+                code: "019524",
+                impactText: "涨跌归因：重仓股上涨带动净值回升。",
+                supportingEvidenceIDs: []
+            ),
+        ]
+        // v4.7.0 线上正是这两类基金把修复预算耗尽——现在应整批通过
+        try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: batch))
+        let progress = await store.progress()
+        XCTAssertEqual(progress.completedSections, 1, "持仓分批已暂存")
+    }
+
+    func testMixedBatchPartialAcceptanceViaFullErrorList() async throws {
+        // 未知代码 + 无证据归因：前者报错，后者降级——错误信息只含前者
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+        let batch = [
+            asset(code: "999999", impactText: "涨跌归因：板块上涨。"),
+            asset(code: "000001", impactText: "涨跌归因：板块上涨。"),
+        ]
+        do {
+            try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: batch))
+            XCTFail("未知代码应报错")
+        } catch let error as TrendReportDraftError {
+            XCTAssertTrue(error.localizedDescription.contains("999999"))
+            XCTAssertFalse(error.localizedDescription.contains("涨跌归因"), "降级后不再报归因类错误")
+        }
+    }
+}

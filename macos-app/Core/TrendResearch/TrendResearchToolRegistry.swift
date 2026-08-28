@@ -22,6 +22,7 @@ struct TrendResearchToolRegistry: Sendable {
             MarketSnapshotTool(),
             MarketBreadthTool(engine: marketDataEngine),
             DailyKlineTool(engine: marketDataEngine),
+            FinancialHeadlinesTool(engine: marketDataEngine),
             SECOfficialResearchTool(
                 client: officialSourceClient,
                 cache: officialSourceCache
@@ -730,5 +731,110 @@ struct DailyKlineTool: TrendResearchTool {
                 isError: true
             )
         }
+    }
+}
+
+// MARK: - get_financial_headlines
+
+/// 财经热榜工具（NewsNow 免费源）：财联社/雪球热门/华尔街见闻/金十。
+/// Tavily 下线后恢复「新闻/政策」维度的轻量通道；热榜是市场级信息，
+/// 不算单只基金的因果归因证据（归因仍需 market:stock:/vendor:alphavantage:）。
+struct FinancialHeadlinesTool: TrendResearchTool {
+    static let supportedSources = NewsFeedSource.allCases
+    static let perSourceLimit = 8
+
+    let name = "get_financial_headlines"
+    let description = "获取财经热榜快讯（财联社热榜/雪球热门股票/华尔街见闻快讯/金十数据，免费源）。适合为市场情绪、板块轮动与消息面判断提供最新佐证；条目为标题级信息，不构成单只标的的因果归因证据。10 分钟内新鲜。"
+    let parameters: AgentJSONValue = [
+        "type": "object",
+        "properties": [
+            "sources": [
+                "type": "array",
+                "items": ["type": "string", "enum": AgentJSONValue.array(NewsFeedSource.allCases.map { AgentJSONValue.string($0.rawValue) })],
+                "description": "可选：只要这些源（默认全部）"
+            ]
+        ],
+        "additionalProperties": false
+    ]
+
+    let engine: MarketDataEngine
+
+    private struct Params: Codable {
+        var sources: [String]?
+    }
+
+    func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
+        let params: Params
+        do {
+            if argumentsJSON.isEmpty || argumentsJSON == "{}" {
+                params = Params()
+            } else {
+                params = try JSONDecoder().decode(Params.self, from: Data(argumentsJSON.utf8))
+            }
+        } catch {
+            return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "参数不是合法 JSON：\(error.localizedDescription)"), isError: true)
+        }
+        let requested = (params.sources ?? Self.supportedSources.map(\.rawValue))
+            .compactMap { NewsFeedSource(rawValue: $0) }
+        let sources = requested.isEmpty ? Self.supportedSources : requested
+
+        var items: [NewsFeedItem] = []
+        var warnings: [String] = []
+        var evidenceIDs: [String] = []
+        for source in sources {
+            do {
+                let fetched = try await engine.newsFeed(source)
+                let limited = Array(fetched.prefix(Self.perSourceLimit))
+                items += limited
+                evidenceIDs += limited.map(Self.evidenceID)
+            } catch {
+                warnings.append("\(source.displayName)暂不可用：\((error as? MarketDataError)?.errorDescription ?? error.localizedDescription)")
+            }
+        }
+        guard !items.isEmpty else {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "headlines_unavailable",
+                    message: "全部热榜源暂不可用。\(warnings.joined(separator: "；"))。不得把缺失解读为市场平静。"
+                ),
+                isError: true
+            )
+        }
+
+        await context.evidenceLedger.record(items.map { item in
+            TrendEvidence(
+                id: Self.evidenceID(item),
+                sourceName: item.sourceName,
+                title: item.title,
+                url: item.url,
+                publishedAt: nil,
+                retrievedAt: context.snapshot.dataAsOf,
+                summary: "热榜条目（\(item.sourceName)）：\(item.title)",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .webSearch,
+                    sourceTier: .secondary,
+                    requestedTopicKeys: ["headline", item.sourceID],
+                    metadataConfidence: .deterministic
+                )
+            )
+        })
+
+        let data: [String: Any] = [
+            "headlines": items.map { item -> [String: Any] in
+                [
+                    "title": item.title,
+                    "source": item.sourceName,
+                    "url": item.url ?? NSNull(),
+                    "evidence_id": Self.evidenceID(item),
+                ]
+            },
+            "count": items.count,
+            "note": "标题级快讯：可佐证市场情绪与消息面，不构成单只标的的因果归因证据"
+        ]
+        return .content(TrendResearchToolEnvelope.success(data, warnings: warnings, evidenceIDs: evidenceIDs))
+    }
+
+    static func evidenceID(_ item: NewsFeedItem) -> String {
+        "newsnow:\(item.itemID)"
     }
 }

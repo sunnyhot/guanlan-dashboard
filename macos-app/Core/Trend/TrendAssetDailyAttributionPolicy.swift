@@ -63,6 +63,20 @@ enum TrendAssetDailyAttributionPolicy {
         return value + "(缺少可佐证的底层证券当日行情或外部研究证据。)"
     }
 
+    /// 2026-08-28 死循环修复（v4.7.0 实证）：模型写了「涨跌归因：」但 supporting 证据里没有
+    /// 任何因果证据（market:stock:/vendor:alphavantage:）时，由 App 降级为「原因待确认：」
+    /// 而不是拒批——联网搜索下线后 40 只行情上限外的基金零路径通关，结构性拒批必然复发。
+    /// 与 v4.6.1 appendingMissingEvidenceBoundaryIfNeeded 同一先例：只往保守方向改写，原文保留为线索。
+    static func downgradedAttributionText(_ asset: TrendAssetView) -> String? {
+        guard let value = normalized(asset.impactText),
+              value.hasPrefix(attributionPrefix) else { return nil }
+        let hasCausal = asset.claimEvidence.supportingEvidenceIDs.contains(where: isCausalEvidenceID)
+        guard !hasCausal else { return nil }
+        let original = String(value.dropFirst(attributionPrefix.count))
+        return unavailablePrefix
+            + "(缺少可佐证的底层证券当日行情或外部研究证据。原描述：\(original))"
+    }
+
     static func underlyingQuoteCodes(
         in snapshot: PortfolioLookThroughSnapshot
     ) -> [String] {

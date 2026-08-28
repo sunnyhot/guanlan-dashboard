@@ -161,3 +161,60 @@ final class TrendAssetDailyAttributionPolicyTests: XCTestCase {
         )
     }
 }
+
+// MARK: - 2026-08-28 死循环修复：无因果证据的归因自动降级
+
+final class AttributionDowngradeTests: XCTestCase {
+    private func asset(
+        impactText: String,
+        supportingEvidenceIDs: [String]
+    ) -> TrendAssetView {
+        TrendAssetView(
+            id: "000001",
+            name: "测试基金",
+            code: "000001",
+            sector: "半导体",
+            impactText: impactText,
+            horizons: [],
+            rationale: impactText,
+            counterSignals: ["若底层行情反转则重新评估。"],
+            claimEvidence: TrendClaimEvidence(
+                supportingEvidenceIDs: supportingEvidenceIDs
+            )
+        )
+    }
+
+    func testAttributionWithoutCausalEvidenceDowngradesToUnavailable() {
+        let noEvidence = asset(
+            impactText: "涨跌归因：当日盘中估值跌0.31%，跟随港股科技回调。",
+            supportingEvidenceIDs: ["manager:forumHit:86149"]
+        )
+        let downgraded = TrendAssetDailyAttributionPolicy.downgradedAttributionText(noEvidence)
+        XCTAssertNotNil(downgraded, "非因果证据（manager 帖子）也要降级")
+        XCTAssertTrue(downgraded?.hasPrefix("原因待确认：") ?? false)
+        XCTAssertTrue(downgraded?.contains("缺少可佐证的底层证券当日行情或外部研究证据") ?? false)
+        XCTAssertTrue(downgraded?.contains("跟随港股科技回调") ?? false, "原文保留为线索")
+        // 降级后的文本通过校验（含边界词「缺少」）
+        let patched = asset(
+            impactText: downgraded ?? "",
+            supportingEvidenceIDs: ["manager:forumHit:86149"]
+        )
+        XCTAssertNil(TrendAssetDailyAttributionPolicy.validationMessage(for: patched))
+    }
+
+    func testAttributionWithCausalEvidenceUntouched() {
+        let evidenced = asset(
+            impactText: "涨跌归因：重仓的贵州茅台涨0.39%带动估值。",
+            supportingEvidenceIDs: ["market:stock:600519:2026-08-28 15:00:00"]
+        )
+        XCTAssertNil(TrendAssetDailyAttributionPolicy.downgradedAttributionText(evidenced), "有行情证据不降级")
+    }
+
+    func testNonAttributionPrefixNotDowngraded() {
+        let malformed = asset(
+            impactText: "组合核心持仓，市值较高。",
+            supportingEvidenceIDs: []
+        )
+        XCTAssertNil(TrendAssetDailyAttributionPolicy.downgradedAttributionText(malformed), "错前缀仍走原校验拒绝")
+    }
+}
