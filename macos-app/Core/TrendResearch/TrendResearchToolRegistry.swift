@@ -450,6 +450,22 @@ struct MarketSnapshotTool: TrendResearchTool {
             if !missing.isEmpty {
                 warnings.append("部分基金代码无估值行情：\(missing.sorted().joined(separator: "、"))")
             }
+            // scope guard：请求的代码在冻结快照里一个都匹配不上，视为越界调用
+            //（模型臆造代码/串台），硬拒绝而不是返回空数据让模型编故事。
+            let knownCodes = Set(snapshot.marketQuotes.map(\.code))
+            let normalizedKnown = Set(knownCodes.map { MarketCodeNormalizer.canonicalKey(for: $0) })
+            let allUnknown = requestedCodes.allSatisfy { code in
+                !knownCodes.contains(code) && !normalizedKnown.contains(MarketCodeNormalizer.canonicalKey(for: code))
+            }
+            if allUnknown, !knownCodes.isEmpty {
+                return .content(
+                    TrendResearchToolEnvelope.error(
+                        code: "scope_violation",
+                        message: "请求的资产代码 \(requestedCodes.sorted().joined(separator: "、")) 不在本次分析冻结范围内。本次仅覆盖：\(knownCodes.sorted().prefix(12).joined(separator: "、"))\(knownCodes.count > 12 ? " 等 \(knownCodes.count) 个" : "")。请改用范围内的代码，或去掉 asset_codes 参数获取全部。"
+                    ),
+                    isError: true
+                )
+            }
         }
         if includeIndices && !snapshot.marketQuotes.contains(where: { $0.kind == "index" }) {
             warnings.append("本次分析已主动刷新指数，但没有取得可用大盘行情；不得把缺失解读为市场平稳。")

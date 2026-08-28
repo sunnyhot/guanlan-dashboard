@@ -200,6 +200,9 @@ enum TrendResearchAgentError: Error, LocalizedError {
     case invalidSubmissionLimitExceeded(errors: [String])
     case modelRequestTimeoutRecoveryExceeded(timeout: Double)
     case totalTimeoutExceeded(limit: Double)
+    /// 剩余预算为正但低于单步最小预算：直接终止而不是发起一次注定中途超时的计费请求。
+    /// 与 totalTimeoutExceeded 区分：预算「止损不发」，语义可观测。
+    case budgetSkipBeforeRequest(remaining: Double)
 
     var errorDescription: String? {
         switch self {
@@ -217,6 +220,8 @@ enum TrendResearchAgentError: Error, LocalizedError {
             return "趋势模型连续请求超时（单轮上限 \(Int(timeout.rounded())) 秒）。Agent 已自动收敛任务并重试，但模型服务仍未返回；已保留上一次报告，请检查模型服务状态后重试。"
         case .totalTimeoutExceeded(let limit):
             return "趋势 Agent 已达到 \(Int(limit.rounded())) 秒整体运行上限。已保留上一次报告，请检查模型服务状态后重试。"
+        case .budgetSkipBeforeRequest(let remaining):
+            return "趋势 Agent 剩余预算仅 \(Int(remaining.rounded())) 秒，低于单步最小预算，已止损终止而不发起注定超时的模型请求。已保留上一次报告。"
         }
     }
 }
@@ -237,6 +242,9 @@ struct TrendResearchAgent: Sendable {
     static let webSearchToolName = "web_search"
     static let submitToolName = "submit_trend_report"
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
+    /// 一次有意义的 LLM 往返所需最小秒数（对拍 DSA runner 的 _MIN_STEP_BUDGET_S）。
+    /// 剩余预算为正但低于此值时按 budgetSkip 终止，不浪费一次计费请求。
+    static let minimumStepBudgetSeconds: Double = 8
 
     init(
         // 经 LLM 网关：预算 / 记账 / trace 立即生效；重试关闭（本 Agent 自带
@@ -411,6 +419,11 @@ struct TrendResearchAgent: Sendable {
                 let remainingTotal = effectiveTotal - Date().timeIntervalSince(started)
                 if remainingTotal <= 0 {
                     throw TrendResearchAgentError.totalTimeoutExceeded(limit: effectiveTotal)
+                }
+                // 单步最小预算护栏：剩余为正但不足一次有意义的模型往返时直接止损，
+                // 不发起注定中途超时的计费请求（语义与 totalTimeout 区分，可观测）。
+                if remainingTotal < Self.minimumStepBudgetSeconds {
+                    throw TrendResearchAgentError.budgetSkipBeforeRequest(remaining: remainingTotal)
                 }
                 let configuredTimeout = max(1, settings.timeoutSeconds)
                 // 每轮超时不再随总预算缩减：让慢但正常推进的运行能跑完，而不是越到后面越被掐。
@@ -1267,18 +1280,10 @@ struct TrendResearchAgent: Sendable {
     /// 同一次运行内，相同只读工具 + 相同参数只执行一次。分模块提交必须每次重新校验，不能缓存。
     private static func toolCallSignature(_ call: AgentToolCall) -> String? {
         guard !isSubmissionTool(call.function.name) else { return nil }
-        let rawArguments = call.function.arguments.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedArguments: String
-        if let data = rawArguments.data(using: .utf8),
-           let object = try? JSONSerialization.jsonObject(with: data),
-           JSONSerialization.isValidJSONObject(object),
-           let canonicalData = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
-           let canonical = String(data: canonicalData, encoding: .utf8) {
-            normalizedArguments = canonical
-        } else {
-            normalizedArguments = rawArguments
-        }
-        return "\(call.function.name)|\(normalizedArguments)"
+        return TrendResearchArgumentCanonicalizer.signature(
+            toolName: call.function.name,
+            arguments: call.function.arguments
+        )
     }
 
     private static func isSubmissionTool(_ name: String) -> Bool {
