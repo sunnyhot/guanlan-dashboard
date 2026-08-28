@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.7.0/QiemanDashboard-4.7.0.zip",
-    "name" : "QiemanDashboard-4.7.0.zip",
-    "sha256" : "cc454e7d953263faeaffdaeb5fd14ef82261893e904533ecc01847e8620091a7",
-    "size" : 8362101
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.0/QiemanDashboard-4.8.0.zip",
+    "name" : "QiemanDashboard-4.8.0.zip",
+    "sha256" : "32ab5467507eccf53f229cef5a7d86bc46b4ff02b68e39d1feb527bcabbb64f3",
+    "size" : 8362328
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.7.0/QiemanDashboard-4.7.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.0/QiemanDashboard-4.8.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.7.0.zip",
-      "size" : 8362101
+      "name" : "QiemanDashboard-4.8.0.zip",
+      "size" : 8362328
     }
   ],
-  "body" : "版本号同步 v4.7.0\n菜单弹框内容块自定义(板块开关/排序 + 大盘数据/黄金汇率块)\n版本号同步 v4.6.3\n记录两线合流后的 R2 功能状态——摘要卡按产品决定移除,三个功能待重新安置\n版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)\n版本号同步 v4.6.1\n模型输出并入运行日志时间线——一条原地更新的输出条目\n模型实时输出改为进度子条目——两行预览，完整块收进运行详情\n研判进度整合为顶部唯一进度区——分块进度卡移除\n移除「今日研判」摘要卡\n流式卡顿根治——观察者隔离 + 进主线程前合批 + 展示截断\n流式实时输出节流——增量先进缓冲，每 0.2s 刷一次发布状态\n实时输出看得见——思考流/工具调用透出 + 长期研判区接进度卡\n模型实时输出全链路透传——网关可选事件通道 + UI 实时渲染\n旧链路接线 LLM 统一网关 + 尝试级 trace 进运行日志\n平移 V2 的 LLM 统一网关——选型/failover/重试/预算/用量记账/留痕\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化\n数据源 client 从 TrendResearch/ 移至 Core/Clients/\nADR-5 四防火墙总览一页文档（M0 里程碑）\nADR-4 D000-004 Cardinal Firewall 5 条 ADR\nADR-3 DATA001-009 数据层 9 条 ADR\nADR-2 FREE001 Zero Paid Dependency\nADR-1 建立 docs/adr/ 目录与 ADR 模板\n添加投资智能 V3.1 实施计划",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.7.0",
-  "name" : "QiemanDashboard v4.7.0",
-  "notes" : "版本号同步 v4.7.0\n菜单弹框内容块自定义(板块开关/排序 + 大盘数据/黄金汇率块)\n版本号同步 v4.6.3\n记录两线合流后的 R2 功能状态——摘要卡按产品决定移除,三个功能待重新安置\n版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)\n版本号同步 v4.6.1\n模型输出并入运行日志时间线——一条原地更新的输出条目\n模型实时输出改为进度子条目——两行预览，完整块收进运行详情\n研判进度整合为顶部唯一进度区——分块进度卡移除\n移除「今日研判」摘要卡\n流式卡顿根治——观察者隔离 + 进主线程前合批 + 展示截断\n流式实时输出节流——增量先进缓冲，每 0.2s 刷一次发布状态\n实时输出看得见——思考流/工具调用透出 + 长期研判区接进度卡\n模型实时输出全链路透传——网关可选事件通道 + UI 实时渲染\n旧链路接线 LLM 统一网关 + 尝试级 trace 进运行日志\n平移 V2 的 LLM 统一网关——选型/failover/重试/预算/用量记账/留痕\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化\n数据源 client 从 TrendResearch/ 移至 Core/Clients/\nADR-5 四防火墙总览一页文档（M0 里程碑）\nADR-4 D000-004 Cardinal Firewall 5 条 ADR\nADR-3 DATA001-009 数据层 9 条 ADR\nADR-2 FREE001 Zero Paid Dependency\nADR-1 建立 docs/adr/ 目录与 ADR 模板\n添加投资智能 V3.1 实施计划",
+  "body" : "版本号同步 v4.8.0\n拒批修复方向3——提交前upfront告知无因果行情路径的基金清单(prompt三处契约注入),模型直接写原因待确认;顺带修正全量契约中两行遗留的web:tavily指令\n拒批死循环双修复——持仓批次全错一次性返回(消灭打地鼠循环)+无因果证据的涨跌归因App自动降级为原因待确认; feat: NewsNow财经热榜接入为Agent工具get_financial_headlines(恢复新闻维度)\n移除 Tavily 联网搜索子系统——客户端/工具/限流器/设置/同步/粘贴启发/UI 全链路下线；机会模块留空、盘中买卖门禁永久生效、遗留密钥自动清理；保留旧报告解码所需枚举 case\n策略规则回测层 M9 + 文档同步——技能量化条件历史求值(胜率/盈亏比/回撤)、baseline 第10节决策引擎契约、AGENTS.md 模块表更新\n多Agent研究流水线 M8——四档模式(quick/standard/full/specialist)、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、M4护栏链合成、LLM失败确定性兜底、仪表盘直抽信号\nscope guard 已知代码集合补上穿透持仓的底层与贡献基金代码，不误伤合法的穿透关联查询\nAgent 运行时升级 M7——工具签名参数值规范化(等价代码格式共享缓存)、单步最小预算止损(剩余<8s不发计费请求)、市场快照完全越界 scope guard\n策略技能系统 M6——15个策略技能移植(Swift常量库,量化口径保留)、默认纪律基线注入、市场状态路由(trend/sideways/volatile/sectorHot)\n信号闭环 M5——趋势行动候选抽取为结构化信号(价格正则/标的解析)、市价结算(先止损/跳空开盘价/到期未触发)、反向失效、胜率记忆校准、一对象一文件Store\n决策契约与护栏 M4——市场阶段7态判定与行为禁令、数据质量→置信度封顶、结构稳定器(支撑压力资金流降级+分数钳制+审计字段)\n规则技术分析引擎 M3——MA/乖离/量价/支撑压力/MACD/RSI 六模块加权评分+逐条理由、canonical 分数带单一事实源、Agent 新工具 get_daily_kline\n市场数据引擎 M2——东财/腾讯K线双源、东财全市场快照、NewsNow热榜、引擎fallback门面 + Agent 新工具 get_market_breadth\n市场数据引擎 M1——统一行情契约/腾讯全字段/新浪全市场快照/广度计算/熔断限速缓存 + 八层决策引擎总体计划",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.0",
+  "name" : "QiemanDashboard v4.8.0",
+  "notes" : "版本号同步 v4.8.0\n拒批修复方向3——提交前upfront告知无因果行情路径的基金清单(prompt三处契约注入),模型直接写原因待确认;顺带修正全量契约中两行遗留的web:tavily指令\n拒批死循环双修复——持仓批次全错一次性返回(消灭打地鼠循环)+无因果证据的涨跌归因App自动降级为原因待确认; feat: NewsNow财经热榜接入为Agent工具get_financial_headlines(恢复新闻维度)\n移除 Tavily 联网搜索子系统——客户端/工具/限流器/设置/同步/粘贴启发/UI 全链路下线；机会模块留空、盘中买卖门禁永久生效、遗留密钥自动清理；保留旧报告解码所需枚举 case\n策略规则回测层 M9 + 文档同步——技能量化条件历史求值(胜率/盈亏比/回撤)、baseline 第10节决策引擎契约、AGENTS.md 模块表更新\n多Agent研究流水线 M8——四档模式(quick/standard/full/specialist)、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、M4护栏链合成、LLM失败确定性兜底、仪表盘直抽信号\nscope guard 已知代码集合补上穿透持仓的底层与贡献基金代码，不误伤合法的穿透关联查询\nAgent 运行时升级 M7——工具签名参数值规范化(等价代码格式共享缓存)、单步最小预算止损(剩余<8s不发计费请求)、市场快照完全越界 scope guard\n策略技能系统 M6——15个策略技能移植(Swift常量库,量化口径保留)、默认纪律基线注入、市场状态路由(trend/sideways/volatile/sectorHot)\n信号闭环 M5——趋势行动候选抽取为结构化信号(价格正则/标的解析)、市价结算(先止损/跳空开盘价/到期未触发)、反向失效、胜率记忆校准、一对象一文件Store\n决策契约与护栏 M4——市场阶段7态判定与行为禁令、数据质量→置信度封顶、结构稳定器(支撑压力资金流降级+分数钳制+审计字段)\n规则技术分析引擎 M3——MA/乖离/量价/支撑压力/MACD/RSI 六模块加权评分+逐条理由、canonical 分数带单一事实源、Agent 新工具 get_daily_kline\n市场数据引擎 M2——东财/腾讯K线双源、东财全市场快照、NewsNow热榜、引擎fallback门面 + Agent 新工具 get_market_breadth\n市场数据引擎 M1——统一行情契约/腾讯全字段/新浪全市场快照/广度计算/熔断限速缓存 + 八层决策引擎总体计划",
   "published_at" : "",
-  "sha256" : "cc454e7d953263faeaffdaeb5fd14ef82261893e904533ecc01847e8620091a7",
-  "tag" : "v4.7.0",
-  "tag_name" : "v4.7.0",
-  "version" : "4.7.0"
+  "sha256" : "32ab5467507eccf53f229cef5a7d86bc46b4ff02b68e39d1feb527bcabbb64f3",
+  "tag" : "v4.8.0",
+  "tag_name" : "v4.8.0",
+  "version" : "4.8.0"
 }
