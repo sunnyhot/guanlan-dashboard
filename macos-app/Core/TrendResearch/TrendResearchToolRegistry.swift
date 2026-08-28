@@ -452,7 +452,16 @@ struct MarketSnapshotTool: TrendResearchTool {
             }
             // scope guard：请求的代码在冻结快照里一个都匹配不上，视为越界调用
             //（模型臆造代码/串台），硬拒绝而不是返回空数据让模型编故事。
-            let knownCodes = Set(snapshot.marketQuotes.map(\.code))
+            // 已知代码 = 行情代码 ∪ 穿透持仓底层代码 ∪ 贡献基金代码。
+            var knownCodes = Set(snapshot.marketQuotes.map(\.code))
+            for position in snapshot.lookThrough?.topPositions ?? [] {
+                knownCodes.insert(position.code)
+                for contributor in position.contributors {
+                    if let fundCode = contributor.fundCode {
+                        knownCodes.insert(fundCode)
+                    }
+                }
+            }
             let normalizedKnown = Set(knownCodes.map { MarketCodeNormalizer.canonicalKey(for: $0) })
             let allUnknown = requestedCodes.allSatisfy { code in
                 !knownCodes.contains(code) && !normalizedKnown.contains(MarketCodeNormalizer.canonicalKey(for: code))
