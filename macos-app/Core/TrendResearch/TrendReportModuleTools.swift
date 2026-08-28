@@ -218,9 +218,12 @@ actor TrendReportDraftStore {
                 "单批最多提交 \(Self.assetBatchSize) 只基金，当前提交了 \(module.assetTrends.count) 只。"
             )
         }
+        // v4.6.1:「原因待确认」缺边界措辞时由 App 补写而不是拒批
+        // (真实运行实证的拒批死循环修复,详见 policy 注释)。
+        let assetTrends = module.assetTrends.map(Self.assetWithAttributionBoundary)
 
         var submittedCodes = Set<String>()
-        for asset in module.assetTrends {
+        for asset in assetTrends {
             guard let normalized = Self.normalizedCode(asset.code) else {
                 throw TrendReportDraftError.invalidModule(
                     "持仓基金「\(asset.name)」缺少有效 code。"
@@ -241,11 +244,27 @@ actor TrendReportDraftStore {
             }
         }
 
-        for asset in module.assetTrends {
+        for asset in assetTrends {
             if let normalized = Self.normalizedCode(asset.code) {
                 assetTrendsByCode[normalized] = asset
             }
         }
+    }
+
+    private static func assetWithAttributionBoundary(_ asset: TrendAssetView) -> TrendAssetView {
+        let patched = TrendAssetDailyAttributionPolicy.appendingMissingEvidenceBoundaryIfNeeded(asset.impactText)
+        guard patched != asset.impactText else { return asset }
+        return TrendAssetView(
+            id: asset.id,
+            name: asset.name,
+            code: asset.code,
+            sector: asset.sector,
+            impactText: patched,
+            horizons: asset.horizons,
+            rationale: asset.rationale,
+            counterSignals: asset.counterSignals,
+            claimEvidence: asset.claimEvidence
+        )
     }
 
     func storeActions(_ module: TrendReportActionsModule) throws {
