@@ -49,6 +49,20 @@ enum TrendAssetDailyAttributionPolicy {
         return nil
     }
 
+    /// v4.6.1:「原因待确认:」已声明边界语义但措辞没命中六词硬词表时,
+    /// 由 App 追加缺失证据说明而不是拒批(2026-08-28 真实运行实证:
+    /// 模型写「超额收益具体来源原因待确认」被词表拒掉,修复预算耗尽致整次失败)。
+    /// 前缀仍是 unavailablePrefix,不宣称因果,安全方向不变——与 W4 的
+    /// 「App 强制降级自动补写待观察信号」同一先例。
+    static func appendingMissingEvidenceBoundaryIfNeeded(_ impactText: String) -> String {
+        guard let value = normalized(impactText),
+              value.hasPrefix(unavailablePrefix),
+              !unavailableBoundaryTerms.contains(where: value.contains) else {
+            return impactText
+        }
+        return value + "(缺少可佐证的底层证券当日行情或外部研究证据。)"
+    }
+
     static func underlyingQuoteCodes(
         in snapshot: PortfolioLookThroughSnapshot
     ) -> [String] {
