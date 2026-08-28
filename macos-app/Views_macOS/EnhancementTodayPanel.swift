@@ -135,14 +135,7 @@ extension EnhancementCenterView {
             }
         ) {
             VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                if isGeneratingMarketRadar {
-                    TrendResearchProgressCard(
-                        narrative: TrendRunProgressNarrative.derive(from: model.trendProgressLogs),
-                        progress: model.trendResearchProgress,
-                        sectionName: "市场雷达",
-                        liveModel: model.trendLiveOutputModel
-                    )
-                }
+                // 进度统一在页面顶部的 TrendLiveLogPanel 展示（唯一进度区）。
 
                 InvestmentDirectionView(
                     analysis: opportunities,
@@ -173,30 +166,16 @@ extension EnhancementCenterView {
                 .disabled(!model.trendSettings.provider.isConfigured)
             }
         ) {
-            // 生成中恒显进度卡（含「已有报告时的更新」场景）；旧报告保留在下方。
-            if isGeneratingLongTermResearch {
-                TrendResearchProgressCard(
-                    narrative: TrendRunProgressNarrative.derive(from: model.trendProgressLogs),
-                    progress: model.trendResearchProgress,
-                    sectionName: "组合研判",
-                    liveModel: model.trendLiveOutputModel
-                )
-            }
+            // 进度统一在页面顶部的 TrendLiveLogPanel 展示（唯一进度区）；
+            // 更新期间旧报告保留在下方。
             if let report = model.trendReport {
                 portfolioLongTermReportView(report)
-            } else if !isGeneratingLongTermResearch && model.trendSettings.provider.isConfigured {
+            } else if model.trendSettings.provider.isConfigured {
                 trendEmptyState("等待生成", detail: "组合研判只展示持仓方向、周期判断、重点风险和行动候选。")
-            } else if !isGeneratingLongTermResearch {
+            } else {
                 trendEmptyState("未配置模型", detail: "在「设置」里配置 AI 模型后即可生成趋势研判。")
             }
         }
-    }
-
-    /// 长期研判生成中：longTerm 或 full scope 在跑。
-    private var isGeneratingLongTermResearch: Bool {
-        guard model.trendGenerationState == .generating else { return false }
-        let scope = model.trendResearchScope
-        return scope == .longTerm || scope == .full
     }
 
     private var portfolioLongTermSubtitle: String {

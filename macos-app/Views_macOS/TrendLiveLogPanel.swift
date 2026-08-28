@@ -25,6 +25,12 @@ struct TrendLiveLogPanel: View {
                 VStack(alignment: .leading, spacing: 0) {
                     header
 
+                    if model.trendGenerationState == .generating {
+                        // 唯一进度区:模型实时输出(思考/正文/工具调用)常驻首屏,
+                        // 分块内不再重复放进度卡。
+                        TrendLiveOutputView(model: model.trendLiveOutputModel)
+                    }
+
                     if isExpanded {
                         Divider()
                             .overlay(AppPalette.hairline.opacity(AppPalette.borderFaint))
@@ -428,6 +434,50 @@ struct TrendLiveLogPanel: View {
             return AppPalette.warning
         case .error:
             return AppPalette.danger
+        }
+    }
+}
+
+/// 模型实时输出：等宽字体滚动区，随内容增长滚动到底部。展示文本由
+/// TrendLiveOutputModel 截断（尾部 2000 字）——长文本全文重排是大开销。
+/// 独立 ObservableObject——流式刷新只重渲染本区块。
+struct TrendLiveOutputView: View {
+    @ObservedObject var model: TrendLiveOutputModel
+
+    var body: some View {
+        if let text = model.displayText {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("模型实时输出")
+                        .font(AppPalette.appFont(.caption, weight: .semibold))
+                        .foregroundStyle(AppPalette.muted)
+                    Text("（思考 / 输出 / 工具调用）")
+                        .font(AppPalette.appFont(.caption2))
+                        .foregroundStyle(AppPalette.muted.opacity(0.7))
+                }
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Text(text)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(AppPalette.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                        Color.clear
+                            .frame(height: 0)
+                            .id("liveOutputTail")
+                    }
+                    .frame(maxHeight: 150)
+                    .onChange(of: text) { _ in
+                        // 不加动画：流式期间动画会叠加布局开销。
+                        proxy.scrollTo("liveOutputTail", anchor: .bottom)
+                    }
+                }
+            }
+            .padding(.horizontal, AppPalette.spaceM)
+            .padding(.vertical, AppPalette.spaceS)
+            .background(AppPalette.card.opacity(0.6), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
+            .padding(.horizontal, AppPalette.spaceS)
+            .padding(.bottom, AppPalette.spaceS)
         }
     }
 }
