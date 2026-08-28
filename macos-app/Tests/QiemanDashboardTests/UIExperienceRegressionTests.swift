@@ -600,34 +600,20 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(marketEngine.contains("portfolioExposureText"))
     }
 
-    func testInvestmentSummaryCardAndReadingGuideAreWiredIntoDashboard() throws {
+    func testInvestmentDashboardAnchorScrollAndEmptyHintsRemain() throws {
+        // 「今日研判」摘要卡（含怎么读指南入口）已按产品决定移除；
+        // 锚点滚动与空态引流/memo 化仍在，这里守护不回归。
         let dashboard = try source(
             at: "Views_macOS/InvestmentIntelligence/InvestmentIntelligenceDashboardView.swift"
-        )
-        let card = try source(
-            at: "Views_macOS/InvestmentIntelligence/InvestmentTodaySummaryCard.swift"
-        )
-        let guide = try source(
-            at: "Views_macOS/InvestmentIntelligence/ResearchReadingGuideSheet.swift"
         )
         let center = try source(at: "Views_macOS/EnhancementCenterView.swift")
         let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
 
-        // 摘要卡置顶 + 复盘区段锚点
-        XCTAssertTrue(dashboard.contains("InvestmentTodaySummaryCard()"))
+        // 摘要卡确实不在了
+        XCTAssertFalse(dashboard.contains("InvestmentTodaySummaryCard"))
+
+        // 复盘区段锚点
         XCTAssertTrue(dashboard.contains("investmentSectionAnchor(.closeReview)"))
-
-        // 摘要卡:指南入口、未生成引导态、锚点点击、首弹一次
-        XCTAssertTrue(card.contains("怎么读"))
-        XCTAssertTrue(card.contains("ResearchReadingGuideSheet"))
-        XCTAssertTrue(card.contains("去设置配置模型"))
-        XCTAssertTrue(card.contains("anchors?.scrollTo = row.kind"))
-        XCTAssertTrue(card.contains("hasSeenReadingGuide"))
-
-        // 指南 sheet:立场声明 + 术语速查全部来自词表
-        XCTAssertTrue(guide.contains("不替你做买卖决定"))
-        XCTAssertTrue(guide.contains("ResearchTerm.allCases"))
-        XCTAssertTrue(guide.contains("term.plainExplanation"))
 
         // 锚点滚动贯通:协调器注入 + 三个区段锚点
         XCTAssertTrue(center.contains("ScrollViewReader"))

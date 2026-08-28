@@ -26,7 +26,6 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Trend: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-            InvestmentTodaySummaryCard()
             TrendLiveLogPanel()
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
