@@ -22,6 +22,7 @@ struct TrendResearchToolRegistry: Sendable {
             FundLookThroughTool(),
             MarketSnapshotTool(),
             MarketBreadthTool(engine: marketDataEngine),
+            DailyKlineTool(engine: marketDataEngine),
             SECOfficialResearchTool(
                 client: officialSourceClient,
                 cache: officialSourceCache
@@ -591,6 +592,117 @@ struct MarketBreadthTool: TrendResearchTool {
                 TrendResearchToolEnvelope.error(
                     code: "market_breadth_unavailable",
                     message: "全市场广度暂不可用：\((error as? MarketDataError)?.errorDescription ?? error.localizedDescription)。不得把缺失解读为市场平稳。"
+                ),
+                isError: true
+            )
+        }
+    }
+}
+
+// MARK: - get_daily_kline
+
+/// 日 K + 规则技术分析工具：返回预计算的技术面摘要（评分/均线排列/量价/MACD/RSI/支撑压力/逐条理由），
+/// 而不是原始 K 线数组——LLM 负责合成解读，不负责算数（对拍 DSA 预计算证据进 prompt 的设计）。
+struct DailyKlineTool: TrendResearchTool {
+    let name = "get_daily_kline"
+    let description = "获取A股个股日 K 与确定性技术分析：0-100 加权评分（趋势/乖离/量能/支撑/MACD/RSI 六模块）、均线排列、量价状态、支撑压力位、逐条 ✅/❌ 理由与风险项。引用技术面判断时必须以本工具评分为准，不得自行心算指标。"
+    let parameters: AgentJSONValue = [
+        "type": "object",
+        "properties": [
+            "code": [
+                "type": "string",
+                "description": "6 位 A股代码，如 600519"
+            ],
+            "days": [
+                "type": "integer",
+                "description": "取多少个交易日的 K 线（默认 120，上限 500）"
+            ]
+        ],
+        "required": ["code"],
+        "additionalProperties": false
+    ]
+
+    let engine: MarketDataEngine
+
+    private struct Params: Codable {
+        var code: String
+        var days: Int?
+    }
+
+    func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
+        let params: Params
+        do {
+            params = try JSONDecoder().decode(Params.self, from: Data(argumentsJSON.utf8))
+        } catch {
+            return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "参数不是合法 JSON：\(error.localizedDescription)"), isError: true)
+        }
+        let bare = MarketCodeNormalizer.bareACode(from: params.code)
+        guard bare.count == 6, bare.allSatisfy(\.isNumber) else {
+            return .content(TrendResearchToolEnvelope.error(code: "invalid_code", message: "仅支持 6 位 A股代码，收到：\(params.code)"), isError: true)
+        }
+        let days = min(max(params.days ?? 120, 30), 500)
+
+        do {
+            let bars = try await engine.dailyBars(code: bare, days: days)
+            let sanitized = TechnicalAnalysisEngine.analyze(code: bare, bars: bars)
+            let (sanitizedResult, consistencyNotes) = TechnicalAnalysisEngine.sanitizeForPrompt(sanitized)
+            await context.evidenceLedger.record([
+                TrendEvidence(
+                    id: sanitizedResult.evidenceID,
+                    sourceName: "日K技术分析（本地规则计算）",
+                    title: "\(bare) 技术面评分 \(sanitizedResult.score)",
+                    url: nil,
+                    publishedAt: nil,
+                    retrievedAt: sanitizedResult.asOf,
+                    summary: sanitizedResult.evidenceSummary,
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .derived,
+                        sourceTier: .primary,
+                        requestedTopicKeys: ["technical-analysis", bare],
+                        entityCodes: [bare],
+                        metadataConfidence: .ruleDerived
+                    )
+                )
+            ])
+            let recentBars = bars.suffix(5).map { bar -> [String: Any] in
+                [
+                    "date": bar.date,
+                    "close": bar.close,
+                    "pct_chg": bar.pctChg ?? NSNull(),
+                    "volume": bar.volume,
+                ]
+            }
+            let data: [String: Any] = [
+                "code": bare,
+                "score": sanitizedResult.score,
+                "signal_band": sanitizedResult.signalBand.rawValue,
+                "score_breakdown": sanitizedResult.scoreBreakdown,
+                "ma_alignment": sanitizedResult.maAlignment?.rawValue ?? NSNull(),
+                "volume_price_state": sanitizedResult.volumePriceState?.rawValue ?? NSNull(),
+                "macd_state": sanitizedResult.macdState?.rawValue ?? NSNull(),
+                "rsi_state": sanitizedResult.rsiState?.rawValue ?? NSNull(),
+                "ma5": sanitizedResult.ma5 ?? NSNull(),
+                "ma20": sanitizedResult.ma20 ?? NSNull(),
+                "bias_ma5": sanitizedResult.biasMA5.map { (round($0 * 100) / 100) } ?? NSNull(),
+                "support": sanitizedResult.support ?? NSNull(),
+                "resistance": sanitizedResult.resistance ?? NSNull(),
+                "volume_ratio": sanitizedResult.volumeRatio.map { (round($0 * 100) / 100) } ?? NSNull(),
+                "reasons": sanitizedResult.reasons.map(\.text),
+                "risk_factors": sanitizedResult.riskFactors.map(\.text),
+                "recent_bars": recentBars,
+                "data_boundary": sanitizedResult.dataBoundary,
+                "evidence_id": sanitizedResult.evidenceID
+            ]
+            var warnings: [String] = consistencyNotes
+            if sanitizedResult.dataBoundary.contains("不足") {
+                warnings.append("技术面样本边界：\(sanitizedResult.dataBoundary)")
+            }
+            return .content(TrendResearchToolEnvelope.success(data, warnings: warnings, evidenceIDs: [sanitizedResult.evidenceID]))
+        } catch {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "kline_unavailable",
+                    message: "日 K 数据暂不可用：\((error as? MarketDataError)?.errorDescription ?? error.localizedDescription)。不得在无 K 线时编造技术指标。"
                 ),
                 isError: true
             )
