@@ -127,6 +127,7 @@ enum MarketDataError: Error, LocalizedError, Sendable {
     case badStatus(status: Int, snippet: String)
     case rateLimited(status: Int)
     case circuitOpen(key: String)
+    case allSourcesFailed(details: [String])
 
     var errorDescription: String? {
         switch self {
@@ -135,6 +136,7 @@ enum MarketDataError: Error, LocalizedError, Sendable {
         case .badStatus(let status, let snippet): return "行情源 HTTP \(status)：\(snippet)"
         case .rateLimited(let status): return "行情源限流（HTTP \(status)），稍后重试"
         case .circuitOpen(let key): return "行情源熔断中：\(key)"
+        case .allSourcesFailed(let details): return "全部行情源失败：\(details.joined(separator: "；"))"
         }
     }
 }

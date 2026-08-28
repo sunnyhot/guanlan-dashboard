@@ -9,6 +9,7 @@ import Foundation
 /// - 数值字段是字符串，需容错转换。
 struct SinaSnapshotProvider: Sendable {
     static let pageSize = 100
+    let name = "sina"
     /// 沪深 A股约 5400+ 只，60 页封顶防异常场景失控循环。
     static let maxPages = 60
 

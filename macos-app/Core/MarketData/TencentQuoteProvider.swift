@@ -12,6 +12,7 @@ import Foundation
 /// 用 `流通市值/价格 × 换手率` 交叉校验后决定是否 ×100。
 struct TencentQuoteProvider: Sendable {
     static let batchSize = 30
+    let name = "tencent"
 
     let session: MarketDataSession
 

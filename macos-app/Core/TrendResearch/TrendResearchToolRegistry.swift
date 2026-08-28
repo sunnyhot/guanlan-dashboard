@@ -13,13 +13,15 @@ struct TrendResearchToolRegistry: Sendable {
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared,
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
-        alphaVantageCache: AlphaVantageResponseCache = .shared
+        alphaVantageCache: AlphaVantageResponseCache = .shared,
+        marketDataEngine: MarketDataEngine = MarketDataEngine()
     ) {
         let all: [any TrendResearchTool] = [
             PortfolioOverviewTool(),
             PortfolioAssetsTool(),
             FundLookThroughTool(),
             MarketSnapshotTool(),
+            MarketBreadthTool(engine: marketDataEngine),
             SECOfficialResearchTool(
                 client: officialSourceClient,
                 cache: officialSourceCache
@@ -523,6 +525,75 @@ struct MarketSnapshotTool: TrendResearchTool {
             position.kind == .stock && position.contributors.contains { contributor in
                 contributor.fundCode.map { requestedFundCodes.contains($0) } ?? false
             }
+        }
+    }
+}
+
+// MARK: - get_market_breadth
+
+/// 全市场广度工具：涨跌家数/涨停跌停/两市成交额（本地计算）。
+/// 首次调用需拉全市场快照（约 15-30 秒），之后 10 分钟内命中缓存。
+struct MarketBreadthTool: TrendResearchTool {
+    let name = "get_market_breadth"
+    let description = "获取A股全市场广度统计：上涨/下跌/平盘家数、涨停/跌停家数、两市成交额（亿元）与数据边界说明。适合判断市场整体情绪与赚钱效应，为市场判断（marketOutlook）提供客观基数；不得用单只标的涨跌推断整体。数据 10 分钟内新鲜，首次计算较慢。"
+    let parameters: AgentJSONValue = [
+        "type": "object",
+        "properties": [:],
+        "additionalProperties": false
+    ]
+
+    let engine: MarketDataEngine
+
+    func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
+        do {
+            let stats = try await engine.marketBreadth()
+            let evidenceID = "market:breadth:\(String(stats.computedAt.prefix(10)))"
+            let amountText = stats.totalAmountYi.map { String(format: "%.1f", $0) } ?? "缺失"
+            await context.evidenceLedger.record([
+                TrendEvidence(
+                    id: evidenceID,
+                    sourceName: "全市场行情快照",
+                    title: "A股市场广度统计",
+                    url: nil,
+                    publishedAt: nil,
+                    retrievedAt: stats.computedAt,
+                    summary: "\(stats.advanceDeclineSummary)；\(stats.limitSummary)；两市成交额约 \(amountText) 亿元。边界：\(stats.dataBoundary.isEmpty ? "无" : stats.dataBoundary)",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .marketQuote,
+                        sourceTier: .primary,
+                        requestedTopicKeys: ["market-breadth", "市场广度"],
+                        entityNames: ["A股整体"],
+                        metadataConfidence: .deterministic
+                    )
+                )
+            ])
+            let data: [String: Any] = [
+                "up_count": stats.upCount,
+                "down_count": stats.downCount,
+                "flat_count": stats.flatCount,
+                "limit_up_count": stats.limitUpCount,
+                "limit_down_count": stats.limitDownCount,
+                "total_amount_yi": stats.totalAmountYi ?? NSNull(),
+                "sample_count": stats.sampleCount,
+                "excluded_count": stats.excludedCount,
+                "computed_at": stats.computedAt,
+                "data_boundary": stats.dataBoundary,
+                "summary": "\(stats.advanceDeclineSummary)；\(stats.limitSummary)",
+                "evidence_id": evidenceID
+            ]
+            var warnings: [String] = []
+            if stats.sampleCount < 4000 {
+                warnings.append("广度样本偏少（\(stats.sampleCount) 只），全市场约 5400 只，解读时注明覆盖不完整。")
+            }
+            return .content(TrendResearchToolEnvelope.success(data, warnings: warnings, evidenceIDs: [evidenceID]))
+        } catch {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "market_breadth_unavailable",
+                    message: "全市场广度暂不可用：\((error as? MarketDataError)?.errorDescription ?? error.localizedDescription)。不得把缺失解读为市场平稳。"
+                ),
+                isError: true
+            )
         }
     }
 }
