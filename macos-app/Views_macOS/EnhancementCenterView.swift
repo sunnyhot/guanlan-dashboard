@@ -127,7 +127,9 @@ private struct TrendCatchUpBanner: View {
             .buttonStyle(.appSecondary)
             .controlSize(.small)
             Button {
-                dismissedScopes.insert(window.scope.rawValue)
+                // 赋值而非 Set.insert:-O/WMO 下对 @State 调 mutating 方法
+                // 会触发 "self is immutable"(Xcode 26.5 起),赋值走 nonmutating set 无此问题。
+                dismissedScopes = dismissedScopes.union([window.scope.rawValue])
             } label: {
                 Image(systemName: "xmark")
                     .font(AppPalette.appFont(.caption, weight: .semibold))
