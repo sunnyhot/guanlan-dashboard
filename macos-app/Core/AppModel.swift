@@ -431,6 +431,16 @@ final class AppModel: ObservableObject {
         set { enhancementState.liveModelOutput = newValue }
     }
 
+    var liveModelOutputBuffer: TrendLiveModelOutput? {
+        get { enhancementState.liveModelOutputBuffer }
+        set { enhancementState.liveModelOutputBuffer = newValue }
+    }
+
+    var lastLiveModelOutputFlushAt: Date {
+        get { enhancementState.lastLiveModelOutputFlushAt }
+        set { enhancementState.lastLiveModelOutputFlushAt = newValue }
+    }
+
     var nextHourGuidanceArchive: NextHourGuidanceArchive {
         get { enhancementState.nextHourGuidanceArchive }
         set { enhancementState.nextHourGuidanceArchive = newValue }

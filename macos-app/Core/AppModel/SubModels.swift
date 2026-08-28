@@ -128,6 +128,10 @@ final class EnhancementState: ObservableObject {
     @Published var lastTrendConnectionMessage = ""
     @Published var trendProgressLogs: [TrendProgressLog] = []
     @Published var liveModelOutput: TrendLiveModelOutput?
+    // 实时输出缓冲（非发布）：流式分片可达每秒数百次，直接发布会把
+    // MainActor 打满导致界面卡死——先缓冲，节流后统一刷到 liveModelOutput。
+    var liveModelOutputBuffer: TrendLiveModelOutput?
+    var lastLiveModelOutputFlushAt: Date = .distantPast
     @Published var nextHourGuidanceArchive: NextHourGuidanceArchive = .empty
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
     @Published var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage = .idle
