@@ -19,6 +19,8 @@ final class TrendLiveOutputModel: ObservableObject {
     private let flushInterval: TimeInterval
     private var buffer: TrendLiveModelOutput?
     private var lastFlushAt = Date.distantPast
+    /// 每次刷盘后回调（AppModel 用来把输出镜像进运行日志条目）。
+    var onFlush: (@MainActor (TrendLiveModelOutput) -> Void)?
 
     init(flushInterval: TimeInterval = 0.25) {
         self.flushInterval = flushInterval
@@ -55,6 +57,7 @@ final class TrendLiveOutputModel: ObservableObject {
         }
         output = updated
         lastFlushAt = now
+        onFlush?(updated)
     }
 
     /// 视图用的展示文本（尾部截断；空输出返回 nil 不显示区块）。

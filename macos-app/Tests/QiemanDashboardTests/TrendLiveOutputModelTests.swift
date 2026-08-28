@@ -75,3 +75,19 @@ extension TrendLiveOutputModelTests {
         XCTAssertNil(model.displayTailLines)
     }
 }
+
+@MainActor
+final class TrendLiveOutputModelFlushHookTests: XCTestCase {
+    func testFlushInvokesOnFlushWithLatestOutput() {
+        let model = TrendLiveOutputModel(flushInterval: 0)
+        var received: [TrendLiveModelOutput] = []
+        model.onFlush = { received.append($0) }
+
+        model.update(turn: 1, kind: .content, delta: "第一段")
+        model.update(turn: 1, kind: .content, delta: "第二段")
+
+        XCTAssertEqual(received.count, 2)
+        XCTAssertEqual(received.last?.text, "第一段第二段")
+        XCTAssertEqual(received.last?.turn, 1)
+    }
+}

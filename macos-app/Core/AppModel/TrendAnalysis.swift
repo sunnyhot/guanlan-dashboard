@@ -273,6 +273,10 @@ extension AppModel {
         lastTrendError = ""
         trendProgressLogs = []
         trendLiveOutputModel.reset()
+        // 模型实时输出镜入运行日志：刷盘时原地更新日志末尾的输出条目。
+        trendLiveOutputModel.onFlush = { [weak self] output in
+            self?.mirrorLiveOutputToLogEntry(output)
+        }
         trendSettings.defaultPrivacyMode = trendPrivacyMode
         // W3.1:成功后判断「第一份研判」用;必须在覆盖 trendReport 前捕获。
         let hadExistingReport = trendReport != nil
@@ -1087,14 +1091,16 @@ extension AppModel {
                     detail: "第 \(turn) 轮；\(chunkCount) 个分片；耗时 \(String(format: "%.1f", elapsed)) 秒；结束原因 \(finishReason ?? "未提供")",
                     level: .success
                 )
+                finalizeLiveOutputLogEntry(turn: turn)
                 trendLiveOutputModel.flush()
             }
-        case .modelResponseReceived(_, let duration):
+        case .modelResponseReceived(let turn, let duration):
             appendTrendProgress(
                 "已收到模型响应",
                 detail: "耗时 \(String(format: "%.1f", duration)) 秒",
                 level: .success
             )
+            finalizeLiveOutputLogEntry(turn: turn)
             trendLiveOutputModel.flush()
         case .modelCorrection(let message):
             appendTrendProgress("模型输出需要修正", detail: message, level: .warning)
@@ -1271,6 +1277,39 @@ extension AppModel {
         let trimmed = timestamp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 10 else { return trimmed }
         return String(trimmed.prefix(10))
+    }
+
+    /// 模型实时输出镜入运行日志：时间线里维护一条「模型输出中（第 N 轮）」
+    /// 条目，刷盘时原地更新其内容（不追加新行）；轮次结束由 finalize 定格。
+    private func mirrorLiveOutputToLogEntry(_ output: TrendLiveModelOutput) {
+        let marker = "模型输出中（第 \(output.turn) 轮）"
+        let tail = String(output.text.suffix(600))
+        if let index = trendProgressLogs.lastIndex(where: { $0.message == marker }) {
+            let existing = trendProgressLogs[index]
+            trendProgressLogs[index] = TrendProgressLog(
+                id: existing.id,
+                timestamp: existing.timestamp,
+                message: existing.message,
+                detail: tail,
+                level: .activity
+            )
+        } else {
+            appendTrendProgress(marker, detail: tail, level: .activity)
+        }
+    }
+
+    /// 轮次结束定格：条目改名（与新轮次的条目区分），内容保留最后快照。
+    private func finalizeLiveOutputLogEntry(turn: Int) {
+        let marker = "模型输出中（第 \(turn) 轮）"
+        guard let index = trendProgressLogs.lastIndex(where: { $0.message == marker }) else { return }
+        let existing = trendProgressLogs[index]
+        trendProgressLogs[index] = TrendProgressLog(
+            id: existing.id,
+            timestamp: existing.timestamp,
+            message: "模型输出（第 \(turn) 轮）",
+            detail: existing.detail,
+            level: .info
+        )
     }
 
     private func appendTrendProgress(
