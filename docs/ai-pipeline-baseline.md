@@ -485,3 +485,60 @@ runDailyTrendAnalysisIfNeeded():
 - Slice 5:决策状态 + 用户约束
 - Slice 6:替换 Tracking 主写入路径(含 sunset)
 - Slice 7:复盘 + 更多 Case 类型
+
+---
+
+## 10. 投资决策引擎链路（2026-08-28 新增，M1-M9）
+
+> 蓝图与里程碑详见 `docs/2026-08-28-investment-decision-engine-master-plan.md`。
+> 本节冻结已落地链路的行为契约。
+
+### 10.1 模块与依赖
+
+```
+Core/MarketData/                    # L1 数据引擎（通用基础设施，不挂 II flag）
+  MarketDataEngine(actor)           # fallback 门面：行情[腾讯→东财]/K线[东财→腾讯]/快照[东财→新浪]/NewsNow
+  MarketBoardRule                   # 板块识别 + 涨跌停价（BSE30%/科创创业20%/主板ST5%/主板10%）
+  MarketBreadthCalculator           # 广度统计（本地计算：涨跌/涨停/成交额）
+  TechnicalAnalysisEngine           # L2 规则技术分析（纯函数，六模块 100 分制）
+Core/InvestmentIntelligence/
+  DecisionContract/                 # L3：CanonicalDecisionScale / MarketPhase(7态) / 结构稳定器 / 数据质量封顶
+  MarketSignals/                    # L6：信号模型/抽取/结算/胜率校准/Store(market-signals/*.json + index)
+  StrategySkills/                   # L4：15 技能常量库 + 注入器 + regime 路由
+  MarketResearchPipeline/           # L7：四档流水线 + 风险否决状态机 + 确定性兜底
+Core/Backtest/StrategyRuleBacktester.swift   # L8：技能规则级回测
+Core/TrendResearch/
+  TrendResearchArgumentCanonicalizer # M7 参数规范化签名
+```
+
+### 10.2 Agent 工具新增（TrendResearchToolRegistry）
+
+- `get_market_breadth`：全市场广度（TTL 10 分钟，首算约 15-30s），登记证据 `market:breadth:{date}`
+- `get_daily_kline`：日 K + **TA 摘要**（评分/均线/量价/支撑压力/理由），非原始 K 线数组；证据 `ta:{code}:{date}`
+
+### 10.3 信号闭环契约
+
+- 抽取源：① `MarketSignalExtractor`（趋势报告行动候选，kind→方向映射 + 价格正则）；② `MarketResearchPipeline.candidateSignal`（仪表盘狙击点直填）
+- 结算口径：**同根 K 线双触先止损**；跳空穿越按开盘价；到期未触发 = expiredUnresolved（计入样本不计入胜率分子）
+- 胜率校准：桶 ≥30 可结算样本才干预；factor = clamp(1 + (winRate − 0.7), 0.3, 1.2)（70% 胜率中性锚）
+- 反向失效：同标的出现反方向 active 信号 → 旧信号 invalidated(superseded)
+- 红线：信号不自动建 DecisionCase、不自动交易；与 Case 正交（Signal=标的级市场判定，Case=组合级决策事项）
+
+### 10.4 护栏链顺序（不可调换）
+
+Decision LLM 输出 → `RiskOverrideStateMachine`（风险否决，单向保守：仅压进攻方向）→ `DecisionGuardrailPipeline`（结构稳定器 → 市场阶段护栏 → 数据质量置信度封顶）。每次修正落 `DecisionScoreCalibration` 审计字段。
+
+### 10.5 M7 运行时增量（不破坏第 2/7 节既有契约）
+
+- 工具签名 = sorted-keys JSON + **参数值级代码规范化**（`0700.HK`≡`hk700`≡`HK00700`）→ 等价调用共享缓存与非重试语义
+- `budgetSkipBeforeRequest`：剩余预算 <8s 止损终止（区别于 totalTimeout，不发计费请求）
+- `get_market_snapshot` scope guard：请求代码与冻结快照完全无交集 → `scope_violation` 错误（部分缺失仍走 warning）
+
+### 10.6 当前边界（App 集成待办）
+
+核心库与 Agent 工具已完成并有测试基线；**尚未接入 AppModel/UI**：
+- AppModel/MarketData 控制器与广度预暖、NextHourGuidanceContext 广度注入
+- 信号结算调度（每日盘后 `settleDueSignals`）与流水线 UI 入口
+- MarketDecisionDashboard/信号的展示面板（红涨绿跌走 AppPalette）
+
+接入时遵守第 8 节时间尺度隔离与互斥 guard；上述接线完成后更新本节。

@@ -59,6 +59,13 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `Core/Clients/` | 1559 (4 文件) | 外部数据源 + LLM API 客户端（通用基础设施，从 TrendResearch/ 移出归位）：AlphaVantageClient(279，含 quota/cache/budget) / SECOfficialSourceClient(161，SEC EDGAR HTTP) / TavilySearchClient(349，web search) / OpenAICompatibleAgentClient(770，OpenAI 兼容 LLM)。被 TrendResearch 工具、NextHourGuidance、InvestmentIntelligence、V2 Provider 层跨子系统复用 |
 | `Core/TrendResearch/` | 8367 (22 文件) | **AI 趋势研究子系统**：TrendResearchAgent(821) 多轮 Tool Calling Harness / TrendResearchToolRegistry(576) / TrendResearchSnapshot(460) / SubmitTrendReportTool / TrendAnalysisValidator / TrendEvidenceLedger（actor，在 TrendResearchTool.swift 内）/ TrendClaimEvidencePolicy(261) / TrendEvidenceMetadata / SEC+AlphaVantage+Tavily \*ResearchTool（调用 `Core/Clients/` 的 client）/ TrendSourceFreshnessPolicy。数据源 client 已移至 `Core/Clients/`。详见下方「AI 研判子系统」 |
 | `Core/Trend/` | 3519 (11 文件) | 趋势数据层：TrendAnalysisStore / TrendTrackingModels / TrendTrackingStore / TrendAnalysisValidator / TrendReportModuleTools / TrendSourceStatus 等趋势报告与跟踪持久化和校验 |
+| `Core/MarketData/` | ~2600 (13 文件) | **市场数据引擎（L1/L2）**：统一行情契约/腾讯全字段/新浪+东财快照/东财腾讯K线双源/NewsNow热榜/广度计算/熔断限速缓存/MarketDataEngine fallback 门面/TechnicalAnalysisEngine 规则技术分析（六模块100分制）。设计参考 daily_stock_analysis（MIT） |
+| `Core/InvestmentIntelligence/DecisionContract/` | 4 文件 | **决策契约（L3）**：CanonicalDecisionScale（五带/三态/八态单一事实源）、MarketPhase（7态+行为禁令+节假日近似表）、结构稳定器护栏、数据质量→置信度封顶 |
+| `Core/InvestmentIntelligence/MarketSignals/` | 6 文件 | **信号闭环（L6）**：行动候选/仪表盘抽取、市价结算（先止损/跳空开盘价）、反向失效、胜率记忆校准（≥30样本，70%胜率中性锚）、`market-signals/` 一对象一文件 Store |
+| `Core/InvestmentIntelligence/StrategySkills/` | 4 文件 | **策略技能（L4）**：15 技能 Swift 常量库（移植 DSA strategies，量化口径保留）、默认纪律基线注入、regime 路由 |
+| `Core/InvestmentIntelligence/MarketResearchPipeline/` | 2 文件 | **多 Agent 流水线（L7）**：quick/standard/full/specialist 四档、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、LLM 失败确定性兜底 |
+| `Core/Backtest/` | 1 文件 | **策略规则级回测（L8）**：技能量化条件历史求值，胜率/盈亏比/回撤 |
+| `Core/TrendResearch/TrendResearchArgumentCanonicalizer.swift` | 100 | 工具签名参数值规范化（等价代码格式共享缓存） |
 | `Core/NativeSnapshotStore.swift` | 246 | 数据快照持久化（注：是规范化 Snapshot DTO 的文件 Store，**不是数据库**，不涉及 SQLite） |
 | `Core/UserPortfolioStore.swift` | 351 | 用户持仓存储 |
 | `Core/InvestmentPlansStore.swift` | 184 | 投资计划存储 |

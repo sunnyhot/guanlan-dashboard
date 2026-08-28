@@ -1,7 +1,7 @@
 # 投资决策引擎落地总体计划（DSA 蓝图八层全量）
 
 - **日期**: 2026-08-28
-- **状态**: 已定稿，待实施
+- **状态**: M1-M9 已实施（937 测试全绿，App 构建通过）；M10（token 型源）待凭据；App 集成接线见 baseline 第 10.6 节待办
 - **来源**: 对 [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis)（下称 DSA，MIT 许可，Python，约 32 万行）的深度调研结论 + 本仓库现状摸底
 - **范围声明**: 本计划覆盖八层能力的全量落地（用户决策：「全干」）。实施按里程碑垂直切片推进，每个里程碑独立可验证、可中止。
 
