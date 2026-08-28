@@ -43,7 +43,6 @@ struct TrendAnalysisSettingsStore {
         saveAPIKeysToKeychain(settings)
         var sanitized = settings
         sanitized.provider.apiKey = ""
-        sanitized.webSearch.apiKey = ""
         sanitized.alphaVantage.apiKey = ""
         try JSONFilePersistence.save(sanitized, to: fileURL, encoder: encoder)
     }
@@ -59,17 +58,21 @@ struct TrendAnalysisSettingsStore {
             account: KeychainHelper.Account.openAIKey,
             userDefaultsKey: "qieman.trend.openai.key"
         )
-        let tavily = resolvedAPIKey(
-            account: KeychainHelper.Account.tavilyKey,
-            userDefaultsKey: "qieman.trend.tavily.key"
-        )
         let alpha = resolvedAPIKey(
             account: KeychainHelper.Account.alphaVantageKey,
             userDefaultsKey: "qieman.trend.alphavantage.key"
         )
         if let key = openAI, !key.isEmpty { settings.provider.apiKey = key }
-        if let key = tavily, !key.isEmpty { settings.webSearch.apiKey = key }
         if let key = alpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
+        removeLegacyTavilyKey()
+    }
+
+    /// Tavily 联网搜索已下线（2026-08-28）：清理用户 Keychain/UserDefaults 里的孤儿密钥。
+    private func removeLegacyTavilyKey() {
+        if readSecret(KeychainHelper.Account.tavilyKey) != nil {
+            KeychainHelper.delete(account: KeychainHelper.Account.tavilyKey)
+        }
+        userDefaults.removeObject(forKey: "qieman.trend.tavily.key")
     }
 
     private func resolvedAPIKey(account: String, userDefaultsKey: String) -> String? {
@@ -89,10 +92,6 @@ struct TrendAnalysisSettingsStore {
            !settings.provider.apiKey.isEmpty {
             writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
         }
-        if readSecret(KeychainHelper.Account.tavilyKey) == nil,
-           !settings.webSearch.apiKey.isEmpty {
-            writeSecret(settings.webSearch.apiKey, KeychainHelper.Account.tavilyKey)
-        }
         if readSecret(KeychainHelper.Account.alphaVantageKey) == nil,
            !settings.alphaVantage.apiKey.isEmpty {
             writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)
@@ -104,10 +103,6 @@ struct TrendAnalysisSettingsStore {
         if !settings.provider.apiKey.isEmpty {
             writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
             userDefaults.set(settings.provider.apiKey, forKey: "qieman.trend.openai.key")
-        }
-        if !settings.webSearch.apiKey.isEmpty {
-            writeSecret(settings.webSearch.apiKey, KeychainHelper.Account.tavilyKey)
-            userDefaults.set(settings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
         }
         if !settings.alphaVantage.apiKey.isEmpty {
             writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)

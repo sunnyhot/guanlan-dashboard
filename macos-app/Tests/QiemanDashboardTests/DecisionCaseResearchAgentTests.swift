@@ -25,7 +25,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
             settings: Self.configuredSettings,
-            webSearchSettings: .empty,
             officialSourceSettings: .empty
         )
 
@@ -60,7 +59,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
                 settings: Self.configuredSettings,
-                webSearchSettings: .empty,
                 officialSourceSettings: .empty
             )
             // 成功:说明门禁触发了重试(context → submit)
@@ -82,7 +80,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
                 settings: TrendAIProviderSettings.empty,  // 未配置
-                webSearchSettings: .empty,
                 officialSourceSettings: .empty
             )
             XCTFail("应抛 missingConfiguration")
@@ -113,7 +110,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
                 settings: Self.configuredSettings,
-                webSearchSettings: .empty,
                 officialSourceSettings: .empty
             )
             XCTFail("exitReview 反向证据不足应导致提交失败")
@@ -142,7 +138,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
             settings: Self.configuredSettings,
-            webSearchSettings: .empty,
             officialSourceSettings: .empty
         )
         XCTAssertEqual(report.suggestedState, .stable)
@@ -164,7 +159,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
                 settings: Self.configuredSettings,
-                webSearchSettings: .empty,
                 officialSourceSettings: .empty
             )
             XCTFail("findings 非数组应导致解码失败")
@@ -198,7 +192,6 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
             settings: Self.configuredSettings,
-            webSearchSettings: .empty,
             officialSourceSettings: .empty
         )
         XCTAssertEqual(report.findings.count, 1)

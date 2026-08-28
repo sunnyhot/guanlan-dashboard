@@ -12,7 +12,6 @@ protocol TrendResearchAgentProtocol: Sendable {
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings,
         alphaVantageSettings: AlphaVantageSettings,
         scope: TrendResearchRunScope,
@@ -80,9 +79,6 @@ struct TrendResearchRunPolicy: Sendable {
     var maxToolCalls: Int = 40
     var expandedMaxTurns: Int = 48
     var expandedMaxToolCalls: Int = 96
-    var preferredWebSearches: Int = 6
-    var maxWebSearches: Int = 10
-    var expandedMaxWebSearches: Int = 12
     var reservedSubmitToolCalls: Int = 8
     var maxInvalidSubmissions: Int = 4
     var maxPlainTextResponses: Int = 2
@@ -90,7 +86,6 @@ struct TrendResearchRunPolicy: Sendable {
     var totalTimeoutSeconds: Double = Self.defaultTotalTimeoutSeconds
     var expandedTotalTimeoutSeconds: Double = 1800
     var totalTimeoutPerAssetSeconds: Double = 4
-    var totalTimeoutPerWebSearchSeconds: Double = 15
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
     var temperature: Double = 0.2
@@ -106,9 +101,7 @@ struct TrendResearchRunPolicy: Sendable {
         scope: TrendResearchRunScope = .full
     ) -> (
         maxTurns: Int,
-        maxToolCalls: Int,
-        preferredWebSearches: Int,
-        maxWebSearches: Int
+        maxToolCalls: Int
     ) {
         let pageSize = 20
         let pageCount = max(1, (max(0, assetCount) + pageSize - 1) / pageSize)
@@ -120,28 +113,18 @@ struct TrendResearchRunPolicy: Sendable {
         ) / TrendReportDraftStore.assetBatchSize
         // 基础 18 轮已为常见的 15 只以内组合预留 3 个持仓报告批次。
         let extraReportBatches = max(0, reportBatchCount - 3)
-        // 组合板块更多时允许少量额外定向搜索，但增长缓慢且有独立硬上限。
-        let extraSectorGroups = max(0, (max(0, sectorCount) - 4 + 3) / 4)
-        let effectiveMaxWebSearches = min(
-            expandedMaxWebSearches,
-            maxWebSearches + extraSectorGroups
-        )
         switch scope {
         case .marketRadar:
-            return (18, 28, 8, 10)
+            return (18, 28)
         case .closeReview:
             return (
                 min(expandedMaxTurns, 8 + extraPages + max(1, reportBatchCount)),
-                min(expandedMaxToolCalls, 16 + extraPages + max(1, reportBatchCount)),
-                0,
-                0
+                min(expandedMaxToolCalls, 16 + extraPages + max(1, reportBatchCount))
             )
         case .longTerm:
             return (
                 min(expandedMaxTurns, 14 + extraPages + max(1, reportBatchCount)),
-                min(expandedMaxToolCalls, 28 + extraPages + max(1, reportBatchCount)),
-                2,
-                4
+                min(expandedMaxToolCalls, 28 + extraPages + max(1, reportBatchCount))
             )
         case .full:
             return (
@@ -152,29 +135,23 @@ struct TrendResearchRunPolicy: Sendable {
                 maxToolCalls: min(
                     expandedMaxToolCalls,
                     maxToolCalls + extraPages + extraReportBatches
-                ),
-                preferredWebSearches: min(
-                    effectiveMaxWebSearches,
-                    preferredWebSearches + extraSectorGroups
-                ),
-                maxWebSearches: effectiveMaxWebSearches
+                )
             )
         }
     }
 
-    /// 整次运行总预算随组合规模和搜索预算扩张：分块报告与多次联网搜索都比单次提交
-    /// 更耗时，固定基线对大组合偏紧。最终受 expandedTotalTimeoutSeconds 约束。
-    func effectiveTotalTimeout(assetCount: Int, maxWebSearches: Int) -> Double {
+    /// 整次运行总预算随组合规模扩张：分块报告比单次提交更耗时，固定基线对大组合偏紧。
+    /// 最终受 expandedTotalTimeoutSeconds 约束。
+    func effectiveTotalTimeout(assetCount: Int) -> Double {
         let scaled = totalTimeoutSeconds
             + Double(max(0, assetCount)) * totalTimeoutPerAssetSeconds
-            + Double(max(0, maxWebSearches)) * totalTimeoutPerWebSearchSeconds
         return min(expandedTotalTimeoutSeconds, scaled)
     }
 }
 
 enum TrendResearchAgentEvent: Sendable {
     case started(runID: UUID)
-    case harnessConfigured(maxTurns: Int, maxToolCalls: Int, preferredWebSearches: Int, maxWebSearches: Int)
+    case harnessConfigured(maxTurns: Int, maxToolCalls: Int)
     case moduleProgress(completedSections: Int, totalSections: Int, nextToolName: String?)
     case harnessGuidance(message: String)
     case turnStarted(Int)
@@ -233,13 +210,11 @@ struct TrendResearchAgent: Sendable {
     let registry: TrendResearchToolRegistry
     let promptBuilder: TrendResearchPromptBuilder
     let policy: TrendResearchRunPolicy
-    let webSearchCache: TrendWebSearchResponseCache
 
     /// 运行时强制：submit 前必须先调用的工具。
     static let overviewToolName = "get_portfolio_overview"
     static let officialSourceToolName = "official_sec_research"
     static let alphaVantageToolName = "alpha_vantage_research"
-    static let webSearchToolName = "web_search"
     static let submitToolName = "submit_trend_report"
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
     /// 一次有意义的 LLM 往返所需最小秒数（对拍 DSA runner 的 _MIN_STEP_BUDGET_S）。
@@ -253,8 +228,6 @@ struct TrendResearchAgent: Sendable {
             purpose: "trend-research",
             policy: ModelGatewayPolicy(maxRetriesPerProvider: 0)
         ),
-        webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
-        webSearchCache: TrendWebSearchResponseCache = .shared,
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared,
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
@@ -263,21 +236,18 @@ struct TrendResearchAgent: Sendable {
     ) {
         self.client = client
         self.registry = TrendResearchToolRegistry(
-            webSearchClient: webSearchClient,
             officialSourceClient: officialSourceClient,
             officialSourceCache: officialSourceCache,
             alphaVantageClient: alphaVantageClient,
             alphaVantageCache: alphaVantageCache
         )
         self.promptBuilder = TrendResearchPromptBuilder()
-        self.webSearchCache = webSearchCache
         self.policy = policy
     }
 
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
         scope requestedScope: TrendResearchRunScope = .full,
@@ -308,7 +278,6 @@ struct TrendResearchAgent: Sendable {
         let alphaVantageRequired = scope.usesOfficialAndVendorResearch
             && alphaVantageSettings.isConfigured
             && !snapshot.eligibleAlphaVantageSymbols.isEmpty
-        let webSearchRequired = scope.usesWebSearch && webSearchSettings.isConfigured
         var messages = promptBuilder.initialMessages(
             snapshot: snapshot,
             scope: scope,
@@ -323,7 +292,6 @@ struct TrendResearchAgent: Sendable {
         var executedByID: [String: TrendResearchToolResult] = [:]
         var executedBySignature: [String: TrendResearchToolResult] = [:]
         var toolCallAudits: [TrendAgentToolCallAudit] = []
-        var webSearchUnavailableResult: TrendResearchToolResult?
         var harnessState = TrendResearchHarnessState(
             snapshot: snapshot,
             scope: scope,
@@ -332,8 +300,6 @@ struct TrendResearchAgent: Sendable {
         )
         var submissionMode = false
         var consecutiveRequestTimeoutRecoveries = 0
-        var didWarnPreferredWebSearches = false
-        var didWarnWebSearchExhausted = false
         // 拒批教训去重:同一条校验错误只前移注入一次,避免修复循环里重复刷屏。
         var injectedRejectionLessons: Set<String> = []
         let started = Date()
@@ -343,14 +309,9 @@ struct TrendResearchAgent: Sendable {
             reportAssetCount: snapshot.expectedFundCodes.count,
             scope: scope
         )
-        // 整次运行总预算随组合规模与搜索预算动态扩张；固定值对大组合+联网搜索偏紧。
+        // 整次运行总预算随组合规模动态扩张；固定值对大组合偏紧。
         let effectiveTotal = policy.effectiveTotalTimeout(
-            assetCount: snapshot.assets.count,
-            maxWebSearches: runLimits.maxWebSearches
-        )
-        let webSearchGovernor = TrendWebSearchGovernor(
-            maxNetworkSearches: runLimits.maxWebSearches,
-            cache: webSearchCache
+            assetCount: snapshot.assets.count
         )
 
         await AIAgentDiagnosticLog.record(
@@ -363,7 +324,6 @@ struct TrendResearchAgent: Sendable {
                 "privacy_mode": .string(snapshot.privacyMode.rawValue),
                 "max_turns": .number(Double(runLimits.maxTurns)),
                 "max_tool_calls": .number(Double(runLimits.maxToolCalls)),
-                "max_web_searches": .number(Double(runLimits.maxWebSearches)),
                 "total_timeout_seconds": .number(effectiveTotal),
             ])
         )
@@ -372,9 +332,7 @@ struct TrendResearchAgent: Sendable {
         await eventHandler(
             .harnessConfigured(
                 maxTurns: runLimits.maxTurns,
-                maxToolCalls: runLimits.maxToolCalls,
-                preferredWebSearches: runLimits.preferredWebSearches,
-                maxWebSearches: runLimits.maxWebSearches
+                maxToolCalls: runLimits.maxToolCalls
             )
         )
         let initialDraftProgress = await reportDraftStore.progress()
@@ -399,7 +357,6 @@ struct TrendResearchAgent: Sendable {
                 draftStore: reportDraftStore,
                 ledger: ledger,
                 policy: policy,
-                webSearchGovernor: webSearchGovernor,
                 started: started,
                 eventHandler: eventHandler
             ) {
@@ -432,7 +389,6 @@ struct TrendResearchAgent: Sendable {
                     configuredTimeout
                 )
 
-                let webStatusBeforeRequest = await webSearchGovernor.status()
                 let remainingResearchToolCalls = max(
                     0,
                     runLimits.maxToolCalls
@@ -440,25 +396,13 @@ struct TrendResearchAgent: Sendable {
                         - toolCallCount
                 )
                 let researchToolBudgetExhausted = remainingResearchToolCalls == 0
-                let researchReady = harnessState.readyForSubmission(
-                    webSearchConfigured: webSearchRequired,
-                    allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
-                        && (
-                            webStatusBeforeRequest.remainingNetworkSearches == 0
-                                || webSearchUnavailableResult != nil
-                                || researchToolBudgetExhausted
-                        )
-                )
+                let researchReady = harnessState.readyForSubmission()
                 if researchReady, !submissionMode {
                     submissionMode = true
-                    let guidance = if researchToolBudgetExhausted,
-                                      scope.requiresOpportunitySearchCoverage,
-                                      !harnessState.opportunitySearchCoverageComplete {
+                    let guidance = if researchToolBudgetExhausted {
                         "研究工具预算已收敛，已为结构化提交保留 \(policy.reservedSubmitToolCalls) 次调用。立即停止搜索并提交降级市场模块；未完成覆盖的维度不得生成机会结论。"
-                    } else if webSearchUnavailableResult != nil {
-                        "Tavily 本次不可用，已停止新增联网请求。继续使用本地行情、缓存和已有证据完成「\(scope.displayName)」；需要外部证据的结论必须降级。"
                     } else {
-                        "「\(scope.displayName)」所需数据已覆盖，立即停止新增搜索，只提交当前开放模块；其它模块复用上一份已校验结果。"
+                        "「\(scope.displayName)」所需数据已覆盖，立即停止新增研究，只提交当前开放模块；其它模块复用上一份已校验结果。"
                     }
                     messages.append(correctionMessage(guidance))
                     await eventHandler(.harnessGuidance(message: guidance))
@@ -475,13 +419,6 @@ struct TrendResearchAgent: Sendable {
                     }
                     guard scope.allowedResearchToolNames.contains(toolName) else {
                         return false
-                    }
-                    if toolName == Self.webSearchToolName {
-                        return webSearchRequired
-                            && (!officialSourceRequired || harnessState.officialSourceAttempted)
-                            && webStatusBeforeRequest.remainingNetworkSearches > 0
-                            && webSearchUnavailableResult == nil
-                            && !researchToolBudgetExhausted
                     }
                     if toolName == Self.officialSourceToolName {
                         return officialSourceRequired
@@ -523,16 +460,7 @@ struct TrendResearchAgent: Sendable {
                     }
 
                     consecutiveRequestTimeoutRecoveries += 1
-                    let webStatus = await webSearchGovernor.status()
-                    let researchReady = harnessState.readyForSubmission(
-                        webSearchConfigured: webSearchRequired,
-                        allowInsufficientWebEvidence: harnessState.webSearchAttempts > 0
-                            && (
-                                webStatus.remainingNetworkSearches == 0
-                                    || webSearchUnavailableResult != nil
-                                    || researchToolBudgetExhausted
-                            )
-                    )
+                    let researchReady = harnessState.readyForSubmission()
                     if researchReady {
                         submissionMode = true
                     }
@@ -548,7 +476,7 @@ struct TrendResearchAgent: Sendable {
                     let recoveryProgress = await reportDraftStore.progress()
                     let nextStep = researchReady
                         ? "研究覆盖已经满足要求。停止新增搜索和解释，只调用当前开放的分模块提交工具 \(recoveryProgress.nextToolName ?? TrendReportModuleToolName.actions)。"
-                        : "不要重复展开分析，本轮只完成一个必要动作：\(harnessState.nextStepHint(webSearchConfigured: webSearchRequired, remainingWebSearches: webStatus.remainingNetworkSearches))"
+                        : "不要重复展开分析，本轮只完成一个必要动作：\(harnessState.nextStepHint())"
                     let guidance = "第 \(currentTurn) 轮模型请求超时。Harness 正在自动恢复：\(nextStep)"
                     messages.append(correctionMessage(guidance))
                     await eventHandler(.harnessGuidance(message: guidance))
@@ -606,10 +534,6 @@ struct TrendResearchAgent: Sendable {
                     let missingLookThrough = isSubmit
                         && scope.requiresFundLookThrough
                         && !harnessState.lookThroughCoverageComplete
-                    // 配置了 Tavily 时至少尝试一次联网搜索，避免把模型记忆冒充最新行业/政策信息。
-                    let missingWebSearch = isSubmit
-                        && webSearchRequired
-                        && harnessState.webSearchAttempts == 0
                     let missingOfficialSource = isSubmit
                         && officialSourceRequired
                         && !harnessState.officialSourceAttempted
@@ -622,7 +546,6 @@ struct TrendResearchAgent: Sendable {
                         || missingLookThrough
                         || missingOfficialSource
                         || missingAlphaVantage
-                        || missingWebSearch
 
                     var rawToolResult: TrendResearchToolResult
                     if unexpectedTool {
@@ -675,9 +598,6 @@ struct TrendResearchAgent: Sendable {
                             isError: true
                         )
                         await eventHandler(.modelCorrection(message: "报告提交被延后：必须先完成一次 Alpha Vantage 结构化研究。"))
-                    } else if missingWebSearch {
-                        rawToolResult = .content(TrendResearchToolEnvelope.error(code: "missing_required_tool", message: "已配置 Tavily，提交报告前必须至少调用一次 web_search 获取最新行业或政策信息。"), isError: true)
-                        await eventHandler(.modelCorrection(message: "报告提交被延后：已配置 Tavily，必须先完成一次联网搜索。"))
                     } else if !isSubmit, let cached = executedByID[call.id] {
                         rawToolResult = cached
                         await eventHandler(.toolFinished(name: toolName, summary: "复用本次运行缓存：\(Self.summary(of: cached))"))
@@ -686,23 +606,12 @@ struct TrendResearchAgent: Sendable {
                         rawToolResult = cached
                         executedByID[call.id] = cached
                         await eventHandler(.toolFinished(name: toolName, summary: "复用本次运行缓存：\(Self.summary(of: cached))"))
-                    } else if toolName == Self.webSearchToolName,
-                              let unavailable = webSearchUnavailableResult {
-                        rawToolResult = unavailable
-                        executedByID[call.id] = unavailable
-                        if let callSignature {
-                            executedBySignature[callSignature] = unavailable
-                        }
-                        await eventHandler(.modelCorrection(message: "Tavily 本次运行已失败，已阻止重复联网请求以避免继续消耗搜索额度。"))
-                        await eventHandler(.toolFinished(name: toolName, summary: "已熔断重复请求：\(Self.summary(of: unavailable))"))
                     } else {
                         await eventHandler(.toolStarted(name: toolName))
                         var context = TrendResearchToolContext(
                             snapshot: snapshot,
                             scope: scope,
                             evidenceLedger: ledger,
-                            webSearchSettings: webSearchSettings,
-                            webSearchGovernor: webSearchGovernor,
                             officialSourceSettings: officialSourceSettings,
                             alphaVantageSettings: alphaVantageSettings,
                             reportDraftStore: reportDraftStore
@@ -713,11 +622,6 @@ struct TrendResearchAgent: Sendable {
                         executedByID[call.id] = rawToolResult
                         if let callSignature {
                             executedBySignature[callSignature] = rawToolResult
-                        }
-                        if toolName == Self.webSearchToolName,
-                           rawToolResult.isError,
-                           Self.isNonRecoverableWebSearchFailure(rawToolResult) {
-                            webSearchUnavailableResult = rawToolResult
                         }
                         await eventHandler(.toolFinished(name: toolName, summary: Self.summary(of: rawToolResult)))
                     }
@@ -745,16 +649,13 @@ struct TrendResearchAgent: Sendable {
                             result: rawToolResult
                         )
                     )
-                    let webStatus = await webSearchGovernor.status()
                     let enrichedToolResult = harnessState.attachingHarnessMetadata(
                         to: toolResult,
                         turn: turnCount,
                         maxTurns: runLimits.maxTurns,
                         toolCallsUsed: toolCallCount,
                         maxToolCalls: runLimits.maxToolCalls,
-                        reservedSubmitToolCalls: policy.reservedSubmitToolCalls,
-                        webStatus: webStatus,
-                        webSearchConfigured: webSearchRequired
+                        reservedSubmitToolCalls: policy.reservedSubmitToolCalls
                     )
 
                     // 工具结果超过字节上限：截断后再回灌，避免单个超大结果撑爆上下文。
@@ -820,16 +721,6 @@ struct TrendResearchAgent: Sendable {
                         stubAcceptedBatchArguments(&messages, callID: call.id)
                     }
 
-                    if webStatus.networkSearchesUsed >= runLimits.preferredWebSearches,
-                       !didWarnPreferredWebSearches {
-                        didWarnPreferredWebSearches = true
-                        pendingHarnessGuidance = "已完成 \(webStatus.networkSearchesUsed) 次真实 Tavily 搜索并取得 \(harnessState.seenWebEvidenceIDs.count) 条去重证据。请先评估现有证据；只有明确缺口才继续搜索，否则整理并提交报告。"
-                    }
-                    if webStatus.remainingNetworkSearches == 0,
-                       !didWarnWebSearchExhausted {
-                        didWarnWebSearchExhausted = true
-                        pendingHarnessGuidance = "Tavily 实际请求预算已用完，后续轮次将不再暴露 web_search；请使用已有网页证据和本地工具完成研究并提交报告。"
-                    }
                 }
 
                 if let pendingHarnessGuidance {
@@ -856,7 +747,6 @@ struct TrendResearchAgent: Sendable {
                         settings: settings,
                         officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
-                        webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
                         canonicalEvidence: await ledger.allEvidence(),
@@ -878,7 +768,6 @@ struct TrendResearchAgent: Sendable {
                         settings: settings,
                         officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
-                        webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
                         canonicalEvidence: await ledger.allEvidence(),
@@ -900,7 +789,6 @@ struct TrendResearchAgent: Sendable {
                         settings: settings,
                         officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
-                        webSearchConfigured: webSearchSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
                         canonicalEvidence: await ledger.allEvidence(),
@@ -950,7 +838,6 @@ struct TrendResearchAgent: Sendable {
         draftStore: TrendReportDraftStore,
         ledger: TrendEvidenceLedger,
         policy: TrendResearchRunPolicy,
-        webSearchGovernor: TrendWebSearchGovernor,
         started: Date,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport? {
@@ -975,7 +862,6 @@ struct TrendResearchAgent: Sendable {
                 snapshot: snapshot,
                 scope: scope,
                 evidenceLedger: ledger,
-                webSearchGovernor: webSearchGovernor,
                 reportDraftStore: draftStore
             )
             context.invalidSubmissionBudget = policy.maxInvalidSubmissions
@@ -1288,22 +1174,6 @@ struct TrendResearchAgent: Sendable {
 
     private static func isSubmissionTool(_ name: String) -> Bool {
         name == submitToolName || moduleSubmitToolNames.contains(name)
-    }
-
-    private static func isNonRecoverableWebSearchFailure(_ result: TrendResearchToolResult) -> Bool {
-        guard let object = try? JSONSerialization.jsonObject(with: Data(result.contentJSON.utf8)) as? [String: Any],
-              let error = object["error"] as? [String: Any],
-              let code = error["code"] as? String else {
-            return false
-        }
-        return [
-            "web_search_failed",
-            "web_search_invalid_response",
-            "web_search_timed_out",
-            "web_search_quota_exhausted",
-            "web_search_auth_failed",
-            "web_search_not_configured",
-        ].contains(code)
     }
 
     private static func parseErrors(from contentJSON: String) -> [String] {

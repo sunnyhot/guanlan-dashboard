@@ -386,33 +386,6 @@ struct TrendAIProviderSettings: Codable, Hashable {
     }
 }
 
-struct TavilySearchSettings: Codable, Hashable, Sendable {
-    var apiKey: String
-
-    static let empty = TavilySearchSettings(apiKey: "")
-
-    var isConfigured: Bool {
-        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var redactedAPIKey: String {
-        TrendAIProviderSettings.mask(apiKey)
-    }
-
-    init(apiKey: String) {
-        self.apiKey = apiKey
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? ""
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case apiKey
-    }
-}
-
 struct OfficialSourceSettings: Codable, Hashable, Sendable {
     var enabled: Bool
     var secContactEmail: String
@@ -583,7 +556,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
 
 struct TrendAnalysisSettings: Codable, Hashable {
     var provider: TrendAIProviderSettings
-    var webSearch: TavilySearchSettings
     var officialSources: OfficialSourceSettings
     var alphaVantage: AlphaVantageSettings
     var defaultPrivacyMode: TrendPrivacyMode
@@ -601,7 +573,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
-        webSearch: .empty,
         officialSources: .empty,
         alphaVantage: .empty,
         defaultPrivacyMode: .sanitized,
@@ -618,7 +589,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     init(
         provider: TrendAIProviderSettings,
-        webSearch: TavilySearchSettings = .empty,
         officialSources: OfficialSourceSettings = .empty,
         alphaVantage: AlphaVantageSettings = .empty,
         defaultPrivacyMode: TrendPrivacyMode,
@@ -633,7 +603,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoFailureMessages: [String: String] = [:]
     ) {
         self.provider = provider
-        self.webSearch = webSearch
         self.officialSources = officialSources
         self.alphaVantage = alphaVantage
         self.defaultPrivacyMode = defaultPrivacyMode
@@ -651,7 +620,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         provider = try container.decodeIfPresent(TrendAIProviderSettings.self, forKey: .provider) ?? .empty
-        webSearch = try container.decodeIfPresent(TavilySearchSettings.self, forKey: .webSearch) ?? .empty
         officialSources = try container.decodeIfPresent(
             OfficialSourceSettings.self,
             forKey: .officialSources
@@ -696,7 +664,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(provider, forKey: .provider)
-        try container.encode(webSearch, forKey: .webSearch)
         try container.encode(officialSources, forKey: .officialSources)
         try container.encode(alphaVantage, forKey: .alphaVantage)
         try container.encode(defaultPrivacyMode, forKey: .defaultPrivacyMode)
@@ -713,7 +680,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case provider
-        case webSearch
         case officialSources
         case alphaVantage
         case defaultPrivacyMode

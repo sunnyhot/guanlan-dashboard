@@ -220,7 +220,6 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
         settings: TrendAIProviderSettings,
         officialSourceConfigured: Bool = false,
         alphaVantageConfigured: Bool = false,
-        webSearchConfigured: Bool,
         completedAt: String,
         toolCalls: [TrendAgentToolCallAudit],
         canonicalEvidence: [TrendEvidence],
@@ -278,20 +277,11 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
                 itemCount: alphaEvidence.count
             )
         }
-        let webEvidence = canonicalEvidence.filter {
-            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
-        }
         bySource[.webSearch] = TrendSourceStatus(
             source: .webSearch,
-            status: webSearchConfigured
-                ? (webEvidence.isEmpty ? .failed : .success)
-                : .notConfigured,
-            asOf: webEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
-            receivedAt: webEvidence.map(\.retrievedAt).max() ?? completedAt,
-            errorCode: webSearchConfigured && webEvidence.isEmpty
-                ? "no_usable_web_evidence"
-                : nil,
-            itemCount: webEvidence.count
+            status: .notConfigured,
+            receivedAt: completedAt,
+            detail: "联网搜索已下线（Tavily 已移除）。"
         )
         for source in TrendDataSource.allCases where bySource[source] == nil {
             bySource[source] = TrendSourceStatus(

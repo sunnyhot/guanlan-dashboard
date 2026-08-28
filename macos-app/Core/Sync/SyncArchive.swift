@@ -108,12 +108,10 @@ struct WatchlistItemSync: Codable {
 /// 趋势配置(含 API Key)。仅在内存短暂存在,加密后随 payload 传输。
 struct TrendSettingsSyncDTO: Codable {
     var provider: TrendAIProviderSettings
-    var webSearch: TavilySearchSettings
     var alphaVantage: AlphaVantageSettings
 
     init(from s: TrendAnalysisSettings) {
         self.provider = s.provider
-        self.webSearch = s.webSearch
         self.alphaVantage = s.alphaVantage
     }
 }

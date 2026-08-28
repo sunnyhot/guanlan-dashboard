@@ -249,8 +249,7 @@ final class NextHourGuidanceTests: XCTestCase {
         let report = try await agent.run(
             context: context,
             researchSnapshot: researchSnapshot,
-            settings: settings,
-            webSearchSettings: .empty
+            settings: settings
         )
 
         XCTAssertEqual(report.slotKey, "2026-07-27 10:15")
@@ -260,49 +259,6 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(report.actions.first?.confidence, 68)
         XCTAssertEqual(report.actions.first?.evidenceIDs, ["local:next-hour:asset:fund:510300"])
         XCTAssertEqual(client.callCount, 2)
-    }
-
-    func testAgentRejectsBuyWhenWebSearchIsNotConfigured() async throws {
-        let arguments = """
-        {
-          "headline": "尝试买入",
-          "posture": "opportunistic",
-          "summary": "测试缺少联网搜索时的风控门槛。",
-          "actions": [{
-            "target_id": "fund:510300",
-            "target_name": "沪深300ETF",
-            "action": "buy",
-            "instruction": "分批买入 5% 仓位。",
-            "rationale": "测试理由。",
-            "trigger": "价格保持强势",
-            "invalidation": "价格转弱",
-            "confidence": 70,
-            "evidence_ids": ["local:next-hour:asset:fund:510300"]
-          }],
-          "risk_checks": ["确认行情时间", "确认没有重复订单"]
-        }
-        """
-        let client = FakeNextHourAgentClient(arguments: arguments)
-        let agent = NextHourGuidanceAgent(client: client)
-        let settings = TrendAIProviderSettings(
-            providerName: "Test",
-            baseURL: "https://api.example.com/v1",
-            model: "test-model",
-            apiKey: "sk-test",
-            timeoutSeconds: 300
-        )
-
-        do {
-            _ = try await agent.run(
-                context: makeAgentContext(),
-                researchSnapshot: makeResearchSnapshot(),
-                settings: settings,
-                webSearchSettings: .empty
-            )
-            XCTFail("未配置联网搜索时不应接受 buy")
-        } catch let error as NextHourGuidanceAgentError {
-            XCTAssertTrue(error.localizedDescription.contains("未配置联网搜索"))
-        }
     }
 
     private func makeAgentContext() throws -> NextHourGuidanceContext {

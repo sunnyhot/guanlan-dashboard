@@ -148,119 +148,21 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(client.responsesConsumed, 5)
     }
 
-    func testWebSearchFailureTripsCircuitBreakerAndSubmitsSafeDegradedReport() async throws {
-        let snapshot = makeEmptySnapshot()
-        let report = TrendAnalysisReport
-            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
-            .groundedForSubmission(snapshot: snapshot)
-        let webClient = FailingCountingTavilyClient()
-
-        var responses: [Result<AgentCompletionResult, Error>] = [
-            .success(toolCallResponse([
-                AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
-            ])),
-            .success(toolCallResponse([
-                AgentToolCall(id: "w1", function: AgentToolFunctionCall(name: "web_search", arguments: #"{"query":"最新产业政策","time_range":"day","research_target":{"kind":"macro","key":"产业政策"}}"#))
-            ]))
-        ]
-        responses += try moduleSubmissionResponses(report: report, prefix: "web")
-        let client = ScriptedTrendAgentClient(responses)
-        let agent = TrendResearchAgent(client: client, webSearchClient: webClient)
-
-        let result = try await agent.run(
-            snapshot: snapshot,
-            settings: testSettings(),
-            webSearchSettings: TavilySearchSettings(apiKey: "tvly-test")
-        ) { _ in }
-
-        let callCount = await webClient.callCount()
-        XCTAssertEqual(callCount, 1)
-        XCTAssertTrue(result.opportunities.isEmpty)
-        XCTAssertTrue(result.actions.isEmpty)
-        XCTAssertEqual(
-            result.sourceStatuses.first(where: { $0.source == .webSearch })?.status,
-            .failed
-        )
-    }
-
     func testRunPolicyExpandsBudgetForPaginatedAssetsWithinHardCap() {
         let policy = TrendResearchRunPolicy()
 
         let small = policy.effectiveLimits(assetCount: 13)
         XCTAssertEqual(small.maxTurns, 18)
         XCTAssertEqual(small.maxToolCalls, 40)
-        XCTAssertEqual(small.preferredWebSearches, 6)
-        XCTAssertEqual(small.maxWebSearches, 10)
 
         let oneHundred = policy.effectiveLimits(assetCount: 100, sectorCount: 9)
         // 批量 5→8 后,100 基金的分批轮次预算相应下降(2026-08-19 耗时优化)。
         XCTAssertEqual(oneHundred.maxTurns, 32)
         XCTAssertEqual(oneHundred.maxToolCalls, 54)
-        XCTAssertEqual(oneHundred.preferredWebSearches, 8)
-        XCTAssertEqual(oneHundred.maxWebSearches, 12)
 
         let veryLarge = policy.effectiveLimits(assetCount: 2_000, sectorCount: 30)
         XCTAssertEqual(veryLarge.maxTurns, 48)
         XCTAssertEqual(veryLarge.maxToolCalls, 96)
-        XCTAssertEqual(veryLarge.maxWebSearches, 12)
-    }
-
-    func testMarketRadarPreservesSubmissionBudgetWhenSearchCoverageStalls() async throws {
-        let snapshot = makeEmptySnapshot()
-        let report = reportWithUncertainShortHorizon(
-            TrendAnalysisReport
-                .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
-                .groundedForSubmission(snapshot: snapshot)
-        )
-        var responses: [Result<AgentCompletionResult, Error>] = []
-
-        for turn in 0..<4 {
-            let calls = (0..<5).map { index in
-                AgentToolCall(
-                    id: "invalid-\(turn)-\(index)",
-                    function: AgentToolFunctionCall(
-                        name: "web_search",
-                        arguments: #"{"query":"火星采矿最新进展","research_target":{"kind":"sector","key":"火星采矿"}}"#
-                    )
-                )
-            }
-            responses.append(.success(toolCallResponse(calls)))
-        }
-        for attempt in 0..<5 {
-            responses.append(
-                try moduleSubmissionResponse(
-                    report: report,
-                    stage: .market,
-                    id: "budget-reserved-market-\(attempt)"
-                )
-            )
-        }
-
-        let client = ScriptedTrendAgentClient(responses)
-        let recorder = TrendAgentEventRecorder()
-        let agent = TrendResearchAgent(client: client)
-        let result: TrendAnalysisReport
-        do {
-            result = try await agent.run(
-                snapshot: snapshot,
-                settings: testSettings(),
-                webSearchSettings: TavilySearchSettings(apiKey: "tvly-test"),
-                scope: .marketRadar,
-                baselineReport: report
-            ) { event in
-                await recorder.record(event)
-            }
-        } catch {
-            XCTFail("市场雷达应保留提交预算：\(error.localizedDescription)；校验：\(await recorder.validationErrors)")
-            return
-        }
-
-        XCTAssertEqual(client.responsesConsumed, 5)
-        XCTAssertEqual(
-            client.requestedToolNames(at: 4),
-            [TrendReportModuleToolName.market]
-        )
-        XCTAssertEqual(result.marketOutlook.map(\.id), report.marketOutlook.map(\.id))
     }
 
     func testHarnessImmediatelySwitchesToOrderedModuleTools() async throws {
@@ -363,38 +265,6 @@ final class TrendResearchAgentTests: XCTestCase {
         }
     }
 
-    func testHarnessRemovesRepeatedWebEvidenceFromLaterToolResult() throws {
-        var harness = TrendResearchHarnessState(snapshot: makeEmptySnapshot())
-        let content = TrendResearchToolEnvelope.success(
-            [
-                "query": "测试",
-                "results": [[
-                    "evidence_id": "web:tavily:same",
-                    "title": "同一来源",
-                    "url": "https://example.com/same"
-                ]],
-                "count": 1
-            ],
-            evidenceIDs: ["web:tavily:same"]
-        )
-        let result = TrendResearchToolResult.content(content)
-
-        let first = harness.process(toolName: "web_search", result: result)
-        let second = harness.process(toolName: "web_search", result: result)
-        let firstObject = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(first.contentJSON.utf8)) as? [String: Any]
-        )
-        let secondObject = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: Data(second.contentJSON.utf8)) as? [String: Any]
-        )
-        let firstData = try XCTUnwrap(firstObject["data"] as? [String: Any])
-        let secondData = try XCTUnwrap(secondObject["data"] as? [String: Any])
-
-        XCTAssertEqual(firstData["count"] as? Int, 1)
-        XCTAssertEqual(secondData["count"] as? Int, 0)
-        XCTAssertEqual(harness.duplicateWebEvidenceCount, 1)
-    }
-
     func testHarnessRequiresOfficialSourceAttemptBeforeSubmission() {
         var harness = TrendResearchHarnessState(
             snapshot: makeEmptySnapshot(),
@@ -405,12 +275,10 @@ final class TrendResearchAgentTests: XCTestCase {
         )
         _ = harness.process(toolName: "get_portfolio_overview", result: overview)
 
-        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertFalse(harness.readyForSubmission())
         XCTAssertTrue(
-            harness.nextStepHint(
-                webSearchConfigured: false,
-                remainingWebSearches: 0
-            ).contains("official_sec_research")
+            harness.nextStepHint()
+                .contains("official_sec_research")
         )
 
         let failedOfficialQuery = TrendResearchToolResult.content(
@@ -426,7 +294,7 @@ final class TrendResearchAgentTests: XCTestCase {
         )
 
         XCTAssertTrue(harness.officialSourceAttempted)
-        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertTrue(harness.readyForSubmission())
     }
 
     func testHarnessRequiresAlphaVantageAttemptBeforeSubmission() {
@@ -439,12 +307,10 @@ final class TrendResearchAgentTests: XCTestCase {
         )
         _ = harness.process(toolName: "get_portfolio_overview", result: overview)
 
-        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertFalse(harness.readyForSubmission())
         XCTAssertTrue(
-            harness.nextStepHint(
-                webSearchConfigured: false,
-                remainingWebSearches: 0
-            ).contains("alpha_vantage_research")
+            harness.nextStepHint()
+                .contains("alpha_vantage_research")
         )
 
         let failedVendorQuery = TrendResearchToolResult.content(
@@ -460,7 +326,7 @@ final class TrendResearchAgentTests: XCTestCase {
         )
 
         XCTAssertEqual(harness.alphaVantageAttempts, 1)
-        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: false))
+        XCTAssertTrue(harness.readyForSubmission())
     }
 
     func testTurnLimitExceeded() async throws {
@@ -489,43 +355,6 @@ final class TrendResearchAgentTests: XCTestCase {
         case overview
         case market
         case actions
-    }
-
-    private func reportWithUncertainShortHorizon(
-        _ report: TrendAnalysisReport
-    ) -> TrendAnalysisReport {
-        let horizons = report.horizons.map { item in
-            guard item.horizon == .short else { return item }
-            return TrendHorizonView(
-                horizon: item.horizon,
-                direction: .uncertain,
-                confidence: TrendConfidence(score: 35, label: "低"),
-                rationale: item.rationale,
-                counterSignals: item.counterSignals,
-                claimEvidence: item.claimEvidence
-            )
-        }
-        return TrendAnalysisReport(
-            id: report.id,
-            generatedAt: report.generatedAt,
-            dataAsOf: report.dataAsOf,
-            privacyMode: report.privacyMode,
-            externalSignalStatus: report.externalSignalStatus,
-            portfolio: report.portfolio,
-            horizons: horizons,
-            marketOutlook: report.marketOutlook,
-            sectors: report.sectors,
-            opportunities: report.opportunities,
-            keyAssets: report.keyAssets,
-            assetTrends: report.assetTrends,
-            actions: report.actions,
-            evidence: report.evidence,
-            warnings: report.warnings,
-            disclaimer: report.disclaimer,
-            schemaVersion: report.schemaVersion,
-            disposition: report.disposition,
-            sourceStatuses: report.sourceStatuses
-        )
     }
 
     private func moduleSubmissionResponses(
@@ -686,23 +515,6 @@ final class TrendResearchAgentTests: XCTestCase {
             stopReason: .stop,
             finishReason: "stop"
         )
-    }
-}
-
-private actor FailingCountingTavilyClient: TavilySearchClientProtocol {
-    private var count = 0
-
-    func search(
-        _ searchRequest: TavilySearchRequest,
-        apiKey: String,
-        timeoutSeconds: Double
-    ) async throws -> TavilySearchResponse {
-        count += 1
-        throw TavilySearchClientError.invalidResponse("测试响应格式错误")
-    }
-
-    func callCount() -> Int {
-        count
     }
 }
 

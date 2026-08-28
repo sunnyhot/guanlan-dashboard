@@ -92,7 +92,6 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         context: NextHourGuidanceContext,
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> (MarketSignalAssessment, NewsEventAssessment, PortfolioContextAssessment) {
         async let market = runMarketSignalAgent(
@@ -100,7 +99,6 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         )
         async let news = runNewsEventAgent(
             context: context, settings: settings,
-            webSearchSettings: webSearchSettings,
             officialSourceSettings: officialSourceSettings
         )
         async let portfolio = runPortfolioContextAgent(
@@ -178,16 +176,10 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
     private func runNewsEventAgent(
         context: NextHourGuidanceContext,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> NewsEventAssessment {
         var tools: [AgentToolDefinition] = []
 
-        // web_search
-        if webSearchSettings.isConfigured {
-            let webDef = registry.definitions.first { $0.function.name == "web_search" }
-            if let webDef { tools.append(webDef) }
-        }
         // official_sec_research
         if officialSourceSettings.isSECConfigured {
             let secDef = registry.definitions.first { $0.function.name == "official_sec_research" }
@@ -420,8 +412,6 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         TrendResearchToolContext(
             snapshot: TrendResearchSnapshot.placeholder,
             evidenceLedger: TrendEvidenceLedger(),
-            webSearchSettings: .empty,
-            webSearchGovernor: TrendWebSearchGovernor(maxNetworkSearches: 4),
             officialSourceSettings: .empty,
             alphaVantageSettings: .empty
         )

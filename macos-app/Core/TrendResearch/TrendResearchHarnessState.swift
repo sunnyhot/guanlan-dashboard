@@ -21,18 +21,6 @@ struct TrendResearchHarnessState: Sendable {
     private(set) var alphaVantageAttempts = 0
     private(set) var successfulAlphaVantageQueries = 0
     private(set) var seenAlphaVantageEvidenceIDs: Set<String> = []
-    private(set) var webSearchAttempts = 0
-    private(set) var successfulWebSearches = 0
-    private(set) var seenWebEvidenceIDs: Set<String> = []
-    private(set) var duplicateWebEvidenceCount = 0
-    private(set) var opportunitySearchTargetKinds: Set<TrendResearchTargetKind> = []
-    private(set) var opportunitySearchSectorGroups: Set<String> = []
-
-    private static let requiredOpportunitySearchTargetKinds: Set<TrendResearchTargetKind> = [
-        .assetClass,
-        .index,
-        .sector,
-    ]
 
     init(
         snapshot: TrendResearchSnapshot,
@@ -74,44 +62,13 @@ struct TrendResearchHarnessState: Sendable {
         officialSourceAttempts > 0
     }
 
-    var opportunitySearchCoverageComplete: Bool {
-        Self.requiredOpportunitySearchTargetKinds.isSubset(of: opportunitySearchTargetKinds)
-            && missingOpportunitySearchSectorGroups.isEmpty
-    }
-
-    var missingOpportunitySearchTargetKinds: [TrendResearchTargetKind] {
-        Self.requiredOpportunitySearchTargetKinds
-            .subtracting(opportunitySearchTargetKinds)
-            .sorted { $0.opportunityScanOrder < $1.opportunityScanOrder }
-    }
-
-    var missingOpportunitySearchSectorGroups: [String] {
-        MarketOpportunityUniverse.requiredSectorGroupKeys.filter {
-            !opportunitySearchSectorGroups.contains(Self.normalized($0))
-        }
-    }
-
-    func readyForSubmission(
-        webSearchConfigured: Bool,
-        allowInsufficientWebEvidence: Bool = false
-    ) -> Bool {
+    func readyForSubmission() -> Bool {
         (!scope.requiresPortfolioOverview || overviewRead)
             && assetCoverageComplete
             && lookThroughCoverageComplete
             && (!marketSnapshotRequired || marketSnapshotRead)
             && (!officialSourceRequired || officialSourceAttempted)
             && (!alphaVantageRequired || alphaVantageAttempts > 0)
-            && (
-                !webSearchConfigured
-                    || allowInsufficientWebEvidence
-                    || (!scope.requiresOpportunitySearchCoverage && successfulWebSearches > 0)
-                    || (
-                        scope.requiresOpportunitySearchCoverage
-                            &&
-                        opportunitySearchCoverageComplete
-                            && successfulWebSearches > 0
-                    )
-            )
     }
 
     mutating func process(
@@ -145,34 +102,10 @@ struct TrendResearchHarnessState: Sendable {
                 }
             }
         }
-        if toolName == TrendResearchAgent.webSearchToolName {
-            webSearchAttempts += 1
-            if !result.isError {
-                let evidenceCountBefore = seenWebEvidenceIDs.count
-                processed = deduplicatingWebEvidence(in: result)
-                if seenWebEvidenceIDs.count > evidenceCountBefore {
-                    successfulWebSearches += 1
-                }
-            }
-        }
-
         guard !processed.isError,
               let envelope = Self.jsonObject(processed.contentJSON),
               let data = envelope["data"] as? [String: Any] else {
             return processed
-        }
-
-        if toolName == TrendResearchAgent.webSearchToolName,
-           let target = data["research_target"] as? [String: Any],
-           let rawKind = target["kind"] as? String,
-           let kind = TrendResearchTargetKind(rawValue: rawKind),
-           Self.requiredOpportunitySearchTargetKinds.contains(kind) {
-            opportunitySearchTargetKinds.insert(kind)
-            if kind == .sector,
-               let key = target["key"] as? String,
-               let group = MarketOpportunityUniverse.sectorGroup(matching: key) {
-                opportunitySearchSectorGroups.insert(Self.normalized(group.key))
-            }
         }
 
         switch toolName {
@@ -201,9 +134,7 @@ struct TrendResearchHarnessState: Sendable {
         maxTurns: Int,
         toolCallsUsed: Int,
         maxToolCalls: Int,
-        reservedSubmitToolCalls: Int,
-        webStatus: TrendWebSearchGovernorStatus,
-        webSearchConfigured: Bool
+        reservedSubmitToolCalls: Int
     ) -> TrendResearchToolResult {
         guard var envelope = Self.jsonObject(result.contentJSON) else { return result }
         let remainingResearchToolCalls = max(
@@ -233,32 +164,8 @@ struct TrendResearchHarnessState: Sendable {
             "alpha_vantage_attempts": alphaVantageAttempts,
             "successful_alpha_vantage_queries": successfulAlphaVantageQueries,
             "alpha_vantage_evidence_count": seenAlphaVantageEvidenceIDs.count,
-            "web_search_attempts": webSearchAttempts,
-            "successful_web_searches": successfulWebSearches,
-            "web_evidence_count": seenWebEvidenceIDs.count,
-            "duplicate_web_evidence_removed": duplicateWebEvidenceCount,
-            "opportunity_search_dimensions": opportunitySearchTargetKinds
-                .sorted { $0.opportunityScanOrder < $1.opportunityScanOrder }
-                .map(\.rawValue),
-            "opportunity_sector_groups": MarketOpportunityUniverse.requiredSectorGroupKeys.filter {
-                opportunitySearchSectorGroups.contains(Self.normalized($0))
-            },
-            "opportunity_sector_groups_missing": missingOpportunitySearchSectorGroups,
-            "opportunity_search_coverage_complete": opportunitySearchCoverageComplete,
-            "web_network_searches_used": webStatus.networkSearchesUsed,
-            "web_cache_hits": webStatus.cacheHits,
-            "web_searches_remaining": webStatus.remainingNetworkSearches,
-            "ready_for_submission": readyForSubmission(
-                webSearchConfigured: webSearchConfigured,
-                allowInsufficientWebEvidence: webSearchAttempts > 0
-                    && (
-                        webStatus.remainingNetworkSearches == 0
-                            || remainingResearchToolCalls == 0
-                    )
-            ),
+            "ready_for_submission": readyForSubmission(),
             "next_step_hint": nextStepHint(
-                webSearchConfigured: webSearchConfigured,
-                remainingWebSearches: webStatus.remainingNetworkSearches,
                 remainingResearchToolCalls: remainingResearchToolCalls
             )
         ]
@@ -275,8 +182,6 @@ struct TrendResearchHarnessState: Sendable {
     }
 
     func nextStepHint(
-        webSearchConfigured: Bool,
-        remainingWebSearches: Int,
         remainingResearchToolCalls: Int = .max
     ) -> String {
         if scope.requiresPortfolioOverview, !overviewRead {
@@ -292,120 +197,20 @@ struct TrendResearchHarnessState: Sendable {
             return "调用 get_market_snapshot 读取基金净值、大盘与底层证券当日涨跌；基金归因不能只复述持仓结构。"
         }
         if officialSourceRequired, !officialSourceAttempted {
-            return "先调用 official_sec_research 查询组合相关美股或底层美股的 SEC 官方申报；官方源完成或明确失败后，才使用网页搜索补缺。"
+            return "先调用 official_sec_research 查询组合相关美股或底层美股的 SEC 官方申报。"
         }
         if alphaVantageRequired, alphaVantageAttempts == 0 {
-            if !officialSourceRequired,
-               webSearchConfigured,
-               successfulWebSearches == 0 {
-                return "中国标的先调用 web_search 并限定交易所、监管机构或政府官方域名；取得一手证据后，再用 alpha_vantage_research 补充结构化行情。"
-            }
             return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方源，不得覆盖 SEC 等一手证据。"
         }
-        if webSearchConfigured,
-           webSearchAttempts > 0,
-           remainingResearchToolCalls == 0 {
-            return "研究工具预算已收敛；停止新增搜索，使用现有证据提交当前模块。未覆盖的全市场维度不得生成机会结论。"
-        }
-        if webSearchConfigured,
-           scope.requiresOpportunitySearchCoverage,
-           !opportunitySearchCoverageComplete {
-            if remainingWebSearches == 0 {
-                return "全市场机会扫描未覆盖全部维度且联网预算已用完；本次不得提交新的机会报告，也不得用组合长期观点填充机会清单。"
-            }
-            let missing = missingOpportunitySearchTargetKinds
-                .map(\.opportunityScanDisplayName)
-                .joined(separator: "、")
-            if !missing.isEmpty {
-                return "继续调用 web_search 完成独立于当前持仓的全市场机会扫描，尚缺：\(missing)。每次使用对应的 research_target.kind。"
-            }
-            let nextGroup = missingOpportunitySearchSectorGroups.first ?? "行业板块"
-            return "继续调用 web_search 扫描板块分组「\(nextGroup)」，research_target.key 使用分组名，并在 sectorKeys 中完整填写该组板块。"
-        }
-        if webSearchConfigured, successfulWebSearches == 0 {
-            if remainingWebSearches == 0 {
-                return "联网搜索未形成有效新证据且预算已用完；以 insufficientEvidence/analysisOnly 收尾，所有行动降为 watch。"
-            }
-            return "调用 web_search 并取得至少一条非空、未重复的新证据；必须携带 research_target。"
-        }
-        if remainingWebSearches == 0 {
-            return "联网搜索预算已用完；可读取尚需的本地行情，然后使用现有证据提交报告。"
+        if remainingResearchToolCalls == 0 {
+            return "研究工具预算已收敛；使用现有证据提交当前模块。未覆盖的全市场维度不得生成机会结论。"
         }
         return "「\(scope.displayName)」必需数据已覆盖；立即停止新增研究，只提交当前开放模块。"
-    }
-
-    private mutating func deduplicatingWebEvidence(
-        in result: TrendResearchToolResult
-    ) -> TrendResearchToolResult {
-        guard var envelope = Self.jsonObject(result.contentJSON),
-              var data = envelope["data"] as? [String: Any],
-              let results = data["results"] as? [[String: Any]] else {
-            return result
-        }
-
-        var newEvidenceIDs: [String] = []
-        let uniqueResults = results.filter { item in
-            guard let evidenceID = item["evidence_id"] as? String else { return true }
-            if seenWebEvidenceIDs.contains(evidenceID) {
-                duplicateWebEvidenceCount += 1
-                return false
-            }
-            seenWebEvidenceIDs.insert(evidenceID)
-            newEvidenceIDs.append(evidenceID)
-            return true
-        }
-
-        data["results"] = uniqueResults
-        data["count"] = uniqueResults.count
-        envelope["data"] = data
-        envelope["evidence_ids"] = newEvidenceIDs
-        if uniqueResults.count < results.count {
-            var warnings = envelope["warnings"] as? [String] ?? []
-            warnings.append("Harness 已移除 \(results.count - uniqueResults.count) 条本次运行中重复出现的网页证据。")
-            envelope["warnings"] = warnings
-        }
-
-        guard let encoded = try? JSONSerialization.data(withJSONObject: envelope),
-              let content = String(data: encoded, encoding: .utf8) else {
-            return result
-        }
-        return TrendResearchToolResult(
-            contentJSON: content,
-            isError: result.isError,
-            completion: result.completion
-        )
     }
 
     private static func jsonObject(_ content: String) -> [String: Any]? {
         try? JSONSerialization.jsonObject(with: Data(content.utf8)) as? [String: Any]
     }
 
-    private static func normalized(_ value: String) -> String {
-        value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .filter { $0.isLetter || $0.isNumber }
-    }
 }
 
-private extension TrendResearchTargetKind {
-    var opportunityScanOrder: Int {
-        switch self {
-        case .assetClass: 0
-        case .index: 1
-        case .sector: 2
-        case .asset: 3
-        case .macro: 4
-        }
-    }
-
-    var opportunityScanDisplayName: String {
-        switch self {
-        case .assetClass: "大类资产"
-        case .index: "大盘/宽基"
-        case .sector: "行业/主题板块"
-        case .asset: "持仓标的"
-        case .macro: "宏观环境"
-        }
-    }
-}

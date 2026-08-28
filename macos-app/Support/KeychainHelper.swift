@@ -4,7 +4,7 @@ import Security
 // MARK: - KeychainHelper
 //
 // 跨平台(macOS/iOS)Keychain 存取,用于保存敏感数据:
-// - 趋势分析 API Key(OpenAI/Tavily/AlphaVantage):从明文 JSON 迁移到 Keychain
+// - 趋势分析 API Key(OpenAI/AlphaVantage):从明文 JSON 迁移到 Keychain
 // - 同步密码、accessToken(同步功能用)
 //
 // 零依赖,纯 Security 框架。service 固定为 bundleId 前缀,account 区分用途。
@@ -93,6 +93,7 @@ enum KeychainHelper {
     /// 趋势分析 API Key 的 Keychain account 名。
     enum Account {
         static let openAIKey = "trend.openai.apiKey"
+        /// 已废弃：Tavily 联网搜索 2026-08-28 下线，仅保留给遗留密钥清理用。
         static let tavilyKey = "trend.tavily.apiKey"
         static let alphaVantageKey = "trend.alphaVantage.apiKey"
         static let syncPassword = "sync.password"

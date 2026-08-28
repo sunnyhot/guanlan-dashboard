@@ -6,9 +6,9 @@ enum TrendAssetDailyAttributionPolicy {
     static let unavailablePrefix = "原因待确认："
     static let maxUnderlyingQuoteCount = 40
 
+    // 联网搜索（web:tavily:）已下线；因果归因只能由底层证券行情或结构化行情证据支撑。
     private static let causalEvidencePrefixes = [
         "market:stock:",
-        "web:tavily:",
         "vendor:alphavantage:",
     ]
     private static let unavailableBoundaryTerms = [

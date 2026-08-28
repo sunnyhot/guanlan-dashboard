@@ -33,9 +33,6 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(policy.expandedMaxTurns, 48)
         XCTAssertEqual(policy.maxToolCalls, 40)
         XCTAssertEqual(policy.expandedMaxToolCalls, 96)
-        XCTAssertEqual(policy.preferredWebSearches, 6)
-        XCTAssertEqual(policy.maxWebSearches, 10)
-        XCTAssertEqual(policy.expandedMaxWebSearches, 12)
         XCTAssertEqual(policy.reservedSubmitToolCalls, 8)
         XCTAssertEqual(policy.maxInvalidSubmissions, 4)
         XCTAssertEqual(policy.maxPlainTextResponses, 2)
@@ -60,13 +57,11 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         let huge = policy.effectiveLimits(assetCount: 10_000, sectorCount: 100)
         XCTAssertEqual(huge.maxTurns, 48, "maxTurns 不得超 expandedMaxTurns")
         XCTAssertEqual(huge.maxToolCalls, 96, "maxToolCalls 不得超 expandedMaxToolCalls")
-        XCTAssertEqual(huge.maxWebSearches, 12, "maxWebSearches 不得超 expandedMaxWebSearches")
 
         // 空资产时回到 baseline
         let empty = policy.effectiveLimits(assetCount: 0)
         XCTAssertEqual(empty.maxTurns, 18)
         XCTAssertEqual(empty.maxToolCalls, 40)
-        XCTAssertEqual(empty.maxWebSearches, 10)
     }
 
     // MARK: - makeFailure artifact 结构冻结
@@ -84,7 +79,6 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         let artifact = TrendAgentRunArtifact.makeFailure(
             snapshot: snapshot,
             settings: TrendAIProviderSettings.empty,
-            webSearchConfigured: false,
             completedAt: "2026-08-05 10:00:00",
             toolCalls: [],
             canonicalEvidence: [evidence],
@@ -125,8 +119,7 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
             let artifact = TrendAgentRunArtifact.makeFailure(
                 snapshot: snapshot,
                 settings: TrendAIProviderSettings.empty,
-                webSearchConfigured: false,
-                completedAt: "2026-08-0\(i + 1) 10:00:00",
+                    completedAt: "2026-08-0\(i + 1) 10:00:00",
                 toolCalls: [],
                 canonicalEvidence: [],
                 message: "run-\(i)"
@@ -149,7 +142,6 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         let artifact = TrendAgentRunArtifact.makeFailure(
             snapshot: snapshot,
             settings: TrendAIProviderSettings.empty,
-            webSearchConfigured: false,
             completedAt: completedAt,
             toolCalls: [],
             canonicalEvidence: [],

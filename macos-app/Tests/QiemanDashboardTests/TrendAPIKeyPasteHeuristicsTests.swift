@@ -10,13 +10,6 @@ final class TrendAPIKeyPasteHeuristicsTests: XCTestCase {
         )
     }
 
-    func testTavilyPrefixKey() {
-        XCTAssertEqual(
-            TrendAPIKeyPasteHeuristics.classify("tvly-abcdef1234567890abcdef"),
-            .tavilyKey
-        )
-    }
-
     func testZhipuShapedKeySuggestsPreset() {
         let key = String(repeating: "a1b2c3d4", count: 4) + "." + String(repeating: "e5f6a7b8", count: 2)
         XCTAssertEqual(

@@ -3,7 +3,7 @@ import SwiftUI
 
 // MARK: - iOS 趋势/AI 模型设置(W1.8 向导化)
 //
-// 复用 model.trendSettings(provider/webSearch/alphaVantage)和
+// 复用 model.trendSettings(provider/alphaVantage)和
 // saveTrendAnalysisSettings()。未配置用户进入分步向导(选供应商 → 贴 Key →
 // 检测 → 隐私 → 完成,可选增强收敛为完成页开关);已配置用户进入完整编辑
 // 表单,不被向导打扰,可手动「重新配置(向导)」。
@@ -282,8 +282,6 @@ struct IOSTrendSettingsView: View {
             model.trendSettings.provider.apiKey = key
             model.saveTrendAnalysisSettings()
             clipboardHint = "已从剪贴板识别并填入 Key\(suggestedPresetName.map { "(疑似 \($0))" } ?? "")"
-        case .tavilyKey:
-            break
         }
     }
 
@@ -478,7 +476,6 @@ struct IOSTrendSettingsView: View {
             }
 
             providerSection
-            webSearchSection
             alphaVantageSection
             actionsSection
         }
@@ -529,20 +526,6 @@ struct IOSTrendSettingsView: View {
             Text("AI 模型")
         } footer: {
             Text("兼容 OpenAI 接口的模型供应商。API Key 在设备上使用安全存储；手动同步时会随端到端加密数据传输，服务端不能读取。")
-        }
-    }
-
-    // MARK: - Tavily 网络搜索
-
-    private var webSearchSection: some View {
-        Section {
-            SecureField("Tavily API Key", text: tavilyKeyBinding)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-        } header: {
-            Text("网络搜索 (Tavily)")
-        } footer: {
-            Text("可选。用于 AI 研判时检索最新市场资讯。")
         }
     }
 
@@ -616,10 +599,6 @@ struct IOSTrendSettingsView: View {
     private var timeoutBinding: Binding<String> {
         Binding(get: { String(Int(model.trendSettings.provider.timeoutSeconds.rounded())) },
                 set: { if let t = Double($0) { model.trendSettings.provider.timeoutSeconds = t } })
-    }
-    private var tavilyKeyBinding: Binding<String> {
-        Binding(get: { model.trendSettings.webSearch.apiKey },
-                set: { model.trendSettings.webSearch.apiKey = $0 })
     }
     private var alphaVantageEnabledBinding: Binding<Bool> {
         Binding(get: { model.trendSettings.alphaVantage.enabled },

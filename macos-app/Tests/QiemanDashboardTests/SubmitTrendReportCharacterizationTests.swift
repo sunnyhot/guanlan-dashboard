@@ -109,14 +109,12 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         _ report: TrendAnalysisReport,
         snapshot: TrendResearchSnapshot,
         ledger: TrendEvidenceLedger,
-        webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty
     ) async throws -> TrendResearchToolResult {
         let context = TrendResearchToolContext(
             snapshot: snapshot,
             evidenceLedger: ledger,
-            webSearchSettings: webSearchSettings,
             officialSourceSettings: officialSourceSettings,
             alphaVantageSettings: alphaVantageSettings
         )
@@ -160,32 +158,6 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         // short horizon 应被降为 uncertain
         let shortHorizon = normalized.horizons.first { $0.horizon == .short }
         XCTAssertEqual(shortHorizon?.direction, .uncertain, "短期方向必须降为 uncertain")
-    }
-
-    // MARK: - 测试 2:webSearch 非 success 触发降级
-
-    func testStaleWebSearchClearsActions() async throws {
-        // 配置了 Tavily key 但 ledger 无 web 证据 → normalizedSourceStatuses 把 webSearch 标 .failed
-        let snapshot = makeCompleteSnapshot()
-        let ledger = TrendEvidenceLedger()
-        await recordOverviewEvidence(into: ledger, snapshot: snapshot)
-
-        let report = TrendAnalysisReport
-            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
-            .groundedForSubmission(snapshot: snapshot)
-        let reportWithAction = injectAction(into: await ensureAssetTrends(in: report, for: snapshot, ledger: ledger))
-
-        let result = try await submitReport(
-            reportWithAction, snapshot: snapshot, ledger: ledger,
-            webSearchSettings: TavilySearchSettings(apiKey: "fake-key-for-test")
-        )
-        let normalized = try extractReport(from: result)
-
-        // 即使 portfolioQuote/marketIndex/fundDisclosure 都 success,webSearch failed 仍触发降级
-        XCTAssertEqual(normalized.disposition, .insufficientEvidence)
-        XCTAssertTrue(normalized.actions.isEmpty)
-        let webStatus = normalized.sourceStatuses.first { $0.source == .webSearch }
-        XCTAssertEqual(webStatus?.status, .failed, "配了 key 但无 web 证据 → webSearch 必须为 failed")
     }
 
     // MARK: - 测试 3:基金披露 itemCount < 期望触发降级
@@ -239,9 +211,11 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
             retrievedAt: createdAt, summary: "模型自造的证据",
             metadata: .unknown
         )
-        let baseReport = TrendAnalysisReport
-            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable)
-            .groundedForSubmission(snapshot: snapshot)
+        let baseReport = downgradingShortHorizonToUncertain(
+            TrendAnalysisReport
+                .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable)
+                .groundedForSubmission(snapshot: snapshot)
+        )
         let reportWithAssetTrends = await ensureAssetTrends(in: baseReport, for: snapshot, ledger: ledger)
         // 重置 sectors/actions 避免 claimEvidence 引用问题,只保留 assetTrends + evidence 数组
         let reportWithFabricated = rebuildReport(
@@ -290,10 +264,12 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         let ledger = TrendEvidenceLedger()
         await recordOverviewEvidence(into: ledger, snapshot: snapshot)
 
-        // 模型在 report 里虚报 webSearch=success,但 ledger 无 web 证据 + 未配 Tavily
-        let baseReport = TrendAnalysisReport
-            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable)
-            .groundedForSubmission(snapshot: snapshot)
+        // 模型在 report 里虚报各来源 success,但 ledger 无对应证据且未配置官方源
+        let baseReport = downgradingShortHorizonToUncertain(
+            TrendAnalysisReport
+                .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable)
+                .groundedForSubmission(snapshot: snapshot)
+        )
         var report = await ensureAssetTrends(in: baseReport, for: snapshot, ledger: ledger)
         let fakeSuccessStatuses = TrendDataSource.allCases.map {
             TrendSourceStatus(source: $0, status: .success, receivedAt: createdAt)
@@ -303,11 +279,7 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         let result = try await submitReport(report, snapshot: snapshot, ledger: ledger)
         let normalized = try extractReport(from: result)
 
-        // webSearch 应被 reset:模型虚报 success,但未配 Tavily key → App 重写为 notConfigured/notRequested
-        let webStatus = normalized.sourceStatuses.first { $0.source == .webSearch }
-        XCTAssertNotEqual(webStatus?.status, .success,
-                          "模型虚报的 webSearch=success 必须被 App 重写(未配置时不得保留 success)")
-        // officialSource 同理:模型虚报 success,但未配 SEC → 必须被重写
+        // officialSource:模型虚报 success,但未配 SEC → 必须被重写
         let officialStatus = normalized.sourceStatuses.first { $0.source == .officialSource }
         XCTAssertNotEqual(officialStatus?.status, .success,
                           "模型虚报的 officialSource=success 必须被 App 重写")
@@ -320,10 +292,12 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         let ledger = TrendEvidenceLedger()
         await recordOverviewEvidence(into: ledger, snapshot: snapshot)
 
-        // 模型自报 externalSignalStatus=.available,但 ledger 只有 portfolio 证据(无 SEC/Tavily)
-        let report = TrendAnalysisReport
-            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available) // 模型虚报
-            .groundedForSubmission(snapshot: snapshot)
+        // 模型自报 externalSignalStatus=.available,但 ledger 只有 portfolio 证据(无外部研究)
+        let report = downgradingShortHorizonToUncertain(
+            TrendAnalysisReport
+                .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .available) // 模型虚报
+                .groundedForSubmission(snapshot: snapshot)
+        )
         let reportWithTrends = await ensureAssetTrends(in: report, for: snapshot, ledger: ledger)
 
         let result = try await submitReport(reportWithTrends, snapshot: snapshot, ledger: ledger)
@@ -384,6 +358,31 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
 
     // MARK: - 报告构造辅助
 
+    /// 完整快照(本地数据源全 success)下 insufficientReasons 为空,App 不再强制降级
+    /// short 周期;但 ledger 无外部研究证据时 disposition 仍为 insufficientEvidence,
+    /// Validator 要求模型自报的 short 周期必须是 uncertain(联网搜索移除后的新契约)。
+    private func downgradingShortHorizonToUncertain(
+        _ report: TrendAnalysisReport
+    ) -> TrendAnalysisReport {
+        let horizons = report.horizons.map { item in
+            guard item.horizon == .short, item.direction != .uncertain else { return item }
+            var rationale = item.rationale
+            if !rationale.contains("待观察信号") {
+                rationale += " 待观察信号:本地数据源齐全但缺少外部研究证据;数据恢复后重估短期方向。"
+            }
+            return TrendHorizonView(
+                horizon: item.horizon,
+                direction: .uncertain,
+                confidence: item.confidence,
+                rationale: rationale,
+                whatWouldChange: item.whatWouldChange,
+                counterSignals: item.counterSignals,
+                claimEvidence: item.claimEvidence
+            )
+        }
+        return rebuildReport(report, horizons: horizons)
+    }
+
     /// 给 report 补上与 snapshot 基金资产对应的 assetTrends,并把每只基金的持仓证据写入 ledger。
     /// Validator 要求:① 所有持有基金出现在 assetTrends;② asset.claimEvidence 的 supporting 必须关联该基金。
     private func ensureAssetTrends(
@@ -442,6 +441,7 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
     /// 重建 report,只替换指定字段(保留 schemaVersion=2 等其余字段)。
     private func rebuildReport(
         _ report: TrendAnalysisReport,
+        horizons: [TrendHorizonView]? = nil,
         sectors: [TrendSectorView]? = nil,
         assetTrends: [TrendAssetView]? = nil,
         actions: [TrendActionCandidate]? = nil,
@@ -454,7 +454,7 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
             privacyMode: report.privacyMode,
             externalSignalStatus: report.externalSignalStatus,
             portfolio: report.portfolio,
-            horizons: report.horizons,
+            horizons: horizons ?? report.horizons,
             marketOutlook: report.marketOutlook,
             sectors: sectors ?? report.sectors,
             opportunities: report.opportunities,

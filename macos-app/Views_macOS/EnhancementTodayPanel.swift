@@ -52,10 +52,9 @@ extension EnhancementCenterView {
                     NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
                 }
 
-                if model.trendSettings.provider.isConfigured,
-                   !model.trendSettings.webSearch.isConfigured {
+                if model.trendSettings.provider.isConfigured {
                     Label(
-                        "未配置联网搜索：风控规则只允许输出持有建议",
+                        "联网搜索已下线：风控规则只允许输出持有建议",
                         systemImage: "lock.trianglebadge.exclamationmark"
                     )
                     .font(AppPalette.appFont(.caption, weight: .medium))
@@ -130,7 +129,6 @@ extension EnhancementCenterView {
                 .controlSize(.small)
                 .disabled(
                     !model.trendSettings.provider.isConfigured
-                        || !model.trendSettings.webSearch.isConfigured
                 )
             }
         ) {
@@ -140,8 +138,7 @@ extension EnhancementCenterView {
                 InvestmentDirectionView(
                     analysis: opportunities,
                     hasTrendReport: model.trendReport != nil,
-                    isProviderConfigured: model.trendSettings.provider.isConfigured,
-                    isWebSearchConfigured: model.trendSettings.webSearch.isConfigured
+                    isProviderConfigured: model.trendSettings.provider.isConfigured
                 )
             }
         }

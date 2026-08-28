@@ -58,7 +58,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
 
         XCTAssertFalse(settings.provider.isConfigured)
         XCTAssertEqual(settings.provider.timeoutSeconds, 300)
-        XCTAssertFalse(settings.webSearch.isConfigured)
         XCTAssertTrue(settings.officialSources.enabled)
         XCTAssertFalse(settings.officialSources.isSECConfigured)
         XCTAssertFalse(settings.alphaVantage.enabled)
@@ -79,7 +78,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
                 apiKey: "sk-test-secret",
                 timeoutSeconds: 180
             ),
-            webSearch: TavilySearchSettings(apiKey: "tvly-test-secret"),
             officialSources: OfficialSourceSettings(
                 enabled: true,
                 secContactEmail: "research@example.com"
@@ -105,7 +103,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.model, "glm-5.2")
         XCTAssertEqual(loaded.provider.apiKey, "sk-test-secret")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 180)
-        XCTAssertEqual(loaded.webSearch.apiKey, "tvly-test-secret")
         XCTAssertTrue(loaded.officialSources.isSECConfigured)
         XCTAssertEqual(loaded.officialSources.secContactEmail, "research@example.com")
         XCTAssertTrue(loaded.alphaVantage.isConfigured)
@@ -142,7 +139,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.model, "glm-5.2")
         XCTAssertEqual(loaded.provider.providerName, "智谱")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 60)
-        XCTAssertFalse(loaded.webSearch.isConfigured)
         XCTAssertTrue(loaded.officialSources.enabled)
         XCTAssertFalse(loaded.officialSources.isSECConfigured)
         XCTAssertFalse(loaded.alphaVantage.isConfigured)

@@ -71,14 +71,6 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
         self == .full || self == .longTerm
     }
 
-    var usesWebSearch: Bool {
-        self != .closeReview
-    }
-
-    var requiresOpportunitySearchCoverage: Bool {
-        self == .full || self == .marketRadar
-    }
-
     var allowedResearchToolNames: Set<String> {
         var names: Set<String> = ["get_market_snapshot"]
         if requiresPortfolioOverview { names.insert("get_portfolio_overview") }
@@ -88,7 +80,6 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
             names.insert("official_sec_research")
             names.insert("alpha_vantage_research")
         }
-        if usesWebSearch { names.insert("web_search") }
         return names
     }
 }

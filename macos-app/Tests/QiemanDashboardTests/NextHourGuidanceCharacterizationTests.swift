@@ -151,7 +151,6 @@ final class NextHourGuidanceCharacterizationTests: XCTestCase {
             invalidation: "失效",
             quoteAssessment: assessment,
             marketDataIsFresh: true,
-            webSearchConfigured: true,
             evidenceIDs: [],
             evidenceByID: [:],
             relatedEntityCodes: [],
@@ -180,7 +179,6 @@ final class NextHourGuidanceCharacterizationTests: XCTestCase {
             invalidation: "失效",
             quoteAssessment: assessment,
             marketDataIsFresh: false,  // 行情不新鲜
-            webSearchConfigured: true,
             evidenceIDs: [],
             evidenceByID: [:],
             relatedEntityCodes: [],

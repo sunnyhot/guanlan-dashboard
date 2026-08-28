@@ -441,13 +441,12 @@ extension AppModel {
         let officialText = trendSettings.officialSources.isSECConfigured
             ? "SEC 官方源已配置"
             : "SEC 官方源未配置"
-        let searchText = trendSettings.webSearch.isConfigured ? "Tavily 联网搜索已配置" : "未配置联网搜索"
         let alphaText = trendSettings.alphaVantage.isConfigured
             ? "Alpha Vantage 已配置"
             : "Alpha Vantage 未配置"
         appendTrendProgress(
             "\(scope.displayName)快照已冻结",
-            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(officialText)；\(alphaText)；\(searchText)；隐私 \(snapshot.privacyMode.rawValue)",
+            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(officialText)；\(alphaText)；隐私 \(snapshot.privacyMode.rawValue)",
             level: .success
         )
 
@@ -491,7 +490,6 @@ extension AppModel {
                 try await trendResearchAgent.run(
                     snapshot: snapshot,
                     settings: provider,
-                    webSearchSettings: trendSettings.webSearch,
                     officialSourceSettings: trendSettings.officialSources,
                     alphaVantageSettings: trendSettings.alphaVantage,
                     scope: scope,
@@ -696,14 +694,6 @@ extension AppModel {
                 detail: trendSettings.officialSources.isSECConfigured
                     ? "等待 Agent 优先查询 SEC 官方披露。"
                     : "SEC 官方源需要启用并填写联系邮箱。"
-            ),
-            TrendSourceStatus(
-                source: .webSearch,
-                status: trendSettings.webSearch.isConfigured ? .notRequested : .notConfigured,
-                receivedAt: generatedAt,
-                detail: trendSettings.webSearch.isConfigured
-                    ? "等待 Agent 按研究目标发起联网搜索。"
-                    : "未配置 Tavily API Key。"
             ),
             TrendSourceStatus(
                 source: .alphaVantage,
@@ -1036,15 +1026,10 @@ extension AppModel {
         switch event {
         case .started:
             appendTrendProgress("内嵌趋势 Agent 已启动", level: .activity)
-        case .harnessConfigured(
-            let maxTurns,
-            let maxToolCalls,
-            let preferredWebSearches,
-            let maxWebSearches
-        ):
+        case .harnessConfigured(let maxTurns, let maxToolCalls):
             appendTrendProgress(
                 "Agent Harness 预算已配置",
-                detail: "最多 \(maxTurns) 轮、\(maxToolCalls) 次工具调用；Tavily 建议 \(preferredWebSearches) 次、硬上限 \(maxWebSearches) 次；提交与修复预算已预留。",
+                detail: "最多 \(maxTurns) 轮、\(maxToolCalls) 次工具调用；提交与修复预算已预留。",
                 level: .info
             )
         case .moduleProgress(let completedSections, let totalSections, let nextToolName):
@@ -1342,8 +1327,6 @@ extension AppModel {
             return "读取基金底层资产"
         case "get_market_snapshot":
             return "读取市场快照"
-        case "web_search":
-            return "Tavily 搜索行业与政策"
         case "submit_trend_report":
             return "校验并提交趋势报告"
         case TrendReportModuleToolName.overview:

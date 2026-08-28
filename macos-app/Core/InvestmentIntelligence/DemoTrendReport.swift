@@ -217,7 +217,7 @@ enum DemoTrendReport {
             (.managerWatch, .notConfigured, "未配置主理人关注"),
             (.officialSource, .notConfigured, "未配置 SEC 官方源"),
             (.alphaVantage, .notConfigured, "未配置 Alpha Vantage"),
-            (.webSearch, .notConfigured, "未配置联网搜索")
+            (.webSearch, .notConfigured, "联网搜索已下线")
         ]
         return states.map {
             TrendSourceStatus(

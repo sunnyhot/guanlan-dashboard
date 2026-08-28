@@ -363,8 +363,6 @@ struct TrendSetupWizardSheet: View {
             model.trendSettings.provider.apiKey = key
             model.saveTrendAnalysisSettings()
             clipboardHint = "已从剪贴板识别并填入 Key\(suggestedPresetName.map { "(疑似 \($0))" } ?? "")"
-        case .tavilyKey:
-            break
         }
     }
 
@@ -549,18 +547,9 @@ struct TrendSetupWizardSheet: View {
 
     private var extrasStep: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            Text("三项都是可选的,可以全部跳过;之后随时在设置里补配。")
+            Text("两项都是可选的,可以全部跳过;之后随时在设置里补配。")
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
-
-            extraCard(
-                title: "Tavily 联网搜索",
-                badge: "解锁全市场机会雷达",
-                detail: "雷达需要联网检索新闻与政策;不配置时该区段不可用,其余研判不受影响。",
-                keyField: $model.trendSettings.webSearch.apiKey,
-                placeholder: "tvly-…",
-                consoleURL: "https://app.tavily.com"
-            )
 
             extraCard(
                 title: "Alpha Vantage",
@@ -607,9 +596,6 @@ struct TrendSetupWizardSheet: View {
             .padding(AppPalette.spaceM)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
-        }
-        .onChange(of: model.trendSettings.webSearch.apiKey) { _, _ in
-            model.saveTrendAnalysisSettings()
         }
         .onChange(of: model.trendSettings.alphaVantage.apiKey) { _, _ in
             model.saveTrendAnalysisSettings()

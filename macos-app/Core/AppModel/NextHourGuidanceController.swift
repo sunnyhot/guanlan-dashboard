@@ -220,7 +220,6 @@ extension AppModel {
                             context: context,
                             researchSnapshot: researchSnapshot,
                             settings: provider,
-                            webSearchSettings: trendSettings.webSearch,
                             officialSourceSettings: trendSettings.officialSources
                         )
                     } else {
@@ -228,7 +227,6 @@ extension AppModel {
                             context: context,
                             researchSnapshot: researchSnapshot,
                             settings: provider,
-                            webSearchSettings: trendSettings.webSearch,
                             officialSourceSettings: trendSettings.officialSources
                         )
                     }
@@ -368,9 +366,7 @@ extension AppModel {
                 "以下标的报价超过 20 分钟或缺少准确时间，只允许持有：\(staleAssetNames.prefix(8).joined(separator: "、"))"
             )
         }
-        if !trendSettings.webSearch.isConfigured {
-            marketDataWarnings.append("未配置 Tavily 联网搜索，风控规则禁止输出买入或卖出。")
-        }
+        marketDataWarnings.append("联网搜索源已下线（Tavily 已移除），风控规则禁止输出买入或卖出。")
         let latestActions = (trendReport?.actions ?? []).prefix(5).map {
             "\($0.title)：\($0.detail)"
         }
@@ -609,8 +605,9 @@ extension AppModel {
             ),
             TrendSourceStatus(
                 source: .webSearch,
-                status: trendSettings.webSearch.isConfigured ? .notRequested : .notConfigured,
-                receivedAt: generatedAt
+                status: .notConfigured,
+                receivedAt: generatedAt,
+                detail: "联网搜索已下线（Tavily 已移除）。"
             ),
         ]
     }

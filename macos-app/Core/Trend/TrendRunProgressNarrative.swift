@@ -84,13 +84,10 @@ struct TrendRunProgressNarrative: Equatable {
         if text.contains("读取市场快照") || text.contains("市场快照") {
             return .marketSnapshot
         }
-        // 三方研究:Tavily 搜索、SEC 披露、AlphaVantage。
-        if text.contains("Tavily")
-            || text.contains("web_search")
-            || text.contains("SEC")
+        // 三方研究:SEC 披露、AlphaVantage。
+        if text.contains("SEC")
             || text.contains("official_sec_research")
-            || text.contains("alpha_vantage_research")
-            || text.contains("搜索行业与政策") {
+            || text.contains("alpha_vantage_research") {
             return .thirdPartyResearch
         }
         // 报告已通过校验,进入保存收尾。

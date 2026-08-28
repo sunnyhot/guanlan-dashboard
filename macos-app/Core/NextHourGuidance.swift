@@ -606,7 +606,6 @@ protocol NextHourGuidanceAgentProtocol: Sendable {
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> NextHourGuidanceReport
 
@@ -616,7 +615,6 @@ protocol NextHourGuidanceAgentProtocol: Sendable {
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> NextHourGuidanceReport
 }
@@ -775,64 +773,48 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
 
     let client: any TrendResearchAgentClient
     let registry: TrendResearchToolRegistry
-    let webSearchCache: TrendWebSearchResponseCache
 
     private static let contextToolName = "get_live_market_context"
     private static let lookThroughToolName = "get_fund_lookthrough"
     private static let officialSourceToolName = "official_sec_research"
-    private static let webSearchToolName = "web_search"
     private static let submitToolName = "submit_next_hour_guidance"
     private static let maxTurns = 10
     private static let maxToolCalls = 20
-    private static let maxWebSearches = 4
-    private static let minimumWebSearchAttempts = 2
     private static let totalTimeoutSeconds: Double = 300
 
     init(
         client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "next-hour-guidance"),
-        webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
-        officialSourceCache: SECOfficialSourceCache = .shared,
-        webSearchCache: TrendWebSearchResponseCache = .shared
+        officialSourceCache: SECOfficialSourceCache = .shared
     ) {
         self.client = client
         self.registry = TrendResearchToolRegistry(
-            webSearchClient: webSearchClient,
             officialSourceClient: officialSourceClient,
             officialSourceCache: officialSourceCache
         )
-        self.webSearchCache = webSearchCache
     }
 
     func run(
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty
     ) async throws -> NextHourGuidanceReport {
         guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
 
         let ledger = TrendEvidenceLedger()
-        let webSearchGovernor = TrendWebSearchGovernor(
-            maxNetworkSearches: Self.maxWebSearches,
-            cache: webSearchCache,
-            cacheMaxAgeSeconds: 10 * 60
-        )
         let requiresLookThrough = researchSnapshot.lookThrough != nil
         let requiresOfficialSource = officialSourceSettings.isSECConfigured
             && !researchSnapshot.eligibleSECResearchTickers.isEmpty
         let commonToolNames: Set<String> = [
             Self.lookThroughToolName,
             Self.officialSourceToolName,
-            Self.webSearchToolName,
         ]
         let commonDefinitions = registry.definitions.filter { definition in
             let name = definition.function.name
             guard commonToolNames.contains(name) else { return false }
             if name == Self.lookThroughToolName { return requiresLookThrough }
             if name == Self.officialSourceToolName { return requiresOfficialSource }
-            if name == Self.webSearchToolName { return webSearchSettings.isConfigured }
             return true
         }
         let tools = [Self.contextTool()] + commonDefinitions + [Self.submitTool()]
@@ -844,8 +826,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 你是中国市场盘中交易研究 Agent，任务是生成有证据约束的“下一小时买卖建议”。这是真实资金决策，宁可持有，也不能猜测。
                 必须先调用 get_live_market_context 读取刚刷新的持仓、报价时间、大盘行情和旧研判边界。
                 如果提供 get_fund_lookthrough，提交前必须调用它；基金判断必须基于底层股票、行业、资产配置和披露日期，不能只看基金名称。
-                如果提供 official_sec_research，必须先针对相关美股或基金底层美股查询 SEC 官方披露，再使用 web_search 补充新闻和宏观信息。申报存在本身不等于利好或利空。
-                如果提供 web_search，提交前至少调用两次：一次检索最近一天的市场/政策消息，一次针对候选标的、底层行业或核心证券。每次必须填写经过快照校验的 research_target；搜索词不得包含用户金额或组合隐私。
+                如果提供 official_sec_research，必须先针对相关美股或基金底层美股查询 SEC 官方披露。申报存在本身不等于利好或利空。
                 搜索失败或没有返回新的有效证据时，不得把它算作证据；在完成两次尝试后可安全提交，但所有标的只能 hold，并明确证据不足。
                 只引用工具实际返回的 evidence_id；不得编造新闻、价格、成交量、资金流或证据编号。
                 每条标的必须明确给出 buy（买入）、sell（卖出）、hold（持有）三选一，不得用观察、等待、不追涨等模糊动作替代结论。
@@ -861,7 +842,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 content: """
                 研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)，候选标的 \(context.assets.count) 个。
                 SEC 官方源：\(requiresOfficialSource ? "已配置且存在可查询标的，必须优先查询" : "本次没有已配置且可查询的美股标的")。
-                联网搜索：\(webSearchSettings.isConfigured ? "已配置，必须完成至少两次最新搜索" : "未配置，任何标的都不得给出 buy/sell，只能 hold")。
+                联网搜索：已下线（Tavily 已移除），任何标的都不得给出 buy/sell，只能 hold。
                 请先调用只读工具取证，再提交买入/卖出/持有建议。
                 """
             ),
@@ -875,8 +856,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         var didReadContext = false
         var didReadLookThrough = !requiresLookThrough
         var didAttemptOfficialSource = !requiresOfficialSource
-        var webSearchAttemptQueries = Set<String>()
-        var successfulSearchQueries = Set<String>()
         var toolCallAudits: [TrendAgentToolCallAudit] = []
 
         while turnCount < Self.maxTurns {
@@ -934,8 +913,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     var toolContext = TrendResearchToolContext(
                         snapshot: researchSnapshot,
                         evidenceLedger: ledger,
-                        webSearchSettings: webSearchSettings,
-                        webSearchGovernor: webSearchGovernor,
                         officialSourceSettings: officialSourceSettings
                     )
                     toolContext.invalidSubmissionBudget = 2
@@ -948,44 +925,18 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     var toolContext = TrendResearchToolContext(
                         snapshot: researchSnapshot,
                         evidenceLedger: ledger,
-                        webSearchSettings: webSearchSettings,
-                        webSearchGovernor: webSearchGovernor,
                         officialSourceSettings: officialSourceSettings
                     )
                     toolContext.invalidSubmissionBudget = 2
                     toolContext.invalidSubmissionsUsed = invalidSubmissions
                     toolResult = await registry.execute(call, context: toolContext)
-
-                case Self.webSearchToolName:
-                    let query = Self.recentDaySearchQuery(call)
-                    if let query { webSearchAttemptQueries.insert(query) }
-                    let evidenceBefore = await ledger.allIDs()
-                    var toolContext = TrendResearchToolContext(
-                        snapshot: researchSnapshot,
-                        evidenceLedger: ledger,
-                        webSearchSettings: webSearchSettings,
-                        webSearchGovernor: webSearchGovernor,
-                        officialSourceSettings: officialSourceSettings
-                    )
-                    toolContext.invalidSubmissionBudget = 2
-                    toolContext.invalidSubmissionsUsed = invalidSubmissions
-                    toolResult = await registry.execute(call, context: toolContext)
-                    let evidenceAfter = await ledger.allIDs()
-                    let newWebEvidence = evidenceAfter
-                        .subtracting(evidenceBefore)
-                        .contains { $0.hasPrefix("web:tavily:") }
-                    if !toolResult.isError, newWebEvidence, let query {
-                        successfulSearchQueries.insert(query)
-                    }
 
                 case Self.submitToolName:
                     let missingResearch = Self.missingResearchRequirements(
                         didReadContext: didReadContext,
                         didReadLookThrough: didReadLookThrough,
                         didAttemptOfficialSource: didAttemptOfficialSource,
-                        officialSourceRequired: requiresOfficialSource,
-                        webSearchConfigured: webSearchSettings.isConfigured,
-                        webSearchAttemptCount: webSearchAttemptQueries.count
+                        officialSourceRequired: requiresOfficialSource
                     )
                     if !missingResearch.isEmpty {
                         lastErrors = missingResearch
@@ -1009,8 +960,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                 submission,
                                 context: context,
                                 researchSnapshot: researchSnapshot,
-                                webSearchConfigured: webSearchSettings.isConfigured,
-                                recentSearchQueries: Array(successfulSearchQueries),
                                 ledger: ledger
                             )
                             if errors.isEmpty {
@@ -1038,7 +987,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                     context: context,
                                     researchSnapshot: researchSnapshot,
                                     officialSourceConfigured: requiresOfficialSource,
-                                    webSearchConfigured: webSearchSettings.isConfigured,
                                     ledger: ledger,
                                     toolCalls: completedToolCalls
                                 )
@@ -1117,7 +1065,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings = .empty,
         officialSourceSettings: OfficialSourceSettings = .empty
     ) async throws -> NextHourGuidanceReport {
         guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
@@ -1130,7 +1077,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             context: context,
             snapshot: researchSnapshot,
             settings: settings,
-            webSearchSettings: webSearchSettings,
             officialSourceSettings: officialSourceSettings
         )
 
@@ -1162,7 +1108,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             context: context,
             researchSnapshot: researchSnapshot,
             officialSourceConfigured: officialSourceSettings.isSECConfigured,
-            webSearchConfigured: webSearchSettings.isConfigured,
             ledger: ledger,
             toolCalls: []
         )
@@ -1442,9 +1387,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         didReadContext: Bool,
         didReadLookThrough: Bool,
         didAttemptOfficialSource: Bool,
-        officialSourceRequired: Bool,
-        webSearchConfigured: Bool,
-        webSearchAttemptCount: Int
+        officialSourceRequired: Bool
     ) -> [String] {
         var errors: [String] = []
         if !didReadContext {
@@ -1456,27 +1399,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         if officialSourceRequired, !didAttemptOfficialSource {
             errors.append("存在可查询的美股标的，必须先调用 official_sec_research 查询 SEC 官方披露")
         }
-        if webSearchConfigured, webSearchAttemptCount < minimumWebSearchAttempts {
-            errors.append("已配置联网搜索，提交前必须至少尝试两次 time_range=day 且带 research_target 的 web_search；搜索失败后可以提交 hold")
-        }
         return errors
-    }
-
-    private static func recentDaySearchQuery(_ call: AgentToolCall) -> String? {
-        guard let data = call.function.arguments.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let timeRange = object["time_range"] as? String,
-              timeRange == "day",
-              let query = object["query"] as? String,
-              let target = object["research_target"] as? [String: Any],
-              let targetKind = target["kind"] as? String,
-              !targetKind.isEmpty,
-              let targetKey = target["key"] as? String,
-              !targetKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
     }
 
     /// 回指净化(P5):序号越界/重复丢弃;confirmed 必须挂**当日**有效证据,
@@ -1541,7 +1464,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
         officialSourceConfigured: Bool,
-        webSearchConfigured: Bool,
         ledger: TrendEvidenceLedger,
         toolCalls: [TrendAgentToolCallAudit]
     ) async -> NextHourGuidanceReport {
@@ -1568,15 +1490,10 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let sourceStatuses = await normalizedSourceStatuses(
             snapshot: researchSnapshot,
             officialSourceConfigured: officialSourceConfigured,
-            webSearchConfigured: webSearchConfigured,
             ledger: ledger
         )
         warnings.append(contentsOf: sourceStatuses.compactMap(\.warningText))
-        if !webSearchConfigured {
-            warnings.append("未配置 Tavily 联网搜索，本次风控规则禁止输出买入或卖出。")
-        } else if !orderedEvidenceIDs.contains(where: { $0.hasPrefix("web:tavily:") }) {
-            warnings.append("联网搜索未形成可引用证据，本次只允许持有建议。")
-        }
+        warnings.append("联网搜索源已下线（Tavily 已移除），本次风控规则禁止输出买入或卖出。")
         warnings = Array(Set(warnings.filter {
             !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         })).sorted()
@@ -1608,7 +1525,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             disposition: Self.reportDisposition(
                 submission: submission,
                 context: context,
-                webSearchConfigured: webSearchConfigured,
                 evidence: evidence
             ),
             sourceStatuses: sourceStatuses,
@@ -1623,7 +1539,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     private static func normalizedSourceStatuses(
         snapshot: TrendResearchSnapshot,
         officialSourceConfigured: Bool,
-        webSearchConfigured: Bool,
         ledger: TrendEvidenceLedger
     ) async -> [TrendSourceStatus] {
         var bySource = Dictionary(
@@ -1655,20 +1570,11 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 itemCount: officialEvidence.count
             )
         }
-        let webEvidence = allEvidence.filter {
-            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
-        }
         bySource[.webSearch] = TrendSourceStatus(
             source: .webSearch,
-            status: webSearchConfigured
-                ? (webEvidence.isEmpty ? .failed : .success)
-                : .notConfigured,
-            asOf: webEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
-            receivedAt: webEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
-            errorCode: webSearchConfigured && webEvidence.isEmpty
-                ? "no_usable_web_evidence"
-                : nil,
-            itemCount: webEvidence.count
+            status: .notConfigured,
+            receivedAt: snapshot.createdAt,
+            detail: "联网搜索已下线（Tavily 已移除）。"
         )
         for source in TrendDataSource.allCases where bySource[source] == nil {
             bySource[source] = TrendSourceStatus(
@@ -1683,16 +1589,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     private static func reportDisposition(
         submission: Submission,
         context: NextHourGuidanceContext,
-        webSearchConfigured: Bool,
         evidence: [TrendEvidence]
     ) -> TrendReportDisposition {
         if submission.actions.contains(where: { $0.action == .buy || $0.action == .sell }) {
             return .actionable
         }
-        let hasWebEvidence = evidence.contains {
-            $0.metadata.sourceKind == .webSearch || $0.id.hasPrefix("web:tavily:")
-        }
-        if !context.marketDataIsFresh || !webSearchConfigured || !hasWebEvidence {
+        // 联网搜索已下线：不再有外部研究证据维度，非行动报告统一 insufficientEvidence。
+        if !context.marketDataIsFresh {
             return .insufficientEvidence
         }
         return .analysisOnly
@@ -1702,8 +1605,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         _ submission: Submission,
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        webSearchConfigured: Bool,
-        recentSearchQueries: [String],
         ledger: TrendEvidenceLedger
     ) async -> [String] {
         var errors: [String] = []
@@ -1788,7 +1689,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     invalidation: action.invalidation,
                     quoteAssessment: asset.quoteAssessment,
                     marketDataIsFresh: context.marketDataIsFresh,
-                    webSearchConfigured: webSearchConfigured,
                     evidenceIDs: action.evidenceIDs,
                     evidenceByID: evidenceByID,
                     relatedEntityCodes: disclosure?.holdings.map(\.code) ?? [],
@@ -1799,41 +1699,9 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                         disclosure == nil ? nil : "fund:look-through:\(code):"
                     }
                 ))
-                if !hasTargetedSearch(
-                    asset: asset,
-                    researchSnapshot: researchSnapshot,
-                    queries: recentSearchQueries
-                ) {
-                    errors.append("\(asset.name) 的买卖动作缺少针对标的、底层证券或行业的最近一天搜索")
-                }
             }
         }
         return errors
-    }
-
-    private static func hasTargetedSearch(
-        asset: NextHourGuidanceAssetContext,
-        researchSnapshot: TrendResearchSnapshot,
-        queries: [String]
-    ) -> Bool {
-        var terms = [asset.name, asset.code].compactMap { value -> String? in
-            let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-            return normalized.count >= 2 ? normalized : nil
-        }
-        if let code = asset.code,
-           let disclosure = researchSnapshot.lookThrough?.disclosures[code] {
-            terms.append(contentsOf: disclosure.holdings.prefix(12).flatMap {
-                [$0.name.lowercased(), $0.code.lowercased()]
-            })
-            terms.append(contentsOf: disclosure.industries.prefix(8).map {
-                $0.name.lowercased()
-            })
-        }
-        return queries.contains { query in
-            terms.contains { term in
-                term.count >= 2 && query.contains(term)
-            }
-        }
     }
 
     private static func contextToolResult(

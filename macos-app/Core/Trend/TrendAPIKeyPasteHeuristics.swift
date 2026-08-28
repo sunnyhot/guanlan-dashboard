@@ -4,13 +4,11 @@ import Foundation
 ///
 /// 只做保守的前缀/形状匹配,避免把任意文本误当 Key:
 /// - `sk-` → OpenAI 兼容供应商 Key(OpenAI/DeepSeek 等都用此前缀,无法唯一定供应商,只填 Key)
-/// - `tvly-` → Tavily 联网搜索 Key
 /// - 32 位十六进制.16 位十六进制 → 智谱 Key(同时建议智谱预设)
 enum TrendAPIKeyPasteHeuristics {
     enum Match: Equatable {
         /// 供应商 Key;suggestedPresetName 非空时提示确认对应预设。
         case providerKey(suggestedPresetName: String?)
-        case tavilyKey
     }
 
     /// 识别剪贴板文本;不符合任何已知 Key 形状时返回 nil。
@@ -20,7 +18,6 @@ enum TrendAPIKeyPasteHeuristics {
         guard (12...200).contains(trimmed.count),
               !trimmed.contains(where: { $0.isWhitespace }) else { return nil }
         if trimmed.hasPrefix("tvly-") {
-            return .tavilyKey
         }
         if trimmed.hasPrefix("sk-") {
             return .providerKey(suggestedPresetName: nil)

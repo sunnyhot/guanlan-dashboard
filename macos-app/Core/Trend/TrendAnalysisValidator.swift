@@ -45,7 +45,6 @@ struct TrendAnalysisValidator {
         let hasExternalResearchEvidence = report.evidence.contains {
             $0.metadata.sourceKind.isExternalResearch
                 || $0.id.hasPrefix("official:sec:")
-                || $0.id.hasPrefix("web:tavily:")
         }
         if report.externalSignalStatus == .available && !hasExternalResearchEvidence {
             messages.append("externalSignalStatus 为 available 时必须引用本次官方源或联网搜索产生的外部证据。")

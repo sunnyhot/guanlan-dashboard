@@ -367,7 +367,7 @@ execute(argumentsJSON, context)
       → 成功: 返回 .report(normalizedReport),Agent 结束
 ```
 
-### 7.2 数据不足检测(insufficientEvidenceReasons)
+### 7.2 数据不足检测(insufficientEvidenceReasons)（2026-08-28 起无 webSearch 项）
 
 任一条件成立即触发清空行动 + 降级:
 
@@ -375,8 +375,12 @@ execute(argumentsJSON, context)
 |---|---|
 | 持仓报价 | source 非 success |
 | 主要指数(上证综指/沪深300/创业板) | 非 success **或** 不满足当前时段新鲜度(fresh/previousSessionClose) |
-| webSearch | source 非 success |
 | 基金披露 | itemCount < 期望基金数 |
+
+> **2026-08-28 Tavily 移除**：联网搜索子系统整体下线（客户端/工具/Governor/设置/同步）。
+> webSearch 不再参与数据不足检测；opportunities 无条件清空（不得用记忆填充）；
+> 链路 B 盘中买卖门禁改为永久生效（无联网源 → 只能 hold）；`sourceKind=.webSearch`
+> 与 `TrendDataSource.webSearch` 枚举 case 保留仅供旧报告解码。
 
 ### 7.3 TrendAnalysisValidator 校验项
 
@@ -450,7 +454,7 @@ runDailyTrendAnalysisIfNeeded():
 | Evidence 登记/溯源/稳定 ID/并发安全 | `actor TrendEvidenceLedger` | 直接复用登记能力 |
 | 运行前数据冻结 + 隐私过滤 | `TrendResearchSnapshot`(460 行) | 复用冻结模式 |
 | 报告校验 + 数据不足清空行动 | `SubmitTrendReportTool` + `TrendAnalysisValidator` | 参考校验链设计 |
-| SEC/AlphaVantage/Tavily 研究工具 | `Core/TrendResearch/` 各工具 | 直接复用 |
+| SEC/AlphaVantage 研究工具 | `Core/TrendResearch/` 各工具 | 直接复用（Tavily 已移除） |
 | 基金穿透(行业/资产类别/覆盖率) | `FundLookThrough.swift`(944 行) | 直接复用 `PortfolioLookThroughSnapshot` |
 | Fake Agent 注入模式 | `FakeTrendResearchAgent` | 测试复用 |
 

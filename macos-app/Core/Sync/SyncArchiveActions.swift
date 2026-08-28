@@ -26,10 +26,6 @@ extension AppModel {
             memValue: settings.provider.apiKey,
             kcAccount: KeychainHelper.Account.openAIKey,
             udKey: "qieman.trend.openai.key")
-        settings.webSearch.apiKey = resolveKey(
-            memValue: settings.webSearch.apiKey,
-            kcAccount: KeychainHelper.Account.tavilyKey,
-            udKey: "qieman.trend.tavily.key")
         settings.alphaVantage.apiKey = resolveKey(
             memValue: settings.alphaVantage.apiKey,
             kcAccount: KeychainHelper.Account.alphaVantageKey,
@@ -69,10 +65,6 @@ extension AppModel {
         if !payload.trendSettings.provider.apiKey.isEmpty {
             KeychainHelper.set(payload.trendSettings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
             UserDefaults.standard.set(payload.trendSettings.provider.apiKey, forKey: "qieman.trend.openai.key")
-        }
-        if !payload.trendSettings.webSearch.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.webSearch.apiKey, account: KeychainHelper.Account.tavilyKey)
-            UserDefaults.standard.set(payload.trendSettings.webSearch.apiKey, forKey: "qieman.trend.tavily.key")
         }
         if !payload.trendSettings.alphaVantage.apiKey.isEmpty {
             KeychainHelper.set(payload.trendSettings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
@@ -128,7 +120,6 @@ extension AppModel {
     ) -> TrendAnalysisSettings {
         var settings = current
         settings.provider = synced.provider
-        settings.webSearch = synced.webSearch
         settings.alphaVantage = synced.alphaVantage
         return settings
     }
@@ -162,13 +153,11 @@ extension AppModel {
         try saveJSON(payload.alfaPortfolios, to: dir.appendingPathComponent("alfa-portfolios.json"), encoder: encoder)
 
         // 趋势设置:API Key 存 Keychain(已在 applySyncPayload 做了),JSON 只存 config
-        // 保留现有 settings 的其余字段(officialSources/privacy/autoAnalysis),只覆盖 provider/webSearch/alphaVantage
+        // 保留现有 settings 的其余字段(officialSources/privacy/autoAnalysis),只覆盖 provider/alphaVantage
         var trendForFile = trendSettings
         trendForFile.provider = payload.trendSettings.provider
-        trendForFile.webSearch = payload.trendSettings.webSearch
         trendForFile.alphaVantage = payload.trendSettings.alphaVantage
         trendForFile.provider.apiKey = ""
-        trendForFile.webSearch.apiKey = ""
         trendForFile.alphaVantage.apiKey = ""
         let store = TrendAnalysisSettingsStore()
         if let url = trendAnalysisSettingsFileURL {

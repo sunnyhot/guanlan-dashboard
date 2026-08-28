@@ -4,7 +4,6 @@ struct InvestmentDirectionView: View {
     let analysis: MarketOpportunityAnalysis?
     let hasTrendReport: Bool
     let isProviderConfigured: Bool
-    let isWebSearchConfigured: Bool
 
     @State private var selectedSignal: InvestmentDirectionSignal?
 
@@ -55,8 +54,8 @@ struct InvestmentDirectionView: View {
         if !isProviderConfigured {
             return "AI 模型未配置，暂时无法扫描全市场板块。"
         }
-        if !isWebSearchConfigured {
-            return "联网搜索未配置，暂时无法发现全市场板块机会。"
+        if true {
+            return "联网搜索源已下线，全市场机会扫描暂停（本地研判不受影响）。"
         }
         if hasTrendReport {
             return "本轮没有发现达到证据门槛的市场板块机会。"
@@ -72,8 +71,8 @@ struct InvestmentDirectionView: View {
         if !isProviderConfigured {
             return "先配置 AI 模型，再运行全市场扫描。"
         }
-        if !isWebSearchConfigured {
-            return "先配置联网搜索，再运行全市场扫描。"
+        if true {
+            return "联网搜索源已下线，全市场扫描暂停；组合内研判不受影响。"
         }
         if hasTrendReport {
             return "当前报告不含全市场分组扫描结果（可能是一份早期报告或只跑了组合研判）。已隐藏旧机会和空白占位，请点击右上角「扫描市场」重新生成。"

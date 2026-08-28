@@ -19,7 +19,6 @@ protocol DecisionCaseResearchAgentProtocol: Sendable {
         decisionCase: DecisionCase,
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> DecisionCaseResearchReport
 }
@@ -66,22 +65,20 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
     private static let sharedToolNames: Set<String> = [
         "get_portfolio_overview",
         "get_fund_lookthrough",
-        "official_sec_research",
-        "web_search"
+        "official_sec_research"
     ]
+
 
     let client: any TrendResearchAgentClient
     let registry: TrendResearchToolRegistry
 
     init(
         client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "decision-case-research"),
-        webSearchClient: any TavilySearchClientProtocol = TavilySearchClient(),
         officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
         officialSourceCache: SECOfficialSourceCache = .shared
     ) {
         self.client = client
         self.registry = TrendResearchToolRegistry(
-            webSearchClient: webSearchClient,
             officialSourceClient: officialSourceClient,
             officialSourceCache: officialSourceCache
         )
@@ -93,13 +90,11 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         decisionCase: DecisionCase,
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        webSearchSettings: TavilySearchSettings,
         officialSourceSettings: OfficialSourceSettings
     ) async throws -> DecisionCaseResearchReport {
         guard settings.isConfigured else { throw DecisionCaseResearchAgentError.missingConfiguration }
 
         let ledger = TrendEvidenceLedger()
-        let governor = TrendWebSearchGovernor(maxNetworkSearches: 5)
         let started = Date()
 
         // 装配工具上下文(共享工具用)
@@ -107,8 +102,6 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
             TrendResearchToolContext(
                 snapshot: snapshot,
                 evidenceLedger: ledger,
-                webSearchSettings: webSearchSettings,
-                webSearchGovernor: governor,
                 officialSourceSettings: officialSourceSettings,
                 alphaVantageSettings: .empty
             )
@@ -118,8 +111,6 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         var tools: [AgentToolDefinition] = [Self.caseContextTool()]
         let sharedDefinitions = registry.definitions.filter { def in
             guard Self.sharedToolNames.contains(def.function.name) else { return false }
-            // web_search 只在配置时提供
-            if def.function.name == "web_search" { return webSearchSettings.isConfigured }
             // official_sec_research 只在配置时提供
             if def.function.name == "official_sec_research" { return officialSourceSettings.isSECConfigured }
             return true
@@ -299,9 +290,8 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
         1. 必须先调 get_case_context 了解 Case 上下文和已知事实。
         2. 有 get_fund_lookthrough 时,对基金标的调一次穿透。
         3. 有 official_sec_research 时,查官方披露。
-        4. 有 web_search 时,搜索相关行业/政策/事件。
-        5. 证据只能引用工具返回的 evidence_id,不得编造。
-        6. 研究完成后调 submit_case_research 提交:
+        4. 证据只能引用工具返回的 evidence_id,不得编造。
+        5. 研究完成后调 submit_case_research 提交:
            - findings:支持当前风险判断的发现(若结论为风险不成立可留空,改在 rationale 说明)
              每条 finding 必须用这些字段值:
              direction ∈ {supportive, counter, neutral}

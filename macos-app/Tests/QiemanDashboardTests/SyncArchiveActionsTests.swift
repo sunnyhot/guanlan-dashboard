@@ -10,7 +10,6 @@ final class SyncArchiveActionsTests: XCTestCase {
         let payload = model.makeSyncPayload(sourceDeviceName: "Test Mac")
 
         XCTAssertEqual(payload.trendSettings.provider.apiKey, "sk-sync-test")
-        XCTAssertEqual(payload.trendSettings.webSearch.apiKey, "tvly-sync-test")
         XCTAssertEqual(payload.trendSettings.alphaVantage.apiKey, "alpha-sync-test")
     }
 
@@ -27,7 +26,6 @@ final class SyncArchiveActionsTests: XCTestCase {
 
         XCTAssertTrue(applied.provider.isConfigured)
         XCTAssertEqual(applied.provider.apiKey, "sk-sync-test")
-        XCTAssertEqual(applied.webSearch.apiKey, "tvly-sync-test")
         XCTAssertEqual(applied.alphaVantage.apiKey, "alpha-sync-test")
         XCTAssertEqual(applied.officialSources.secContactEmail, "research@example.com")
         XCTAssertEqual(applied.defaultPrivacyMode, .fullDetail)
@@ -96,7 +94,6 @@ final class SyncArchiveActionsTests: XCTestCase {
                 apiKey: "sk-sync-test",
                 timeoutSeconds: 300
             ),
-            webSearch: TavilySearchSettings(apiKey: "tvly-sync-test"),
             alphaVantage: AlphaVantageSettings(
                 enabled: true,
                 apiKey: "alpha-sync-test",

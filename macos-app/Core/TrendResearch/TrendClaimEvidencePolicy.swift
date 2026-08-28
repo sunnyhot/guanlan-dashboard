@@ -154,7 +154,6 @@ struct TrendClaimEvidencePolicy {
         invalidation: String,
         quoteAssessment: TrendQuoteAssessment,
         marketDataIsFresh: Bool,
-        webSearchConfigured: Bool,
         evidenceIDs: [String],
         evidenceByID: [String: TrendEvidence],
         relatedEntityCodes: [String] = [],
@@ -179,9 +178,6 @@ struct TrendClaimEvidencePolicy {
         }
         if !quoteAssessment.isFreshForExecution {
             messages.append("\(targetName) 的标的报价不满足对应品种和交易时段的新鲜度策略，只能给出 hold")
-        }
-        if !webSearchConfigured {
-            messages.append("未配置联网搜索，\(targetName) 只能给出 hold")
         }
 
         let selectedEvidence = evidenceIDs.compactMap { evidenceByID[$0] }

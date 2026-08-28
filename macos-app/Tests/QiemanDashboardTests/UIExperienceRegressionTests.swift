@@ -666,10 +666,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(panel.contains("不发送任何金额"))
         XCTAssertTrue(panel.contains("隐私说明"))
 
-        // 分层:超时与三个可选数据源收进 DisclosureGroup
+        // 分层:超时与两个可选数据源收进 DisclosureGroup
         XCTAssertTrue(panel.contains("DisclosureGroup(\"高级:服务超时\")"))
         XCTAssertTrue(panel.contains("高级数据源"))
-        XCTAssertTrue(panel.contains("trendWebSearchCard"))
 
         // iOS 同步:快速选择预设 + 取 Key 链接
         XCTAssertTrue(iosPanel.contains("TrendProviderPreset"))

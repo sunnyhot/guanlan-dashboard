@@ -250,56 +250,6 @@ final class MarketOpportunityResearchTests: XCTestCase {
         XCTAssertEqual(decoded.scope, .portfolioRelated)
     }
 
-    func testHarnessRequiresEverySectorGroupBeforeSubmission() throws {
-        var harness = TrendResearchHarnessState(snapshot: .placeholder)
-        _ = harness.process(
-            toolName: "get_portfolio_overview",
-            result: .content(TrendResearchToolEnvelope.success(["portfolio": [:]]))
-        )
-        _ = harness.process(
-            toolName: "web_search",
-            result: webResult(kind: .assetClass, key: "黄金")
-        )
-        _ = harness.process(
-            toolName: "web_search",
-            result: webResult(kind: .index, key: "沪深300")
-        )
-
-        for group in MarketOpportunityUniverse.sectorGroups.dropLast() {
-            _ = harness.process(
-                toolName: "web_search",
-                result: webResult(kind: .sector, key: group.key)
-            )
-        }
-
-        XCTAssertFalse(harness.opportunitySearchCoverageComplete)
-        XCTAssertFalse(harness.readyForSubmission(webSearchConfigured: true))
-        XCTAssertTrue(
-            harness.readyForSubmission(
-                webSearchConfigured: true,
-                allowInsufficientWebEvidence: true
-            )
-        )
-        XCTAssertEqual(
-            harness.missingOpportunitySearchSectorGroups,
-            [try XCTUnwrap(MarketOpportunityUniverse.sectorGroups.last?.key)]
-        )
-        XCTAssertTrue(
-            harness.nextStepHint(webSearchConfigured: true, remainingWebSearches: 3)
-                .contains("板块分组")
-        )
-
-        if let lastGroup = MarketOpportunityUniverse.sectorGroups.last {
-            _ = harness.process(
-                toolName: "web_search",
-                result: webResult(kind: .sector, key: lastGroup.key)
-            )
-        }
-
-        XCTAssertTrue(harness.opportunitySearchCoverageComplete)
-        XCTAssertTrue(harness.readyForSubmission(webSearchConfigured: true))
-    }
-
     func testPromptRequiresGroupedWholeMarketScan() throws {
         let messages = TrendResearchPromptBuilder().initialMessages(snapshot: .placeholder)
         let prompt = try XCTUnwrap(messages.first?.content)
@@ -316,31 +266,6 @@ final class MarketOpportunityResearchTests: XCTestCase {
         XCTAssertTrue(prompt.contains("原因待确认："))
         XCTAssertTrue(prompt.contains("market:stock:*"))
         XCTAssertTrue(prompt.contains("\"scope\":\"marketWide\""))
-    }
-
-    private func webResult(
-        kind: TrendResearchTargetKind,
-        key: String
-    ) -> TrendResearchToolResult {
-        let id = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
-        return .content(
-            TrendResearchToolEnvelope.success(
-                [
-                    "query": "测试查询",
-                    "research_target": [
-                        "kind": kind.rawValue,
-                        "key": key,
-                    ],
-                    "results": [[
-                        "evidence_id": "web:tavily:\(id)",
-                        "title": "测试证据",
-                        "url": "https://example.com/\(id)",
-                    ]],
-                    "count": 1,
-                ],
-                evidenceIDs: ["web:tavily:\(id)"]
-            )
-        )
     }
 
     private func makeOpportunity(

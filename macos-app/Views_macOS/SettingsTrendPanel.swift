@@ -48,14 +48,12 @@ struct TrendSettingsPanel: View {
 
     // MARK: - Cards
 
-    /// 可选数据源默认收起:普通用户只需模型连接;不配 Tavily 则全市场雷达
-    /// 不可用(该说明保留在 Tavily 卡内,展开可见)。
+    /// 可选数据源默认收起:普通用户只需模型连接。
     private var advancedSourcesGroup: some View {
-        DisclosureGroup("高级数据源(可选):SEC / Alpha Vantage / Tavily") {
+        DisclosureGroup("高级数据源(可选):SEC / Alpha Vantage") {
             VStack(spacing: AppPalette.spaceXL) {
                 trendOfficialSourcesCard
                 trendAlphaVantageCard
-                trendWebSearchCard
             }
             .padding(.top, AppPalette.spaceS)
         }
@@ -135,7 +133,7 @@ struct TrendSettingsPanel: View {
                 SettingsRow(
                     title: "共享数据缓存",
                     value: "自动复用",
-                    detail: "基金披露 24 小时；Tavily 搜索 6 小时；SEC 与结构化行情按来源时效缓存",
+                    detail: "基金披露 24 小时；SEC 与结构化行情按来源时效缓存",
                     icon: "externaldrive.badge.checkmark",
                     tint: AppPalette.muted
                 )
@@ -305,11 +303,6 @@ struct TrendSettingsPanel: View {
             } else {
                 presetFeedbackText = "检测到剪贴板中的模型 Key,已填入;请确认供应商与地址匹配后再检测。"
             }
-        case .tavilyKey:
-            guard model.trendSettings.webSearch.apiKey.isEmpty else { return }
-            model.trendSettings.webSearch.apiKey = key
-            saveTrendSettingsFromDraft()
-            presetFeedbackText = "检测到剪贴板中的 Tavily Key,已填入联网搜索。"
         }
     }
 
@@ -479,24 +472,6 @@ struct TrendSettingsPanel: View {
         }
     }
 
-    private var trendWebSearchCard: some View {
-        SettingsCardGroup(
-            title: "联网补充搜索",
-            subtitle: "Tavily 新闻与政策检索",
-            icon: "magnifyingglass.circle",
-            tint: AppPalette.info
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                trendSecureField("Tavily API Key", text: tavilyAPIKeyBinding, placeholder: "tvly-...")
-                Text("在官方源无法覆盖新闻、宏观或政策信息时补充检索。搜索查询只包含通用行业和政策关键词，不发送组合金额或个人信息。")
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 12)
-        }
-    }
-
     private var trendActionsRow: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsActionRow {
@@ -619,13 +594,6 @@ struct TrendSettingsPanel: View {
                     model.trendSettings.provider.timeoutSeconds = timeout
                 }
             }
-        )
-    }
-
-    private var tavilyAPIKeyBinding: Binding<String> {
-        Binding(
-            get: { model.trendSettings.webSearch.apiKey },
-            set: { model.trendSettings.webSearch.apiKey = $0 }
         )
     }
 
