@@ -218,3 +218,172 @@ final class AttributionDowngradeTests: XCTestCase {
         XCTAssertNil(TrendAssetDailyAttributionPolicy.downgradedAttributionText(malformed), "错前缀仍走原校验拒绝")
     }
 }
+
+// MARK: - 修复方向3：无因果行情路径的基金清单（upfront 提示）
+
+final class AttributionCoverageListTests: XCTestCase {
+    private func holding(_ code: String, weight: Double) -> FundUnderlyingHolding {
+        FundUnderlyingHolding(
+            code: code,
+            name: "股票\(code)",
+            kind: .stock,
+            weightPct: weight,
+            disclosureDate: "2026-06-30"
+        )
+    }
+
+    private func disclosure(code: String, holdings: [FundUnderlyingHolding]) -> FundLookThroughDisclosure {
+        FundLookThroughDisclosure(
+            fundCode: code,
+            fundName: "基金\(code)",
+            asOf: "2026-06-30",
+            holdings: holdings,
+            industries: [],
+            assetAllocation: nil,
+            sourceLabel: "测试披露",
+            sourceURL: "https://example.com/\(code)",
+            warnings: []
+        )
+    }
+
+    private func lookThrough(_ disclosures: [String: FundLookThroughDisclosure]) -> PortfolioLookThroughSnapshot {
+        PortfolioLookThroughSnapshot(
+            expectedFundCount: disclosures.count,
+            coveredFundCount: disclosures.count,
+            fundDataCoveragePct: 100,
+            disclosedSecurityCoveragePct: 30,
+            unknownPortfolioWeightPct: 70,
+            topPositions: [],
+            industries: [],
+            assetClasses: [],
+            funds: [],
+            disclosures: disclosures,
+            warnings: []
+        )
+    }
+
+    func testLackingFundsIdentifiedByQuoteCoverage() {
+        let look = lookThrough([
+            "000001": disclosure(code: "000001", holdings: [holding("600519", weight: 9), holding("300750", weight: 8)]),
+            "000369": disclosure(code: "000369", holdings: [holding("03690.HK", weight: 9)]),  // 港股：无行情路径且非美股
+            "019524": disclosure(code: "019524", holdings: [holding("688981", weight: 9)]),    // 排在 40 上限外
+        ])
+        // 只有 600519/300750 拿到底层行情
+        let lacking = TrendAssetDailyAttributionPolicy.fundCodesLackingCausalEvidence(
+            expectedFundCodes: ["000001", "000369", "019524"],
+            lookThrough: look,
+            quotedStockCodes: ["600519", "300750"],
+            alphaVantageConfigured: false
+        )
+        XCTAssertEqual(lacking, ["000369", "019524"], "未覆盖行情的基金被列出，覆盖的不列")
+    }
+
+    func testNoDisclosureAndPureBondFundsLackPath() {
+        let look = lookThrough([
+            "161725": disclosure(code: "161725", holdings: []),
+        ])
+        let lacking = TrendAssetDailyAttributionPolicy.fundCodesLackingCausalEvidence(
+            expectedFundCodes: ["000001", "161725"],
+            lookThrough: look,
+            quotedStockCodes: [],
+            alphaVantageConfigured: false
+        )
+        XCTAssertEqual(lacking, ["000001", "161725"], "无披露与无股票底层都无因果路径")
+    }
+
+    func testUSStocksWithAlphaVantageConfiguredHavePath() {
+        let look = lookThrough([
+            "050025": disclosure(code: "050025", holdings: [holding("AAPL", weight: 9)]),
+        ])
+        let withAV = TrendAssetDailyAttributionPolicy.fundCodesLackingCausalEvidence(
+            expectedFundCodes: ["050025"],
+            lookThrough: look,
+            quotedStockCodes: [],
+            alphaVantageConfigured: true
+        )
+        XCTAssertTrue(withAV.isEmpty, "美股 + AV 已配置 = 有 vendor: 路径")
+        let withoutAV = TrendAssetDailyAttributionPolicy.fundCodesLackingCausalEvidence(
+            expectedFundCodes: ["050025"],
+            lookThrough: look,
+            quotedStockCodes: [],
+            alphaVantageConfigured: false
+        )
+        XCTAssertEqual(withoutAV, ["050025"], "AV 未配置时美股也无路径")
+    }
+
+    func testCoverageHintRendersIntoPromptText() {
+        // 空清单 → 空提示；非空 → 含基金代码与「原因待确认」指令
+        var snapshot = TrendResearchSnapshot.placeholder
+        snapshot = TrendResearchSnapshot(
+            runID: snapshot.runID,
+            createdAt: snapshot.createdAt,
+            dataAsOf: snapshot.dataAsOf,
+            privacyMode: snapshot.privacyMode,
+            portfolio: snapshot.portfolio,
+            assets: snapshot.assets,
+            sectors: snapshot.sectors,
+            platformSignals: snapshot.platformSignals,
+            managerSignals: snapshot.managerSignals,
+            marketQuotes: snapshot.marketQuotes,
+            lookThrough: snapshot.lookThrough,
+            insightHeadline: snapshot.insightHeadline,
+            sourceWarnings: snapshot.sourceWarnings,
+            sourceStatuses: snapshot.sourceStatuses
+        )
+        let emptyHint = TrendResearchPromptBuilder.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: false)
+        XCTAssertEqual(emptyHint, "", "无基金无穿透时空提示")
+    }
+}
+
+extension AttributionCoverageListTests {
+    func testHintRendersInCloseReviewPromptForUncoveredFund() {
+        let look = lookThrough([
+            "000369": disclosure(code: "000369", holdings: [holding("03690.HK", weight: 9)]),
+        ])
+        let snapshot = TrendResearchSnapshot(
+            runID: UUID(),
+            createdAt: "2026-08-28 15:00:00",
+            dataAsOf: "2026-08-28 15:00:00",
+            privacyMode: .sanitized,
+            portfolio: TrendContextPortfolio(
+                assetCount: 1, holdingCount: 1, activePlanCount: 0, pendingAssetCount: 0,
+                totalMarketValue: nil, totalPendingCashAmount: nil,
+                totalEstimatedNextPlanAmount: nil, totalEffectiveHoldingAmount: nil
+            ),
+            assets: [
+                TrendContextAsset(
+                    id: "fund:fundmkt:off_exchange:code:000369",
+                    name: "恒生科技",
+                    code: "000369",
+                    assetType: PersonalAssetType.fund.displayName,
+                    sector: "场外基金",
+                    statusText: "持有",
+                    weightText: nil,
+                    profitPct: nil,
+                    estimateChangePct: nil,
+                    pendingTradeCount: 0,
+                    activePlanCount: 0,
+                    pausedPlanCount: 0,
+                    endedPlanCount: 0,
+                    marketValue: nil,
+                    costValue: nil,
+                    profitAmount: nil,
+                    pendingCashAmount: nil,
+                    estimatedNextPlanAmount: nil,
+                    totalCumulativePlanAmount: nil
+                )
+            ],
+            sectors: [],
+            platformSignals: [],
+            managerSignals: [],
+            marketQuotes: [],
+            lookThrough: look,
+            insightHeadline: "测试",
+            sourceWarnings: []
+        )
+        let hint = TrendResearchPromptBuilder.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: false)
+        XCTAssertTrue(hint.contains("000369"), "提示包含未覆盖基金代码")
+        XCTAssertTrue(hint.contains("原因待确认"))
+        XCTAssertTrue(hint.contains("不要写「涨跌归因：」"))
+    }
+}

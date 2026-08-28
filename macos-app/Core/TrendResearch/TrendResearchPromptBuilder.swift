@@ -47,6 +47,27 @@ struct TrendResearchPromptBuilder: Sendable {
         ]
     }
 
+    /// 修复方向3：upfront 告知本轮无因果行情路径的基金（模型直接写「原因待确认：」，
+    /// 避免先写「涨跌归因：」再被 App 降级的来回浪费）。
+    static func attributionCoverageHint(
+        snapshot: TrendResearchSnapshot,
+        alphaVantageConfigured: Bool
+    ) -> String {
+        let quotedStockCodes = Set(
+            snapshot.marketQuotes
+                .filter { $0.kind == "underlying-stock" }
+                .map(\.code)
+        )
+        let lacking = TrendAssetDailyAttributionPolicy.fundCodesLackingCausalEvidence(
+            expectedFundCodes: snapshot.expectedFundCodes,
+            lookThrough: snapshot.lookThrough,
+            quotedStockCodes: quotedStockCodes,
+            alphaVantageConfigured: alphaVantageConfigured
+        )
+        guard !lacking.isEmpty else { return "" }
+        return "本轮以下基金没有可引用的底层证券行情（行情上限或抓取未覆盖），其 impactText 必须直接写「原因待确认：」并说明缺少哪类数据，不要写「涨跌归因：」：\(lacking.joined(separator: "、"))。"
+    }
+
     private func partialSystemMessage(
         snapshot: TrendResearchSnapshot,
         scope: TrendResearchRunScope,
@@ -74,6 +95,7 @@ submit_trend_market_module JSON：
             contract = """
 submit_trend_asset_batch JSON：{"assetTrends":[{"id":"","name":"","code":"","sector":"","impactText":"","horizons":[short/medium/long 三个 horizon],"rationale":"","counterSignals":[],"claimEvidence":{}}]}
 impactText 必须以「涨跌归因：」或「原因待确认：」开头。只有 market:stock:* 或 vendor:alphavantage:* 能支撑因果归因；静态持仓名单、持仓占比、市值、累计盈利和净值涨跌本身都不是涨跌原因。没有可引用的行情/结构化证据时一律写「原因待确认：」并说明缺少哪类数据。公开持仓有披露滞后，使用「可能主要由」「与……一致」。
+\(Self.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: alphaVantageConfigured))
 """
         case .longTerm:
             mission = "只更新组合长期研判：组合结论、短中长期周期、逐只持仓趋势与少量行动候选。全市场机会雷达从缓存报告复用，不重新做八组全市场扫描。"
@@ -210,7 +232,7 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - 每条有方向的结论都必须填写 supportingEvidenceIDs。证据不足时 direction 必须为 uncertain，填写 exemptionReason，并把短期行动降为 watch；不得为满足格式而挂无关证据。
 - counterEvidenceIDs 用于真实反证，contextEvidenceIDs 只表示背景事实，不能拿上下文证据冒充方向支持。
 - watch/waitForConfirmation/observeInBatches 属于 informational；pausePlan/rebalanceReview/considerIncrease/considerReduce 属于 allocationReview。所有行动都必须填写 targetName、引用对应本地持仓/净值/行情事实并提供触发和失效条件；allocationReview 还必须有与理由匹配的结构或外部证据和仓位边界。
-- 最新行业、宏观和政策判断必须引用 web_search 返回的 web:tavily:* evidence id；不要把模型记忆当作最新事实。
+- 最新行业、宏观和政策判断优先引用 get_financial_headlines 返回的 newsnow:* evidence id；没有快讯佐证时明确说明证据边界，不要把模型记忆当作最新事实。
 - SEC 申报和财务事实优先引用 official:sec:* evidence id；网页摘要不能替代已有官方证据。officialFiling 只证明提交了什么表单及其结构化项目，若未读取正文，不得推断事件方向。
 - Alpha Vantage 证据引用 vendor:alphavantage:*；它可支持 ETF 结构、财报日历和历史日线统计，但不得描述为监管、交易所或发行人官方披露，也不得冒充实时行情。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
@@ -226,8 +248,9 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - assetTrends 仍按用户直接持有的基金逐只输出；底层证券用于解释基金趋势和组合共同风险，不要用底层证券替代应覆盖的基金 code。
 - assetTrends.impactText 是「当日涨跌归因」，不是持仓画像。必须以「涨跌归因：」或「原因待确认：」开头：
   - 能归因时，结合基金当日估值/净值、get_market_snapshot.underlying_attribution 中底层证券涨跌、来源基金与披露权重，以及必要的行业/事件证据，说明哪些因素构成主要贡献或拖累。公开持仓存在披露滞后，措辞使用「可能主要由」「与……一致」，不得宣称精确因果。
-  - 「涨跌归因：」必须在 asset.claimEvidence.supportingEvidenceIDs 引用 market:stock:*、web:tavily:* 或 vendor:alphavantage:* 之一；只引用基金净值、组合快照或穿透名单不构成因果证据。
+  - 「涨跌归因：」必须在 asset.claimEvidence.supportingEvidenceIDs 引用 market:stock:* 或 vendor:alphavantage:* 之一；只引用基金净值、组合快照或穿透名单不构成因果证据。
   - 没有底层当日行情或外部证据时，必须写「原因待确认：仅确认净值变化，但缺少……」，不得用市值、累计盈利、持仓占比、底层证券名单或净值涨跌本身代替原因。
+\(Self.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: alphaVantageConfigured))
 
 【其它约束】
 - 不要输出普通文本作为最终结论；普通文本不会被接收。提交阶段每轮只调用当前开放的分模块工具。

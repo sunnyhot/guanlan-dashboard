@@ -67,6 +67,41 @@ enum TrendAssetDailyAttributionPolicy {
     /// 任何因果证据（market:stock:/vendor:alphavantage:）时，由 App 降级为「原因待确认：」
     /// 而不是拒批——联网搜索下线后 40 只行情上限外的基金零路径通关，结构性拒批必然复发。
     /// 与 v4.6.1 appendingMissingEvidenceBoundaryIfNeeded 同一先例：只往保守方向改写，原文保留为线索。
+    /// 2026-08-28 修复方向3：提交前算出「本轮没有因果行情路径的基金」清单，由 prompt upfront 告知
+    /// 模型直接写「原因待确认：」——40 只行情上限或抓取失败之外的基金物理上拿不到
+    /// market:stock: 证据；美股底层证券在 Alpha Vantage 已配置时有 vendor: 路径，排除。
+    static func fundCodesLackingCausalEvidence(
+        expectedFundCodes: [String],
+        lookThrough: PortfolioLookThroughSnapshot?,
+        quotedStockCodes: Set<String>,
+        alphaVantageConfigured: Bool
+    ) -> [String] {
+        guard !expectedFundCodes.isEmpty else { return [] }
+        var lacking: [String] = []
+        for fundCode in expectedFundCodes {
+            guard let disclosure = lookThrough?.disclosures[fundCode] else {
+                lacking.append(fundCode)  // 无披露 → 无因果路径
+                continue
+            }
+            let topStocks = disclosure.holdings
+                .filter { $0.kind == .stock }
+                .sorted { $0.weightPct > $1.weightPct }
+                .prefix(3)
+            guard !topStocks.isEmpty else {
+                lacking.append(fundCode)  // 无股票底层（纯债/货基）→ 无因果路径
+                continue
+            }
+            let hasQuoted = topStocks.contains { quotedStockCodes.contains($0.code) }
+            if hasQuoted { continue }
+            let hasAVPath = alphaVantageConfigured
+                && topStocks.contains { UserPortfolioHolding.detectStockMarket(from: $0.code) == .us }
+            if !hasAVPath {
+                lacking.append(fundCode)
+            }
+        }
+        return lacking
+    }
+
     static func downgradedAttributionText(_ asset: TrendAssetView) -> String? {
         guard let value = normalized(asset.impactText),
               value.hasPrefix(attributionPrefix) else { return nil }
