@@ -48,3 +48,30 @@ final class TrendLiveOutputModelTests: XCTestCase {
         XCTAssertNil(model.displayText)
     }
 }
+
+extension TrendLiveOutputModelTests {
+    func testDisplayTailLinesTakesLastTwoNonEmptyLines() {
+        let model = TrendLiveOutputModel(flushInterval: 0)
+        model.update(turn: 1, kind: .reasoning, delta: "第一行思考")
+        model.update(turn: 1, kind: .toolCall, delta: "\n[调用工具 web_search] {\"query\":\"政策\"}")
+        model.update(turn: 1, kind: .content, delta: "\n最新正文行")
+        let tail = model.displayTailLines ?? ""
+        XCTAssertTrue(tail.contains("[调用工具 web_search]"), "实际：\(tail)")
+        XCTAssertTrue(tail.contains("最新正文行"), "实际：\(tail)")
+        XCTAssertFalse(tail.contains("第一行思考"), "只保留最近两行，实际：\(tail)")
+        XCTAssertEqual(tail.components(separatedBy: "\n").count, 2)
+    }
+
+    func testDisplayTailLinesTruncatesOverlongLineFromHead() {
+        let model = TrendLiveOutputModel(flushInterval: 0)
+        model.update(turn: 1, kind: .content, delta: String(repeating: "长", count: 400))
+        let tail = model.displayTailLines ?? ""
+        XCTAssertEqual(tail.first, "…")
+        XCTAssertLessThanOrEqual(tail.count, 161)
+    }
+
+    func testDisplayTailLinesNilWhenEmpty() {
+        let model = TrendLiveOutputModel(flushInterval: 0)
+        XCTAssertNil(model.displayTailLines)
+    }
+}

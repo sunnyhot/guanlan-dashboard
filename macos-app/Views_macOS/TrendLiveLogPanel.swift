@@ -25,13 +25,9 @@ struct TrendLiveLogPanel: View {
                 VStack(alignment: .leading, spacing: 0) {
                     header
 
-                    if model.trendGenerationState == .generating {
-                        // 唯一进度区:模型实时输出(思考/正文/工具调用)常驻首屏,
-                        // 分块内不再重复放进度卡。
-                        TrendLiveOutputView(model: model.trendLiveOutputModel)
-                    }
-
                     if isExpanded {
+                        // 展开运行详情时才给完整实时输出块；首屏只留进度下方的两行预览。
+                        TrendLiveOutputView(model: model.trendLiveOutputModel)
                         Divider()
                             .overlay(AppPalette.hairline.opacity(AppPalette.borderFaint))
                         logList
@@ -142,6 +138,11 @@ struct TrendLiveLogPanel: View {
                             .foregroundStyle(AppPalette.muted)
                             .lineLimit(1)
                     }
+                }
+
+                // 进度的子条目：模型实时输出的最近两行（跟随生成位置）。
+                if model.trendGenerationState == .generating {
+                    TrendLiveOutputPreview(model: model.trendLiveOutputModel)
                 }
             }
 
@@ -478,6 +479,33 @@ struct TrendLiveOutputView: View {
             .background(AppPalette.card.opacity(0.6), in: RoundedRectangle(cornerRadius: AppPalette.badgeRadius))
             .padding(.horizontal, AppPalette.spaceS)
             .padding(.bottom, AppPalette.spaceS)
+        }
+    }
+}
+
+/// 模型实时输出的两行预览子条目（挂在进度条下方；独立 ObservableObject，
+/// 刷新只重渲染本行）。完整输出块见 TrendLiveOutputView（展开运行详情）。
+struct TrendLiveOutputPreview: View {
+    @ObservedObject var model: TrendLiveOutputModel
+
+    var body: some View {
+        if let tail = model.displayTailLines {
+            HStack(alignment: .top, spacing: 5) {
+                Image(systemName: "terminal")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted.opacity(0.7))
+                    .frame(width: 12)
+                Text(tail)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.disabled)
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(AppPalette.controlFill.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+            .help("模型正在生成的内容（最近两行）——展开「运行详情」查看完整输出")
         }
     }
 }

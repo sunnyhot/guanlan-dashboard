@@ -66,6 +66,19 @@ final class TrendLiveOutputModel: ObservableObject {
         return output.text
     }
 
+    /// 两行子条目预览：只取最近的 1–2 个非空行（流式最新内容在末尾，
+    /// 从行尾取才能跟随「正在生成」的部分），每行限长、总计限两行。
+    var displayTailLines: String? {
+        guard let output, !output.text.isEmpty else { return nil }
+        let lines = output.text
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .suffix(2)
+            .map { line in
+                line.count > 160 ? "…" + String(line.suffix(159)) : String(line)
+            }
+        return lines.joined(separator: "\n")
+    }
+
     /// 种类切换时插入分隔/标记行——思考、正文、工具调用三类增量交替到达。
     private static func separator(
         for kind: AgentStreamDeltaKind,
