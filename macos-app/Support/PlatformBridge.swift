@@ -20,6 +20,18 @@ enum PasteboardHelper {
         UIPasteboard.general.string = text
         #endif
     }
+
+    /// W1.4:读剪贴板纯文本;为空或平台不可用时返回 nil。
+    /// 只在用户明确打开配置界面的时机调用(预填),不做后台轮询。
+    static func readPlainText() -> String? {
+        #if os(macOS)
+        return NSPasteboard.general.string(forType: .string)
+        #elseif canImport(UIKit)
+        return UIPasteboard.general.string
+        #else
+        return nil
+        #endif
+    }
 }
 
 // MARK: - FilePresenter

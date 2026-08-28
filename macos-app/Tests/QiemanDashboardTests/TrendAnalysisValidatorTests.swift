@@ -186,6 +186,147 @@ final class TrendAnalysisValidatorTests: XCTestCase {
         XCTAssertTrue(result.isValid)
         XCTAssertTrue(result.messages.isEmpty)
     }
+
+    // MARK: - W4 结论明确性契约(2026-08-27 起)
+
+    private func clarityReport(
+        horizonRationale: String = "中性,短期缺少明确突破信号。",
+        horizonDirection: TrendDirection = .neutral,
+        marketRationale: String? = nil
+    ) -> TrendAnalysisReport {
+        let base = TrendAnalysisReport.fixture(
+            generatedAt: "2026-06-22 12:00:00",
+            externalSignalStatus: .partial
+        )
+        let horizons = base.horizons.map { horizon -> TrendHorizonView in
+            guard horizon.horizon == .short else { return horizon }
+            return TrendHorizonView(
+                horizon: .short,
+                direction: horizonDirection,
+                confidence: TrendConfidence(score: 60, label: "中"),
+                rationale: horizonRationale,
+                whatWouldChange: "触发条件变化时重估。",
+                counterSignals: ["反证条件"],
+                claimEvidence: .empty
+            )
+        }
+        var markets = base.marketOutlook
+        if let marketRationale, let first = base.marketOutlook.first {
+            markets = [
+                TrendMarketOutlook(
+                    id: first.id,
+                    name: first.name,
+                    category: first.category,
+                    direction: first.direction,
+                    confidence: first.confidence,
+                    rationale: marketRationale,
+                    evidenceIDs: first.evidenceIDs,
+                    counterSignals: first.counterSignals,
+                    claimEvidence: first.claimEvidence
+                )
+            ]
+        }
+        return TrendAnalysisReport(
+            id: base.id,
+            generatedAt: base.generatedAt,
+            dataAsOf: base.dataAsOf,
+            privacyMode: base.privacyMode,
+            externalSignalStatus: base.externalSignalStatus,
+            portfolio: base.portfolio,
+            horizons: horizons,
+            marketOutlook: markets,
+            sectors: base.sectors,
+            opportunities: base.opportunities,
+            keyAssets: base.keyAssets,
+            assetTrends: base.assetTrends,
+            actions: base.actions,
+            evidence: base.evidence,
+            warnings: base.warnings,
+            disclaimer: base.disclaimer,
+            schemaVersion: base.schemaVersion,
+            disposition: base.disposition,
+            sourceStatuses: base.sourceStatuses
+        )
+    }
+
+    func testRejectsRationaleWithoutDirectionLeadWord() {
+        let report = clarityReport(horizonRationale: "市场震荡,多空交织,需密切关注。")
+        let result = TrendAnalysisValidator().validate(report)
+        XCTAssertFalse(result.isValid)
+        XCTAssertTrue(
+            result.messages.contains { $0.contains("short 周期趋势") && $0.contains("方向词") },
+            "零信息量开头必须拒批: \(result.messages)"
+        )
+    }
+
+    func testRejectsUncertainClaimWithoutWatchSignal() {
+        // 大盘 uncertain 有方向词但没有「待观察信号」出口。
+        let report = clarityReport(marketRationale: "暂不明确,信号不足。")
+        let result = TrendAnalysisValidator().validate(report)
+        XCTAssertFalse(result.isValid)
+        XCTAssertTrue(
+            result.messages.contains { $0.contains("待观察信号") },
+            "uncertain 必须写清在等什么: \(result.messages)"
+        )
+    }
+
+    func testRejectsMissingWhatWouldChange() {
+        let base = clarityReport()
+        let stripped = base.horizons.map { horizon in
+            TrendHorizonView(
+                horizon: horizon.horizon,
+                direction: horizon.direction,
+                confidence: horizon.confidence,
+                rationale: horizon.rationale,
+                whatWouldChange: "",
+                counterSignals: horizon.counterSignals,
+                claimEvidence: horizon.claimEvidence
+            )
+        }
+        let report = base.replacingHorizons(stripped)
+        let result = TrendAnalysisValidator().validate(report)
+        XCTAssertFalse(result.isValid)
+        XCTAssertTrue(
+            result.messages.contains { $0.contains("whatWouldChange") },
+            "结论四要素的作废条件必须非空: \(result.messages)"
+        )
+    }
+
+    func testAcceptsDirectionLeadWordVocabulary() {
+        // 词表内的任意方向词开头都应通过首句校验。
+        for lead in ["看多", "偏弱", "中性", "观望", "暂不明确", "择机"] {
+            let report = clarityReport(horizonRationale: "\(lead),测试理由。")
+            let result = TrendAnalysisValidator().validate(report)
+            XCTAssertTrue(
+                result.messages.allSatisfy { !$0.contains("方向词") },
+                "「\(lead)」开头不应触发方向词拒批: \(result.messages)"
+            )
+        }
+    }
+
+    func testBaselinePatchMakesLegacyReuseSatisfyClarityContract() {
+        // 旧基线数据(无方向词/uncertain 无出口/缺作废条件)经 BaselineContractPatch
+        // 后必须通过三条新校验——增量运行复用旧报告不得整份拒批。
+        let legacy = TrendHorizonView(
+            horizon: .short,
+            direction: .uncertain,
+            confidence: TrendConfidence(score: 40, label: "低"),
+            rationale: "市场信号不足。",
+            counterSignals: []
+        )
+        let patched = TrendBaselineContractPatch.horizon(legacy)
+        let base = clarityReport()
+        let report = base.replacingHorizons(
+            base.horizons.map { $0.horizon == .short ? patched : $0 }
+        )
+        let result = TrendAnalysisValidator().validate(report)
+        XCTAssertTrue(
+            result.messages.allSatisfy { !$0.contains("short 周期趋势") },
+            "补丁后的短期结论不得再触发明确性拒批: \(result.messages)"
+        )
+        XCTAssertTrue(patched.rationale.contains("待观察信号"))
+        XCTAssertFalse(patched.whatWouldChange.isEmpty)
+    }
 }
 
 private extension TrendAnalysisReport {

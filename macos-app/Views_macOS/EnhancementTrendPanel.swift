@@ -74,19 +74,20 @@ extension EnhancementCenterView {
                         .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
-                    trendDirectionBadge(outlook.direction)
                     Spacer(minLength: 4)
-                    trendConfidenceMeter(outlook.confidence)
                     Text(outlook.categoryDisplayName)
                         .font(AppPalette.appFont(.caption, weight: .semibold))
                         .foregroundStyle(AppPalette.muted)
                         .lineLimit(1)
                 }
-                Text(outlook.rationale)
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-                trendEvidenceDisclosureFooter(count: evidenceDetail.items.count)
+                VerdictCard(
+                    direction: outlook.direction,
+                    confidence: outlook.confidence,
+                    rationale: outlook.rationale,
+                    counterSignals: outlook.counterSignals,
+                    supportingCount: outlook.claimEvidence.supportingEvidenceIDs.count,
+                    counterCount: outlook.claimEvidence.counterEvidenceIDs.count
+                )
             }
             .padding(12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -331,17 +332,17 @@ extension EnhancementCenterView {
                 Text(horizon.horizon.displayText)
                     .font(AppPalette.appFont(.body, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
-                trendDirectionBadge(horizon.direction)
-                Spacer(minLength: 4)
-                trendConfidenceMeter(horizon.confidence)
             }
-            Text(horizon.rationale)
-                .font(AppPalette.appFont(.subheadline))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-            if !horizon.counterSignals.isEmpty {
-                trendCounterSignalsRow(horizon.counterSignals)
-            }
+            // W4.4:方向/把握/结论/理由/作废条件统一走结论卡组件。
+            VerdictCard(
+                direction: horizon.direction,
+                confidence: horizon.confidence,
+                rationale: horizon.rationale,
+                whatWouldChange: horizon.whatWouldChange,
+                counterSignals: horizon.counterSignals,
+                supportingCount: horizon.claimEvidence.supportingEvidenceIDs.count,
+                counterCount: horizon.claimEvidence.counterEvidenceIDs.count
+            )
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -379,19 +380,17 @@ extension EnhancementCenterView {
                         .font(AppPalette.appFont(.body, weight: .bold))
                         .foregroundStyle(AppPalette.ink)
                         .lineLimit(1)
-                    trendDirectionBadge(sector.direction)
-                    Spacer(minLength: 4)
-                    trendConfidenceMeter(sector.confidence)
                 }
                 trendSectorExposure(sector.exposureText)
-                Text(sector.rationale)
-                    .font(AppPalette.appFont(.footnote))
-                    .foregroundStyle(AppPalette.muted)
-                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-                if !sector.counterSignals.isEmpty {
-                    trendCounterSignalsRow(sector.counterSignals)
-                }
-                trendEvidenceDisclosureFooter(count: evidenceDetail.items.count)
+                VerdictCard(
+                    direction: sector.direction,
+                    confidence: sector.confidence,
+                    rationale: sector.rationale,
+                    whatWouldChange: sector.whatWouldChange,
+                    counterSignals: sector.counterSignals,
+                    supportingCount: sector.claimEvidence.supportingEvidenceIDs.count,
+                    counterCount: sector.claimEvidence.counterEvidenceIDs.count
+                )
             }
             .padding(12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -711,68 +710,5 @@ private extension TrendExternalSignalStatus {
     }
 }
 
-private extension TrendHorizon {
-    var displayText: String {
-        switch self {
-        case .short:
-            return "短期"
-        case .medium:
-            return "中期"
-        case .long:
-            return "长期"
-        }
-    }
-}
+// TrendDirection / TrendHorizon 的展示映射已迁至 VerdictCard.swift 共用。
 
-private extension TrendDirection {
-    var displayText: String {
-        switch self {
-        case .bullish:
-            return "偏强"
-        case .neutralPositive:
-            return "中性偏强"
-        case .neutral:
-            return "中性"
-        case .neutralNegative:
-            return "中性偏弱"
-        case .bearish:
-            return "偏弱"
-        case .uncertain:
-            return "不确定"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .bullish, .neutralPositive:
-            return AppPalette.positive
-        case .neutral:
-            return AppPalette.info
-        case .neutralNegative, .bearish:
-            return AppPalette.warning
-        case .uncertain:
-            return AppPalette.muted
-        }
-    }
-}
-
-extension TrendActionKind {
-    var displayText: String {
-        switch self {
-        case .watch:
-            return "观察"
-        case .waitForConfirmation:
-            return "等待确认"
-        case .observeInBatches:
-            return "分批观察"
-        case .pausePlan:
-            return "暂停计划"
-        case .considerIncrease:
-            return "考虑增加"
-        case .considerReduce:
-            return "考虑降低"
-        case .rebalanceReview:
-            return "调仓复核"
-        }
-    }
-}

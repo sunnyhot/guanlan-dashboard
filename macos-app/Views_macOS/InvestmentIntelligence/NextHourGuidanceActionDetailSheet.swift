@@ -26,14 +26,24 @@ struct NextHourGuidanceActionDetailSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    // 理由
+                    // 结论(W4.4:一句话结论 + 为什么,与研判结论卡同构)
                     if !action.rationale.isEmpty {
-                        detailSection("为什么", icon: "questionmark.bubble") {
-                            Text(action.rationale)
-                                .font(AppPalette.appFont(.subheadline))
-                                .foregroundStyle(AppPalette.muted)
-                                .lineSpacing(4)
-                                .fixedSize(horizontal: false, vertical: true)
+                        let verdict = TrendVerdictPresentation.split(rationale: action.rationale)
+                        detailSection("结论", icon: "questionmark.bubble") {
+                            VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                                Text(verdict.headline.isEmpty ? action.rationale : verdict.headline)
+                                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                                    .foregroundStyle(AppPalette.ink)
+                                    .lineSpacing(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if !verdict.reasoning.isEmpty {
+                                    Text(verdict.reasoning)
+                                        .font(AppPalette.appFont(.subheadline))
+                                        .foregroundStyle(AppPalette.muted)
+                                        .lineSpacing(4)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
                         }
                     }
 

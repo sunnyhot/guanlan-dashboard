@@ -119,6 +119,8 @@ final class EnhancementState: ObservableObject {
     @Published var trendResearchScope: TrendResearchRunScope = .full
     @Published var trendResearchRequestedScope: TrendResearchRunScope = .full
     @Published var trendResearchProgress: TrendResearchModuleProgress = .idle
+    /// W3.7:链路 A 运行中排队的手动请求;当前任务结束后自动执行。
+    @Published var queuedUserRequestedScope: TrendResearchRunScope?
     @Published var marketCloseReviewArchive: MarketCloseReviewArchive?
     @Published var trendConnectionState: TrendConnectionState = .idle
     @Published var trendProviderCapabilities: TrendProviderCapabilities?
@@ -133,6 +135,9 @@ final class EnhancementState: ObservableObject {
     @Published var nextHourGuidanceError = ""
     @Published var trendTrackingItems: [TrendTrackingItem] = []
     @Published var selectedTrendTrackingItemID: UUID?
+    /// W3.1 通知深链:链路 A 完成通知点击后要滚动到的研判区段;
+    /// EnhancementCenterView 消费后清空。
+    @Published var pendingInvestmentSectionAnchor: InvestmentTodayResearchRow.Kind?
     @Published var isPresentingCommandPalette = false
 
     // 投资智能(Slice 1):DecisionCase + UserDecisionProfile。

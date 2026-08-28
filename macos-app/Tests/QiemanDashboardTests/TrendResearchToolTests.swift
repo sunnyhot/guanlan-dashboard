@@ -830,7 +830,8 @@ final class TrendResearchToolTests: XCTestCase {
             "exposureText": "影响组合相关行业",
             "direction": "neutralPositive",
             "confidence": ["score": 65, "label": "中"],
-            "rationale": "近期政策提供边际支持。",
+            "rationale": "中性偏强,近期政策提供边际支持。",
+            "whatWouldChange": "后续执行力度不足时下调判断。",
             "evidenceIDs": [webEvidence.id],
             "counterSignals": ["若后续执行力度不足则下调判断。"]
         ]]

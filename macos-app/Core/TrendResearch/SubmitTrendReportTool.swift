@@ -384,13 +384,24 @@ struct SubmitTrendReportTool: TrendResearchTool {
                 exemptionReason: forceShortUncertainReasons.joined(separator: "；")
             )
             : value.claimEvidence
+        // W4.3:App 强制降级为 uncertain 时由 App 补「待观察信号」出口——
+        // 降级原因就是「在等什么」,不能指望已被降级的模型表述。
+        var rationale = value.rationale
+        if mustDowngrade, !rationale.contains("待观察信号") {
+            let reasons = forceShortUncertainReasons.joined(separator: "；")
+            let separator = rationale.isEmpty ? "" : " "
+            rationale += "\(separator)待观察信号:\(reasons);数据恢复后重估短期方向。"
+        }
         return TrendHorizonView(
             horizon: value.horizon,
             direction: mustDowngrade ? .uncertain : value.direction,
             confidence: mustDowngrade
                 ? TrendConfidence(score: min(35, value.confidence.score), label: "低").appNormalized
                 : value.confidence.appNormalized,
-            rationale: value.rationale,
+            rationale: rationale,
+            whatWouldChange: value.whatWouldChange.isEmpty && mustDowngrade
+                ? forceShortUncertainReasons.joined(separator: "；") + "解除后重估短期方向。"
+                : value.whatWouldChange,
             counterSignals: value.counterSignals,
             claimEvidence: evidence
         )
@@ -421,6 +432,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             direction: value.direction,
             confidence: value.confidence.appNormalized,
             rationale: value.rationale,
+            whatWouldChange: value.whatWouldChange,
             evidenceIDs: value.evidenceIDs,
             counterSignals: value.counterSignals,
             claimEvidence: effectiveClaimEvidence(
@@ -439,6 +451,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             direction: value.direction,
             confidence: value.confidence.appNormalized,
             rationale: value.rationale,
+            whatWouldChange: value.whatWouldChange,
             triggerConditions: value.triggerConditions,
             invalidatingConditions: value.invalidatingConditions,
             evidenceIDs: value.evidenceIDs,
@@ -480,6 +493,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             detail: value.detail,
             targetName: value.targetName,
             confidence: value.confidence.appNormalized,
+            whatWouldChange: value.whatWouldChange,
             triggerConditions: value.triggerConditions,
             invalidatingConditions: value.invalidatingConditions,
             claimEvidence: value.claimEvidence

@@ -150,6 +150,20 @@ final class AppModel: ObservableObject {
             )
         )
     }
+    /// W3.1:链路 A(趋势研究)完成/失败通知;是否发送由设置里的偏好判定,
+    /// 测试注入空实现即可避免真实系统通知。
+    var trendAnalysisNotificationSender: @Sendable (TrendCompletionNotification) async -> Void = { notice in
+        let manager = LocalNotificationManager()
+        guard await manager.requestAuthorizationIfNeeded() else { return }
+        try? await manager.send(
+            title: notice.title,
+            body: notice.body,
+            deepLink: NotificationDeepLinkPayload(
+                type: .investmentIntelligenceSection,
+                targetID: notice.sectionAnchor?.rawValue ?? ""
+            )
+        )
+    }
     /// 工具调用能力探测器；默认走真实 client，测试可替换以避免联网。
     var trendCapabilityProbe: @Sendable (TrendAIProviderSettings) async throws -> TrendProviderCapabilities = { settings in
         try await OpenAICompatibleAgentClient().checkToolCallingCapability(settings: settings)
@@ -390,6 +404,12 @@ final class AppModel: ObservableObject {
         set { enhancementState.trendResearchProgress = newValue }
     }
 
+    /// W3.7:链路 A 运行中排队的手动请求;当前任务结束后自动执行。
+    var queuedUserRequestedScope: TrendResearchRunScope? {
+        get { enhancementState.queuedUserRequestedScope }
+        set { enhancementState.queuedUserRequestedScope = newValue }
+    }
+
     var marketCloseReviewArchive: MarketCloseReviewArchive? {
         get { enhancementState.marketCloseReviewArchive }
         set { enhancementState.marketCloseReviewArchive = newValue }
@@ -462,6 +482,11 @@ final class AppModel: ObservableObject {
     var selectedTrendTrackingItemID: UUID? {
         get { enhancementState.selectedTrendTrackingItemID }
         set { enhancementState.selectedTrendTrackingItemID = newValue }
+    }
+
+    var pendingInvestmentSectionAnchor: InvestmentTodayResearchRow.Kind? {
+        get { enhancementState.pendingInvestmentSectionAnchor }
+        set { enhancementState.pendingInvestmentSectionAnchor = newValue }
     }
 
     // 投资智能(Slice 1)proxy

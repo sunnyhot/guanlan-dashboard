@@ -333,21 +333,24 @@ extension TrendAnalysisReport {
                     horizon: .short,
                     direction: .neutral,
                     confidence: TrendConfidence(score: 62, label: "中"),
-                    rationale: "短期缺少明确突破信号。",
+                    rationale: "中性,短期缺少明确突破信号。",
+                    whatWouldChange: "成交额连续放大并站上趋势线时,短期判断转偏强。",
                     counterSignals: ["成交量放大后可能改变短期判断"]
                 ),
                 TrendHorizonView(
                     horizon: .medium,
                     direction: .neutral,
                     confidence: TrendConfidence(score: 58, label: "中"),
-                    rationale: "中期等待估值和主理人调仓信号进一步确认。",
+                    rationale: "中性,中期等待估值和主理人调仓信号进一步确认。",
+                    whatWouldChange: "政策和盈利预期同步改善时,中期判断需要上修。",
                     counterSignals: ["若政策和盈利预期同步改善，中期判断需要上修。"]
                 ),
                 TrendHorizonView(
                     horizon: .long,
                     direction: .neutralPositive,
                     confidence: TrendConfidence(score: 61, label: "中"),
-                    rationale: "长期配置分散度尚可，但仍需控制重复暴露。",
+                    rationale: "偏乐观,长期配置分散度尚可,但仍需控制重复暴露。",
+                    whatWouldChange: "主要板块长期盈利下修时,长期判断需要降级。",
                     counterSignals: ["若主要板块长期盈利下修，长期判断需要降级。"]
                 )
             ],
@@ -358,7 +361,7 @@ extension TrendAnalysisReport {
                     category: "index",
                     direction: .uncertain,
                     confidence: TrendConfidence(score: 40, label: "低"),
-                    rationale: "当前市场信号仍需进一步确认。",
+                    rationale: "暂不明确,市场信号需要进一步确认。待观察信号:主要指数放量突破或跌破 20 日均线后转向。",
                     evidenceIDs: [],
                     counterSignals: ["若主要指数趋势改变则重新评估。"]
                 )
@@ -429,6 +432,7 @@ extension TrendAnalysisReport {
                     direction: $0.direction,
                     confidence: $0.confidence.appNormalized,
                     rationale: $0.rationale,
+                    whatWouldChange: $0.whatWouldChange,
                     counterSignals: $0.counterSignals,
                     claimEvidence: claimEvidence
                 )

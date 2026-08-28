@@ -116,14 +116,16 @@ actor TrendReportDraftStore {
         var initialActions: TrendReportActionsModule?
 
         if let baselineReport {
+            // W4:复用的旧基线数据由 App 补丁到满足明确性契约,避免旧报告
+            // 把增量运行的新报告整份拒批(模型只提交本次开放模块)。
             initialOverview = TrendReportOverviewModule(
                 portfolio: baselineReport.portfolio,
-                horizons: baselineReport.horizons
+                horizons: TrendBaselineContractPatch.horizons(baselineReport.horizons)
             )
             initialMarket = TrendReportMarketModule(
-                marketOutlook: baselineReport.marketOutlook,
-                sectors: baselineReport.sectors,
-                opportunities: baselineReport.opportunities
+                marketOutlook: TrendBaselineContractPatch.markets(baselineReport.marketOutlook),
+                sectors: TrendBaselineContractPatch.sectors(baselineReport.sectors),
+                opportunities: TrendBaselineContractPatch.opportunities(baselineReport.opportunities)
             )
             initialAssets = Dictionary(
                 baselineReport.assetTrends.compactMap { asset -> (String, TrendAssetView)? in
@@ -135,7 +137,7 @@ actor TrendReportDraftStore {
             )
             initialActions = TrendReportActionsModule(
                 keyAssets: baselineReport.keyAssets,
-                actions: baselineReport.actions,
+                actions: TrendBaselineContractPatch.actions(baselineReport.actions),
                 warnings: baselineReport.warnings,
                 disclaimer: baselineReport.disclaimer
             )

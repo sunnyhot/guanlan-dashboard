@@ -527,7 +527,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(card.contains("dynamicTypeSize"))
         XCTAssertFalse(card.contains("minHeight:"))
         XCTAssertFalse(card.contains("portfolioWeightPct"))
-        XCTAssertTrue(card.contains(".lineLimit(2, reservesSpace: true)"))
+        // W4.4:机会卡改为「结论一句 + 理由一句」两行等高结构,reservedSpace 保持卡片高度一致。
+        XCTAssertTrue(card.contains(".lineLimit(1, reservesSpace: true)"))
+        XCTAssertTrue(card.contains("TrendVerdictPresentation.split"))
         XCTAssertTrue(card.contains(".frame(maxWidth: .infinity, alignment: .topLeading)"))
         XCTAssertTrue(card.contains("查看详情"))
         XCTAssertTrue(detail.contains("ScrollView"))
@@ -563,7 +565,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         )
 
         XCTAssertTrue(today.contains("title: \"全市场机会雷达\""))
-        XCTAssertTrue(today.contains("subtitle: \"市场强弱主线、触发条件与失效信号\""))
+        // W3.4:雷达副标题优先显示「上次生成时间 + 节奏」,无记录时回退这句内容说明。
+        XCTAssertTrue(today.contains("市场强弱主线、触发条件与失效信号"))
+        XCTAssertTrue(today.contains("moduleFreshnessText(.marketRadar"))
         XCTAssertTrue(today.contains("title: \"我的组合长期研判\""))
         XCTAssertTrue(today.contains("portfolioLongTermReportView(report)"))
 
@@ -601,8 +605,8 @@ final class UIExperienceRegressionTests: XCTestCase {
     }
 
     func testInvestmentDashboardAnchorScrollAndEmptyHintsRemain() throws {
-        // 「今日研判」摘要卡（含怎么读指南入口）已按产品决定移除；
-        // 锚点滚动与空态引流/memo 化仍在，这里守护不回归。
+        // 「今日研判」摘要卡（含怎么读指南入口）已按产品决定移除（合并
+        // pre-intelligence-v2 时保持该决定）；锚点滚动与空态引流仍在。
         let dashboard = try source(
             at: "Views_macOS/InvestmentIntelligence/InvestmentIntelligenceDashboardView.swift"
         )
@@ -708,6 +712,25 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(panel.contains(".aiPosture"))
     }
 
+    func testLegacyTrackingListIsRetiredFromAIDashboard() throws {
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
+        let center = try source(at: "Views_macOS/EnhancementCenterView.swift")
+
+        // 写入入口已切:按钮走 addDecisionCase,不再调旧 addTrackingItem
+        XCTAssertTrue(today.contains("model.addDecisionCase(from: action, report: report)"))
+        XCTAssertFalse(today.contains("model.addTrackingItem("))
+        XCTAssertTrue(today.contains("model.hasDecisionCase(for: action, report: report)"))
+
+        // 旧清单 UI 退场:区段与展开状态都不存在
+        XCTAssertFalse(today.contains("legacyTrackingDisclosure"))
+        XCTAssertFalse(today.contains("trackingContent"))
+        XCTAssertFalse(center.contains("isLegacyTrackingExpanded"))
+
+        // 通知深链改路由到决策案例详情(迁移保持 ID 稳定)
+        XCTAssertTrue(center.contains("deepLinkedCase"))
+        XCTAssertTrue(center.contains("DecisionCaseDetailSheet(caseID: caseItem.id)"))
+    }
+
     func testNextHourFollowupReviewIsWiredThroughPipeline() throws {
         let core = try source(at: "Core/NextHourGuidance.swift")
         let controller = try source(at: "Core/AppModel/NextHourGuidanceController.swift")
@@ -715,6 +738,7 @@ final class UIExperienceRegressionTests: XCTestCase {
             at: "Views_macOS/InvestmentIntelligence/NextHourGuidanceDecisionConsole.swift"
         )
         let subAgents = try source(at: "Core/NextHourGuidance/NextHourGuidanceSubAgents.swift")
+        let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
 
         // V1 system prompt 与 V2 决策 user message 都带回指指令
         XCTAssertTrue(core.contains("followup_reviews 中逐条回指"))
@@ -731,8 +755,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         // V2 子 Agent 主动核对:行情看量能,新闻做针对性检索
         XCTAssertTrue(subAgents.contains("逐条核对其中与行情、量能、指数表现相关的事项"))
         XCTAssertTrue(subAgents.contains("至少为每条做一次针对性搜索"))
-        // UI:决策台底部回顾块(评审定:靠下)
-        XCTAssertTrue(console.contains("NextHourGuidanceFollowupReviewsView"))
+        // W5.3:昨日关注回指上移为盘中区段第一条可见内容(决策台内不再重复)。
+        XCTAssertTrue(today.contains("NextHourGuidanceFollowupReviewsView"))
+        XCTAssertFalse(console.contains("NextHourGuidanceFollowupReviewsView"))
     }
 
     private func source(at relativePath: String) throws -> String {

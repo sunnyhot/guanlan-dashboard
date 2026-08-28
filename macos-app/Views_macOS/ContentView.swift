@@ -254,7 +254,8 @@ struct ContentView: View {
     private func sidebarBadge(for section: AppSection) -> Int {
         switch section {
         case .portfolio: return model.pendingTrades.count
-        case .enhancement: return model.trendTrackingItems.count
+        // W3.6:「AI 有新研判」——按链路成功生成时间晚于上次访问的条数计数,访问即清零。
+        case .enhancement: return model.unreadAIResearchCount
         default: return 0
         }
     }

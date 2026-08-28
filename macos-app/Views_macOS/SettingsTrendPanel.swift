@@ -5,6 +5,11 @@ import SwiftUI
 struct TrendSettingsPanel: View {
     @EnvironmentObject var model: AppModel
     @Environment(\.openURL) private var openURL
+    /// W1.5:预设应用反馈 Toast;W1.4:剪贴板预填也复用这条 Toast。
+    @State private var presetFeedbackText = ""
+    @State private var didAttemptClipboardPrefill = false
+    /// W1.1:配置向导入口(未配置 → 引导;已配置 → 重新配置)。
+    @State private var isShowingWizard = false
 
     var body: some View {
         SettingsPanel(
@@ -17,6 +22,7 @@ struct TrendSettingsPanel: View {
                     HStack(alignment: .top, spacing: AppPalette.spaceXL) {
                         VStack(spacing: AppPalette.spaceXL) {
                             trendAutoAnalysisCard
+                            trendNotificationsCard
                             advancedSourcesGroup
                         }
                         .frame(minWidth: 360, maxWidth: .infinity)
@@ -29,6 +35,7 @@ struct TrendSettingsPanel: View {
 
                     VStack(spacing: AppPalette.spaceXL) {
                         trendAutoAnalysisCard
+                        trendNotificationsCard
                         trendModelConnectionCard
                         advancedSourcesGroup
                     }
@@ -161,6 +168,28 @@ struct TrendSettingsPanel: View {
             tint: AppPalette.brand
         ) {
             VStack(alignment: .leading, spacing: 12) {
+                // W1.1:向导入口——未配置时引导,已配置时提供「重新配置」。
+                HStack(spacing: AppPalette.spaceS) {
+                    if model.trendSettings.provider.isConfigured {
+                        Button {
+                            isShowingWizard = true
+                        } label: {
+                            Label("重新配置(向导)", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.appSecondary)
+                        .controlSize(.small)
+                    } else {
+                        Button {
+                            isShowingWizard = true
+                        } label: {
+                            Label("打开配置向导,一步步完成", systemImage: "wand.and.stars")
+                        }
+                        .buttonStyle(.appPrimary)
+                        .tint(AppPalette.brand)
+                    }
+                    Spacer(minLength: 0)
+                }
+
                 // 隐私说明按当前模式如实描述:脱敏不发送金额,完整明细包含金额。
                 Text(
                     model.trendPrivacyMode == .sanitized
@@ -194,6 +223,10 @@ struct TrendSettingsPanel: View {
                     }
                 }
 
+                if !presetFeedbackText.isEmpty {
+                    presetFeedbackToast
+                }
+
                 Picker("隐私模式", selection: trendPrivacyModeBinding) {
                     ForEach(TrendPrivacyMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
@@ -222,6 +255,134 @@ struct TrendSettingsPanel: View {
             }
             .padding(.vertical, 12)
         }
+        .onAppear {
+            attemptClipboardPrefill()
+        }
+        .sheet(isPresented: $isShowingWizard) {
+            TrendSetupWizardSheet()
+                .environmentObject(model)
+        }
+    }
+
+    /// W1.5/W1.4 共用的预设与预填反馈;6 秒后自动消失。
+    private var presetFeedbackToast: some View {
+        ToastBar(
+            text: presetFeedbackText,
+            tint: AppPalette.positive,
+            onDismiss: { presetFeedbackText = "" }
+        )
+        .task(id: presetFeedbackText) {
+            let captured = presetFeedbackText
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if presetFeedbackText == captured {
+                presetFeedbackText = ""
+            }
+        }
+    }
+
+    /// W1.4:打开面板时识别剪贴板中的 API Key,空字段自动预填并说明来源;
+    /// 已填过 Key 不覆盖,不符合已知 Key 形状不动作。
+    private func attemptClipboardPrefill() {
+        guard !didAttemptClipboardPrefill else { return }
+        didAttemptClipboardPrefill = true
+        guard let text = PasteboardHelper.readPlainText(),
+              let match = TrendAPIKeyPasteHeuristics.classify(text) else { return }
+        let key = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch match {
+        case .providerKey(let suggestedPresetName):
+            guard model.trendSettings.provider.apiKey.isEmpty else { return }
+            var appliedPresetName: String?
+            if let suggestedPresetName,
+               let preset = TrendProviderPreset.allPresets.first(where: { $0.name == suggestedPresetName }),
+               TrendProviderPreset.matching(model.trendSettings.provider) == nil {
+                preset.apply(to: &model.trendSettings.provider)
+                appliedPresetName = preset.name
+            }
+            model.trendSettings.provider.apiKey = key
+            saveTrendSettingsFromDraft()
+            if let appliedPresetName {
+                presetFeedbackText = "检测到剪贴板中的 \(appliedPresetName) Key,已填好地址、模型与 Key,可点「检测模型」验证。"
+            } else {
+                presetFeedbackText = "检测到剪贴板中的模型 Key,已填入;请确认供应商与地址匹配后再检测。"
+            }
+        case .tavilyKey:
+            guard model.trendSettings.webSearch.apiKey.isEmpty else { return }
+            model.trendSettings.webSearch.apiKey = key
+            saveTrendSettingsFromDraft()
+            presetFeedbackText = "检测到剪贴板中的 Tavily Key,已填入联网搜索。"
+        }
+    }
+
+    /// W3.1:研判通知偏好——默认只开「收盘复盘完成 + 自动失败」最小集。
+    private var trendNotificationsCard: some View {
+        SettingsCardGroup(
+            title: "研判通知",
+            subtitle: "生成完成与失败时的系统通知,点击直达对应区段",
+            icon: "bell.badge",
+            tint: AppPalette.info
+        ) {
+            VStack(spacing: 0) {
+                SettingsToggleRow(
+                    title: "收盘复盘完成",
+                    detail: "每日 21:00 复盘生成后通知(默认开)",
+                    icon: "sunset.fill",
+                    tint: AppPalette.warning,
+                    isOn: notificationBinding(\.closeReviewSuccessEnabled)
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsToggleRow(
+                    title: "自动运行失败",
+                    detail: "自动研判失败时提醒手动补做(默认开)",
+                    icon: "exclamationmark.triangle",
+                    tint: AppPalette.danger,
+                    isOn: notificationBinding(\.autoFailureEnabled)
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsToggleRow(
+                    title: "市场雷达完成",
+                    detail: "每日 09:00 全市场机会更新后通知(默认关)",
+                    icon: "scope",
+                    tint: AppPalette.brand,
+                    isOn: notificationBinding(\.marketRadarSuccessEnabled)
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsToggleRow(
+                    title: "长期研判完成",
+                    detail: "每周日 20:00 组合研判更新后通知(默认关)",
+                    icon: "briefcase.fill",
+                    tint: AppPalette.positive,
+                    isOn: notificationBinding(\.longTermSuccessEnabled)
+                )
+
+                SettingsDivider(isInset: true)
+
+                SettingsToggleRow(
+                    title: "首份研判送达",
+                    detail: "手动生成第一份研判完成时通知(默认关)",
+                    icon: "sparkles",
+                    tint: AppPalette.info,
+                    isOn: notificationBinding(\.firstReportEnabled)
+                )
+            }
+        }
+    }
+
+    private func notificationBinding(
+        _ keyPath: WritableKeyPath<TrendNotificationPreferences, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { model.trendSettings.notifications[keyPath: keyPath] },
+            set: {
+                model.trendSettings.notifications[keyPath: keyPath] = $0
+                saveTrendSettingsFromDraft()
+            }
+        )
     }
 
     private func providerPresetChip(_ preset: TrendProviderPreset) -> some View {
@@ -250,9 +411,11 @@ struct TrendSettingsPanel: View {
     }
 
     /// 应用预设并立即保存;只预填供应商/地址/模型,Key 与超时不动。
+    /// W1.5:应用后用 Toast 说明「下一步只剩贴 Key」,替代静默填表。
     private func applyProviderPreset(_ preset: TrendProviderPreset) {
         preset.apply(to: &model.trendSettings.provider)
         saveTrendSettingsFromDraft()
+        presetFeedbackText = "已填好\(preset.name)地址与模型,只需贴 Key"
     }
 
     private var trendOfficialSourcesCard: some View {

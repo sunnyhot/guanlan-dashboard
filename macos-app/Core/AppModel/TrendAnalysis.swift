@@ -274,6 +274,8 @@ extension AppModel {
         trendProgressLogs = []
         trendLiveOutputModel.reset()
         trendSettings.defaultPrivacyMode = trendPrivacyMode
+        // W3.1:成功后判断「第一份研判」用;必须在覆盖 trendReport 前捕获。
+        let hadExistingReport = trendReport != nil
         let triggerText = userInitiated ? "手动更新" : scope.triggerDescription
         if let trendAgentRunLogFileURL {
             try? TrendAgentRunLogStore().beginRun(
@@ -509,6 +511,7 @@ extension AppModel {
                 scope: requestedScope,
                 generatedAt: report.generatedAt
             )
+            trendSettings.clearAutoFailureStreak(scope: requestedScope)
             if requestedScope == .closeReview {
                 let snapshot = MarketCloseReviewSnapshot.make(
                     report: report,
@@ -534,6 +537,16 @@ extension AppModel {
             saveTrendAnalysisSettings()
             trendGenerationState = .succeeded
             appendTrendProgress("\(scope.displayName)完成", level: .success)
+            await dispatchTrendCompletionNotification(
+                TrendCompletionNotification(
+                    scope: requestedScope,
+                    outcome: .succeeded,
+                    userInitiated: userInitiated,
+                    isFirstReport: !hadExistingReport,
+                    opportunityCount: report.opportunities.count,
+                    failureSummary: nil
+                )
+            )
         } catch is CancellationError {
             telemetryResult = "cancelled"
             trendGenerationState = .failed
@@ -553,16 +566,42 @@ extension AppModel {
                     level: .error
                 )
             }
+            // W3.1:自动运行的失败用户不在场,发通知提醒补做;手动失败不打扰。
+            // W3.5:同时累加连击计数,连续失败时 TodayBrief 升级提示根因。
+            if !userInitiated {
+                trendSettings.recordAutoFailure(
+                    scope: requestedScope,
+                    message: error.localizedDescription
+                )
+                saveTrendAnalysisSettings()
+                await dispatchTrendCompletionNotification(
+                    TrendCompletionNotification(
+                        scope: requestedScope,
+                        outcome: .failed,
+                        userInitiated: userInitiated,
+                        isFirstReport: !hadExistingReport,
+                        opportunityCount: 0,
+                        failureSummary: error.localizedDescription
+                    )
+                )
+            }
         }
     }
 
-    // MARK: - 生成任务管理（支持取消）
+    // MARK: - 生成任务管理（支持取消与 W3.7 手动排队）
 
     /// 由 UI 触发：取消上一次（若有）并启动新的趋势分析任务。
+    /// W3.7:链路 A 正在运行时,手动请求进入队列(替代按钮置灰),当前任务
+    /// 结束后自动执行;互斥契约不变——A/B 任何时刻仍只有一个任务在跑。
     func startTrendAnalysis(
         userInitiated: Bool,
         scope: TrendResearchRunScope = .full
     ) {
+        if userInitiated, trendGenerationState == .generating {
+            queuedUserRequestedScope = scope
+            noticeMessage = "当前有 AI 任务在运行,「\(scope.displayName)」已排队,完成后自动开始"
+            return
+        }
         trendGenerationTask?.cancel()
         trendGenerationTask = Task { [weak self] in
             await self?.generateTrendAnalysis(
@@ -571,12 +610,44 @@ extension AppModel {
                 scope: scope
             )
             self?.trendGenerationTask = nil
+            await self?.runQueuedUserTrendRequestIfNeeded()
         }
     }
 
     /// 取消正在进行的趋势分析；Agent 循环会在下一个取消点停止，并保留上一次报告。
+    /// W3.7:取消意味着「停下来」,排队中的手动请求一并清空。
     func cancelTrendAnalysis() {
         trendGenerationTask?.cancel()
+        if queuedUserRequestedScope != nil {
+            queuedUserRequestedScope = nil
+            noticeMessage = "已取消当前任务与排队请求。"
+        }
+    }
+
+    private func runQueuedUserTrendRequestIfNeeded() {
+        guard trendGenerationState != .generating, let queued = queuedUserRequestedScope else { return }
+        queuedUserRequestedScope = nil
+        startTrendAnalysis(userInitiated: true, scope: queued)
+    }
+
+    /// W3.2:手动入口触发时给预期(时长 + 成本同场提示),走全局 Toast;
+    /// 自动调度不经过这里。四个手动按钮统一走此入口。
+    func startTrendAnalysisFromUser(withExpectation scope: TrendResearchRunScope) {
+        noticeMessage = Self.trendRunExpectationText(scope: scope)
+        startTrendAnalysis(userInitiated: true, scope: scope)
+    }
+
+    static func trendRunExpectationText(scope: TrendResearchRunScope) -> String {
+        switch scope {
+        case .full:
+            return "完整研判通常需要 5–15 分钟,期间可正常使用,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        case .marketRadar:
+            return "市场雷达通常需要 5–15 分钟,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        case .closeReview:
+            return "收盘复盘通常需要 5–15 分钟,期间可正常使用,完成后会通知你。"
+        case .longTerm:
+            return "长期研判通常需要 5–15 分钟,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
+        }
     }
 
     func runDailyTrendAnalysisIfNeeded(createdAt: String? = nil) async {
@@ -1093,6 +1164,108 @@ extension AppModel {
     }
 
     // MARK: - 进度与工具方法
+
+    // MARK: - W3.5/W3.6 触达派生
+
+    /// W3.5:当前应该主动提示补做的错过窗口。
+    /// 已过滤「距下一班自动运行 ≤ 2 小时」的情形——那会自动补上,不让用户花冤枉钱。
+    var missedTrendWindowsForPrompt: [TrendMissedWindow] {
+        guard trendSettings.provider.isConfigured else { return [] }
+        let now = Self.timestampString()
+        let missed = TrendMissedWindowCheck.missedScopes(
+            lastModuleAutoAnalysisKeys: trendSettings.lastModuleAutoAnalysisKeys,
+            lastModuleGeneratedAt: trendSettings.lastModuleGeneratedAt,
+            now: now
+        )
+        return missed.filter {
+            TrendMissedWindowCheck.shouldPromptManualCatchUp(
+                $0,
+                autoAnalysisEnabled: trendSettings.dailyAutoAnalysisEnabled,
+                now: now
+            )
+        }
+    }
+
+    /// W3.5:连续失败最严重的模块(连击 ≥ 2 才升级提示),附人话原因。
+    var worstAutoFailureStreak: (scope: TrendResearchRunScope, streak: Int, reasonText: String?)? {
+        guard let worst = trendSettings.autoFailureStreaks.max(by: { $0.value < $1.value }),
+              worst.value >= 2,
+              let scope = TrendResearchRunScope(rawValue: worst.key) else { return nil }
+        let reasonText = trendSettings.lastAutoFailureMessages[worst.key]
+            .map { TrendErrorTriage.explain($0).reasonText }
+        return (scope, worst.value, reasonText.flatMap { $0.isEmpty ? nil : $0 })
+    }
+
+    /// W3.6:未读研判数——最近一次链路成功生成晚于「上次访问 AI 页」的链路条数;
+    /// 访问(出现/离开页面)即清零。从未访问过但有内容时算 1,引导进去看一次。
+    var unreadAIResearchCount: Int {
+        let chains = latestResearchTimestampPerChain
+        guard !chains.isEmpty else { return 0 }
+        guard let lastSeen = Self.aiResearchLastSeenDate else { return 1 }
+        return chains.values.filter {
+            Self.researchDate(from: $0).map { $0 > lastSeen } ?? false
+        }.count
+    }
+
+    private var latestResearchTimestampPerChain: [String: String] {
+        func best(_ a: String?, _ b: String?) -> String? {
+            switch (a, b) {
+            case let (a?, b?): return a >= b ? a : b
+            case let (a?, nil): return a
+            case let (nil, b?): return b
+            default: return nil
+            }
+        }
+        var chains: [String: String] = [:]
+        if let intraday = nextHourGuidanceReport?.generatedAt {
+            chains["intraday"] = intraday
+        }
+        if let radar = trendSettings.moduleGeneratedAt(.marketRadar) {
+            chains["marketRadar"] = radar
+        }
+        if let close = best(
+            trendSettings.moduleGeneratedAt(.closeReview),
+            marketCloseReviewArchive?.generatedAt
+        ) {
+            chains["closeReview"] = close
+        }
+        if let long = best(
+            trendSettings.moduleGeneratedAt(.longTerm),
+            trendReport?.generatedAt
+        ) {
+            chains["longTerm"] = long
+        }
+        return chains
+    }
+
+    /// W3.6:访问即清零(出现与离开页面都记录,页面内实时完成的研判不算未读)。
+    static func markAIResearchSeen() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: AppStorageKey.aiResearchLastSeen)
+    }
+
+    private static var aiResearchLastSeenDate: Date? {
+        (UserDefaults.standard.object(forKey: AppStorageKey.aiResearchLastSeen) as? Double)
+            .map { Date(timeIntervalSince1970: $0) }
+    }
+
+    private static func researchDate(from timestamp: String) -> Date? {
+        guard timestamp.count >= 16 else { return nil }
+        return researchTimestampFormatter.date(from: String(timestamp.prefix(16)))
+    }
+
+    private static let researchTimestampFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
+
+    /// W3.1:按通知偏好发送链路 A 完成/失败通知;偏好未开启时静默跳过,
+    /// 避免无谓的系统权限请求。
+    private func dispatchTrendCompletionNotification(_ notice: TrendCompletionNotification) async {
+        guard trendSettings.notifications.wants(notice) else { return }
+        await trendAnalysisNotificationSender(notice)
+    }
 
     private func trendDayString(from timestamp: String) -> String {
         let trimmed = timestamp.trimmingCharacters(in: .whitespacesAndNewlines)

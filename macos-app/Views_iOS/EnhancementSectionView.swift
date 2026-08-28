@@ -3,32 +3,23 @@ import SwiftUI
 
 // MARK: - iOS AI 研判页
 //
-// 投资智能主路径：AI 观点 / 我的组合 / 决策中心 / 决策记录。
-// 原趋势研判、跟踪和证据保留为按需展开的研究依据。
+// W7.1:与 macOS 同一信息架构的纵向单页——今日研判摘要(含 hero 一句话)
+// → 研判基础 → 今日收盘复盘 → AI 眼中的组合 → 判断与复盘。
+// 旧「观点/组合/决策/记录」四段与趋势跟踪兼容路径保留给 flag 关闭时。
 
 struct EnhancementSectionView: View {
     @EnvironmentObject private var model: AppModel
     @State private var segment: ResearchSegment = .report
-    @State private var intelligenceSegment: IntelligenceSegment = .viewpoint
     @State private var selectedCase: DecisionCase?
     @State private var reviewCase: DecisionCase?
     @State private var isShowingProfile = false
     @State private var isShowingGlossary = false
 
-    // 旧分段(投资智能未启用时)
+    // 旧分段(InvestmentIntelligence 关闭时的兼容路径)
     private enum ResearchSegment: String, CaseIterable, Identifiable {
         case report = "研判"
         case tracking = "跟踪"
         case evidence = "证据"
-        var id: String { rawValue }
-    }
-
-    // 新分段与 macOS 保持同一产品语言。
-    private enum IntelligenceSegment: String, CaseIterable, Identifiable {
-        case viewpoint = "观点"
-        case portfolio = "组合"
-        case decisions = "决策"
-        case records = "记录"
         var id: String { rawValue }
     }
 
@@ -37,13 +28,17 @@ struct EnhancementSectionView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if InvestmentIntelligence.enabled {
                     HStack(spacing: IOSDesign.spaceS) {
-                        Picker("", selection: $intelligenceSegment) {
-                            ForEach(IntelligenceSegment.allCases) { seg in
-                                Text(seg.rawValue).tag(seg)
-                            }
+                        Text("AI 研判")
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(IOSDesign.ink)
+                        Spacer(minLength: IOSDesign.spaceS)
+                        Button {
+                            isShowingProfile = true
+                        } label: {
+                            Image(systemName: "person.crop.circle")
+                                .foregroundStyle(IOSDesign.accent)
                         }
-                        .pickerStyle(.segmented)
-
+                        .accessibilityLabel("投资偏好")
                         Button {
                             isShowingGlossary = true
                         } label: {
@@ -52,14 +47,17 @@ struct EnhancementSectionView: View {
                         }
                         .accessibilityLabel("怎么读这份研判")
                     }
-                    .padding(.bottom, 2)
 
-                    switch intelligenceSegment {
-                    case .viewpoint: intelligenceViewpointContent
-                    case .portfolio: intelligencePortfolioContent
-                    case .decisions: intelligenceCasesContent
-                    case .records: intelligenceRecordsContent
-                    }
+                    // W7.1:今日研判摘要(hero + 四链路各一行)
+                    iosTodaySummarySection
+                    // 研判基础:读结论前先看判断基础
+                    iosCredibilitySection
+                    // 今日收盘复盘
+                    intelligenceViewpointContent
+                    // AI 眼中的组合
+                    intelligencePortfolioContent
+                    // 判断与复盘:活跃事项 + 待复盘 + 历史
+                    iosJudgementSection
                 } else {
                     // 旧分段(兼容)
                     Picker("", selection: $segment) {
@@ -84,6 +82,11 @@ struct EnhancementSectionView: View {
         .scrollDismissesKeyboard(.interactively)
         .refreshable {
             try? await model.refreshLatest(updateNotice: false)
+        }
+        .onChange(of: model.pendingInvestmentSectionAnchor) { _, target in
+            // W7.2:通知深链落到 AI 页即可;iOS 无区段锚点系统,消费后清空。
+            guard target != nil else { return }
+            model.pendingInvestmentSectionAnchor = nil
         }
         .sheet(item: $selectedCase) { decisionCase in
             IOSDecisionCaseDetailView(caseID: decisionCase.id, onReview: { reviewCase = decisionCase })
@@ -111,6 +114,146 @@ struct EnhancementSectionView: View {
     // MARK: 投资智能 - 观点
 
     @ViewBuilder
+    // MARK: W7.1 今日研判摘要(与 macOS 同一信息架构)
+
+    /// W2.3 同款 hero 装配。
+    private var iosTodayVerdictText: String? {
+        let topSignal = model.marketOpportunities.flatMap {
+            InvestmentTodayResearchSummary.topSignal($0)
+        }
+        return TodayVerdictDerivation.derive(
+            TodayVerdictDerivation.Input(
+                intradayPosture: model.nextHourGuidanceReport?.posture,
+                topRadarSignalName: topSignal?.name,
+                topRadarRecommendation: topSignal?.recommendation,
+                mediumDirection: model.trendReport?.horizons.first { $0.horizon == .medium }?.direction
+            )
+        )
+    }
+
+    /// 与 macOS `InvestmentTodayResearchRow.Kind.iconName` 同款映射
+    /// (那个扩展在 Views_macOS,iOS target 不可见,故本地维护一份)。
+    private static func iosRowIcon(_ kind: InvestmentTodayResearchRow.Kind) -> String {
+        switch kind {
+        case .closeReview: return "sunset.fill"
+        case .intraday: return "clock.arrow.circlepath"
+        case .marketRadar: return "scope"
+        case .longTerm: return "briefcase.fill"
+        }
+    }
+
+    private var iosTodaySummarySection: some View {
+        let summary = model.investmentTodayResearchSummary
+        return VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+            if !model.trendSettings.provider.isConfigured {
+                VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+                    Label("AI 研判尚未配置", systemImage: "wand.and.stars")
+                        .font(.subheadline.weight(.bold))
+                    Text("配置模型后可生成盘中指引、收盘复盘、长期研判与全市场雷达。")
+                        .font(.footnote)
+                        .foregroundStyle(IOSDesign.muted)
+                    Button("开始配置模型") {
+                        model.selectedSection = .settings
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            } else if summary.hasAnyContent {
+                Text("今日研判")
+                    .font(.headline)
+                    .foregroundStyle(IOSDesign.ink)
+                if let verdict = iosTodayVerdictText {
+                    HStack(spacing: IOSDesign.spaceS) {
+                        Image(systemName: "quote.opening")
+                            .foregroundStyle(IOSDesign.accent)
+                        Text("今天:\(verdict)")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(IOSDesign.ink)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .background(IOSDesign.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
+                ForEach(summary.rows) { row in
+                    HStack(alignment: .top, spacing: IOSDesign.spaceS) {
+                        Image(systemName: Self.iosRowIcon(row.kind))
+                            .foregroundStyle(IOSDesign.accent)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                                .font(.caption)
+                                .foregroundStyle(IOSDesign.muted)
+                            Text(row.headline)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(IOSDesign.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: IOSDesign.spaceS)
+                        Text(row.footnote)
+                            .font(.caption2)
+                            .foregroundStyle(IOSDesign.muted)
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
+                    Text("还没有任何研判")
+                        .font(.subheadline.weight(.bold))
+                    Text("生成第一份研判后,这里会出现今日摘要。")
+                        .font(.footnote)
+                        .foregroundStyle(IOSDesign.muted)
+                    Button("生成第一份研判") {
+                        model.startTrendAnalysisFromUser(withExpectation: .full)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
+    /// W7.1 研判基础:读结论前先看「基于多少穿透数据」。
+    private var iosCredibilitySection: some View {
+        let pct = model.portfolioLookThroughSnapshot?.disclosedSecurityCoveragePct
+        let low = pct.map { $0 < 70 } ?? true
+        let text: String
+        if let pct {
+            text = "基于\(Int(pct))%穿透数据" + (low ? " · 判断基础有限" : "")
+        } else {
+            text = "穿透数据未就绪 · 判断基础有限"
+        }
+        return HStack(spacing: IOSDesign.spaceS) {
+            Image(systemName: low ? "exclamationmark.triangle.fill" : "shield.checkered")
+                .foregroundStyle(low ? Color.orange : IOSDesign.muted)
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(IOSDesign.muted)
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// W7.1 判断与复盘:活跃事项 + 待复盘 + 历史,与 macOS 同名同义。
+    private var iosJudgementSection: some View {
+        VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
+            Text("判断与复盘")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(IOSDesign.ink)
+            Text("当时的判断和后来的结果,方便回头看")
+                .font(.subheadline)
+                .foregroundStyle(IOSDesign.muted)
+            intelligenceCasesContent
+            intelligenceRecordsContent
+        }
+    }
+
     private var intelligenceViewpointContent: some View {
         let review = model.marketCloseReview
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {

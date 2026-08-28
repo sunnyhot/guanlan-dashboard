@@ -7,6 +7,15 @@ import Foundation
 // 要求先调用 get_portfolio_overview。不在初始 user prompt 里内嵌整份持仓 JSON。
 
 struct TrendResearchPromptBuilder: Sendable {
+    /// W4.1:结论明确性契约——full 与增量 scope 的提交契约共用。
+    /// 与 `TrendAnalysisValidator` 的 W4 三校验一一对应,收紧时两边同步。
+    static let clarityContract = """
+- 结论句式：horizons/sectors/marketOutlook/opportunities 的 rationale 第一句必须是带方向的判断句——以 看多/看空/看涨/看跌/看淡/偏强/偏弱/偏乐观/偏谨慎/中性/观望/暂不明确 之一开头并给出理由，不超过 40 字；全文不超过 120 字。首句没有方向词会被校验拒批。
+- hedge 禁令：禁止「可能有机会」「不排除」「有待观察」「建议关注」「需持续跟踪」「需密切关注」「视情况而定」等零信息量措辞——要么给方向，要么写清在等什么信号。
+- uncertain 出口：direction=uncertain 时，rationale 末尾必须写「待观察信号：……」，说明什么信号在什么时间点出现后转为看多/看空；没有待观察信号的 uncertain 会被拒批。
+- 作废条件：horizons/sectors/opportunities 与 actions 必须填写 whatWouldChange——一句话说明该结论在什么情况下作废或升级；缺失会被校验拒批。
+"""
+
     func initialMessages(
         snapshot: TrendResearchSnapshot,
         scope: TrendResearchRunScope = .full,
@@ -55,7 +64,7 @@ struct TrendResearchPromptBuilder: Sendable {
 """
             contract = """
 submit_trend_market_module JSON：
-{"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[{"id":"","name":"","category":"index|assetClass|sector","scope":"marketWide","direction":"","confidence":{},"rationale":"","triggerConditions":[],"invalidatingConditions":[],"evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}]}
+{"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","whatWouldChange":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[{"id":"","name":"","category":"index|assetClass|sector","scope":"marketWide","direction":"","confidence":{},"rationale":"","whatWouldChange":"","triggerConditions":[],"invalidatingConditions":[],"evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}]}
 """
         case .closeReview:
             mission = "只更新今日收盘复盘所需的逐只持仓涨跌归因。市场雷达与长期组合模块从缓存报告复用，不做联网行业扫描，不生成行动建议。"
@@ -74,9 +83,9 @@ impactText 必须以「涨跌归因：」或「原因待确认：」开头。只
 依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot。\(official)\(alpha)配置 Tavily 时只做与当前组合直接相关的必要搜索，取得有效证据后停止。然后按 App 开放顺序提交 submit_trend_overview_module、submit_trend_asset_batch（每批最多 \(TrendReportDraftStore.assetBatchSize) 只）、submit_trend_actions_module。
 """
             contract = """
-overview：{"portfolio":{"headline":"","riskLevel":"low|medium|high|unknown","summary":"","claimEvidence":{}},"horizons":[三个 short/medium/long horizon]}
+overview：{"portfolio":{"headline":"","riskLevel":"low|medium|high|unknown","summary":"","claimEvidence":{}},"horizons":[三个 short/medium/long horizon，含 whatWouldChange]}
 asset batch：{"assetTrends":[asset]}，必须覆盖 remaining_fund_codes；asset 含 id/name/code/sector/impactText/horizons/rationale/counterSignals/claimEvidence。
-actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirmation|observeInBatches|pausePlan|considerIncrease|considerReduce|rebalanceReview","title":"","detail":"","targetName":"","confidence":{},"triggerConditions":[],"invalidatingConditions":[],"claimEvidence":{}}],"warnings":[],"disclaimer":"必须包含非投资建议"}。
+actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirmation|observeInBatches|pausePlan|considerIncrease|considerReduce|rebalanceReview","title":"","detail":"","targetName":"","confidence":{},"whatWouldChange":"","triggerConditions":[],"invalidatingConditions":[],"claimEvidence":{}}],"warnings":[],"disclaimer":"必须包含非投资建议"}。
 """
         case .full:
             mission = ""
@@ -99,8 +108,8 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
 
 【提交契约】
 \(contract)
-通用 horizon 含 horizon/direction/confidence/rationale/counterSignals/claimEvidence。confidence.score 为 0...100，label 按 ≥75 高、≥45 中、否则低。claimEvidence 固定为 supportingEvidenceIDs/counterEvidenceIDs/contextEvidenceIDs/exemptionReason，只能引用工具返回的 evidence_ids。方向性结论没有相关支持证据时必须 direction=uncertain 并填写 exemptionReason。行动必须有触发与失效条件；资金动作证据不足时降为 watch。
-
+通用 horizon 含 horizon/direction/confidence/rationale/whatWouldChange/counterSignals/claimEvidence。confidence.score 为 0...100，label 按 ≥75 高、≥45 中、否则低。claimEvidence 固定为 supportingEvidenceIDs/counterEvidenceIDs/contextEvidenceIDs/exemptionReason，只能引用工具返回的 evidence_ids。方向性结论没有相关支持证据时必须 direction=uncertain 并填写 exemptionReason。行动必须有触发与失效条件；资金动作证据不足时降为 watch。
+\(Self.clarityContract)
 \(privacy)
 不得输出绝对买卖指令；最终声明非投资建议。
 """
@@ -178,20 +187,20 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
 所有字段名区分大小写；中文枚举值必须与下方完全一致。confidence 为对象 {\"score\":0~100, \"label\":\"高\"|\"中\"|\"低\"}，label 规则：score≥75→高、≥45→中、否则低。
 claimEvidence 的固定结构为 {\"supportingEvidenceIDs\":[],\"counterEvidenceIDs\":[],\"contextEvidenceIDs\":[],\"exemptionReason\":null}。
 
-通用 horizon = {\"horizon\":\"short\"|\"medium\"|\"long\",\"direction\":\"bullish\"|\"neutralPositive\"|\"neutral\"|\"neutralNegative\"|\"bearish\"|\"uncertain\",\"confidence\":{\"score\":0,\"label\":\"低\"},\"rationale\":\"判断依据\",\"counterSignals\":[\"反证条件\"],\"claimEvidence\":{}}
+通用 horizon = {\"horizon\":\"short\"|\"medium\"|\"long\",\"direction\":\"bullish\"|\"neutralPositive\"|\"neutral\"|\"neutralNegative\"|\"bearish\"|\"uncertain\",\"confidence\":{\"score\":0,\"label\":\"低\"},\"rationale\":\"判断依据\",\"whatWouldChange\":\"作废或升级条件\",\"counterSignals\":[\"反证条件\"],\"claimEvidence\":{}}
 通用 asset = {\"id\":\"\",\"name\":\"\",\"code\":\"\",\"sector\":\"\",\"impactText\":\"\",\"horizons\":[horizon],\"rationale\":\"\",\"counterSignals\":[],\"claimEvidence\":{}}
 
 1. submit_trend_overview_module
 {\"portfolio\":{\"headline\":\"\",\"riskLevel\":\"low\"|\"medium\"|\"high\"|\"unknown\",\"summary\":\"\",\"claimEvidence\":{}},\"horizons\":[horizon,horizon,horizon]}
 
 2. submit_trend_market_module
-{\"marketOutlook\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"sectors\":[{\"id\":\"\",\"name\":\"\",\"exposureText\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"opportunities\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\"|\"sector\",\"scope\":\"marketWide\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}]}
+{\"marketOutlook\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"sectors\":[{\"id\":\"\",\"name\":\"\",\"exposureText\":\"\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"whatWouldChange\":\"\",\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}],\"opportunities\":[{\"id\":\"\",\"name\":\"\",\"category\":\"index\"|\"assetClass\"|\"sector\",\"scope\":\"marketWide\",\"direction\":\"\",\"confidence\":{},\"rationale\":\"\",\"whatWouldChange\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"evidenceIDs\":[],\"counterSignals\":[],\"claimEvidence\":{}}]}
 
 3. submit_trend_asset_batch
 {\"assetTrends\":[asset]}；每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。
 
 4. submit_trend_actions_module
-{\"keyAssets\":[asset],\"actions\":[{\"id\":\"\",\"kind\":\"watch\"|\"waitForConfirmation\"|\"observeInBatches\"|\"pausePlan\"|\"considerIncrease\"|\"considerReduce\"|\"rebalanceReview\",\"title\":\"\",\"detail\":\"\",\"targetName\":\"\",\"confidence\":{},\"triggerConditions\":[],\"invalidatingConditions\":[],\"claimEvidence\":{}}],\"warnings\":[{\"id\":\"\",\"title\":\"\",\"detail\":\"\"}],\"disclaimer\":\"必须包含非投资建议\"}
+{\"keyAssets\":[asset],\"actions\":[{\"id\":\"\",\"kind\":\"watch\"|\"waitForConfirmation\"|\"observeInBatches\"|\"pausePlan\"|\"considerIncrease\"|\"considerReduce\"|\"rebalanceReview\",\"title\":\"\",\"detail\":\"\",\"targetName\":\"\",\"confidence\":{},\"whatWouldChange\":\"\",\"triggerConditions\":[],\"invalidatingConditions\":[],\"claimEvidence\":{}}],\"warnings\":[{\"id\":\"\",\"title\":\"\",\"detail\":\"\"}],\"disclaimer\":\"必须包含非投资建议\"}
 
 schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence 由 App 本地组装与归一化，模块中不要输出这些字段。
 
@@ -205,6 +214,7 @@ schemaVersion、privacyMode、externalSignalStatus、sourceStatuses 和 evidence
 - SEC 申报和财务事实优先引用 official:sec:* evidence id；网页摘要不能替代已有官方证据。officialFiling 只证明提交了什么表单及其结构化项目，若未读取正文，不得推断事件方向。
 - Alpha Vantage 证据引用 vendor:alphavantage:*；它可支持 ETF 结构、财报日历和历史日线统计，但不得描述为监管、交易所或发行人官方披露，也不得冒充实时行情。
 - horizons/sectors/marketOutlook/opportunities/keyAssets/assetTrends 的 rationale 必须非空，且都要带 counterSignals（actions 只需 triggerConditions + invalidatingConditions）。
+\(Self.clarityContract)
 - marketOutlook 与 sectors 互斥：同一主题只能出现在其中一个数组。指数/大类资产（沪深300、黄金、债券、原油…）只放 marketOutlook；行业板块（消费、科技、医药、新能源…）只放 sectors。不要在两边写同一个主题（例如「消费」不能同时出现在两个数组里）。
 - opportunities 是完整扫描后的全市场机会排序，不是当前持仓分析摘要，每一项 scope 必须固定为 marketWide。category 用 index 表示大盘/宽基指数，assetClass 表示大类资产，sector 表示行业/主题板块；index 与 assetClass 各输出 1～3 个，sector 从六个分组全部扫描完后跨组比较，输出 3～6 个最值得继续研究的板块。候选无需已持有，也无需出现在组合穿透结果中。每项必须有独立外部证据、触发条件和失效条件；不得为了填满数量编造机会，证据不足可以少报或留空并披露缺口。
 - opportunities 不得把 marketOutlook 或 sectors 的同名结论原样复制过来；同名方向只有在全市场搜索取得额外证据，并给出独立的触发/失效条件时才可进入机会清单。

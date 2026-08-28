@@ -77,9 +77,7 @@ struct NextHourGuidanceDecisionConsole: View {
                 Spacer(minLength: AppPalette.spaceS)
             }
 
-            if !report.followupReviews.isEmpty {
-                NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
-            }
+            // W5.3:昨日关注回指上移为盘中区段第一条可见内容,决策台内不再重复。
 
             Text(report.disclaimer)
                 .font(AppPalette.appFont(.caption))

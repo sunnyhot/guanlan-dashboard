@@ -62,17 +62,20 @@ enum PortfolioDecisionState: String, Codable, Hashable, Sendable, CaseIterable {
 
 // MARK: - Case 类型
 
-/// Slice 1 起 concentrationRisk;Slice 7 扩展 drawdown / deviation。
+/// Slice 1 起 concentrationRisk;Slice 7 扩展 drawdown / deviation;
+/// sunset(方案 A)新增 trendAction:行动候选「加入关注」直接建案。
 enum DecisionCaseKind: String, Codable, Hashable, Sendable {
     case concentrationRisk
     case drawdownExpansion     // 回撤扩大(Slice 7)
     case targetDeviation       // 目标配置偏离(Slice 7)
+    case trendAction           // 趋势报告行动候选(旧跟踪清单写入切换)
 
     var displayName: String {
         switch self {
         case .concentrationRisk: return "集中度风险"
         case .drawdownExpansion: return "回撤扩大"
         case .targetDeviation: return "目标配置偏离"
+        case .trendAction: return "趋势行动"
         }
     }
 }

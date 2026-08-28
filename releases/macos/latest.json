@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
-    "name" : "QiemanDashboard-4.0.0.zip",
-    "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
-    "size" : 7733719
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.2/QiemanDashboard-4.2.2.zip",
+    "name" : "QiemanDashboard-4.2.2.zip",
+    "sha256" : "64d4c8d22cccc3d1c77fbb8792666e8c671b3b02d43dee35bf71c2bcccff9601",
+    "size" : 7922246
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.0.0/QiemanDashboard-4.0.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.2/QiemanDashboard-4.2.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.0.0.zip",
-      "size" : 7733719
+      "name" : "QiemanDashboard-4.2.2.zip",
+      "size" : 7922246
     }
   ],
-  "body" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.0.0",
-  "name" : "QiemanDashboard v4.0.0",
-  "notes" : "升级投资智能研判与收盘复盘\n精简今日复盘并复用共享基础能力\n重构投资智能并加入收盘复盘\n支持拖拽重排及顺序持久化\nM1-M3 数据正确性 + 研究闭环 + 复盘闭环修复\nSlice 7 复盘机制 + 回撤扩大/目标配置偏离 Case 类型(收尾)\nSlice 6 旧 TrendTracking → DecisionCase 迁移(sunset 阶段一)\nSlice 5 用户决策画像编辑 UI + 概况摘要\nSlice 4 最小 Evidence Intelligence(独立性/时效/Claim Assessment)\nSlice 3 DecisionCaseResearchAgent(专项研究 + 自动/手动触发)\nSlice 2 穿透行业集中度风险",
+  "body" : "Xcode 工程同步 v4.2.2(版本号)\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.2.2",
+  "name" : "QiemanDashboard v4.2.2",
+  "notes" : "Xcode 工程同步 v4.2.2(版本号)\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)",
   "published_at" : "",
-  "sha256" : "29ed5955675e21ea34e944ebd96d623ca444787e9418e868954ffdbc2adf43d4",
-  "tag" : "v4.0.0",
-  "tag_name" : "v4.0.0",
-  "version" : "4.0.0"
+  "sha256" : "64d4c8d22cccc3d1c77fbb8792666e8c671b3b02d43dee35bf71c2bcccff9601",
+  "tag" : "v4.2.2",
+  "tag_name" : "v4.2.2",
+  "version" : "4.2.2"
 }

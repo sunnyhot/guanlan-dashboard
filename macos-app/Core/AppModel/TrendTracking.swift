@@ -140,7 +140,8 @@ extension AppModel {
 
     // MARK: - 标的匹配
 
-    private static func matchedRow(
+    /// 行动候选 → 持仓行匹配。sunset 后由旧跟踪与决策案例两条写入路径共用。
+    static func matchedRow(
         for action: TrendActionCandidate,
         in rows: [PersonalAssetAggregateRow]
     ) -> PersonalAssetAggregateRow? {

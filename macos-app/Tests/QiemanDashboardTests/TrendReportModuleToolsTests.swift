@@ -215,7 +215,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertTrue(progress.isComplete)
 
         let assembled = await store.assembledReport(snapshot: makeSnapshot(codes: [code]))
-        XCTAssertEqual(assembled?.marketOutlook, base.marketOutlook)
+        // W4:复用的基线 market 模块经 BaselineContractPatch 满足明确性契约后透传
+        // (方向词前缀 + uncertain 待观察信号出口),其余字段不变。
+        XCTAssertEqual(assembled?.marketOutlook, TrendBaselineContractPatch.markets(base.marketOutlook))
         XCTAssertEqual(assembled?.portfolio, base.portfolio)
         XCTAssertEqual(assembled?.assetTrends.count, 1)
     }

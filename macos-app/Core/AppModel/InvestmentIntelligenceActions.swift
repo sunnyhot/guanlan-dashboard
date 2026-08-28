@@ -178,6 +178,109 @@ extension AppModel {
         }
     }
 
+    // MARK: - 行动候选 → 决策案例(sunset 方案 A:写入路径切换)
+
+    /// 行动候选的决策案例键。trend: 是新写入口;legacy: 兼容已迁移的旧项。
+    /// 两键互为去重键:同一动作无论经旧清单迁移还是新按钮加入,只保留一案。
+    static func decisionCaseKeys(
+        actionKind: TrendActionKind,
+        subjectID: String
+    ) -> (fresh: String, legacy: String) {
+        (
+            "trend:\(actionKind.rawValue)|\(subjectID)",
+            "legacy:\(actionKind.rawValue)|\(subjectID)"
+        )
+    }
+
+    /// 「加入关注」:行动候选直接创建 DecisionCase(sunset 后的唯一 UI 写入口)。
+    /// 自然语言触发/失效条件写入 detail 并标注人工复核,不自动触发;
+    /// 复查时间不预设,由用户在判断与复盘里设定。
+    @discardableResult
+    func addDecisionCase(from action: TrendActionCandidate, report: TrendAnalysisReport) -> Bool {
+        let now = Self.timestampString()
+        let row = Self.matchedRow(for: action, in: personalAssetRows)
+        let assetName = row?.fundName ?? action.targetName ?? action.title
+        let subjectID = (row?.fundCode ?? assetName).lowercased()
+        let keys = Self.decisionCaseKeys(actionKind: action.kind, subjectID: subjectID)
+
+        if decisionCases.contains(where: { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }) {
+            noticeMessage = "该标的和动作已在判断与复盘清单中。"
+            return false
+        }
+
+        var detailParts: [String] = []
+        detailParts.append("来源:趋势报告(\(report.generatedAt))")
+        detailParts.append("操作建议:\(action.kind.displayText)")
+        detailParts.append("理由:\(action.detail)")
+        if !action.triggerConditions.isEmpty {
+            detailParts.append("触发条件(人工复核):\(action.triggerConditions.joined(separator: "、"))")
+        }
+        if !action.invalidatingConditions.isEmpty {
+            detailParts.append("失效条件(人工复核):\(action.invalidatingConditions.joined(separator: "、"))")
+        }
+        detailParts.append("[来自行动候选;条件为自然语言,不自动触发]")
+
+        let score = action.confidence.score
+        let createdCase = DecisionCase(
+            caseKey: keys.fresh,
+            kind: .trendAction,
+            dimension: .directHolding,
+            subjectName: assetName,
+            subjectCode: row?.fundCode,
+            lifecycle: .monitoring,
+            decisionState: .watch,
+            metricValue: Double(score),
+            metricLabel: ConfidenceGrade.badgeText(score: score),
+            metricDescription: "来自趋势报告行动候选",
+            title: "\(assetName) · \(action.kind.displayText)",
+            detail: detailParts.joined(separator: "\n"),
+            createdAt: now,
+            updatedAt: now,
+            events: [
+                DecisionCaseEvent(
+                    at: now,
+                    type: .created,
+                    previousLifecycle: nil,
+                    newLifecycle: .monitoring,
+                    previousDecisionState: nil,
+                    newDecisionState: .watch,
+                    reason: "行动候选加入关注",
+                    actor: .user
+                )
+            ],
+            userDisposition: .acknowledged
+        )
+        decisionCases.append(createdCase)
+        persistDecisionCases()
+        noticeMessage = "已加入判断与复盘清单。"
+        return true
+    }
+
+    /// 行动候选是否已有对应决策案例(新键或旧迁移键任一命中)。
+    func hasDecisionCase(for action: TrendActionCandidate, report: TrendAnalysisReport) -> Bool {
+        decisionCase(for: action, report: report) != nil
+    }
+
+    /// 行动候选对应的既有决策案例;「加入关注」后当场设复查时间用。
+    func decisionCase(for action: TrendActionCandidate, report: TrendAnalysisReport) -> DecisionCase? {
+        let row = Self.matchedRow(for: action, in: personalAssetRows)
+        let assetName = row?.fundName ?? action.targetName ?? action.title
+        let subjectID = (row?.fundCode ?? assetName).lowercased()
+        let keys = Self.decisionCaseKeys(actionKind: action.kind, subjectID: subjectID)
+        return decisionCases.first { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }
+    }
+
+    /// W5.1:加入关注后当场设定/调整复查时间;`days` 传 nil 清除(暂不提醒)。
+    /// 默认建议 watch 状态 7 天(与 `DecisionReview.computeReviewDueAt` 对齐)。
+    @discardableResult
+    func setDecisionCaseReviewDue(caseID: UUID, daysFromNow days: Int?) -> Bool {
+        guard let index = decisionCases.firstIndex(where: { $0.id == caseID }) else { return false }
+        decisionCases[index].reviewDueAt = days.map { Self.timestampString(addingDays: $0) }
+        decisionCases[index].updatedAt = Self.timestampString()
+        persistDecisionCases()
+        return true
+    }
+
     // MARK: - 刷新(集中度评估)
 
     /// 刷新集中度风险评估,生成/更新 DecisionCase。

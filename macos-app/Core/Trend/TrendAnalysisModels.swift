@@ -134,6 +134,29 @@ enum TrendHorizon: String, Codable, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 }
 
+
+/// 面向用户的动作文案(原定义在视图层,Core 的决策案例写入也依赖,下沉至此)。
+extension TrendActionKind {
+    var displayText: String {
+        switch self {
+        case .watch:
+            return "观察"
+        case .waitForConfirmation:
+            return "等待确认"
+        case .observeInBatches:
+            return "分批观察"
+        case .pausePlan:
+            return "暂停计划"
+        case .considerIncrease:
+            return "考虑增加"
+        case .considerReduce:
+            return "考虑降低"
+        case .rebalanceReview:
+            return "调仓复核"
+        }
+    }
+}
+
 enum TrendActionKind: String, Codable, Hashable {
     case watch
     case waitForConfirmation
@@ -487,6 +510,77 @@ struct AlphaVantageSettings: Codable, Hashable, Sendable {
     }
 }
 
+/// W3.1 链路 A 通知偏好:默认只开「收盘复盘完成 + 自动失败」最小集,
+/// 其余链路由用户在设置里显式打开,避免通知轰炸。
+struct TrendNotificationPreferences: Codable, Hashable {
+    var closeReviewSuccessEnabled: Bool
+    var marketRadarSuccessEnabled: Bool
+    var longTermSuccessEnabled: Bool
+    var firstReportEnabled: Bool
+    var autoFailureEnabled: Bool
+
+    static let `default` = TrendNotificationPreferences()
+
+    init(
+        closeReviewSuccessEnabled: Bool = true,
+        marketRadarSuccessEnabled: Bool = false,
+        longTermSuccessEnabled: Bool = false,
+        firstReportEnabled: Bool = false,
+        autoFailureEnabled: Bool = true
+    ) {
+        self.closeReviewSuccessEnabled = closeReviewSuccessEnabled
+        self.marketRadarSuccessEnabled = marketRadarSuccessEnabled
+        self.longTermSuccessEnabled = longTermSuccessEnabled
+        self.firstReportEnabled = firstReportEnabled
+        self.autoFailureEnabled = autoFailureEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        closeReviewSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .closeReviewSuccessEnabled) ?? true
+        marketRadarSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .marketRadarSuccessEnabled) ?? false
+        longTermSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .longTermSuccessEnabled) ?? false
+        firstReportEnabled = try container.decodeIfPresent(Bool.self, forKey: .firstReportEnabled) ?? false
+        autoFailureEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoFailureEnabled) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(closeReviewSuccessEnabled, forKey: .closeReviewSuccessEnabled)
+        try container.encode(marketRadarSuccessEnabled, forKey: .marketRadarSuccessEnabled)
+        try container.encode(longTermSuccessEnabled, forKey: .longTermSuccessEnabled)
+        try container.encode(firstReportEnabled, forKey: .firstReportEnabled)
+        try container.encode(autoFailureEnabled, forKey: .autoFailureEnabled)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case closeReviewSuccessEnabled
+        case marketRadarSuccessEnabled
+        case longTermSuccessEnabled
+        case firstReportEnabled
+        case autoFailureEnabled
+    }
+
+    /// 是否发送该通知。手动触发的成功只在「首份研判」偏好开启时发送;
+    /// 自动调度不会请求 full scope,防御性关闭。
+    func wants(_ notice: TrendCompletionNotification) -> Bool {
+        switch notice.outcome {
+        case .failed:
+            return autoFailureEnabled && !notice.userInitiated
+        case .succeeded:
+            if notice.userInitiated {
+                return notice.isFirstReport && firstReportEnabled
+            }
+            switch notice.scope {
+            case .closeReview: return closeReviewSuccessEnabled
+            case .marketRadar: return marketRadarSuccessEnabled
+            case .longTerm: return longTermSuccessEnabled
+            case .full: return false
+            }
+        }
+    }
+}
+
 struct TrendAnalysisSettings: Codable, Hashable {
     var provider: TrendAIProviderSettings
     var webSearch: TavilySearchSettings
@@ -499,6 +593,11 @@ struct TrendAnalysisSettings: Codable, Hashable {
     var lastAutoAnalysisSlotKey: String?
     var lastModuleAutoAnalysisKeys: [String: String]
     var lastModuleGeneratedAt: [String: String]
+    var notifications: TrendNotificationPreferences
+    /// W3.5 连续失败升级:scope → 连续未成功的自动窗口数(成功即清零)。
+    var autoFailureStreaks: [String: Int]
+    /// W3.5:scope → 最近一次自动失败的错误文案(TodayBrief 人话化用)。
+    var lastAutoFailureMessages: [String: String]
 
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
@@ -511,7 +610,10 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoAnalysisDay: nil,
         lastAutoAnalysisSlotKey: nil,
         lastModuleAutoAnalysisKeys: [:],
-        lastModuleGeneratedAt: [:]
+        lastModuleGeneratedAt: [:],
+        notifications: .default,
+        autoFailureStreaks: [:],
+        lastAutoFailureMessages: [:]
     )
 
     init(
@@ -525,7 +627,10 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoAnalysisDay: String? = nil,
         lastAutoAnalysisSlotKey: String? = nil,
         lastModuleAutoAnalysisKeys: [String: String] = [:],
-        lastModuleGeneratedAt: [String: String] = [:]
+        lastModuleGeneratedAt: [String: String] = [:],
+        notifications: TrendNotificationPreferences = .default,
+        autoFailureStreaks: [String: Int] = [:],
+        lastAutoFailureMessages: [String: String] = [:]
     ) {
         self.provider = provider
         self.webSearch = webSearch
@@ -538,6 +643,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         self.lastAutoAnalysisSlotKey = lastAutoAnalysisSlotKey
         self.lastModuleAutoAnalysisKeys = lastModuleAutoAnalysisKeys
         self.lastModuleGeneratedAt = lastModuleGeneratedAt
+        self.notifications = notifications
+        self.autoFailureStreaks = autoFailureStreaks
+        self.lastAutoFailureMessages = lastAutoFailureMessages
     }
 
     init(from decoder: Decoder) throws {
@@ -571,6 +679,18 @@ struct TrendAnalysisSettings: Codable, Hashable {
             [String: String].self,
             forKey: .lastModuleGeneratedAt
         ) ?? [:]
+        notifications = try container.decodeIfPresent(
+            TrendNotificationPreferences.self,
+            forKey: .notifications
+        ) ?? .default
+        autoFailureStreaks = try container.decodeIfPresent(
+            [String: Int].self,
+            forKey: .autoFailureStreaks
+        ) ?? [:]
+        lastAutoFailureMessages = try container.decodeIfPresent(
+            [String: String].self,
+            forKey: .lastAutoFailureMessages
+        ) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -586,6 +706,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         try container.encodeIfPresent(lastAutoAnalysisSlotKey, forKey: .lastAutoAnalysisSlotKey)
         try container.encode(lastModuleAutoAnalysisKeys, forKey: .lastModuleAutoAnalysisKeys)
         try container.encode(lastModuleGeneratedAt, forKey: .lastModuleGeneratedAt)
+        try container.encode(notifications, forKey: .notifications)
+        try container.encode(autoFailureStreaks, forKey: .autoFailureStreaks)
+        try container.encode(lastAutoFailureMessages, forKey: .lastAutoFailureMessages)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -601,6 +724,9 @@ struct TrendAnalysisSettings: Codable, Hashable {
         case lastAutoAnalysisSlotKey
         case lastModuleAutoAnalysisKeys
         case lastModuleGeneratedAt
+        case notifications
+        case autoFailureStreaks
+        case lastAutoFailureMessages
     }
 
     var dailyAutoAnalysisSchedule: TrendAutoAnalysisSchedule {
@@ -658,6 +784,26 @@ struct TrendAnalysisSettings: Codable, Hashable {
     func moduleGeneratedAt(_ scope: TrendResearchRunScope) -> String? {
         lastModuleGeneratedAt[scope.rawValue]
     }
+
+    /// W3.5:成功生成后清零对应模块的连续失败计数(full 同时清三个模块)。
+    mutating func clearAutoFailureStreak(scope: TrendResearchRunScope) {
+        let scopes = scope == .full
+            ? [TrendResearchRunScope.marketRadar, .closeReview, .longTerm]
+            : [scope]
+        for moduleScope in scopes {
+            autoFailureStreaks[moduleScope.rawValue] = nil
+            lastAutoFailureMessages[moduleScope.rawValue] = nil
+        }
+    }
+
+    /// W3.5:自动运行失败后累加连击并记录错误文案;返回新的连击数。
+    mutating func recordAutoFailure(scope: TrendResearchRunScope, message: String) -> Int {
+        let key = scope.rawValue
+        let next = (autoFailureStreaks[key] ?? 0) + 1
+        autoFailureStreaks[key] = next
+        lastAutoFailureMessages[key] = message
+        return next
+    }
 }
 
 struct TrendPortfolioSummary: Codable, Hashable {
@@ -702,6 +848,8 @@ struct TrendHorizonView: Codable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级(用户可读短句);旧报告解码为空,UI 降级用反证首条。
+    let whatWouldChange: String
     let counterSignals: [String]
     let claimEvidence: TrendClaimEvidence
 
@@ -710,6 +858,7 @@ struct TrendHorizonView: Codable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         counterSignals: [String],
         claimEvidence: TrendClaimEvidence = .empty
     ) {
@@ -717,6 +866,7 @@ struct TrendHorizonView: Codable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.counterSignals = counterSignals
         self.claimEvidence = claimEvidence
     }
@@ -727,6 +877,7 @@ struct TrendHorizonView: Codable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decodeIfPresent(String.self, forKey: .rationale) ?? ""
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
         claimEvidence = try container.decodeIfPresent(
             TrendClaimEvidence.self,
@@ -739,6 +890,7 @@ struct TrendHorizonView: Codable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case counterSignals
         case claimEvidence
     }
@@ -751,6 +903,8 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let evidenceIDs: [String]
     let counterSignals: [String]
     let claimEvidence: TrendClaimEvidence
@@ -762,6 +916,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         evidenceIDs: [String],
         counterSignals: [String],
         claimEvidence: TrendClaimEvidence = .empty
@@ -772,6 +927,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.evidenceIDs = evidenceIDs
         self.counterSignals = counterSignals
         self.claimEvidence = claimEvidence
@@ -785,6 +941,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decode(String.self, forKey: .rationale)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
         claimEvidence = try container.decodeIfPresent(
@@ -800,6 +957,7 @@ struct TrendSectorView: Codable, Identifiable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case evidenceIDs
         case counterSignals
         case claimEvidence
@@ -959,6 +1117,8 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
     var direction: TrendDirection
     let confidence: TrendConfidence
     let rationale: String
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let triggerConditions: [String]
     let invalidatingConditions: [String]
     let evidenceIDs: [String]
@@ -973,6 +1133,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         direction: TrendDirection,
         confidence: TrendConfidence,
         rationale: String,
+        whatWouldChange: String = "",
         triggerConditions: [String],
         invalidatingConditions: [String],
         evidenceIDs: [String],
@@ -986,6 +1147,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         self.direction = direction
         self.confidence = confidence
         self.rationale = rationale
+        self.whatWouldChange = whatWouldChange
         self.triggerConditions = triggerConditions
         self.invalidatingConditions = invalidatingConditions
         self.evidenceIDs = evidenceIDs
@@ -1007,6 +1169,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         direction = try container.decode(TrendDirection.self, forKey: .direction)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
         rationale = try container.decode(String.self, forKey: .rationale)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         triggerConditions = try container.decodeIfPresent([String].self, forKey: .triggerConditions) ?? []
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
         evidenceIDs = try container.decodeIfPresent([String].self, forKey: .evidenceIDs) ?? []
@@ -1025,6 +1188,7 @@ struct TrendOpportunity: Codable, Identifiable, Hashable {
         case direction
         case confidence
         case rationale
+        case whatWouldChange
         case triggerConditions
         case invalidatingConditions
         case evidenceIDs
@@ -1040,6 +1204,8 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
     let detail: String
     let targetName: String?
     let confidence: TrendConfidence
+    /// W4.2:什么情况作废/升级;旧报告解码为空。
+    let whatWouldChange: String
     let triggerConditions: [String]
     let invalidatingConditions: [String]
     let claimEvidence: TrendClaimEvidence
@@ -1051,6 +1217,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         detail: String,
         targetName: String?,
         confidence: TrendConfidence,
+        whatWouldChange: String = "",
         triggerConditions: [String],
         invalidatingConditions: [String],
         claimEvidence: TrendClaimEvidence = .empty
@@ -1061,6 +1228,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         self.detail = detail
         self.targetName = targetName
         self.confidence = confidence
+        self.whatWouldChange = whatWouldChange
         self.triggerConditions = triggerConditions
         self.invalidatingConditions = invalidatingConditions
         self.claimEvidence = claimEvidence
@@ -1074,6 +1242,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         detail = try container.decode(String.self, forKey: .detail)
         targetName = try container.decodeIfPresent(String.self, forKey: .targetName)
         confidence = try container.decode(TrendConfidence.self, forKey: .confidence)
+        whatWouldChange = try container.decodeIfPresent(String.self, forKey: .whatWouldChange) ?? ""
         triggerConditions = try container.decodeIfPresent([String].self, forKey: .triggerConditions) ?? []
         invalidatingConditions = try container.decodeIfPresent([String].self, forKey: .invalidatingConditions) ?? []
         claimEvidence = try container.decodeIfPresent(
@@ -1089,6 +1258,7 @@ struct TrendActionCandidate: Codable, Identifiable, Hashable {
         case detail
         case targetName
         case confidence
+        case whatWouldChange
         case triggerConditions
         case invalidatingConditions
         case claimEvidence

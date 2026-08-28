@@ -18,6 +18,14 @@ struct TrendAnalysisValidator {
         "保证收益"
     ]
 
+    /// W4.3:结论句必须命中的方向词表(与展示词汇同源;首句由
+    /// `TrendVerdictPresentation.split` 拆出)。
+    static let directionLeadWords: [String] = [
+        "看多", "看空", "看涨", "看跌", "看淡", "看好",
+        "偏强", "偏弱", "偏乐观", "偏谨慎", "偏防守", "偏进攻",
+        "中性", "观望", "防御", "防守", "进攻", "择机", "暂不明确"
+    ]
+
     func validate(_ report: TrendAnalysisReport, expectedFundCodes: [String] = [], expectedPrivacyMode: TrendPrivacyMode? = nil) -> TrendValidationResult {
         var messages: [String] = []
 
@@ -139,6 +147,59 @@ struct TrendAnalysisValidator {
             }
         }
 
+        // MARK: - W4 结论明确性契约(2026-08-27 起)
+        // 1. 方向性结论的 rationale 首句必须命中方向词表——消灭「震荡、多空交织、
+        //    需密切关注」这类零信息量开头;
+        // 2. uncertain 必须带「待观察信号:…」出口,「暂不明确」要说清在等什么;
+        // 3. whatWouldChange(作废/升级条件)非空——结论四要素固定
+        //    (marketOutlook 无该字段,UI 用反证首条降级)。
+
+        for horizon in report.horizons {
+            validateClarity(
+                label: "\(horizon.horizon.rawValue) 周期趋势",
+                direction: horizon.direction,
+                rationale: horizon.rationale,
+                messages: &messages
+            )
+            if horizon.whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages.append("\(horizon.horizon.rawValue) 周期趋势缺少 whatWouldChange/作废与升级条件。")
+            }
+        }
+        for sector in report.sectors {
+            validateClarity(
+                label: "板块「\(sector.name)」",
+                direction: sector.direction,
+                rationale: sector.rationale,
+                messages: &messages
+            )
+            if sector.whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages.append("板块「\(sector.name)」缺少 whatWouldChange/作废与升级条件。")
+            }
+        }
+        for market in report.marketOutlook {
+            validateClarity(
+                label: "大盘/大类资产「\(market.name)」",
+                direction: market.direction,
+                rationale: market.rationale,
+                messages: &messages
+            )
+        }
+        for opportunity in report.opportunities {
+            validateClarity(
+                label: "投资机会「\(opportunity.name)」",
+                direction: opportunity.direction,
+                rationale: opportunity.rationale,
+                messages: &messages
+            )
+            if opportunity.whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages.append("投资机会「\(opportunity.name)」缺少 whatWouldChange/作废与升级条件。")
+            }
+        }
+        for action in report.actions
+        where action.whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messages.append("行动候选「\(action.title)」缺少 whatWouldChange/作废与升级条件。")
+        }
+
         let portfolioParts = [report.portfolio.headline, report.portfolio.summary, report.disclaimer]
         let actionParts = report.actions.flatMap { [$0.title, $0.detail] }
         let horizonParts = report.horizons.flatMap { [$0.rationale] + $0.counterSignals }
@@ -155,6 +216,26 @@ struct TrendAnalysisValidator {
         }
 
         return messages.isEmpty ? .valid : TrendValidationResult(isValid: false, messages: messages)
+    }
+
+    /// W4.3:结论句方向词 + uncertain 待观察信号出口。
+    private func validateClarity(
+        label: String,
+        direction: TrendDirection,
+        rationale: String,
+        messages: inout [String]
+    ) {
+        let headline = TrendVerdictPresentation.split(rationale: rationale).headline
+        if !Self.directionLeadWords.contains(where: headline.contains) {
+            messages.append(
+                "\(label)结论句缺少方向词(看多/看空/偏强/偏弱/中性/暂不明确等),请以方向判断句开头重写。"
+            )
+        }
+        if direction == .uncertain, !rationale.contains("待观察信号") {
+            messages.append(
+                "\(label)方向为 uncertain,rationale 末尾必须写「待观察信号:……」说明什么信号出现后转向。"
+            )
+        }
     }
 
     private func validate(asset: TrendAssetView, label: String, messages: inout [String]) {
