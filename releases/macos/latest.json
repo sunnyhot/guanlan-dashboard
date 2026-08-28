@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.6.2/QiemanDashboard-4.6.2.zip",
-    "name" : "QiemanDashboard-4.6.2.zip",
-    "sha256" : "fbacae577ce38a584c7ecdb4c7c6196bb56f4152126df6956cb141f0247ea027",
-    "size" : 8222650
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.7.0/QiemanDashboard-4.7.0.zip",
+    "name" : "QiemanDashboard-4.7.0.zip",
+    "sha256" : "cc454e7d953263faeaffdaeb5fd14ef82261893e904533ecc01847e8620091a7",
+    "size" : 8362101
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.6.2/QiemanDashboard-4.6.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.7.0/QiemanDashboard-4.7.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.6.2.zip",
-      "size" : 8222650
+      "name" : "QiemanDashboard-4.7.0.zip",
+      "size" : 8362101
     }
   ],
-  "body" : "版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.6.2",
-  "name" : "QiemanDashboard v4.6.2",
-  "notes" : "版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)",
+  "body" : "版本号同步 v4.7.0\n菜单弹框内容块自定义(板块开关/排序 + 大盘数据/黄金汇率块)\n版本号同步 v4.6.3\n记录两线合流后的 R2 功能状态——摘要卡按产品决定移除,三个功能待重新安置\n版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)\n版本号同步 v4.6.1\n模型输出并入运行日志时间线——一条原地更新的输出条目\n模型实时输出改为进度子条目——两行预览，完整块收进运行详情\n研判进度整合为顶部唯一进度区——分块进度卡移除\n移除「今日研判」摘要卡\n流式卡顿根治——观察者隔离 + 进主线程前合批 + 展示截断\n流式实时输出节流——增量先进缓冲，每 0.2s 刷一次发布状态\n实时输出看得见——思考流/工具调用透出 + 长期研判区接进度卡\n模型实时输出全链路透传——网关可选事件通道 + UI 实时渲染\n旧链路接线 LLM 统一网关 + 尝试级 trace 进运行日志\n平移 V2 的 LLM 统一网关——选型/failover/重试/预算/用量记账/留痕\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化\n数据源 client 从 TrendResearch/ 移至 Core/Clients/\nADR-5 四防火墙总览一页文档（M0 里程碑）\nADR-4 D000-004 Cardinal Firewall 5 条 ADR\nADR-3 DATA001-009 数据层 9 条 ADR\nADR-2 FREE001 Zero Paid Dependency\nADR-1 建立 docs/adr/ 目录与 ADR 模板\n添加投资智能 V3.1 实施计划",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.7.0",
+  "name" : "QiemanDashboard v4.7.0",
+  "notes" : "版本号同步 v4.7.0\n菜单弹框内容块自定义(板块开关/排序 + 大盘数据/黄金汇率块)\n版本号同步 v4.6.3\n记录两线合流后的 R2 功能状态——摘要卡按产品决定移除,三个功能待重新安置\n版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)\n版本号同步 v4.6.1\n模型输出并入运行日志时间线——一条原地更新的输出条目\n模型实时输出改为进度子条目——两行预览，完整块收进运行详情\n研判进度整合为顶部唯一进度区——分块进度卡移除\n移除「今日研判」摘要卡\n流式卡顿根治——观察者隔离 + 进主线程前合批 + 展示截断\n流式实时输出节流——增量先进缓冲，每 0.2s 刷一次发布状态\n实时输出看得见——思考流/工具调用透出 + 长期研判区接进度卡\n模型实时输出全链路透传——网关可选事件通道 + UI 实时渲染\n旧链路接线 LLM 统一网关 + 尝试级 trace 进运行日志\n平移 V2 的 LLM 统一网关——选型/failover/重试/预算/用量记账/留痕\nmacOS 密钥写入恒失败的真根因——SecAccessControl 缺 entitlement\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)\n修复启动竞态双主窗口——reveal 排队/重复窗口收敛/场景跟踪重试\n复盘生成提速——批次并行fan-out/批量8/拒批教训前移/上下文短桩\n模型输出规整——字符串数组字段类型收敛,单字段毛刺不再否决整份报告\n回指取证强化——先查再答,V2 子 Agent 主动核对昨日关注\n盘中研判回指昨晚复盘明日关注(P5 回指,带当日证据门槛)\nAI 错误分诊人话化、运行日志收纳与菜单栏姿态条目\nmacOS 决策偏好入口与 iOS 术语/词表统一\nAI 模型配置预设与获取 Key 引导(智谱/OpenAI/DeepSeek)\nAI 研判今日摘要头与怎么读指南(锚点滚动+机会雷达缓存)\n收盘复盘状态显性化与 AI 研判术语人话化\n数据源 client 从 TrendResearch/ 移至 Core/Clients/\nADR-5 四防火墙总览一页文档（M0 里程碑）\nADR-4 D000-004 Cardinal Firewall 5 条 ADR\nADR-3 DATA001-009 数据层 9 条 ADR\nADR-2 FREE001 Zero Paid Dependency\nADR-1 建立 docs/adr/ 目录与 ADR 模板\n添加投资智能 V3.1 实施计划",
   "published_at" : "",
-  "sha256" : "fbacae577ce38a584c7ecdb4c7c6196bb56f4152126df6956cb141f0247ea027",
-  "tag" : "v4.6.2",
-  "tag_name" : "v4.6.2",
-  "version" : "4.6.2"
+  "sha256" : "cc454e7d953263faeaffdaeb5fd14ef82261893e904533ecc01847e8620091a7",
+  "tag" : "v4.7.0",
+  "tag_name" : "v4.7.0",
+  "version" : "4.7.0"
 }
