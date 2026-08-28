@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.2/QiemanDashboard-4.2.2.zip",
-    "name" : "QiemanDashboard-4.2.2.zip",
-    "sha256" : "64d4c8d22cccc3d1c77fbb8792666e8c671b3b02d43dee35bf71c2bcccff9601",
-    "size" : 7922246
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.6.2/QiemanDashboard-4.6.2.zip",
+    "name" : "QiemanDashboard-4.6.2.zip",
+    "sha256" : "fbacae577ce38a584c7ecdb4c7c6196bb56f4152126df6956cb141f0247ea027",
+    "size" : 8222650
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.2.2/QiemanDashboard-4.2.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.6.2/QiemanDashboard-4.6.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.2.2.zip",
-      "size" : 7922246
+      "name" : "QiemanDashboard-4.6.2.zip",
+      "size" : 8222650
     }
   ],
-  "body" : "Xcode 工程同步 v4.2.2(版本号)\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.2.2",
-  "name" : "QiemanDashboard v4.2.2",
-  "notes" : "Xcode 工程同步 v4.2.2(版本号)\n修复登录自启崩溃——窗口收敛过度释放(isReleasedWhenClosed)致 SIGSEGV\n测试修复——手动兜底窗口测试防 use-after-free(isReleasedWhenClosed)",
+  "body" : "版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.6.2",
+  "name" : "QiemanDashboard v4.6.2",
+  "notes" : "版本号同步 v4.6.2\n消除「原因待确认」边界词表的拒批死循环(v4.6.1)",
   "published_at" : "",
-  "sha256" : "64d4c8d22cccc3d1c77fbb8792666e8c671b3b02d43dee35bf71c2bcccff9601",
-  "tag" : "v4.2.2",
-  "tag_name" : "v4.2.2",
-  "version" : "4.2.2"
+  "sha256" : "fbacae577ce38a584c7ecdb4c7c6196bb56f4152126df6956cb141f0247ea027",
+  "tag" : "v4.6.2",
+  "tag_name" : "v4.6.2",
+  "version" : "4.6.2"
 }
