@@ -8,40 +8,33 @@ private enum MenuBarHoldingSortOption: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-private enum MenuBarPopoverSection: String, CaseIterable, Identifiable {
-    case portfolio
-    case watchlist
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .portfolio: return "我的持仓"
-        case .watchlist: return "我的关注"
-        }
-    }
-}
-
 struct MenuBarPortfolioView: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage("menu.bar.holdings.sort") private var holdingSortRawValue = MenuBarHoldingSortOption.marketValue.rawValue
-    @AppStorage("menu.bar.popover.top-section") private var topSectionRawValue = MenuBarPopoverSection.portfolio.rawValue
 
     @State private var pendingWatchlistDeletion: PersonalWatchlistQuoteRow?
+    /// 弹框内嵌配置模式：把滚动区切换成板块开关/排序/行情勾选面板。
+    @State private var isPresentingPopoverConfig = false
 
     private var holdingSort: MenuBarHoldingSortOption {
         MenuBarHoldingSortOption(rawValue: holdingSortRawValue) ?? .marketValue
     }
 
-    private var topSection: MenuBarPopoverSection {
-        MenuBarPopoverSection(rawValue: topSectionRawValue) ?? .portfolio
+    private var orderedSections: [MenuBarPopoverSectionKind] {
+        model.menuBarPopoverSections.visibleSections
     }
 
-    private var orderedSections: [MenuBarPopoverSection] {
-        switch topSection {
-        case .portfolio: return [.portfolio, .watchlist]
-        case .watchlist: return [.watchlist, .portfolio]
-        }
+    private var isMarketIndexSectionVisible: Bool {
+        !model.menuBarPopoverSections.isHidden(.marketIndices)
+    }
+
+    private var isGoldForexSectionVisible: Bool {
+        !model.menuBarPopoverSections.isHidden(.goldForex)
+    }
+
+    private var hasPopoverQuoteSectionToRefresh: Bool {
+        (isMarketIndexSectionVisible && !model.selectedMenuBarMarketIndexKinds.isEmpty)
+            || (isGoldForexSectionVisible && !model.selectedMenuBarGoldForexKinds.isEmpty)
     }
 
     private var hasMarketIndexTickerSelection: Bool {
@@ -59,6 +52,7 @@ struct MenuBarPortfolioView: View {
         model.isRefreshingPortfolio
             || model.isRefreshingPersonalWatchlist
             || model.isRefreshingMarketIndices
+            || model.isRefreshingGoldForex
     }
 
     private var refreshCaption: String {
@@ -92,13 +86,25 @@ struct MenuBarPortfolioView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(orderedSections) { section in
-                        popoverSection(section)
+            if isPresentingPopoverConfig {
+                popoverConfigPanel
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if orderedSections.isEmpty {
+                            MenuBarEmptyState(
+                                icon: "eye.slash",
+                                title: "所有板块都已隐藏",
+                                subtitle: "点右上角的齿轮，重新开启需要的板块。"
+                            )
+                        } else {
+                            ForEach(orderedSections) { section in
+                                popoverSection(section)
+                            }
+                        }
                     }
+                    .padding(.trailing, 2)
                 }
-                .padding(.trailing, 2)
             }
 
             Divider()
@@ -152,6 +158,14 @@ struct MenuBarPortfolioView: View {
             }
             Spacer()
             sectionOrderMenu
+            Button {
+                isPresentingPopoverConfig.toggle()
+            } label: {
+                Image(systemName: isPresentingPopoverConfig ? "xmark" : "slider.horizontal.3")
+            }
+            .buttonStyle(.appSecondary)
+            .controlSize(.small)
+            .help(isPresentingPopoverConfig ? "返回弹框内容" : "配置弹框内容板块")
             Button(isRefreshing ? "刷新中…" : "刷新") {
                 Task {
                     if model.hasPersonalPortfolio {
@@ -163,6 +177,12 @@ struct MenuBarPortfolioView: View {
                     if !model.hasPersonalPortfolio {
                         await model.refreshMarketIndices(kinds: MarketIndexKind.allCases, updateNotice: true)
                     }
+                    if isMarketIndexSectionVisible, !model.selectedMenuBarMarketIndexKinds.isEmpty {
+                        await model.refreshMarketIndices(updateNotice: false)
+                    }
+                    if isGoldForexSectionVisible, !model.selectedMenuBarGoldForexKinds.isEmpty {
+                        await model.refreshGoldForexQuotes(updateNotice: false)
+                    }
                 }
             }
             .buttonStyle(.appPrimary)
@@ -171,18 +191,19 @@ struct MenuBarPortfolioView: View {
                 isRefreshing
                     || (!model.hasPersonalPortfolio
                         && !model.hasPersonalWatchlist
-                        && !hasMarketIndexTickerSelection)
+                        && !hasMarketIndexTickerSelection
+                        && !hasPopoverQuoteSectionToRefresh)
             )
         }
     }
 
     private var sectionOrderMenu: some View {
         Menu {
-            ForEach(MenuBarPopoverSection.allCases) { section in
+            ForEach(orderedSections) { section in
                 Button {
-                    topSectionRawValue = section.rawValue
+                    model.moveMenuBarPopoverSectionToTop(section)
                 } label: {
-                    if topSection == section {
+                    if orderedSections.first == section {
                         Label("\(section.title)在上", systemImage: "checkmark")
                     } else {
                         Text("\(section.title)在上")
@@ -195,16 +216,34 @@ struct MenuBarPortfolioView: View {
         .menuStyle(.borderlessButton)
         .fixedSize()
         .controlSize(.small)
-        .help("调整我的持仓与我的关注的上下顺序")
+        .help("把某个板块移到最上；隐藏/更多排序可用右键或齿轮配置")
     }
 
     @ViewBuilder
-    private func popoverSection(_ section: MenuBarPopoverSection) -> some View {
+    private func sectionContextMenu(_ section: MenuBarPopoverSectionKind) -> some View {
+        Button {
+            model.moveMenuBarPopoverSectionToTop(section)
+        } label: {
+            Label("移到最上", systemImage: "arrow.up.to.line")
+        }
+        Button(role: .destructive) {
+            model.setMenuBarPopoverSection(section, isHidden: true)
+        } label: {
+            Label("隐藏“\(section.title)”板块", systemImage: "eye.slash")
+        }
+    }
+
+    @ViewBuilder
+    private func popoverSection(_ section: MenuBarPopoverSectionKind) -> some View {
         switch section {
         case .portfolio:
             portfolioPanel
         case .watchlist:
             watchlistPanel(rows: watchlistRows)
+        case .marketIndices:
+            marketIndicesPanel
+        case .goldForex:
+            goldForexPanel
         }
     }
 
@@ -237,6 +276,7 @@ struct MenuBarPortfolioView: View {
                     .controlSize(.small)
                 }
             }
+            .contextMenu { sectionContextMenu(.portfolio) }
 
             if let snapshot = model.userPortfolioSnapshot, !snapshot.rows.isEmpty {
                 MenuBarSummaryCard(
@@ -313,6 +353,7 @@ struct MenuBarPortfolioView: View {
                 .buttonStyle(.appText)
                 .controlSize(.small)
             }
+            .contextMenu { sectionContextMenu(.watchlist) }
 
             if rows.isEmpty {
                 HStack(spacing: 8) {
@@ -348,6 +389,149 @@ struct MenuBarPortfolioView: View {
             }
         } message: {
             Text(pendingWatchlistDeletionMessage)
+        }
+    }
+
+    private var marketIndicesPanel: some View {
+        let selectedKinds = model.menuBarPopoverSections.marketIndexKinds
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: MenuBarPopoverSectionKind.marketIndices.icon)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.info)
+                Text(MenuBarPopoverSectionKind.marketIndices.title)
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                if !selectedKinds.isEmpty {
+                    Text("\(selectedKinds.count)")
+                        .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppPalette.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppPalette.cardStrong)
+                        .clipShape(Capsule())
+                }
+                Spacer()
+                if model.isRefreshingMarketIndices {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .contextMenu { sectionContextMenu(.marketIndices) }
+
+            if selectedKinds.isEmpty {
+                quoteSectionEmptyState(text: "还没有勾选指数。") {
+                    isPresentingPopoverConfig = true
+                }
+            } else {
+                LazyVStack(spacing: 6) {
+                    ForEach(selectedKinds) { kind in
+                        if let quote = model.marketIndexQuotes[kind] {
+                            MenuBarMarketIndexRow(quote: quote)
+                        } else {
+                            MenuBarQuotePlaceholderRow(title: kind.label)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var goldForexPanel: some View {
+        let selectedKinds = model.menuBarPopoverSections.goldForexKinds
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: MenuBarPopoverSectionKind.goldForex.icon)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.brand)
+                Text(MenuBarPopoverSectionKind.goldForex.title)
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                if !selectedKinds.isEmpty {
+                    Text("\(selectedKinds.count)")
+                        .font(AppPalette.appFont(.footnote, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppPalette.muted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppPalette.cardStrong)
+                        .clipShape(Capsule())
+                }
+                Spacer()
+                if model.isRefreshingGoldForex {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .contextMenu { sectionContextMenu(.goldForex) }
+
+            if selectedKinds.isEmpty {
+                quoteSectionEmptyState(text: "还没有勾选黄金/汇率标的。") {
+                    isPresentingPopoverConfig = true
+                }
+            } else {
+                LazyVStack(spacing: 6) {
+                    ForEach(selectedKinds) { kind in
+                        if let quote = model.goldForexQuotes[kind] {
+                            MenuBarGoldForexRow(quote: quote)
+                        } else {
+                            MenuBarQuotePlaceholderRow(title: kind.label)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func quoteSectionEmptyState(text: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(text)
+                .font(AppPalette.appFont(.footnote))
+                .foregroundStyle(AppPalette.muted)
+            Spacer()
+            Button("去勾选", action: action)
+                .buttonStyle(.appText)
+                .controlSize(.small)
+        }
+        .padding(10)
+        .background(AppPalette.cardStrong)
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+    }
+
+    private var popoverConfigPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("配置弹框内容")
+                        .font(AppPalette.appFont(.title3, weight: .bold))
+                    Text("开关控制板块显示，箭头调整上下顺序")
+                        .font(AppPalette.appFont(.subheadline))
+                        .foregroundStyle(AppPalette.muted)
+                }
+                Spacer()
+            }
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(model.menuBarPopoverSections.order) { kind in
+                        MenuBarPopoverSectionConfigCard(
+                            kind: kind,
+                            isFirst: model.menuBarPopoverSections.order.first == kind,
+                            isLast: model.menuBarPopoverSections.order.last == kind
+                        )
+                    }
+
+                    Button {
+                        model.resetMenuBarPopoverSections()
+                    } label: {
+                        Label("恢复默认", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.appSecondary)
+                    .controlSize(.small)
+                }
+                .padding(.trailing, 2)
+            }
         }
     }
 }
@@ -642,6 +826,270 @@ private struct MenuBarWatchlistRow: View {
         .contextMenu {
             Button(role: .destructive, action: onDelete) {
                 Label("取消关注", systemImage: "star.slash")
+            }
+        }
+    }
+}
+
+private struct MenuBarMarketIndexRow: View {
+    let quote: MarketIndexQuote
+
+    private var tint: Color {
+        AppPalette.marketTint(for: quote.changePct ?? quote.changeAmount ?? 0)
+    }
+
+    private var displayName: String {
+        quote.name.isEmpty ? quote.kind.label : quote.name
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineLimit(1)
+                    .help(displayName)
+                Text(quote.quotedAt)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(levelText(quote.price))
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppPalette.ink)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("点位")
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+            }
+            .frame(width: 96, alignment: .trailing)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(signedAmountText(quote.changeAmount))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                Text(percentOptional(quote.changePct))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            .frame(width: 84, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(displayName)，点位 \(levelText(quote.price))，\(percentOptional(quote.changePct))"
+        )
+    }
+}
+
+private struct MenuBarGoldForexRow: View {
+    let quote: GoldForexQuote
+
+    private var tint: Color {
+        AppPalette.marketTint(for: quote.changePct ?? quote.changeAmount ?? 0)
+    }
+
+    private var priceText: String {
+        quote.kind.isForex ? decimalText(quote.price) : levelText(quote.price)
+    }
+
+    private var changeAmountText: String {
+        signedAmountText(quote.changeAmount, fractionDigits: quote.kind.isForex ? 4 : 2)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(quote.name.isEmpty ? quote.kind.label : quote.name)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                    .lineLimit(1)
+                    .help(quote.kind.label)
+                Text(quote.quotedAt)
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(priceText)
+                    .font(AppPalette.appFont(.subheadline, weight: .bold, design: .rounded))
+                    .foregroundStyle(AppPalette.ink)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(quote.kind.isForex ? "CNY" : "USD/oz")
+                    .font(AppPalette.appFont(.caption))
+                    .foregroundStyle(AppPalette.muted)
+            }
+            .frame(width: 96, alignment: .trailing)
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(changeAmountText)
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                Text(percentOptional(quote.changePct))
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+            .frame(width: 84, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.cardRadius)
+                .stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(quote.kind.label) \(priceText)，\(percentOptional(quote.changePct))"
+        )
+    }
+}
+
+private struct MenuBarQuotePlaceholderRow: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                .foregroundStyle(AppPalette.ink)
+                .lineLimit(1)
+            Spacer()
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                Text("待刷新")
+            }
+            .font(AppPalette.appFont(.footnote))
+            .foregroundStyle(AppPalette.muted)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppPalette.cardStrong)
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+    }
+}
+
+private struct MenuBarPopoverSectionConfigCard: View {
+    @EnvironmentObject private var model: AppModel
+    let kind: MenuBarPopoverSectionKind
+    let isFirst: Bool
+    let isLast: Bool
+
+    private var isVisible: Bool {
+        !model.menuBarPopoverSections.isHidden(kind)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: kind.icon)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.info)
+                Text(kind.title)
+                    .font(AppPalette.appFont(.body, weight: .semibold))
+                    .foregroundStyle(AppPalette.ink)
+                Spacer()
+                Toggle("显示", isOn: Binding(
+                    get: { isVisible },
+                    set: { model.setMenuBarPopoverSection(kind, isHidden: !$0) }
+                ))
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                Button {
+                    model.moveMenuBarPopoverSection(kind, offset: -1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+                .disabled(isFirst)
+                Button {
+                    model.moveMenuBarPopoverSection(kind, offset: 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+                .disabled(isLast)
+            }
+
+            if isVisible {
+                switch kind {
+                case .marketIndices:
+                    kindCheckboxGrid(
+                        MarketIndexKind.allCases,
+                        label: { $0.compactLabel },
+                        help: { $0.label },
+                        isEnabled: { model.isMenuBarPopoverMarketIndexKindEnabled($0) },
+                        set: { model.setMenuBarPopoverMarketIndexKind($0, isEnabled: $1) }
+                    )
+                case .goldForex:
+                    kindCheckboxGrid(
+                        GoldForexKind.allCases,
+                        label: { $0.compactLabel },
+                        help: { $0.label },
+                        isEnabled: { model.isMenuBarPopoverGoldForexKindEnabled($0) },
+                        set: { model.setMenuBarPopoverGoldForexKind($0, isEnabled: $1) }
+                    )
+                case .portfolio, .watchlist:
+                    EmptyView()
+                }
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppPalette.cardStrong)
+        .clipShape(RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+    }
+
+    private func kindCheckboxGrid<Kind: Identifiable>(
+        _ kinds: [Kind],
+        label: @escaping (Kind) -> String,
+        help: @escaping (Kind) -> String,
+        isEnabled: @escaping (Kind) -> Bool,
+        set: @escaping (Kind, Bool) -> Void
+    ) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 6)], alignment: .leading, spacing: 6) {
+            ForEach(kinds) { kind in
+                Toggle(label(kind), isOn: Binding(
+                    get: { isEnabled(kind) },
+                    set: { set(kind, $0) }
+                ))
+                .toggleStyle(.checkbox)
+                .controlSize(.small)
+                .font(AppPalette.appFont(.footnote))
+                .foregroundStyle(AppPalette.muted)
+                .help(help(kind))
+                .fixedSize()
             }
         }
     }

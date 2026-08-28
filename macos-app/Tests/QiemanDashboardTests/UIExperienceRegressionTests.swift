@@ -388,7 +388,9 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(menuBar.contains("percentOptional(row.changeSinceFollowPct)"))
         // 关注刷新已迁移到 AppModel.onMenuBarPopoverPresented()，view 不再持有 .task 刷新逻辑。
         XCTAssertFalse(menuBar.contains("try? await model.refreshPersonalWatchlist(updateNotice: false)"))
-        XCTAssertTrue(menuBar.contains("@AppStorage(\"menu.bar.popover.top-section\")"))
+        // 板块顺序/显示改由 MenuBarPopoverSectionSettings（UserDefaults 持久化 + 旧 top-section 迁移）驱动。
+        XCTAssertTrue(menuBar.contains("model.menuBarPopoverSections.visibleSections"))
+        XCTAssertTrue(menuBar.contains("model.moveMenuBarPopoverSectionToTop(section)"))
         XCTAssertTrue(menuBar.contains("Text(\"\\(section.title)在上\")"))
         XCTAssertTrue(menuBar.contains("ForEach(orderedSections)"))
 
@@ -415,6 +417,25 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(updateButton.contains(".disabled(model.isCheckingForUpdates)"))
         XCTAssertFalse(menuBar.contains("Button(\"数据目录\")"))
         XCTAssertFalse(menuBar.contains("model.openDataDirectory()"))
+    }
+
+    func testMenuBarPopoverRendersCustomQuoteSectionsAndEmbeddedConfig() throws {
+        let menuBar = try source(at: "Views_macOS/MenuBarPortfolioView.swift")
+
+        // 大盘数据 / 黄金·汇率 两个行情板块
+        XCTAssertTrue(menuBar.contains("marketIndicesPanel"))
+        XCTAssertTrue(menuBar.contains("goldForexPanel"))
+        XCTAssertTrue(menuBar.contains("MenuBarMarketIndexRow(quote: quote)"))
+        XCTAssertTrue(menuBar.contains("MenuBarGoldForexRow(quote: quote)"))
+        // 弹框内嵌配置面板 + 板块右键快捷菜单
+        XCTAssertTrue(menuBar.contains("isPresentingPopoverConfig"))
+        XCTAssertTrue(menuBar.contains("popoverConfigPanel"))
+        XCTAssertTrue(menuBar.contains("MenuBarPopoverSectionConfigCard"))
+        XCTAssertTrue(menuBar.contains("sectionContextMenu(.marketIndices)"))
+        XCTAssertTrue(menuBar.contains("sectionContextMenu(.goldForex)"))
+
+        let settings = try source(at: "Views_macOS/SettingsMenuBarPanel.swift")
+        XCTAssertTrue(settings.contains("弹框内容块"))
     }
 
     func testMenuBarPopoverRefreshIsDrivenByAppDelegateEventNotByTaskModifier() throws {

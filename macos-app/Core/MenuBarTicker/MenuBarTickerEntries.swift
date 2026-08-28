@@ -106,6 +106,94 @@ extension AppModel {
         normalized.save()
     }
 
+    // MARK: - Popover Section Settings
+
+    func setMenuBarPopoverSection(_ kind: MenuBarPopoverSectionKind, isHidden: Bool) {
+        var settings = menuBarPopoverSections
+        if isHidden {
+            if !settings.hidden.contains(kind) {
+                settings.hidden.append(kind)
+            }
+        } else {
+            settings.hidden.removeAll { $0 == kind }
+        }
+        persistMenuBarPopoverSections(settings)
+        if !isHidden {
+            switch kind {
+            case .marketIndices:
+                Task { await refreshMarketIndices(updateNotice: false) }
+            case .goldForex:
+                Task { await refreshGoldForexQuotes(updateNotice: false) }
+            case .portfolio, .watchlist:
+                break
+            }
+        }
+    }
+
+    func moveMenuBarPopoverSection(_ kind: MenuBarPopoverSectionKind, offset: Int) {
+        var settings = menuBarPopoverSections
+        guard let index = settings.order.firstIndex(of: kind) else { return }
+        let targetIndex = min(max(index + offset, 0), settings.order.count - 1)
+        let section = settings.order.remove(at: index)
+        settings.order.insert(section, at: targetIndex)
+        persistMenuBarPopoverSections(settings)
+    }
+
+    func moveMenuBarPopoverSectionToTop(_ kind: MenuBarPopoverSectionKind) {
+        var settings = menuBarPopoverSections
+        settings.order.removeAll { $0 == kind }
+        settings.order.insert(kind, at: 0)
+        persistMenuBarPopoverSections(settings)
+    }
+
+    func isMenuBarPopoverMarketIndexKindEnabled(_ indexKind: MarketIndexKind) -> Bool {
+        menuBarPopoverSections.marketIndexKinds.contains(indexKind)
+    }
+
+    func setMenuBarPopoverMarketIndexKind(_ indexKind: MarketIndexKind, isEnabled: Bool) {
+        var settings = menuBarPopoverSections
+        if isEnabled {
+            if !settings.marketIndexKinds.contains(indexKind) {
+                settings.marketIndexKinds.append(indexKind)
+            }
+        } else {
+            settings.marketIndexKinds.removeAll { $0 == indexKind }
+        }
+        persistMenuBarPopoverSections(settings)
+        if isEnabled {
+            Task { await refreshMarketIndices(updateNotice: false) }
+        }
+    }
+
+    func isMenuBarPopoverGoldForexKindEnabled(_ kind: GoldForexKind) -> Bool {
+        menuBarPopoverSections.goldForexKinds.contains(kind)
+    }
+
+    func setMenuBarPopoverGoldForexKind(_ kind: GoldForexKind, isEnabled: Bool) {
+        var settings = menuBarPopoverSections
+        if isEnabled {
+            if !settings.goldForexKinds.contains(kind) {
+                settings.goldForexKinds.append(kind)
+            }
+        } else {
+            settings.goldForexKinds.removeAll { $0 == kind }
+        }
+        persistMenuBarPopoverSections(settings)
+        if isEnabled {
+            Task { await refreshGoldForexQuotes(updateNotice: false) }
+        }
+    }
+
+    func resetMenuBarPopoverSections() {
+        persistMenuBarPopoverSections(.default)
+    }
+
+    func persistMenuBarPopoverSections(_ settings: MenuBarPopoverSectionSettings) {
+        let normalized = settings.normalized()
+        menuBarPopoverSections = normalized
+        normalized.save()
+    }
+
     func menuBarTickerCandidateEntries(
         settings: MenuBarTickerSettings,
         maxEntries: Int? = nil

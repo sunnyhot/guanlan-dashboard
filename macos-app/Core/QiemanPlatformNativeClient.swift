@@ -12,6 +12,7 @@ actor QiemanPlatformCache {
     private var stockQuotes: [String: (Date, NativeStockQuote)] = [:]
     private var stockDailySeries: [String: (Date, [PersonalWatchlistDailyPoint])] = [:]
     private var marketIndexQuotes: [MarketIndexKind: (Date, MarketIndexQuote)] = [:]
+    private var goldForexQuotes: [GoldForexKind: (Date, GoldForexQuote)] = [:]
 
     func payload(for prodCode: String, ttl: TimeInterval) -> PlatformPayload? {
         guard let (loadedAt, payload) = payloads[prodCode], Date().timeIntervalSince(loadedAt) < ttl else {
@@ -96,6 +97,17 @@ actor QiemanPlatformCache {
 
     func store(marketIndexQuote: MarketIndexQuote, for kind: MarketIndexKind) {
         marketIndexQuotes[kind] = (Date(), marketIndexQuote)
+    }
+
+    func goldForexQuote(for kind: GoldForexKind, ttl: TimeInterval) -> GoldForexQuote? {
+        guard let (loadedAt, quote) = goldForexQuotes[kind], Date().timeIntervalSince(loadedAt) < ttl else {
+            return nil
+        }
+        return quote
+    }
+
+    func store(goldForexQuote: GoldForexQuote, for kind: GoldForexKind) {
+        goldForexQuotes[kind] = (Date(), goldForexQuote)
     }
 
     private func store<Value>(
@@ -427,6 +439,111 @@ final class QiemanPlatformNativeClient {
             }
         }
         return results
+    }
+
+    func fetchGoldForexQuotes(kinds: [GoldForexKind]) async -> [GoldForexKind: GoldForexQuote] {
+        let uniqueKinds = Array(Set(kinds)).sorted { $0.rawValue < $1.rawValue }
+        guard !uniqueKinds.isEmpty else { return [:] }
+
+        var results: [GoldForexKind: GoldForexQuote] = [:]
+        var pendingKinds: [GoldForexKind] = []
+        for kind in uniqueKinds {
+            if let cached = await cache.goldForexQuote(for: kind, ttl: quoteTTL) {
+                results[kind] = cached
+            } else {
+                pendingKinds.append(kind)
+            }
+        }
+        guard !pendingKinds.isEmpty else { return results }
+
+        // 黄金/汇率统一走新浪批量接口（腾讯无外汇数据），一次请求拉全部缺失项。
+        let symbols = pendingKinds.map(\.sinaSymbol).joined(separator: ",")
+        let url = URL(string: "https://hq.sinajs.cn/list=\(symbols)")!
+        guard let text = try? await requestText(
+            absoluteURL: url,
+            headers: [
+                "Accept": "text/plain,*/*",
+                "Referer": "https://finance.sina.com.cn/",
+            ]
+        ) else {
+            return results
+        }
+
+        for (kind, quote) in parseGoldForexQuotes(text: text) where pendingKinds.contains(kind) {
+            await cache.store(goldForexQuote: quote, for: kind)
+            results[kind] = quote
+        }
+        return results
+    }
+
+    /// 解析新浪批量行情文本为黄金/汇率报价。
+    /// hf_（海外现货）字段：[0]最新 [6]时间 [7]昨收 [12]日期 [13]名称；
+    /// fx_（外汇）字段：[0]时间 [3]昨收 [8]最新 [9]名称 [10]涨跌% [11]涨跌额 [17]日期。
+    /// internal 供解析单测直接喂样例文本（字段布局先例见 fetchSinaGlobalFuturesEstimate / fetchSinaForexEstimate）。
+    func parseGoldForexQuotes(text: String) -> [GoldForexKind: GoldForexQuote] {
+        var results: [GoldForexKind: GoldForexQuote] = [:]
+        for kind in GoldForexKind.allCases {
+            let pattern = #"hq_str_\#(kind.sinaSymbol)="([^"]*)";"#
+            guard let quoted = firstMatch(in: text, pattern: pattern), !quoted.isEmpty else {
+                continue
+            }
+            let parts = quoted.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            guard let quote = parseGoldForexQuote(parts: parts, kind: kind) else { continue }
+            results[kind] = quote
+        }
+        return results
+    }
+
+    private func parseGoldForexQuote(parts: [String], kind: GoldForexKind) -> GoldForexQuote? {
+        let price: Double?
+        let previousClose: Double?
+        let reportedChangePct: Double?
+        let reportedChangeAmount: Double?
+        let quotedAt: String
+        var name: String
+
+        if kind.isForex {
+            price = doubleValue(parts[safe: 8])
+            previousClose = doubleValue(parts[safe: 3])
+            reportedChangePct = doubleValue(parts[safe: 10])
+            reportedChangeAmount = doubleValue(parts[safe: 11])
+            name = normalizedString(parts[safe: 9])
+            quotedAt = [
+                normalizedString(parts[safe: 17]),
+                normalizedString(parts[safe: 0]),
+            ].filter { !$0.isEmpty }.joined(separator: " ")
+        } else {
+            price = doubleValue(parts[safe: 0])
+            previousClose = doubleValue(parts[safe: 7])
+            reportedChangePct = nil
+            reportedChangeAmount = nil
+            name = normalizedString(parts[safe: 13])
+            quotedAt = [
+                normalizedString(parts[safe: 12]),
+                normalizedString(parts[safe: 6]),
+            ].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+
+        guard let price, price > 0 else { return nil }
+        if name.isEmpty { name = kind.label }
+        let digits = kind.isForex ? 4 : 2
+        let changeAmount = reportedChangeAmount
+            ?? previousClose.map { round(price - $0, digits: digits) }
+        let changePct = reportedChangePct
+            ?? previousClose.flatMap { previous in
+                previous > 0 ? round((price / previous - 1) * 100, digits: 2) : nil
+            }
+
+        return GoldForexQuote(
+            kind: kind,
+            name: name,
+            price: round(price, digits: digits),
+            previousClose: previousClose.map { round($0, digits: digits) },
+            changeAmount: changeAmount,
+            changePct: changePct,
+            quotedAt: quotedAt,
+            sourceLabel: "新浪行情"
+        )
     }
 
     func resolveAssetNames(holdings: [UserPortfolioHolding]) async -> [UUID: String] {

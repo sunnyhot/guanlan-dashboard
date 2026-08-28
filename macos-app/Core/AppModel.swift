@@ -105,6 +105,7 @@ final class AppModel: ObservableObject {
     @Published var managerWatchSettings = ManagerWatchSettings.default
     @Published var isManagerWatchPolling = false
     @Published var menuBarTickerSettings = MenuBarTickerSettings.load()
+    @Published var menuBarPopoverSections = MenuBarPopoverSectionSettings.load()
     @Published var portfolioValuationAlertProfiles: [String: PortfolioValuationAlertProfile] = [:]
     @Published var portfolioValuationAlertSettings = PortfolioValuationAlertSettings()
 
@@ -240,6 +241,16 @@ final class AppModel: ObservableObject {
     var isRefreshingMarketIndices: Bool {
         get { portfolioState.isRefreshingMarketIndices }
         set { portfolioState.isRefreshingMarketIndices = newValue }
+    }
+
+    var goldForexQuotes: [GoldForexKind: GoldForexQuote] {
+        get { portfolioState.goldForexQuotes }
+        set { portfolioState.goldForexQuotes = newValue }
+    }
+
+    var isRefreshingGoldForex: Bool {
+        get { portfolioState.isRefreshingGoldForex }
+        set { portfolioState.isRefreshingGoldForex = newValue }
     }
 
     // ForumState proxies

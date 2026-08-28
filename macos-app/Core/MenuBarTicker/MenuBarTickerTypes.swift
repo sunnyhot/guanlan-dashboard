@@ -90,3 +90,59 @@ struct MarketIndexQuote: Hashable, Identifiable {
 
     var id: String { kind.rawValue }
 }
+
+/// 黄金/汇率行情标的，统一走新浪行情（腾讯无外汇数据）。
+/// 海外现货（hf_ 前缀）与外汇（fx_ 前缀）返回字段布局不同，解析差异见
+/// `QiemanPlatformNativeClient.fetchGoldForexQuotes`。
+enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
+    case xauUSD
+    case xagUSD
+    case usdCNY
+    case usdCNH
+
+    var id: String { rawValue }
+
+    var sinaSymbol: String {
+        switch self {
+        case .xauUSD: return "hf_XAU"
+        case .xagUSD: return "hf_XAG"
+        case .usdCNY: return "fx_susdcny"
+        case .usdCNH: return "fx_susdcnh"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .xauUSD: return "伦敦金"
+        case .xagUSD: return "伦敦银"
+        case .usdCNY: return "美元/在岸人民币"
+        case .usdCNH: return "美元/离岸人民币"
+        }
+    }
+
+    var compactLabel: String {
+        switch self {
+        case .xauUSD: return "伦敦金"
+        case .xagUSD: return "伦敦银"
+        case .usdCNY: return "在岸人民币"
+        case .usdCNH: return "离岸人民币"
+        }
+    }
+
+    var isForex: Bool {
+        self == .usdCNY || self == .usdCNH
+    }
+}
+
+struct GoldForexQuote: Hashable, Identifiable {
+    let kind: GoldForexKind
+    let name: String
+    let price: Double
+    let previousClose: Double?
+    let changeAmount: Double?
+    let changePct: Double?
+    let quotedAt: String
+    let sourceLabel: String
+
+    var id: String { kind.rawValue }
+}

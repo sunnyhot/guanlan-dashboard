@@ -6,7 +6,7 @@ extension SettingsSectionView {
     var menuBarPanel: some View {
         let tickerEntries = model.menuBarTickerVisibleEntries
 
-        return SettingsPanel(title: "菜单栏", subtitle: "选择常驻系统菜单栏的资产摘要、外观与轮播顺序", icon: "menubar.rectangle") {
+        return SettingsPanel(title: "菜单栏", subtitle: "菜单栏常驻数据、弹框内容块、外观与轮播顺序", icon: "menubar.rectangle") {
             VStack(alignment: .leading, spacing: AppPalette.spaceXL) {
                 SettingsToggleRow(
                     title: "启用菜单栏数据",
@@ -29,6 +29,8 @@ extension SettingsSectionView {
                         menuBarSelectionCard
                     }
                 }
+
+                menuBarPopoverSectionsCard
             }
         }
         .alert("恢复菜单栏默认设置？", isPresented: $isConfirmingMenuBarReset) {
@@ -119,6 +121,131 @@ extension SettingsSectionView {
                 }
             }
         }
+    }
+
+    // MARK: - Popover Sections
+
+    private var menuBarPopoverSectionsCard: some View {
+        SettingsCardGroup(
+            title: "弹框内容块",
+            subtitle: "点击菜单栏图标弹出的面板：板块显示、顺序与行情选择",
+            icon: "rectangle.3.group",
+            tint: AppPalette.brand
+        ) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(model.menuBarPopoverSections.order.enumerated()), id: \.element) { index, kind in
+                    if index > 0 {
+                        SettingsDivider(isInset: true)
+                    }
+                    popoverSectionSettingRow(kind)
+                }
+
+                SettingsDivider(isInset: true)
+
+                HStack(spacing: 10) {
+                    Text("隐藏的板块不占空间；顺序也可在弹框内右键或点齿轮配置。")
+                        .font(AppPalette.appFont(.footnote))
+                        .foregroundStyle(AppPalette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        model.resetMenuBarPopoverSections()
+                    } label: {
+                        Label("恢复默认", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.appSecondary)
+                    .controlSize(.small)
+                }
+                .padding(.vertical, 10)
+            }
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func popoverSectionSettingRow(_ kind: MenuBarPopoverSectionKind) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: kind.icon)
+                    .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                    .foregroundStyle(AppPalette.info)
+                Toggle(kind.title, isOn: Binding(
+                    get: { !model.menuBarPopoverSections.isHidden(kind) },
+                    set: { model.setMenuBarPopoverSection(kind, isHidden: !$0) }
+                ))
+                .toggleStyle(.checkbox)
+                .font(AppPalette.appFont(.body, weight: .medium))
+                Spacer()
+                Button {
+                    model.moveMenuBarPopoverSection(kind, offset: -1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+                .disabled(model.menuBarPopoverSections.order.first == kind)
+                Button {
+                    model.moveMenuBarPopoverSection(kind, offset: 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.appSecondary)
+                .controlSize(.small)
+                .disabled(model.menuBarPopoverSections.order.last == kind)
+            }
+
+            if !model.menuBarPopoverSections.isHidden(kind) {
+                switch kind {
+                case .marketIndices:
+                    popoverMarketIndexOptions
+                case .goldForex:
+                    popoverGoldForexOptions
+                case .portfolio, .watchlist:
+                    EmptyView()
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var popoverMarketIndexOptions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("大盘数据块显示的指数")
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(MarketIndexKind.allCases) { indexKind in
+                    menuBarTickerSelectionToggle(
+                        isOn: Binding(
+                            get: { model.isMenuBarPopoverMarketIndexKindEnabled(indexKind) },
+                            set: { model.setMenuBarPopoverMarketIndexKind(indexKind, isEnabled: $0) }
+                        ),
+                        label: indexKind.label
+                    )
+                }
+            }
+        }
+        .padding(10)
+        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
+    }
+
+    private var popoverGoldForexOptions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("黄金·汇率块显示的标的")
+                .font(AppPalette.appFont(.footnote, weight: .semibold))
+                .foregroundStyle(AppPalette.muted)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(GoldForexKind.allCases) { kind in
+                    menuBarTickerSelectionToggle(
+                        isOn: Binding(
+                            get: { model.isMenuBarPopoverGoldForexKindEnabled(kind) },
+                            set: { model.setMenuBarPopoverGoldForexKind(kind, isEnabled: $0) }
+                        ),
+                        label: kind.label
+                    )
+                }
+            }
+        }
+        .padding(10)
+        .background(AppPalette.card, in: RoundedRectangle(cornerRadius: AppPalette.cardRadius))
     }
 
     // MARK: - Style Options

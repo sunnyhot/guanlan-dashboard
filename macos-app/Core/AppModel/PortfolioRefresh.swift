@@ -29,6 +29,7 @@ extension AppModel {
             userPortfolioSnapshot = nil
             rebuildAssetRows()
             await refreshMarketIndicesIfNeeded()
+            await refreshGoldForexIfNeeded()
             return
         }
         guard !isRefreshingPortfolio else {
@@ -51,6 +52,7 @@ extension AppModel {
                 noticeMessage = snapshot.refreshNoticeMessage
             }
             await refreshMarketIndicesIfNeeded()
+            await refreshGoldForexIfNeeded()
         } catch {
             telemetryResult = "failed"
             throw error
@@ -100,9 +102,61 @@ extension AppModel {
     }
 
     func refreshMarketIndicesIfNeeded() async {
-        guard menuBarTickerSettings.isEnabled, !selectedMenuBarMarketIndexKinds.isEmpty else { return }
+        guard (menuBarTickerSettings.isEnabled || !menuBarPopoverSections.isHidden(.marketIndices)),
+              !selectedMenuBarMarketIndexKinds.isEmpty else { return }
         await refreshThrottle.throttle(key: "marketIndices") { [weak self] in
             await self?.refreshMarketIndices(updateNotice: false)
+        }
+    }
+
+    /// 弹框「黄金·汇率」块与状态栏 ticker 独立：块可见且有勾选标的时参与自动刷新。
+    func refreshGoldForexQuotes(kinds requestedKinds: [GoldForexKind]? = nil, updateNotice: Bool = true) async {
+        let telemetryStart = PerformanceTelemetry.start()
+        var telemetryKindCount = 0
+        var telemetryResult = "completed"
+        defer {
+            PerformanceTelemetry.record(
+                "refresh.goldForexQuotes",
+                startedAt: telemetryStart,
+                metadata: [
+                    "kindCount": "\(telemetryKindCount)",
+                    "quoteCount": "\(goldForexQuotes.count)",
+                    "result": telemetryResult,
+                    "updateNotice": "\(updateNotice)"
+                ]
+            )
+        }
+        let kinds = requestedKinds ?? selectedMenuBarGoldForexKinds
+        telemetryKindCount = kinds.count
+        guard !kinds.isEmpty else {
+            telemetryResult = "empty"
+            return
+        }
+        guard !isRefreshingGoldForex else {
+            telemetryResult = "alreadyRefreshing"
+            return
+        }
+
+        isRefreshingGoldForex = true
+        defer { isRefreshingGoldForex = false }
+
+        let quotes = await platformClient.fetchGoldForexQuotes(kinds: kinds)
+        if !quotes.isEmpty {
+            goldForexQuotes.merge(quotes) { _, new in new }
+            if updateNotice {
+                noticeMessage = "黄金汇率行情已刷新。"
+            }
+        } else if updateNotice {
+            telemetryResult = "emptyResponse"
+            errorMessage = "黄金汇率行情暂时没有拉到可用数据。"
+        }
+    }
+
+    func refreshGoldForexIfNeeded() async {
+        guard !menuBarPopoverSections.isHidden(.goldForex),
+              !selectedMenuBarGoldForexKinds.isEmpty else { return }
+        await refreshThrottle.throttle(key: "goldForexQuotes") { [weak self] in
+            await self?.refreshGoldForexQuotes(updateNotice: false)
         }
     }
 
@@ -124,21 +178,38 @@ extension AppModel {
                     try? await self.refreshPersonalWatchlist(updateNotice: false)
                 }
                 await self.refreshMarketIndicesIfNeeded()
+                await self.refreshGoldForexIfNeeded()
             }
         }
     }
 
+    /// 需要自动刷新的指数 = 状态栏 ticker 勾选的指数（ticker 开启时）
+    /// ∪ 弹框「大盘数据」块勾选的指数（块可见时），按 allCases 顺序稳定排序。
     var selectedMenuBarMarketIndexKinds: [MarketIndexKind] {
         var seen = Set<MarketIndexKind>()
-        let selected = menuBarTickerSettings.selections.compactMap { selection -> MarketIndexKind? in
-            guard let kind = selection.kindValue,
-                  let indexKind = kind.marketIndexRequest?.kind else { return nil }
-            return seen.insert(indexKind).inserted ? indexKind : nil
+        var selected: [MarketIndexKind] = []
+        if menuBarTickerSettings.isEnabled {
+            for selection in menuBarTickerSettings.selections {
+                guard let kind = selection.kindValue,
+                      let indexKind = kind.marketIndexRequest?.kind,
+                      seen.insert(indexKind).inserted else { continue }
+                selected.append(indexKind)
+            }
+        }
+        if !menuBarPopoverSections.isHidden(.marketIndices) {
+            for indexKind in menuBarPopoverSections.marketIndexKinds where seen.insert(indexKind).inserted {
+                selected.append(indexKind)
+            }
         }
         return selected.sorted { left, right in
             let all = MarketIndexKind.allCases
             return (all.firstIndex(of: left) ?? 0) < (all.firstIndex(of: right) ?? 0)
         }
+    }
+
+    var selectedMenuBarGoldForexKinds: [GoldForexKind] {
+        guard !menuBarPopoverSections.isHidden(.goldForex) else { return [] }
+        return menuBarPopoverSections.goldForexKinds
     }
 
     func restartPortfolioAutoRefreshLoop() {
@@ -167,6 +238,7 @@ extension AppModel {
             && (selectedSection == .portfolio || hasActivePersonalWatchlistAlerts)
         guard shouldRefreshPortfolio || shouldRefreshWatchlist else {
             await refreshMarketIndicesIfNeeded()
+            await refreshGoldForexIfNeeded()
             return
         }
 

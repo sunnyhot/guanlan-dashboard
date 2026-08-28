@@ -81,3 +81,19 @@ func unitsText(_ value: Double) -> String {
     }
     return fractionalUnitsFormatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
 }
+
+/// 指数点位/贵金属价格：千分位 + 2 位小数。
+func levelText(_ value: Double?) -> String {
+    guard let value else { return "—" }
+    return currencyFormatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f", value)
+}
+
+/// 带符号的涨跌数值（指数点位差/汇率差），不附加货币符号。
+func signedAmountText(_ value: Double?, fractionDigits: Int = 2) -> String {
+    guard let value else { return "—" }
+    let sign = value >= 0 ? "+" : "-"
+    let magnitude = fractionDigits >= 4
+        ? decimalText(abs(value))
+        : formattedNumber(abs(value))
+    return "\(sign)\(magnitude)"
+}

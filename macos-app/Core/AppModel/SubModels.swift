@@ -19,6 +19,8 @@ final class PortfolioState: ObservableObject {
     @Published var investmentPlans: [PersonalInvestmentPlan] = []
     @Published var marketIndexQuotes: [MarketIndexKind: MarketIndexQuote] = [:]
     @Published var isRefreshingMarketIndices = false
+    @Published var goldForexQuotes: [GoldForexKind: GoldForexQuote] = [:]
+    @Published var isRefreshingGoldForex = false
 
     // Cached computed property backing stores (moved from AppModel)
     var _cachedMonthlyPlatformSummary: [PlatformMonthSummary]?
