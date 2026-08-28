@@ -132,7 +132,7 @@ extension EnhancementCenterView {
                     TrendResearchProgressCard(
                         message: model.trendProgressLogs.last?.message,
                         progress: model.trendResearchProgress,
-                        liveOutput: model.liveModelOutput?.text
+                        liveModel: model.trendLiveOutputModel
                     )
                 }
 
@@ -174,7 +174,7 @@ extension EnhancementCenterView {
                     message: model.trendProgressLogs.last?.message,
                     progress: model.trendResearchProgress,
                     subtitle: "研判引擎正在多轮读取持仓、检索与生成报告，模型输出实时显示在下方。",
-                    liveOutput: model.liveModelOutput?.text
+                    liveModel: model.trendLiveOutputModel
                 )
             }
             if let report = model.trendReport {

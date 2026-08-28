@@ -72,13 +72,16 @@ struct GatewayAgentClient: TrendResearchAgentClient {
             purpose: purpose
         )
         do {
-            let eventForwarder: (@Sendable (ModelStreamEvent) async -> Void)? = streamProgress.map { callback in
-                { event in
-                    await callback(Self.transportStreamEvent(event))
-                }
+            let streamBridge = Self.makeStreamBridge(streamProgress)
+            do {
+                let response = try await gateway.complete(request, onEvent: streamBridge.forwarder)
+                await streamBridge.flushPending?()
+                return Self.transportResult(response)
+            } catch {
+                // 失败路径也把已流出的增量补投，不因合批丢失。
+                await streamBridge.flushPending?()
+                throw error
             }
-            let response = try await gateway.complete(request, onEvent: eventForwarder)
-            return Self.transportResult(response)
         } catch let error as ModelProviderError {
             throw Self.transportError(error)
         } catch let error as ModelGatewayError {
@@ -167,6 +170,45 @@ extension GatewayAgentClient {
         }
     }
 
+    /// 高频增量先合批再进主线程（几百次/秒的 actor 跳转本身就有调度
+    /// 压力）；进度/结束等低频事件直通，但直通前先冲批保证顺序。
+    static func makeStreamBridge(
+        _ streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
+    ) -> (
+        forwarder: (@Sendable (ModelStreamEvent) async -> Void)?,
+        flushPending: (@Sendable () async -> Void)?
+    ) {
+        guard let streamProgress else { return (nil, nil) }
+        let batcher = StreamDeltaBatcher { batch in
+            for item in batch {
+                await streamProgress(Self.transportDelta(item))
+            }
+        }
+        let forwarder: @Sendable (ModelStreamEvent) async -> Void = { event in
+            switch event {
+            case .contentDelta(let text):
+                batcher.add(.content, text)
+            case .reasoningDelta(let text):
+                batcher.add(.reasoning, text)
+            case .toolCallDelta(let text):
+                batcher.add(.toolCall, text)
+            case .firstChunk, .active, .finished:
+                await batcher.flush()
+                await streamProgress(Self.transportStreamEvent(event))
+            }
+        }
+        let flushPending: @Sendable () async -> Void = { await batcher.flush() }
+        return (forwarder, flushPending)
+    }
+
+    static func transportDelta(_ item: StreamDeltaBatcher.PendingDelta) -> AgentStreamProgress {
+        switch item.kind {
+        case .reasoning: return .reasoningDelta(item.text)
+        case .content: return .contentDelta(item.text)
+        case .toolCall: return .toolCallDelta(item.text)
+        }
+    }
+
     /// 网关/供应商错误 → 旧客户端错误（保持调用方 catch 分支不变）。
     static func transportError(_ error: ModelProviderError) -> OpenAICompatibleAgentClientError {
         switch error {
@@ -206,5 +248,57 @@ extension GatewayAgentClient {
 struct DiagnosticModelTraceSink: ModelTraceSink {
     func record(_ trace: ModelCallTrace) async {
         await AIAgentDiagnosticLog.record("model_gateway_trace", payload: trace)
+    }
+}
+
+// MARK: - 流式增量合批器
+
+/// 高频流式增量按时间窗合批后统一投递：流式分片可达每秒数百个，
+/// 逐片跨线程投递（尤其进 MainActor）调度开销显著；合批后投递频率
+/// 降到 ~8 次/秒。直通事件（首片/进度/结束）应先 flush() 保证顺序。
+final class StreamDeltaBatcher: @unchecked Sendable {
+    struct PendingDelta: Sendable {
+        let kind: AgentStreamDeltaKind
+        let text: String
+    }
+
+    private let lock = NSLock()
+    private var pending: [PendingDelta] = []
+    private var flushTask: Task<Void, Never>?
+    private let interval: TimeInterval
+    private let deliver: @Sendable ([PendingDelta]) async -> Void
+
+    init(
+        interval: TimeInterval = 0.12,
+        deliver: @escaping @Sendable ([PendingDelta]) async -> Void
+    ) {
+        self.interval = interval
+        self.deliver = deliver
+    }
+
+    /// 追加增量；窗口未开时开一个定时冲刷任务（首增量起算一个窗口）。
+    func add(_ kind: AgentStreamDeltaKind, _ text: String) {
+        lock.lock()
+        pending.append(PendingDelta(kind: kind, text: text))
+        if flushTask == nil {
+            let window = interval
+            flushTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(window * 1_000_000_000))
+                await self?.flush()
+            }
+        }
+        lock.unlock()
+    }
+
+    /// 立即投递缓冲中的增量（无待投递则空操作）。
+    func flush() async {
+        lock.lock()
+        let items = pending
+        pending.removeAll()
+        flushTask?.cancel()
+        flushTask = nil
+        lock.unlock()
+        guard !items.isEmpty else { return }
+        await deliver(items)
     }
 }

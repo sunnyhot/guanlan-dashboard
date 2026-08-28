@@ -73,6 +73,10 @@ final class AppModel: ObservableObject {
     @Published private(set) var updateState = UpdateState()
     @Published private(set) var enhancementState = EnhancementState()
 
+    // 研判实时输出：独立 ObservableObject（非 @Published）——流式刷新只
+    // 重渲染输出区块本身，不触发 AppModel 上其他视图重新求值。
+    private(set) var trendLiveOutputModel = TrendLiveOutputModel()
+
     // alfa 投顾组合
     @Published var alfaPortfolios: [AlfaPortfolioCatalogItem] = []
     @Published var alfaPayload: PlatformPayload?
@@ -424,21 +428,6 @@ final class AppModel: ObservableObject {
     var trendProgressLogs: [TrendProgressLog] {
         get { enhancementState.trendProgressLogs }
         set { enhancementState.trendProgressLogs = newValue }
-    }
-
-    var liveModelOutput: TrendLiveModelOutput? {
-        get { enhancementState.liveModelOutput }
-        set { enhancementState.liveModelOutput = newValue }
-    }
-
-    var liveModelOutputBuffer: TrendLiveModelOutput? {
-        get { enhancementState.liveModelOutputBuffer }
-        set { enhancementState.liveModelOutputBuffer = newValue }
-    }
-
-    var lastLiveModelOutputFlushAt: Date {
-        get { enhancementState.lastLiveModelOutputFlushAt }
-        set { enhancementState.lastLiveModelOutputFlushAt = newValue }
     }
 
     var nextHourGuidanceArchive: NextHourGuidanceArchive {

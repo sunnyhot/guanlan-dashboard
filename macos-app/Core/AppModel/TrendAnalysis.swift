@@ -272,9 +272,7 @@ extension AppModel {
         trendResearchProgress = .idle
         lastTrendError = ""
         trendProgressLogs = []
-        liveModelOutput = nil
-        liveModelOutputBuffer = nil
-        lastLiveModelOutputFlushAt = .distantPast
+        trendLiveOutputModel.reset()
         trendSettings.defaultPrivacyMode = trendPrivacyMode
         let triggerText = userInitiated ? "手动更新" : scope.triggerDescription
         if let trendAgentRunLogFileURL {
@@ -995,11 +993,11 @@ extension AppModel {
         case .modelStreamProgress(let turn, let progress):
             switch progress {
             case .contentDelta(let text):
-                updateLiveModelOutput(turn: turn, kind: .content, delta: text)
+                trendLiveOutputModel.update(turn: turn, kind: .content, delta: text)
             case .reasoningDelta(let text):
-                updateLiveModelOutput(turn: turn, kind: .reasoning, delta: text)
+                trendLiveOutputModel.update(turn: turn, kind: .reasoning, delta: text)
             case .toolCallDelta(let text):
-                updateLiveModelOutput(turn: turn, kind: .toolCall, delta: text)
+                trendLiveOutputModel.update(turn: turn, kind: .toolCall, delta: text)
             case .firstChunk(let elapsed):
                 appendTrendProgress(
                     "已收到首个流式分片",
@@ -1018,7 +1016,7 @@ extension AppModel {
                     detail: "第 \(turn) 轮；\(chunkCount) 个分片；耗时 \(String(format: "%.1f", elapsed)) 秒；结束原因 \(finishReason ?? "未提供")",
                     level: .success
                 )
-                flushLiveModelOutput()
+                trendLiveOutputModel.flush()
             }
         case .modelResponseReceived(_, let duration):
             appendTrendProgress(
@@ -1026,7 +1024,7 @@ extension AppModel {
                 detail: "耗时 \(String(format: "%.1f", duration)) 秒",
                 level: .success
             )
-            flushLiveModelOutput()
+            trendLiveOutputModel.flush()
         case .modelCorrection(let message):
             appendTrendProgress("模型输出需要修正", detail: message, level: .warning)
         case .toolStarted(let name):
@@ -1100,53 +1098,6 @@ extension AppModel {
         let trimmed = timestamp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 10 else { return trimmed }
         return String(trimmed.prefix(10))
-    }
-
-    /// 模型实时输出：增量先进缓冲（追加开销极小），节流后统一刷到发布状态。
-    /// 流式分片可达每秒数百次——直接逐片发布会把 MainActor 打满（界面卡死）。
-    /// 种类切换时插入分隔/标记行——思考、正文、工具调用三类增量交替到达。
-    private static let liveModelOutputFlushInterval: TimeInterval = 0.2
-    private static let liveModelOutputMaximumLength = 8000
-
-    private func updateLiveModelOutput(turn: Int, kind: AgentStreamDeltaKind, delta: String) {
-        if liveModelOutputBuffer == nil || liveModelOutputBuffer?.turn != turn {
-            liveModelOutputBuffer = TrendLiveModelOutput(turn: turn, text: "")
-        }
-        var buffer = liveModelOutputBuffer ?? TrendLiveModelOutput(turn: turn, text: "")
-
-        let prefix: String
-        if buffer.lastKind == kind {
-            prefix = ""
-        } else {
-            switch kind {
-            case .reasoning:
-                prefix = buffer.text.isEmpty ? "〔思考〕" : "\n〔思考〕"
-            case .content:
-                prefix = buffer.text.isEmpty ? "" : "\n"
-            case .toolCall:
-                // 工具转写自带「\n[调用工具 …」前缀，这里不再额外加标记。
-                prefix = ""
-            }
-        }
-        buffer.text += prefix + delta
-        buffer.lastKind = kind
-        liveModelOutputBuffer = buffer
-
-        let now = Date()
-        if now.timeIntervalSince(lastLiveModelOutputFlushAt) >= Self.liveModelOutputFlushInterval {
-            flushLiveModelOutput(now: now)
-        }
-    }
-
-    /// 把缓冲刷到发布状态（截断保尾部）。流结束/换事件时兜底调用，
-    /// 保证最后一批增量不因节流丢失。
-    private func flushLiveModelOutput(now: Date = Date()) {
-        guard var buffer = liveModelOutputBuffer else { return }
-        if buffer.text.count > Self.liveModelOutputMaximumLength {
-            buffer.text = String(buffer.text.suffix(Self.liveModelOutputMaximumLength))
-        }
-        liveModelOutput = buffer
-        lastLiveModelOutputFlushAt = now
     }
 
     private func appendTrendProgress(

@@ -231,6 +231,62 @@ final class GatewayAgentClientTests: XCTestCase {
         XCTAssertEqual(result.assistantMessage.content, "done")
     }
 
+    func testBatcherDeliversAfterWindowOrFlush() async throws {
+        let collector = AgentStreamProgressCollector()
+        let batcher = StreamDeltaBatcher(interval: 0.05) { batch in
+            for item in batch {
+                await collector.append(Self.transportDeltaForTest(item))
+            }
+        }
+        batcher.add(.content, "你")
+        batcher.add(.content, "好")
+        // 窗口未到：不投递
+        try await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertTrue(collector.progress.isEmpty)
+        // 窗口到期：一批按序投递
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertEqual(collector.progress, [.contentDelta("你"), .contentDelta("好")])
+        // flush 立即投递
+        batcher.add(.reasoning, "想")
+        await batcher.flush()
+        XCTAssertEqual(collector.progress.last, .reasoningDelta("想"))
+    }
+
+    func testPendingDeltasFlushedWhenProviderThrows() async {
+        let provider = EventEmittingProvider(
+            events: [.contentDelta("失败前的输出")],
+            terminalError: .timedOut(providerID: "p", seconds: 30)
+        )
+        let client = makeClient(provider: provider, policy: ModelGatewayPolicy(maxRetriesPerProvider: 0))
+        let collector = AgentStreamProgressCollector()
+
+        await XCTAssertThrowsErrorAsync {
+            try await client.complete(
+                messages: [AgentChatMessage(role: .user, content: "q", toolCalls: nil, toolCallID: nil)],
+                tools: [],
+                toolChoice: .auto,
+                temperature: 0.2,
+                settings: self.settings(),
+                timeout: nil,
+                streamProgress: { progress in collector.append(progress) }
+            )
+        } errorHandler: { error in
+            guard case OpenAICompatibleAgentClientError.timedOut = error else {
+                return XCTFail("期望 timedOut，实际 \(error)")
+            }
+        }
+        // 错误路径也把已流出的增量补投（不因合批丢失）
+        XCTAssertTrue(collector.progress.contains(.contentDelta("失败前的输出")))
+    }
+
+    private static func transportDeltaForTest(_ item: StreamDeltaBatcher.PendingDelta) -> AgentStreamProgress {
+        switch item.kind {
+        case .reasoning: return .reasoningDelta(item.text)
+        case .content: return .contentDelta(item.text)
+        case .toolCall: return .toolCallDelta(item.text)
+        }
+    }
+
     func testToolSpecMapsRoundtrip() {
         let tool = AgentToolDefinition.function(
             name: "submit",
@@ -253,9 +309,11 @@ final class GatewayAgentClientTests: XCTestCase {
 final class EventEmittingProvider: ModelProvider, @unchecked Sendable {
     let descriptor = ModelProviderDescriptor(providerID: "event-provider", model: "m", fingerprint: "fp")
     private let events: [ModelStreamEvent]
+    private let terminalError: ModelProviderError?
 
-    init(events: [ModelStreamEvent]) {
+    init(events: [ModelStreamEvent], terminalError: ModelProviderError? = nil) {
         self.events = events
+        self.terminalError = terminalError
     }
 
     func complete(
@@ -272,6 +330,9 @@ final class EventEmittingProvider: ModelProvider, @unchecked Sendable {
     ) async throws -> ModelCompletionResponse {
         for event in events {
             await onEvent(event)
+        }
+        if let terminalError {
+            throw terminalError
         }
         return textResponse("done")
     }

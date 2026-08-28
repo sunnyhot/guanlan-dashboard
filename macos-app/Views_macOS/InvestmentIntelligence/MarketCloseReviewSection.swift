@@ -53,7 +53,7 @@ struct MarketCloseReviewSection: View {
                     TrendResearchProgressCard(
                         message: model.trendProgressLogs.last?.message,
                         progress: model.trendResearchProgress,
-                        liveOutput: model.liveModelOutput?.text
+                        liveModel: model.trendLiveOutputModel
                     )
                 }
 
@@ -145,8 +145,8 @@ struct TrendResearchProgressCard: View {
     let progress: TrendResearchModuleProgress
     /// 副标题文案（默认收盘复盘口径；长期研判等其他入口传入各自说明）。
     var subtitle: String? = nil
-    /// 模型实时输出（流式正文增量拼接；nil/空时不显示该区块）。
-    var liveOutput: String? = nil
+    /// 模型实时输出（独立 ObservableObject——刷新只重渲染输出区块本身）。
+    var liveModel: TrendLiveOutputModel? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
@@ -176,8 +176,8 @@ struct TrendResearchProgressCard: View {
                     .lineLimit(1)
             }
 
-            if let liveOutput, !liveOutput.isEmpty {
-                liveOutputBlock(liveOutput)
+            if let liveModel {
+                TrendLiveOutputView(model: liveModel)
             }
         }
         .padding(AppPalette.spaceM)
@@ -188,33 +188,39 @@ struct TrendResearchProgressCard: View {
                 .stroke(AppPalette.info.opacity(AppPalette.strokeSubtle), lineWidth: 1)
         )
     }
+}
 
-    /// 模型实时输出：等宽字体滚动区，随内容增长自动滚到底部。
-    private func liveOutputBlock(_ text: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("模型实时输出")
-                .font(AppPalette.appFont(.caption, weight: .semibold))
-                .foregroundStyle(AppPalette.muted)
-            ScrollViewReader { proxy in
-                ScrollView {
-                    Text(text)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(AppPalette.ink)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                    Color.clear
-                        .frame(height: 0)
-                        .id("liveOutputTail")
-                }
-                .frame(maxHeight: 160)
-                .onChange(of: text) { _ in
-                    withAnimation(.easeOut(duration: 0.15)) {
+/// 模型实时输出：等宽字体滚动区，随内容增长滚动到底部。展示文本由
+/// TrendLiveOutputModel 截断（尾部 2000 字）——长文本全文重排是大开销。
+private struct TrendLiveOutputView: View {
+    @ObservedObject var model: TrendLiveOutputModel
+
+    var body: some View {
+        if let text = model.displayText {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("模型实时输出")
+                    .font(AppPalette.appFont(.caption, weight: .semibold))
+                    .foregroundStyle(AppPalette.muted)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        Text(text)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(AppPalette.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                        Color.clear
+                            .frame(height: 0)
+                            .id("liveOutputTail")
+                    }
+                    .frame(maxHeight: 160)
+                    .onChange(of: text) { _ in
+                        // 不加动画：流式期间动画会叠加布局开销。
                         proxy.scrollTo("liveOutputTail", anchor: .bottom)
                     }
                 }
             }
+            .padding(AppPalette.spaceS)
+            .background(AppPalette.card.opacity(0.75), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius - 2))
         }
-        .padding(AppPalette.spaceS)
-        .background(AppPalette.card.opacity(0.75), in: RoundedRectangle(cornerRadius: AppPalette.cardRadius - 2))
     }
 }
