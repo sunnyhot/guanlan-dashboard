@@ -145,6 +145,8 @@ if [ "$SIGN_IDENTITY" = "-" ] && [ -f "$SIGNING_KEYCHAIN" ] && [ -f "$SIGNING_DI
   # shellcheck disable=SC1091
   source "$SIGNING_DIR/env"
   if security unlock-keychain -p "$QIEMAN_SIGNING_KEYCHAIN_PASS" "$SIGNING_KEYCHAIN" 2>/dev/null; then
+    # 禁用自动锁定：CI 的 keychain 可能在步骤间被重新锁上，codesign 会挂起等授权
+    security set-keychain-settings "$SIGNING_KEYCHAIN"
     while IFS= read -r kc; do
       # list-keychains 输出每行带前导空格，不 trim 会把损坏路径写回列表
       kc="${kc//\"/}"
@@ -165,10 +167,19 @@ if [ "$SIGN_IDENTITY" = "-" ] && [ -f "$SIGNING_KEYCHAIN" ] && [ -f "$SIGNING_DI
     echo "  (专用钥匙串解锁失败，回退 ad-hoc 签名)"
   fi
 fi
-if ! codesign --force --deep --sign "$SIGN_IDENTITY" --timestamp=none "$APP_DIR"; then
-  restore_keychain_search_list
-  echo "❌ codesign 失败"
-  exit 1
+if [ "$USE_STABLE_IDENTITY" = "1" ]; then
+  # 显式指定钥匙串，避免 headless 环境（CI）下 codesign 按搜索列表找身份时
+  # 等待 SecurityAgent 授权而挂起（2026-08-31 CI 实证卡死 4 分钟+）。
+  if ! codesign --force --deep --keychain "$SIGNING_KEYCHAIN" --sign "$SIGN_IDENTITY" --timestamp=none "$APP_DIR"; then
+    restore_keychain_search_list
+    echo "❌ codesign 失败"
+    exit 1
+  fi
+else
+  if ! codesign --force --deep --sign "$SIGN_IDENTITY" --timestamp=none "$APP_DIR"; then
+    echo "❌ codesign 失败"
+    exit 1
+  fi
 fi
 restore_keychain_search_list
 

@@ -39,7 +39,11 @@ jobs:
             echo "未配置 MACOS_CODESIGN_* secrets，回退 ad-hoc 签名"
             exit 0
           fi
-          KEYCHAIN_PATH="$RUNNER_TEMP/qieman-signing.keychain-db"
+          # 布置成与本地 scripts/create_signing_identity.sh 相同的 build/signing/ 结构，
+          # 由 build_macos_app.sh 的自动检测块统一解锁/挂载/签名（本地已验证路径；
+          # CI 直接调 codesign 会在 headless 下等 SecurityAgent 授权挂起）。
+          SIGNING_DIR="$GITHUB_WORKSPACE/build/signing"
+          KEYCHAIN_PATH="$SIGNING_DIR/qieman-signing.keychain-db"
           KEYCHAIN_PASS=$(uuidgen)
           CERT_PATH="$RUNNER_TEMP/qieman-codesign.p12"
           CRT_PATH="$RUNNER_TEMP/qieman-codesign.crt"
@@ -49,8 +53,8 @@ jobs:
           security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CODESIGN_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH" >/dev/null
           # 自签名证书需信任设置，否则 codesign 报 no identity found。
-          # headless 环境用户域 add-trusted-cert 会等 GUI 授权（2026-08-31 卡死 16 分钟实证），
-          # 必须走 sudo + admin 域（runner 免密 sudo）；再套超时兜底，任何一步挂起都回退 ad-hoc。
+          # 用户域 add-trusted-cert 会等 GUI 授权（卡死实证），走 sudo + admin 域，
+          # 并套超时兜底，任何一步挂起都回退 ad-hoc。
           run_with_timeout() {
             local secs=$1; shift
             "$@" & local pid=$!
@@ -65,29 +69,24 @@ jobs:
             echo "⚠️ add-trusted-cert 失败/超时，回退 ad-hoc 签名"
             exit 0
           fi
-          EXISTING=$(security list-keychains -d user | tr -d '"' | sed 's/^[[:space:]]*//' | tr '\n' ' ')
-          security list-keychains -d user -s $EXISTING "$KEYCHAIN_PATH"
+          printf 'QIEMAN_SIGNING_KEYCHAIN_PASS=%s\nQIEMAN_SIGNING_P12_PASS=%s\n' \
+            "$KEYCHAIN_PASS" "$MACOS_CODESIGN_PASSWORD" > "$SIGNING_DIR/env"
           rm -f "$CERT_PATH" "$CRT_PATH"
-          if security find-identity -v -p codesigning 2>/dev/null | grep -q "Qieman Dashboard Self-Signing"; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "identity=Qieman Dashboard Self-Signing" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ 签名身份导入后不可见，回退 ad-hoc"
-          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
 
       - name: Build macOS App
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
-          SIGN_IDENTITY: ${{ steps.signing.outputs.enabled == 'true' && steps.signing.outputs.identity || '-' }}
           TARGET_ARCH: arm64
         run: |
+          # 不传 SIGN_IDENTITY：build_macos_app.sh 自动检测 build/signing/ 并用稳定身份
           bash scripts/build_macos_app.sh
 
       - name: Cleanup signing keychain
         if: always()
         run: |
-          security delete-keychain "$RUNNER_TEMP/qieman-signing.keychain-db" 2>/dev/null || true
+          security delete-keychain "$GITHUB_WORKSPACE/build/signing/qieman-signing.keychain-db" 2>/dev/null || true
+          rm -rf "$GITHUB_WORKSPACE/build/signing"
 
       - name: Generate release notes
         id: notes
