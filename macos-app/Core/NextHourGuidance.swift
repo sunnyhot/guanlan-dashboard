@@ -543,6 +543,63 @@ struct NextHourGuidanceMarketContext: Codable, Hashable, Sendable {
     let quoteAssessment: TrendQuoteAssessment
 }
 
+/// 全市场广度注入（2026-08-31，baseline 10.6 收尾）：
+/// 由 App 预暖缓存直接带入（首算约 15-30s，注入后 Agent 无需等工具冷算）。
+/// 证据 ID 与 get_market_breadth 工具同口径 `market:breadth:{date}`。
+struct NextHourGuidanceBreadthContext: Codable, Hashable, Sendable {
+    let evidenceID: String
+    let summary: String
+    let upCount: Int
+    let downCount: Int
+    let limitUpCount: Int
+    let limitDownCount: Int
+    let totalAmountYi: Double?
+    let sampleCount: Int
+    let computedAt: String
+    let dataBoundary: String
+
+    init?(stats: MarketBreadthStats) {
+        guard stats.sampleCount > 0 else { return nil }
+        let day = String(stats.computedAt.prefix(10))
+        self.init(
+            evidenceID: "market:breadth:\(day)",
+            summary: "\(stats.advanceDeclineSummary)；\(stats.limitSummary)",
+            upCount: stats.upCount,
+            downCount: stats.downCount,
+            limitUpCount: stats.limitUpCount,
+            limitDownCount: stats.limitDownCount,
+            totalAmountYi: stats.totalAmountYi,
+            sampleCount: stats.sampleCount,
+            computedAt: stats.computedAt,
+            dataBoundary: stats.dataBoundary
+        )
+    }
+
+    init(
+        evidenceID: String,
+        summary: String,
+        upCount: Int,
+        downCount: Int,
+        limitUpCount: Int,
+        limitDownCount: Int,
+        totalAmountYi: Double?,
+        sampleCount: Int,
+        computedAt: String,
+        dataBoundary: String
+    ) {
+        self.evidenceID = evidenceID
+        self.summary = summary
+        self.upCount = upCount
+        self.downCount = downCount
+        self.limitUpCount = limitUpCount
+        self.limitDownCount = limitDownCount
+        self.totalAmountYi = totalAmountYi
+        self.sampleCount = sampleCount
+        self.computedAt = computedAt
+        self.dataBoundary = dataBoundary
+    }
+}
+
 struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     let generatedAt: String
     let slot: NextHourGuidanceSlot
@@ -557,6 +614,8 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     let dataRules: [String]
     /// 昨晚复盘的「明日关注」(P5 回指注入)。nil 时行为与旧版完全一致。
     var lastCloseReview: LastCloseReviewContext? = nil
+    /// 全市场广度(预暖注入)。nil 时行为与旧版完全一致。
+    var marketBreadth: NextHourGuidanceBreadthContext? = nil
 
     func jsonString() -> String {
         let encoder = JSONEncoder()
@@ -1688,6 +1747,29 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 )
             )
         })
+        // L1 广度注入（2026-08-31）：与 get_market_breadth 工具同一证据 ID 口径，
+        // 模型可直接引用 market:breadth:{date} 而无需冷算半分钟。
+        if let breadth = context.marketBreadth {
+            let amountText = breadth.totalAmountYi.map { String(format: "%.1f", $0) } ?? "缺失"
+            evidence.append(
+                TrendEvidence(
+                    id: breadth.evidenceID,
+                    sourceName: "全市场行情快照",
+                    title: "A股市场广度统计（预暖注入）",
+                    url: nil,
+                    publishedAt: nil,
+                    retrievedAt: breadth.computedAt,
+                    summary: "\(breadth.summary)；两市成交额约 \(amountText) 亿元。边界：\(breadth.dataBoundary.isEmpty ? "无" : breadth.dataBoundary)",
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .marketQuote,
+                        sourceTier: .primary,
+                        requestedTopicKeys: ["market-breadth", "市场广度"],
+                        entityNames: ["A股整体"],
+                        metadataConfidence: .deterministic
+                    )
+                )
+            )
+        }
         await ledger.record(evidence)
 
         guard let data = try? JSONEncoder().encode(context),

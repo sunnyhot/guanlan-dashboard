@@ -53,7 +53,7 @@ extension AppModel {
         )
         let pipeline = MarketResearchPipeline(
             client: OpenAICompatibleAgentClient(),
-            engine: MarketDataEngine(),
+            engine: .shared,
             settings: trendSettings.provider
         )
 
@@ -96,7 +96,7 @@ extension AppModel {
         isRunningBacktest = true
         defer { isRunningBacktest = false }
         do {
-            let engine = MarketDataEngine()
+            let engine = MarketDataEngine.shared
             let bars = try await engine.dailyBars(code: trimmed, days: 260)
             latestBacktestReport = StrategyRuleBacktester.backtest(
                 skillID: skillID,

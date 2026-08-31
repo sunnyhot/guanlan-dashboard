@@ -166,4 +166,49 @@ final class MarketSignalIntegrationTests: XCTestCase {
             "上次盘后结算：兑现 2 · 止损 1 · 到期未触发 1 · 活跃 5"
         )
     }
+
+    // MARK: - L1 广度预暖 + 注入（2026-08-31）
+
+    func testBreadthPrewarmWindow() {
+        XCTAssertTrue(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-08-31 09:00:00")), "周一 09:00 开窗")
+        XCTAssertTrue(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-09-04 15:30:00")), "周五 15:30 关窗前")
+        XCTAssertFalse(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-08-31 08:59:00")), "未开盘")
+        XCTAssertFalse(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-08-31 15:31:00")), "已收盘")
+        XCTAssertFalse(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-09-05 10:00:00")), "周六不开窗")
+        XCTAssertFalse(AppModel.isMarketBreadthPrewarmWindow(now: date("2026-09-06 10:00:00")), "周日不开窗")
+    }
+
+    func testBreadthContextFromStats() {
+        var stats = MarketBreadthStats()
+        XCTAssertEqual(NextHourGuidanceBreadthContext(stats: stats), nil, "零样本不注入")
+
+        stats.upCount = 2800
+        stats.downCount = 2100
+        stats.flatCount = 200
+        stats.limitUpCount = 45
+        stats.limitDownCount = 8
+        stats.totalAmountYi = 9876.5
+        stats.sampleCount = 5100
+        stats.computedAt = "2026-08-31 14:50:00"
+        stats.dataBoundary = "样本含北交所"
+        guard let context = NextHourGuidanceBreadthContext(stats: stats) else {
+            return XCTFail("正样本应注入")
+        }
+        XCTAssertEqual(context.evidenceID, "market:breadth:2026-08-31", "证据 ID 与工具口径一致")
+        XCTAssertTrue(context.summary.contains("上涨 2800"))
+        XCTAssertTrue(context.summary.contains("涨停 45"))
+        XCTAssertEqual(context.sampleCount, 5100)
+        XCTAssertEqual(context.dataBoundary, "样本含北交所")
+    }
+
+    func testContextDecodesWithoutBreadthField() throws {
+        // 旧版本 JSON 没有 marketBreadth 键 → 解码为 nil，行为与旧版一致
+        let legacyJSON = """
+        {"generatedAt":"2026-08-30 10:00:00","slot":{"day":"2026-08-30","timeString":"09:15","validUntil":"2026-08-30 10:15","scope":"market_trading"},"assets":[],"market":[],"marketDataIsFresh":false,"marketDataWarnings":[],"latestTrendGeneratedAt":null,"latestTrendHeadline":null,"latestTrendActions":[],"latestAssetConclusions":[],"dataRules":[]}
+        """
+        let decoder = JSONDecoder()
+        let context = try decoder.decode(NextHourGuidanceContext.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(context.marketBreadth)
+        XCTAssertNil(context.lastCloseReview)
+    }
 }

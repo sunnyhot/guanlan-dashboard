@@ -10,6 +10,11 @@ import Foundation
 ///
 /// 单一数据源失败不拖垮整体（除单源能力外全部多源），熔断中的源直接跳过。
 actor MarketDataEngine {
+    /// 全局共享实例（2026-08-31）：Agent 工具、信号结算、回测、广度预暖共用
+    /// 同一缓存/熔断器——预暖的广度缓存才能被 Agent 的 get_market_breadth 命中
+    /// （缓存是引擎实例私有的，各处自建实例会导致 TTL 缓存形同虚设）。
+    static let shared = MarketDataEngine()
+
     private let session: MarketDataSession
     private let quoteProviders: [any MarketQuoteProviding]
     private let klineProviders: [any MarketKlineProviding]

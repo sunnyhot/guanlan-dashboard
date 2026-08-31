@@ -52,6 +52,7 @@ extension AppModel {
         nextHourGuidanceSchedulerTask?.cancel()
         nextHourGuidanceSchedulerTask = Task { [weak self] in
             if immediate, let self {
+                self.prewarmMarketBreadthIfNeeded()
                 await self.runNextHourGuidanceIfNeeded()
                 await self.runDailyTrendAnalysisIfNeeded()
                 await self.runMarketSignalSettlementIfNeeded()
@@ -60,6 +61,7 @@ extension AppModel {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
                 if Task.isCancelled { return }
                 guard let self else { return }
+                self.prewarmMarketBreadthIfNeeded()
                 await self.runNextHourGuidanceIfNeeded()
                 await self.runDailyTrendAnalysisIfNeeded()
                 await self.runMarketSignalSettlementIfNeeded()
@@ -182,11 +184,15 @@ extension AppModel {
                 rows: rows,
                 generatedAt: generatedAt
             )
+            // L1 广度注入（2026-08-31）：预暖缓存直接带入（TTL 内秒回），
+            // Agent 不必再花 15-30s 冷算 get_market_breadth；拉不到时静默跳过。
+            let breadthStats = try? await MarketDataEngine.shared.marketBreadth()
             let context = makeNextHourGuidanceContext(
                 rows: rows,
                 slot: slot,
                 generatedAt: generatedAt,
-                additionalWarnings: lookThroughResult.warnings
+                additionalWarnings: lookThroughResult.warnings,
+                marketBreadth: breadthStats.flatMap(NextHourGuidanceBreadthContext.init(stats:))
             )
             let researchSnapshot = makeNextHourResearchSnapshot(
                 rows: rows,
@@ -305,7 +311,8 @@ extension AppModel {
         rows: [PersonalAssetAggregateRow],
         slot: NextHourGuidanceSlot,
         generatedAt: String,
-        additionalWarnings: [String]
+        additionalWarnings: [String],
+        marketBreadth: NextHourGuidanceBreadthContext? = nil
     ) -> NextHourGuidanceContext {
         let total = rows.reduce(0) { $0 + $1.effectiveHoldingAmount }
         let assets = rows.map { row in
@@ -401,7 +408,8 @@ extension AppModel {
             latestTrendActions: latestActions,
             latestAssetConclusions: latestAssetConclusions,
             dataRules: rules,
-            lastCloseReview: makeLastCloseReviewContext(generatedAt: generatedAt)
+            lastCloseReview: makeLastCloseReviewContext(generatedAt: generatedAt),
+            marketBreadth: marketBreadth
         )
     }
 

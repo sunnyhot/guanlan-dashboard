@@ -58,6 +58,8 @@ struct EnhancementSectionView: View {
                     intelligencePortfolioContent
                     // 判断与复盘:活跃事项 + 待复盘 + 历史
                     iosJudgementSection
+                    // 市场信号与研究（L6 闭环 / L7 流水线 / L8 回测，2026-08-31）
+                    IOSMarketSignalPanel()
                 } else {
                     // 旧分段(兼容)
                     Picker("", selection: $segment) {
@@ -254,6 +256,7 @@ struct EnhancementSectionView: View {
         }
     }
 
+    @ViewBuilder
     private var intelligenceViewpointContent: some View {
         let review = model.marketCloseReview
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {

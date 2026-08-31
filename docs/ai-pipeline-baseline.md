@@ -551,12 +551,11 @@ Decision LLM 输出 → `RiskOverrideStateMachine`（风险否决，单向保守
 - `budgetSkipBeforeRequest`：剩余预算 <8s 止损终止（区别于 totalTimeout，不发计费请求）
 - `get_market_snapshot` scope guard：请求代码与冻结快照完全无交集 → `scope_violation` 错误（部分缺失仍走 warning）
 
-### 10.6 App 集成接线（2026-08-31 完成，余一项）
+### 10.6 App 集成接线（2026-08-31 全部完成）
 
-核心库与 Agent 工具已完成；App 侧接线已落地：
+核心库与 Agent 工具已完成；App 侧接线全部落地：
 - **L6 信号闭环全自动**：趋势报告落盘自动 ingest（`saveTrendAnalysisReport` → 抽取/去重/反向失效/胜率校准，`MarketSignalActions.ingestMarketSignalsFromReport`）；每日盘后 15:35 起 60s 轮询触发 `settleDueSignals`（每天一次，UserDefaults `qieman.marketSignals.lastSettleDay` 记日）；Store 落在 `investment-intelligence/market-signals/`
-- **L7 流水线 UI 入口**：AI 指引页「市场信号与研究」面板（`Views_macOS/InvestmentIntelligence/MarketSignalSection.swift`），输入标的 + 四档深度手动触发（`runMarketResearch`）；`marketResearchState` 纳入四向互斥 guard（趋势/下一小时/专项研究/流水线，guard 顺序遵守第 8 节）；candidateSignal 自动入库进 L6
+- **L7 流水线 UI 入口**：AI 指引页「市场信号与研究」面板（macOS `MarketSignalSection.swift` / iOS `IOSMarketSignalPanel.swift`），输入标的 + 四档深度手动触发（`runMarketResearch`）；`marketResearchState` 纳入四向互斥 guard（趋势/下一小时/专项研究/流水线，guard 顺序遵守第 8 节）；candidateSignal 自动入库进 L6
 - **L8 回测入口**：同面板策略技能 Picker + 标的 → `runStrategyBacktest` 拉约一年日 K 规则回测（纯本地计算，无 LLM、不占互斥）
-- **展示**：活跃/最近结算信号列表 + 全局胜率记忆摘要；方向与结算红涨绿跌走 `AppPalette.marketGain/marketLoss`
-
-仍待做：广度预暖与 NextHourGuidanceContext 广度注入（V2 子 Agent 已可经 `get_market_breadth` 工具取用，App 侧预暖属性能优化非功能缺口）；iOS 端对应面板（当前仅 macOS）。
+- **L1 广度预暖 + 注入**：`MarketDataEngine.shared` 全局单例（缓存/熔断共享，各处自建实例会使 TTL 缓存失效）；交易日 09:00–15:30 由 60s 调度循环预暖广度缓存（`MarketDataWarmup`，TTL 10 分钟内 Agent 工具秒回）；`NextHourGuidanceContext.marketBreadth` 预取注入——V1 经 contextToolResult 以 `market:breadth:{date}` 同口径登记证据，V2 市场 Agent user message 直带广度摘要；字段缺省 nil 与旧版行为完全一致（解码兼容有测试锁定）
+- **展示**：双端活跃/最近结算信号列表 + 全局胜率记忆摘要；方向与结算红涨绿跌走 `AppPalette.marketGain/marketLoss`

@@ -11,7 +11,7 @@ struct TrendResearchToolRegistry: Sendable {
     init(
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
         alphaVantageCache: AlphaVantageResponseCache = .shared,
-        marketDataEngine: MarketDataEngine = MarketDataEngine()
+        marketDataEngine: MarketDataEngine = .shared
     ) {
         let all: [any TrendResearchTool] = [
             PortfolioOverviewTool(),

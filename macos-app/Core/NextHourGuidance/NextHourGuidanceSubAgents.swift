@@ -157,6 +157,10 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             "昨日关注(需在行情维度逐条核对并在结论中回应):" +
             review.tomorrowWatch.joined(separator: "；")
         } ?? "")
+        \(context.marketBreadth.map { breadth in
+            let amountText = breadth.totalAmountYi.map { String(format: "，两市成交额约 %.0f 亿元", $0) } ?? ""
+            return "全市场广度(App 已预取):\(breadth.summary)\(amountText)。样本 \(breadth.sampleCount) 只，计算于 \(breadth.computedAt)。判断大盘整体走势时优先以此为准。"
+        } ?? "")
         """
 
         return try await runSingleTurnAgent(

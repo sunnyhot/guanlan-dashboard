@@ -192,6 +192,8 @@ final class AppModel: ObservableObject {
 
     // L6 市场信号服务的懒加载缓存（依赖运行期 dataDirectoryURL，无法在 init 构造）
     var marketSignalServiceCache: MarketSignalService?
+    // L1 广度预暖防重入标志
+    var isPrewarmingMarketBreadth = false
 
     // MARK: Proxy computed properties (forwarding to sub-models)
 

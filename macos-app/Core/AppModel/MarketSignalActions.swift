@@ -19,12 +19,12 @@ extension AppModel {
     func makeMarketSignalService() -> MarketSignalService? {
         if let cached = marketSignalServiceCache { return cached }
         guard let base = investmentIntelligenceDirectoryURL else { return nil }
-        let service = MarketSignalService(
-            store: MarketSignalStore(
-                baseDirectory: base.appendingPathComponent("market-signals", isDirectory: true)
-            ),
-            engine: MarketDataEngine()
-        )
+            let service = MarketSignalService(
+                store: MarketSignalStore(
+                    baseDirectory: base.appendingPathComponent("market-signals", isDirectory: true)
+                ),
+                engine: .shared
+            )
         marketSignalServiceCache = service
         return service
     }
