@@ -129,7 +129,6 @@ extension AppModel {
                         decisionCase: case_,
                         snapshot: snapshot,
                         settings: trendSettings.provider,
-                        officialSourceSettings: trendSettings.officialSources
                     )
                     await AIAgentDiagnosticLog.record("run_completed", payload: result)
                     return result

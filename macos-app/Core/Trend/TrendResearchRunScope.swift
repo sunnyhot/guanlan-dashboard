@@ -67,7 +67,7 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
         true
     }
 
-    var usesOfficialAndVendorResearch: Bool {
+    var usesVendorResearch: Bool {
         self == .full || self == .longTerm
     }
 
@@ -76,8 +76,7 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
         if requiresPortfolioOverview { names.insert("get_portfolio_overview") }
         if requiresPortfolioAssets { names.insert("get_portfolio_assets") }
         if requiresFundLookThrough { names.insert("get_fund_lookthrough") }
-        if usesOfficialAndVendorResearch {
-            names.insert("official_sec_research")
+        if usesVendorResearch {
             names.insert("alpha_vantage_research")
         }
         return names

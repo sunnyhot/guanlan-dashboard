@@ -9,8 +9,6 @@ struct TrendResearchToolRegistry: Sendable {
     let definitions: [AgentToolDefinition]
 
     init(
-        officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
-        officialSourceCache: SECOfficialSourceCache = .shared,
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
         alphaVantageCache: AlphaVantageResponseCache = .shared,
         marketDataEngine: MarketDataEngine = MarketDataEngine()
@@ -23,10 +21,6 @@ struct TrendResearchToolRegistry: Sendable {
             MarketBreadthTool(engine: marketDataEngine),
             DailyKlineTool(engine: marketDataEngine),
             FinancialHeadlinesTool(engine: marketDataEngine),
-            SECOfficialResearchTool(
-                client: officialSourceClient,
-                cache: officialSourceCache
-            ),
             AlphaVantageResearchTool(
                 client: alphaVantageClient,
                 cache: alphaVantageCache

@@ -24,8 +24,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
         let report = try await agent.run(
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
-            settings: Self.configuredSettings,
-            officialSourceSettings: .empty
+            settings: Self.configuredSettings
         )
 
         XCTAssertEqual(client.responsesConsumed, 2, "应两轮:context + submit")
@@ -58,8 +57,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             let report = try await agent.run(
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
-                settings: Self.configuredSettings,
-                officialSourceSettings: .empty
+                settings: Self.configuredSettings
             )
             // 成功:说明门禁触发了重试(context → submit)
             XCTAssertEqual(report.suggestedState, .watch)
@@ -79,8 +77,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             _ = try await agent.run(
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
-                settings: TrendAIProviderSettings.empty,  // 未配置
-                officialSourceSettings: .empty
+                settings: TrendAIProviderSettings.empty  // 未配置
             )
             XCTFail("应抛 missingConfiguration")
         } catch let error as DecisionCaseResearchAgentError {
@@ -109,8 +106,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             _ = try await agent.run(
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
-                settings: Self.configuredSettings,
-                officialSourceSettings: .empty
+                settings: Self.configuredSettings
             )
             XCTFail("exitReview 反向证据不足应导致提交失败")
         } catch {
@@ -137,8 +133,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
         let report = try await agent.run(
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
-            settings: Self.configuredSettings,
-            officialSourceSettings: .empty
+            settings: Self.configuredSettings
         )
         XCTAssertEqual(report.suggestedState, .stable)
         XCTAssertTrue(report.findings.isEmpty, "空 findings 的 stable 结论应原样保留")
@@ -158,8 +153,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
             _ = try await agent.run(
                 decisionCase: makeCase(),
                 snapshot: makeSnapshot(),
-                settings: Self.configuredSettings,
-                officialSourceSettings: .empty
+                settings: Self.configuredSettings
             )
             XCTFail("findings 非数组应导致解码失败")
         } catch let error as DecisionCaseResearchAgentError {
@@ -191,8 +185,7 @@ final class DecisionCaseResearchAgentTests: XCTestCase {
         let report = try await agent.run(
             decisionCase: makeCase(),
             snapshot: makeSnapshot(),
-            settings: Self.configuredSettings,
-            officialSourceSettings: .empty
+            settings: Self.configuredSettings
         )
         XCTAssertEqual(report.findings.count, 1)
         XCTAssertEqual(report.findings[0].direction, .supportive, "supports 应降级为 .supportive")

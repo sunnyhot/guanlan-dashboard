@@ -58,8 +58,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
 
         XCTAssertFalse(settings.provider.isConfigured)
         XCTAssertEqual(settings.provider.timeoutSeconds, 300)
-        XCTAssertTrue(settings.officialSources.enabled)
-        XCTAssertFalse(settings.officialSources.isSECConfigured)
         XCTAssertFalse(settings.alphaVantage.enabled)
         XCTAssertEqual(settings.alphaVantage.dailyRequestLimit, 25)
         XCTAssertEqual(settings.defaultPrivacyMode, .sanitized)
@@ -77,10 +75,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
                 model: "glm-5.2",
                 apiKey: "sk-test-secret",
                 timeoutSeconds: 180
-            ),
-            officialSources: OfficialSourceSettings(
-                enabled: true,
-                secContactEmail: "research@example.com"
             ),
             alphaVantage: AlphaVantageSettings(
                 enabled: true,
@@ -103,8 +97,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.model, "glm-5.2")
         XCTAssertEqual(loaded.provider.apiKey, "sk-test-secret")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 180)
-        XCTAssertTrue(loaded.officialSources.isSECConfigured)
-        XCTAssertEqual(loaded.officialSources.secContactEmail, "research@example.com")
         XCTAssertTrue(loaded.alphaVantage.isConfigured)
         XCTAssertEqual(loaded.alphaVantage.apiKey, "alpha-test-secret")
         XCTAssertEqual(loaded.alphaVantage.dailyRequestLimit, 25)
@@ -139,8 +131,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.provider.model, "glm-5.2")
         XCTAssertEqual(loaded.provider.providerName, "智谱")
         XCTAssertEqual(loaded.provider.timeoutSeconds, 60)
-        XCTAssertTrue(loaded.officialSources.enabled)
-        XCTAssertFalse(loaded.officialSources.isSECConfigured)
         XCTAssertFalse(loaded.alphaVantage.isConfigured)
         XCTAssertEqual(loaded.defaultPrivacyMode, .fullDetail)
         XCTAssertTrue(loaded.dailyAutoAnalysisEnabled)

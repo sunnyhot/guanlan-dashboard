@@ -386,48 +386,6 @@ struct TrendAIProviderSettings: Codable, Hashable {
     }
 }
 
-struct OfficialSourceSettings: Codable, Hashable, Sendable {
-    var enabled: Bool
-    var secContactEmail: String
-
-    static let empty = OfficialSourceSettings(
-        enabled: true,
-        secContactEmail: ""
-    )
-
-    var isSECConfigured: Bool {
-        let email = secContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        return enabled
-            && email.contains("@")
-            && email.contains(".")
-            && !email.contains(" ")
-    }
-
-    var secUserAgent: String {
-        let contact = secContactEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "QiemanDashboard/4.0 \(contact)"
-    }
-
-    init(enabled: Bool = true, secContactEmail: String) {
-        self.enabled = enabled
-        self.secContactEmail = secContactEmail
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-        secContactEmail = try container.decodeIfPresent(
-            String.self,
-            forKey: .secContactEmail
-        ) ?? ""
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case enabled
-        case secContactEmail
-    }
-}
-
 struct AlphaVantageSettings: Codable, Hashable, Sendable {
     var enabled: Bool
     var apiKey: String
@@ -556,7 +514,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
 
 struct TrendAnalysisSettings: Codable, Hashable {
     var provider: TrendAIProviderSettings
-    var officialSources: OfficialSourceSettings
     var alphaVantage: AlphaVantageSettings
     var defaultPrivacyMode: TrendPrivacyMode
     var dailyAutoAnalysisEnabled: Bool
@@ -573,7 +530,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     static let `default` = TrendAnalysisSettings(
         provider: .empty,
-        officialSources: .empty,
         alphaVantage: .empty,
         defaultPrivacyMode: .sanitized,
         dailyAutoAnalysisEnabled: false,
@@ -589,7 +545,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     init(
         provider: TrendAIProviderSettings,
-        officialSources: OfficialSourceSettings = .empty,
         alphaVantage: AlphaVantageSettings = .empty,
         defaultPrivacyMode: TrendPrivacyMode,
         dailyAutoAnalysisEnabled: Bool,
@@ -603,7 +558,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastAutoFailureMessages: [String: String] = [:]
     ) {
         self.provider = provider
-        self.officialSources = officialSources
         self.alphaVantage = alphaVantage
         self.defaultPrivacyMode = defaultPrivacyMode
         self.dailyAutoAnalysisEnabled = dailyAutoAnalysisEnabled
@@ -620,10 +574,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         provider = try container.decodeIfPresent(TrendAIProviderSettings.self, forKey: .provider) ?? .empty
-        officialSources = try container.decodeIfPresent(
-            OfficialSourceSettings.self,
-            forKey: .officialSources
-        ) ?? .empty
         alphaVantage = try container.decodeIfPresent(
             AlphaVantageSettings.self,
             forKey: .alphaVantage
@@ -664,7 +614,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(provider, forKey: .provider)
-        try container.encode(officialSources, forKey: .officialSources)
         try container.encode(alphaVantage, forKey: .alphaVantage)
         try container.encode(defaultPrivacyMode, forKey: .defaultPrivacyMode)
         try container.encode(dailyAutoAnalysisEnabled, forKey: .dailyAutoAnalysisEnabled)
@@ -680,7 +629,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case provider
-        case officialSources
         case alphaVantage
         case defaultPrivacyMode
         case dailyAutoAnalysisEnabled

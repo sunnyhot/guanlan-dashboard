@@ -15,10 +15,6 @@ final class SyncArchiveActionsTests: XCTestCase {
 
     func testApplyingSyncedTrendSettingsKeepsAPIKeysInRuntimeState() {
         var current = TrendAnalysisSettings.default
-        current.officialSources = OfficialSourceSettings(
-            enabled: true,
-            secContactEmail: "research@example.com"
-        )
         current.defaultPrivacyMode = .fullDetail
 
         let synced = TrendSettingsSyncDTO(from: syncedTrendSettings())
@@ -27,7 +23,6 @@ final class SyncArchiveActionsTests: XCTestCase {
         XCTAssertTrue(applied.provider.isConfigured)
         XCTAssertEqual(applied.provider.apiKey, "sk-sync-test")
         XCTAssertEqual(applied.alphaVantage.apiKey, "alpha-sync-test")
-        XCTAssertEqual(applied.officialSources.secContactEmail, "research@example.com")
         XCTAssertEqual(applied.defaultPrivacyMode, .fullDetail)
     }
 

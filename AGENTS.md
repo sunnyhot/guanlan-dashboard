@@ -56,7 +56,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `Core/AppModel/` | 6411 (28 文件) | AppModel 子功能拆分。最大几块：TrendAnalysis(880) / ManagerWatch(657) / PortfolioCRUD(581) / NextHourGuidanceController(534) / PersonalWatchlistActions(386) / AssetAggregation(340) / Validation(432) / Alfa(311) / InvestmentPlan(244) / PortfolioRefresh(225) / ComputedProperties(207) / Auth(200) / TrendTracking(172) / Automation(165) / PendingTrade(153) 等。完整清单见目录 |
 | `Core/CLI/` | 369 (2 文件) | Contract(74, snake_case encoder/decoder、NullDouble 包装) + DTOs(295, 命令输出 DTO) |
 | `Core/QiemanCommandLine.swift` | （在 Core/ 下） | 命令路由、JSON 契约与增量巡检（注：CLI 逻辑文件在 Core/ 顶层，非 Core/CLI/ 子目录） |
-| `Core/Clients/` | 3 文件 | 外部数据源 + LLM API 客户端（通用基础设施）：AlphaVantageClient(含 quota/cache/budget) / SECOfficialSourceClient(SEC EDGAR HTTP) / OpenAICompatibleAgentClient(OpenAI 兼容 LLM)。被 TrendResearch 工具、NextHourGuidance、InvestmentIntelligence 跨子系统复用。Tavily 客户端已于 2026-08-28 移除 |
+| `Core/Clients/` | 3 文件 | 外部数据源 + LLM API 客户端（通用基础设施）：AlphaVantageClient(含 quota/cache/budget) / OpenAICompatibleAgentClient(OpenAI 兼容 LLM)。SEC 客户端已于 2026-08-31 移除。被 TrendResearch 工具、NextHourGuidance、InvestmentIntelligence 跨子系统复用。Tavily 客户端已于 2026-08-28 移除 |
 | `Core/TrendResearch/` | 8367 (22 文件) | **AI 趋势研究子系统**：TrendResearchAgent(821) 多轮 Tool Calling Harness / TrendResearchToolRegistry(576) / TrendResearchSnapshot(460) / SubmitTrendReportTool / TrendAnalysisValidator / TrendEvidenceLedger（actor，在 TrendResearchTool.swift 内）/ TrendClaimEvidencePolicy(261) / TrendEvidenceMetadata / SEC+AlphaVantage 研究工具（调用 `Core/Clients/` 的 client）/ TrendSourceFreshnessPolicy。数据源 client 已移至 `Core/Clients/`。详见下方「AI 研判子系统」 |
 | `Core/Trend/` | 3519 (11 文件) | 趋势数据层：TrendAnalysisStore / TrendTrackingModels / TrendTrackingStore / TrendAnalysisValidator / TrendReportModuleTools / TrendSourceStatus 等趋势报告与跟踪持久化和校验 |
 | `Core/MarketData/` | ~2600 (13 文件) | **市场数据引擎（L1/L2）**：统一行情契约/腾讯全字段/新浪+东财快照/东财腾讯K线双源/NewsNow热榜/广度计算/熔断限速缓存/MarketDataEngine fallback 门面/TechnicalAnalysisEngine 规则技术分析（六模块100分制）。设计参考 daily_stock_analysis（MIT） |
@@ -93,7 +93,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 |---|---|---|
 | `TrendResearch/TrendResearchAgent.swift` | 821 | 多轮 Tool Calling 主循环：预算/超时/取消/缓存/搜索熔断/上下文裁剪/校验修复/审计。**强耦合**，通用 Harness 抽取风险高，宜先复制受控子集再反向抽取 |
 | `Clients/OpenAICompatibleAgentClient.swift` | 770 | OpenAI 兼容 API 客户端（从 TrendResearch/ 移至 `Core/Clients/`） |
-| `TrendResearch/TrendResearchToolRegistry.swift` | 576 | 工具注册表：get_portfolio_overview/assets、get_fund_lookthrough、get_market_snapshot、get_market_breadth、get_daily_kline、official_sec_research、alpha_vantage_research（web_search 已移除） |
+| `TrendResearch/TrendResearchToolRegistry.swift` | 576 | 工具注册表：get_portfolio_overview/assets、get_fund_lookthrough、get_market_snapshot、get_market_breadth、get_daily_kline、alpha_vantage_research（SEC/Tavily 工具已移除） |
 | `TrendResearch/TrendResearchSnapshot.swift` | 460 | 运行前数据冻结 + 隐私过滤 + 稳定 Evidence ID + 只读研究 |
 | `TrendResearch/TrendResearchTool.swift` | 148 | 工具协议 + **`actor TrendEvidenceLedger`**（独立 actor：record/contains/canonical/allIDs/allEvidence，被 Agent/NextHour/SubmitTool/SEC/AlphaVantage/Lookthrough 共用） |
 | `TrendResearch/TrendClaimEvidencePolicy.swift` | 261 | Evidence 关联校验、支持/反证/背景区分、不足降级 uncertain、资金动作高证据门槛 |

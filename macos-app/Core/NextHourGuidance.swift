@@ -605,8 +605,7 @@ protocol NextHourGuidanceAgentProtocol: Sendable {
     func run(
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings
+        settings: TrendAIProviderSettings
     ) async throws -> NextHourGuidanceReport
 
     /// V2：3+1 子 Agent 编排（行情/新闻/持仓 并行 → 汇总决策）。
@@ -614,8 +613,7 @@ protocol NextHourGuidanceAgentProtocol: Sendable {
     func runV2(
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings
+        settings: TrendAIProviderSettings
     ) async throws -> NextHourGuidanceReport
 }
 
@@ -776,45 +774,34 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
 
     private static let contextToolName = "get_live_market_context"
     private static let lookThroughToolName = "get_fund_lookthrough"
-    private static let officialSourceToolName = "official_sec_research"
     private static let submitToolName = "submit_next_hour_guidance"
     private static let maxTurns = 10
     private static let maxToolCalls = 20
     private static let totalTimeoutSeconds: Double = 300
 
     init(
-        client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "next-hour-guidance"),
-        officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
-        officialSourceCache: SECOfficialSourceCache = .shared
+        client: any TrendResearchAgentClient = GatewayAgentClient(purpose: "next-hour-guidance")
     ) {
         self.client = client
-        self.registry = TrendResearchToolRegistry(
-            officialSourceClient: officialSourceClient,
-            officialSourceCache: officialSourceCache
-        )
+        self.registry = TrendResearchToolRegistry()
     }
 
     func run(
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings = .empty
+        settings: TrendAIProviderSettings
     ) async throws -> NextHourGuidanceReport {
         guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
 
         let ledger = TrendEvidenceLedger()
         let requiresLookThrough = researchSnapshot.lookThrough != nil
-        let requiresOfficialSource = officialSourceSettings.isSECConfigured
-            && !researchSnapshot.eligibleSECResearchTickers.isEmpty
         let commonToolNames: Set<String> = [
             Self.lookThroughToolName,
-            Self.officialSourceToolName,
         ]
         let commonDefinitions = registry.definitions.filter { definition in
             let name = definition.function.name
             guard commonToolNames.contains(name) else { return false }
             if name == Self.lookThroughToolName { return requiresLookThrough }
-            if name == Self.officialSourceToolName { return requiresOfficialSource }
             return true
         }
         let tools = [Self.contextTool()] + commonDefinitions + [Self.submitTool()]
@@ -826,7 +813,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 你是中国市场盘中交易研究 Agent，任务是生成有证据约束的“下一小时买卖建议”。这是真实资金决策，宁可持有，也不能猜测。
                 必须先调用 get_live_market_context 读取刚刷新的持仓、报价时间、大盘行情和旧研判边界。
                 如果提供 get_fund_lookthrough，提交前必须调用它；基金判断必须基于底层股票、行业、资产配置和披露日期，不能只看基金名称。
-                如果提供 official_sec_research，必须先针对相关美股或基金底层美股查询 SEC 官方披露。申报存在本身不等于利好或利空。
                 搜索失败或没有返回新的有效证据时，不得把它算作证据；在完成两次尝试后可安全提交，但所有标的只能 hold，并明确证据不足。
                 只引用工具实际返回的 evidence_id；不得编造新闻、价格、成交量、资金流或证据编号。
                 每条标的必须明确给出 buy（买入）、sell（卖出）、hold（持有）三选一，不得用观察、等待、不追涨等模糊动作替代结论。
@@ -841,7 +827,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 role: .user,
                 content: """
                 研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)，候选标的 \(context.assets.count) 个。
-                SEC 官方源：\(requiresOfficialSource ? "已配置且存在可查询标的，必须优先查询" : "本次没有已配置且可查询的美股标的")。
                 联网搜索：已下线（Tavily 已移除），任何标的都不得给出 buy/sell，只能 hold。
                 请先调用只读工具取证，再提交买入/卖出/持有建议。
                 """
@@ -855,7 +840,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         var invalidSubmissions = 0
         var didReadContext = false
         var didReadLookThrough = !requiresLookThrough
-        var didAttemptOfficialSource = !requiresOfficialSource
         var toolCallAudits: [TrendAgentToolCallAudit] = []
 
         while turnCount < Self.maxTurns {
@@ -912,31 +896,18 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 case Self.lookThroughToolName:
                     var toolContext = TrendResearchToolContext(
                         snapshot: researchSnapshot,
-                        evidenceLedger: ledger,
-                        officialSourceSettings: officialSourceSettings
+                        evidenceLedger: ledger
                     )
                     toolContext.invalidSubmissionBudget = 2
                     toolContext.invalidSubmissionsUsed = invalidSubmissions
                     toolResult = await registry.execute(call, context: toolContext)
                     if !toolResult.isError { didReadLookThrough = true }
 
-                case Self.officialSourceToolName:
-                    didAttemptOfficialSource = true
-                    var toolContext = TrendResearchToolContext(
-                        snapshot: researchSnapshot,
-                        evidenceLedger: ledger,
-                        officialSourceSettings: officialSourceSettings
-                    )
-                    toolContext.invalidSubmissionBudget = 2
-                    toolContext.invalidSubmissionsUsed = invalidSubmissions
-                    toolResult = await registry.execute(call, context: toolContext)
 
                 case Self.submitToolName:
                     let missingResearch = Self.missingResearchRequirements(
                         didReadContext: didReadContext,
-                        didReadLookThrough: didReadLookThrough,
-                        didAttemptOfficialSource: didAttemptOfficialSource,
-                        officialSourceRequired: requiresOfficialSource
+                        didReadLookThrough: didReadLookThrough
                     )
                     if !missingResearch.isEmpty {
                         lastErrors = missingResearch
@@ -986,8 +957,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                                     submission: submission,
                                     context: context,
                                     researchSnapshot: researchSnapshot,
-                                    officialSourceConfigured: requiresOfficialSource,
-                                    ledger: ledger,
+                                                            ledger: ledger,
                                     toolCalls: completedToolCalls
                                 )
                             }
@@ -1064,8 +1034,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
     func runV2(
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings = .empty
+        settings: TrendAIProviderSettings
     ) async throws -> NextHourGuidanceReport {
         guard settings.isConfigured else { throw NextHourGuidanceAgentError.missingConfiguration }
 
@@ -1076,8 +1045,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         let (marketAssessment, newsAssessment, portfolioAssessment) = try await orchestrator.runAnalysisAgents(
             context: context,
             snapshot: researchSnapshot,
-            settings: settings,
-            officialSourceSettings: officialSourceSettings
+            settings: settings
         )
 
         // 1.5 把三方分析结论注入 Ledger 作为证据，供决策 Agent 引用 + 报告展示
@@ -1107,7 +1075,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             submission: submission,
             context: context,
             researchSnapshot: researchSnapshot,
-            officialSourceConfigured: officialSourceSettings.isSECConfigured,
             ledger: ledger,
             toolCalls: []
         )
@@ -1385,9 +1352,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
 
     private static func missingResearchRequirements(
         didReadContext: Bool,
-        didReadLookThrough: Bool,
-        didAttemptOfficialSource: Bool,
-        officialSourceRequired: Bool
+        didReadLookThrough: Bool
     ) -> [String] {
         var errors: [String] = []
         if !didReadContext {
@@ -1395,9 +1360,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         }
         if !didReadLookThrough {
             errors.append("必须先调用 get_fund_lookthrough 读取基金底层资产")
-        }
-        if officialSourceRequired, !didAttemptOfficialSource {
-            errors.append("存在可查询的美股标的，必须先调用 official_sec_research 查询 SEC 官方披露")
         }
         return errors
     }
@@ -1463,7 +1425,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         submission: Submission,
         context: NextHourGuidanceContext,
         researchSnapshot: TrendResearchSnapshot,
-        officialSourceConfigured: Bool,
         ledger: TrendEvidenceLedger,
         toolCalls: [TrendAgentToolCallAudit]
     ) async -> NextHourGuidanceReport {
@@ -1489,7 +1450,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
         warnings.append(contentsOf: followup.warnings)
         let sourceStatuses = await normalizedSourceStatuses(
             snapshot: researchSnapshot,
-            officialSourceConfigured: officialSourceConfigured,
             ledger: ledger
         )
         warnings.append(contentsOf: sourceStatuses.compactMap(\.warningText))
@@ -1538,7 +1498,6 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
 
     private static func normalizedSourceStatuses(
         snapshot: TrendResearchSnapshot,
-        officialSourceConfigured: Bool,
         ledger: TrendEvidenceLedger
     ) async -> [TrendSourceStatus] {
         var bySource = Dictionary(
@@ -1546,30 +1505,12 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             uniquingKeysWith: { first, _ in first }
         )
         let allEvidence = await ledger.allEvidence()
-        let officialEvidence = allEvidence.filter {
-            $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
-        }
-        if snapshot.eligibleSECResearchTickers.isEmpty {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: .notRequested,
-                receivedAt: snapshot.createdAt,
-                detail: "当前快照没有可映射到 SEC 的美国股票代码。"
-            )
-        } else {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: officialSourceConfigured
-                    ? (officialEvidence.isEmpty ? .failed : .success)
-                    : .notConfigured,
-                asOf: officialEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
-                receivedAt: officialEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
-                errorCode: officialSourceConfigured && officialEvidence.isEmpty
-                    ? "no_usable_official_evidence"
-                    : nil,
-                itemCount: officialEvidence.count
-            )
-        }
+        bySource[.officialSource] = TrendSourceStatus(
+            source: .officialSource,
+            status: .notConfigured,
+            receivedAt: snapshot.createdAt,
+            detail: "SEC 官方源已下线（2026-08-28 移除）。"
+        )
         bySource[.webSearch] = TrendSourceStatus(
             source: .webSearch,
             status: .notConfigured,

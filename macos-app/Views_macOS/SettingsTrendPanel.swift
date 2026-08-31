@@ -50,9 +50,8 @@ struct TrendSettingsPanel: View {
 
     /// 可选数据源默认收起:普通用户只需模型连接。
     private var advancedSourcesGroup: some View {
-        DisclosureGroup("高级数据源(可选):SEC / Alpha Vantage") {
+        DisclosureGroup("高级数据源(可选):Alpha Vantage") {
             VStack(spacing: AppPalette.spaceXL) {
-                trendOfficialSourcesCard
                 trendAlphaVantageCard
             }
             .padding(.top, AppPalette.spaceS)
@@ -133,7 +132,7 @@ struct TrendSettingsPanel: View {
                 SettingsRow(
                     title: "共享数据缓存",
                     value: "自动复用",
-                    detail: "基金披露 24 小时；SEC 与结构化行情按来源时效缓存",
+                    detail: "基金披露 24 小时；结构化行情按来源时效缓存",
                     icon: "externaldrive.badge.checkmark",
                     tint: AppPalette.muted
                 )
@@ -411,32 +410,6 @@ struct TrendSettingsPanel: View {
         presetFeedbackText = "已填好\(preset.name)地址与模型,只需贴 Key"
     }
 
-    private var trendOfficialSourcesCard: some View {
-        SettingsCardGroup(
-            title: "官方数据源",
-            subtitle: "SEC 官方披露",
-            icon: "doc.text.magnifyingglass",
-            tint: AppPalette.info
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                Toggle("启用 SEC 官方披露", isOn: officialSourcesEnabledBinding)
-                    .toggleStyle(.switch)
-                    .font(AppPalette.appFont(.subheadline, weight: .medium))
-                trendField(
-                    "SEC 联系邮箱",
-                    text: secContactEmailBinding,
-                    placeholder: "name@example.com"
-                )
-                .disabled(!model.trendSettings.officialSources.enabled)
-                .opacity(model.trendSettings.officialSources.enabled ? 1 : 0.55)
-                Text("SEC 接口免费且不需要 API Key。邮箱只用于按 SEC 要求组成请求 User-Agent，不会发送持仓和个人资产；有美股或基金底层美股时，Agent 会先查 SEC 披露。")
-                    .font(AppPalette.appFont(.subheadline))
-                    .foregroundStyle(AppPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, 12)
-        }
-    }
 
     private var trendAlphaVantageCard: some View {
         SettingsCardGroup(
@@ -597,12 +570,6 @@ struct TrendSettingsPanel: View {
         )
     }
 
-    private var officialSourcesEnabledBinding: Binding<Bool> {
-        Binding(
-            get: { model.trendSettings.officialSources.enabled },
-            set: { model.trendSettings.officialSources.enabled = $0 }
-        )
-    }
 
     private var alphaVantageEnabledBinding: Binding<Bool> {
         Binding(
@@ -634,12 +601,6 @@ struct TrendSettingsPanel: View {
         )
     }
 
-    private var secContactEmailBinding: Binding<String> {
-        Binding(
-            get: { model.trendSettings.officialSources.secContactEmail },
-            set: { model.trendSettings.officialSources.secContactEmail = $0 }
-        )
-    }
 
     private var trendPrivacyModeBinding: Binding<TrendPrivacyMode> {
         Binding(

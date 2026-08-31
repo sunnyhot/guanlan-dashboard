@@ -23,7 +23,6 @@ struct TrendResearchToolContext: Sendable {
     let snapshot: TrendResearchSnapshot
     let scope: TrendResearchRunScope
     let evidenceLedger: TrendEvidenceLedger
-    let officialSourceSettings: OfficialSourceSettings
     let alphaVantageSettings: AlphaVantageSettings
     /// 分模块报告暂存器；Agent 每次运行独享一个实例。
     let reportDraftStore: TrendReportDraftStore?
@@ -36,14 +35,12 @@ struct TrendResearchToolContext: Sendable {
         snapshot: TrendResearchSnapshot,
         scope: TrendResearchRunScope = .full,
         evidenceLedger: TrendEvidenceLedger,
-        officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
         reportDraftStore: TrendReportDraftStore? = nil
     ) {
         self.snapshot = snapshot
         self.scope = scope
         self.evidenceLedger = evidenceLedger
-        self.officialSourceSettings = officialSourceSettings
         self.alphaVantageSettings = alphaVantageSettings
         self.reportDraftStore = reportDraftStore
     }

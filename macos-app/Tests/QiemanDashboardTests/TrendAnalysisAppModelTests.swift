@@ -412,7 +412,6 @@ private final class FakeTrendResearchAgent: TrendResearchAgentProtocol, @uncheck
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
         scope: TrendResearchRunScope = .full,
         baselineReport: TrendAnalysisReport? = nil,
@@ -474,7 +473,6 @@ private final class BlockingTrendResearchAgent: TrendResearchAgentProtocol, @unc
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
         scope: TrendResearchRunScope = .full,
         baselineReport: TrendAnalysisReport? = nil,

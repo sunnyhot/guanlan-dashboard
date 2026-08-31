@@ -57,7 +57,7 @@ struct TrendValidatorAuditResult: Codable, Hashable, Sendable {
 }
 
 struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
-    static let promptVersion = "trend-research-prompt-v4-official-first"
+    static let promptVersion = "trend-research-prompt-v5-local-evidence"
     static let policyVersion = "trend-claim-evidence-v2"
 
     let runID: UUID
@@ -218,7 +218,6 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
     static func makeFailure(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        officialSourceConfigured: Bool = false,
         alphaVantageConfigured: Bool = false,
         completedAt: String,
         toolCalls: [TrendAgentToolCallAudit],
@@ -229,30 +228,12 @@ struct TrendAgentRunArtifact: Codable, Hashable, Sendable, Identifiable {
             snapshot.sourceStatuses.map { ($0.source, $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        let officialEvidence = canonicalEvidence.filter {
-            $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
-        }
-        if snapshot.eligibleSECResearchTickers.isEmpty {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: .notRequested,
-                receivedAt: completedAt,
-                detail: "当前快照没有可映射到 SEC 的美国股票代码。"
-            )
-        } else {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: officialSourceConfigured
-                    ? (officialEvidence.isEmpty ? .failed : .success)
-                    : .notConfigured,
-                asOf: officialEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
-                receivedAt: officialEvidence.map(\.retrievedAt).max() ?? completedAt,
-                errorCode: officialSourceConfigured && officialEvidence.isEmpty
-                    ? "no_usable_official_evidence"
-                    : nil,
-                itemCount: officialEvidence.count
-            )
-        }
+        bySource[.officialSource] = TrendSourceStatus(
+            source: .officialSource,
+            status: .notConfigured,
+            receivedAt: completedAt,
+            detail: "SEC 官方源已下线（2026-08-28 移除）。"
+        )
         let alphaEvidence = canonicalEvidence.filter {
             $0.metadata.sourceKind == .licensedMarketData
                 || $0.id.hasPrefix("vendor:alphavantage:")

@@ -265,38 +265,6 @@ final class TrendResearchAgentTests: XCTestCase {
         }
     }
 
-    func testHarnessRequiresOfficialSourceAttemptBeforeSubmission() {
-        var harness = TrendResearchHarnessState(
-            snapshot: makeEmptySnapshot(),
-            officialSourceRequired: true
-        )
-        let overview = TrendResearchToolResult.content(
-            TrendResearchToolEnvelope.success(["portfolio": [:]])
-        )
-        _ = harness.process(toolName: "get_portfolio_overview", result: overview)
-
-        XCTAssertFalse(harness.readyForSubmission())
-        XCTAssertTrue(
-            harness.nextStepHint()
-                .contains("official_sec_research")
-        )
-
-        let failedOfficialQuery = TrendResearchToolResult.content(
-            TrendResearchToolEnvelope.error(
-                code: "official_sec_failed",
-                message: "测试失败"
-            ),
-            isError: true
-        )
-        _ = harness.process(
-            toolName: "official_sec_research",
-            result: failedOfficialQuery
-        )
-
-        XCTAssertTrue(harness.officialSourceAttempted)
-        XCTAssertTrue(harness.readyForSubmission())
-    }
-
     func testHarnessRequiresAlphaVantageAttemptBeforeSubmission() {
         var harness = TrendResearchHarnessState(
             snapshot: makeEmptySnapshot(),

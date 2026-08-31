@@ -109,13 +109,11 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         _ report: TrendAnalysisReport,
         snapshot: TrendResearchSnapshot,
         ledger: TrendEvidenceLedger,
-        officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty
     ) async throws -> TrendResearchToolResult {
         let context = TrendResearchToolContext(
             snapshot: snapshot,
             evidenceLedger: ledger,
-            officialSourceSettings: officialSourceSettings,
             alphaVantageSettings: alphaVantageSettings
         )
         let reportData = try JSONEncoder().encode(report)
@@ -264,7 +262,7 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         let ledger = TrendEvidenceLedger()
         await recordOverviewEvidence(into: ledger, snapshot: snapshot)
 
-        // 模型在 report 里虚报各来源 success,但 ledger 无对应证据且未配置官方源
+        // 模型在 report 里虚报各来源 success,但 App 重算 sourceStatuses 时只认快照与 ledger
         let baseReport = downgradingShortHorizonToUncertain(
             TrendAnalysisReport
                 .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable)

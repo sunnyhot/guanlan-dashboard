@@ -438,15 +438,12 @@ extension AppModel {
             additionalSourceWarnings: lookThroughWarnings,
             sourceStatuses: marketSourceStatuses + [fundDisclosureStatus]
         )
-        let officialText = trendSettings.officialSources.isSECConfigured
-            ? "SEC 官方源已配置"
-            : "SEC 官方源未配置"
         let alphaText = trendSettings.alphaVantage.isConfigured
             ? "Alpha Vantage 已配置"
             : "Alpha Vantage 未配置"
         appendTrendProgress(
             "\(scope.displayName)快照已冻结",
-            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(officialText)；\(alphaText)；隐私 \(snapshot.privacyMode.rawValue)",
+            detail: "\(snapshot.assets.count) 个标的；\(snapshot.marketQuotes.count) 条行情；\(alphaText)；隐私 \(snapshot.privacyMode.rawValue)",
             level: .success
         )
 
@@ -490,7 +487,6 @@ extension AppModel {
                 try await trendResearchAgent.run(
                     snapshot: snapshot,
                     settings: provider,
-                    officialSourceSettings: trendSettings.officialSources,
                     alphaVantageSettings: trendSettings.alphaVantage,
                     scope: scope,
                     baselineReport: trendReport,
@@ -689,11 +685,9 @@ extension AppModel {
         ) + [
             TrendSourceStatus(
                 source: .officialSource,
-                status: trendSettings.officialSources.isSECConfigured ? .notRequested : .notConfigured,
+                status: .notConfigured,
                 receivedAt: generatedAt,
-                detail: trendSettings.officialSources.isSECConfigured
-                    ? "等待 Agent 优先查询 SEC 官方披露。"
-                    : "SEC 官方源需要启用并填写联系邮箱。"
+                detail: "SEC 官方源已下线（2026-08-28 移除）。"
             ),
             TrendSourceStatus(
                 source: .alphaVantage,

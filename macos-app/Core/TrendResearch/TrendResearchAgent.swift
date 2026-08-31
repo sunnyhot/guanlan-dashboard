@@ -12,7 +12,6 @@ protocol TrendResearchAgentProtocol: Sendable {
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings,
         alphaVantageSettings: AlphaVantageSettings,
         scope: TrendResearchRunScope,
         baselineReport: TrendAnalysisReport?,
@@ -213,7 +212,6 @@ struct TrendResearchAgent: Sendable {
 
     /// 运行时强制：submit 前必须先调用的工具。
     static let overviewToolName = "get_portfolio_overview"
-    static let officialSourceToolName = "official_sec_research"
     static let alphaVantageToolName = "alpha_vantage_research"
     static let submitToolName = "submit_trend_report"
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
@@ -228,16 +226,12 @@ struct TrendResearchAgent: Sendable {
             purpose: "trend-research",
             policy: ModelGatewayPolicy(maxRetriesPerProvider: 0)
         ),
-        officialSourceClient: any SECOfficialSourceClientProtocol = SECOfficialSourceClient(),
-        officialSourceCache: SECOfficialSourceCache = .shared,
         alphaVantageClient: any AlphaVantageClientProtocol = AlphaVantageClient(),
         alphaVantageCache: AlphaVantageResponseCache = .shared,
         policy: TrendResearchRunPolicy = .init()
     ) {
         self.client = client
         self.registry = TrendResearchToolRegistry(
-            officialSourceClient: officialSourceClient,
-            officialSourceCache: officialSourceCache,
             alphaVantageClient: alphaVantageClient,
             alphaVantageCache: alphaVantageCache
         )
@@ -248,7 +242,6 @@ struct TrendResearchAgent: Sendable {
     func run(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings = .empty,
         alphaVantageSettings: AlphaVantageSettings = .empty,
         scope requestedScope: TrendResearchRunScope = .full,
         baselineReport: TrendAnalysisReport? = nil,
@@ -272,16 +265,12 @@ struct TrendResearchAgent: Sendable {
             scope: scope,
             baselineReport: baselineReport
         )
-        let officialSourceRequired = scope.usesOfficialAndVendorResearch
-            && officialSourceSettings.isSECConfigured
-            && !snapshot.eligibleSECResearchTickers.isEmpty
-        let alphaVantageRequired = scope.usesOfficialAndVendorResearch
+        let alphaVantageRequired = scope.usesVendorResearch
             && alphaVantageSettings.isConfigured
             && !snapshot.eligibleAlphaVantageSymbols.isEmpty
         var messages = promptBuilder.initialMessages(
             snapshot: snapshot,
             scope: scope,
-            officialSourceConfigured: officialSourceRequired,
             alphaVantageConfigured: alphaVantageRequired
         )
 
@@ -295,7 +284,6 @@ struct TrendResearchAgent: Sendable {
         var harnessState = TrendResearchHarnessState(
             snapshot: snapshot,
             scope: scope,
-            officialSourceRequired: officialSourceRequired,
             alphaVantageRequired: alphaVantageRequired
         )
         var submissionMode = false
@@ -420,12 +408,8 @@ struct TrendResearchAgent: Sendable {
                     guard scope.allowedResearchToolNames.contains(toolName) else {
                         return false
                     }
-                    if toolName == Self.officialSourceToolName {
-                        return officialSourceRequired
-                    }
                     if toolName == Self.alphaVantageToolName {
                         return alphaVantageRequired
-                            && (!officialSourceRequired || harnessState.officialSourceAttempted)
                     }
                     return true
                 }
@@ -534,9 +518,6 @@ struct TrendResearchAgent: Sendable {
                     let missingLookThrough = isSubmit
                         && scope.requiresFundLookThrough
                         && !harnessState.lookThroughCoverageComplete
-                    let missingOfficialSource = isSubmit
-                        && officialSourceRequired
-                        && !harnessState.officialSourceAttempted
                     let missingAlphaVantage = isSubmit
                         && alphaVantageRequired
                         && harnessState.alphaVantageAttempts == 0
@@ -544,7 +525,6 @@ struct TrendResearchAgent: Sendable {
                         || missingOverview
                         || missingAssets
                         || missingLookThrough
-                        || missingOfficialSource
                         || missingAlphaVantage
 
                     var rawToolResult: TrendResearchToolResult
@@ -580,15 +560,6 @@ struct TrendResearchAgent: Sendable {
                             isError: true
                         )
                         await eventHandler(.modelCorrection(message: "报告提交被延后：必须先读取基金底层资产穿透结果。"))
-                    } else if missingOfficialSource {
-                        rawToolResult = .content(
-                            TrendResearchToolEnvelope.error(
-                                code: "missing_required_tool",
-                                message: "组合包含可由 SEC 识别的美股暴露，提交报告前必须先调用 official_sec_research 查询官方申报。"
-                            ),
-                            isError: true
-                        )
-                        await eventHandler(.modelCorrection(message: "报告提交被延后：必须先查询 SEC 官方数据。"))
                     } else if missingAlphaVantage {
                         rawToolResult = .content(
                             TrendResearchToolEnvelope.error(
@@ -612,7 +583,6 @@ struct TrendResearchAgent: Sendable {
                             snapshot: snapshot,
                             scope: scope,
                             evidenceLedger: ledger,
-                            officialSourceSettings: officialSourceSettings,
                             alphaVantageSettings: alphaVantageSettings,
                             reportDraftStore: reportDraftStore
                         )
@@ -745,7 +715,6 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
-                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
@@ -766,7 +735,6 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
-                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
@@ -787,7 +755,6 @@ struct TrendResearchAgent: Sendable {
                     TrendAgentRunArtifact.makeFailure(
                         snapshot: snapshot,
                         settings: settings,
-                        officialSourceConfigured: officialSourceSettings.isSECConfigured,
                         alphaVantageConfigured: alphaVantageSettings.isConfigured,
                         completedAt: ISO8601DateFormatter().string(from: Date()),
                         toolCalls: toolCallAudits,
@@ -911,7 +878,6 @@ struct TrendResearchAgent: Sendable {
         let systemPrompt = promptBuilder.initialMessages(
             snapshot: snapshot,
             scope: scope,
-            officialSourceConfigured: false,
             alphaVantageConfigured: false
         ).first?.content ?? ""
         let assetBatchTool = SubmitTrendAssetBatchTool()

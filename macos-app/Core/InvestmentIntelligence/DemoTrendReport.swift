@@ -215,7 +215,7 @@ enum DemoTrendReport {
             (.qiemanAdjustment, .notRequested, "示例报告不读取主理人调仓"),
             (.alfaAdjustment, .notRequested, "示例报告不读取投顾组合"),
             (.managerWatch, .notConfigured, "未配置主理人关注"),
-            (.officialSource, .notConfigured, "未配置 SEC 官方源"),
+            (.officialSource, .notConfigured, "SEC 官方源已下线"),
             (.alphaVantage, .notConfigured, "未配置 Alpha Vantage"),
             (.webSearch, .notConfigured, "联网搜索已下线")
         ]

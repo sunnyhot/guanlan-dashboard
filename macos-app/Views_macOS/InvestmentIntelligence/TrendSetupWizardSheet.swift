@@ -547,7 +547,7 @@ struct TrendSetupWizardSheet: View {
 
     private var extrasStep: some View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            Text("两项都是可选的,可以全部跳过;之后随时在设置里补配。")
+            Text("可选配置,可以跳过;之后随时在设置里补配。")
                 .font(AppPalette.appFont(.footnote))
                 .foregroundStyle(AppPalette.muted)
 
@@ -579,28 +579,12 @@ struct TrendSetupWizardSheet: View {
                         verticalPadding: 1
                     )
                 }
-                Toggle("启用 SEC 官方披露(有美股或基金底层美股时更有用)", isOn: $model.trendSettings.officialSources.enabled)
-                    .toggleStyle(.switch)
-                    .font(AppPalette.appFont(.footnote))
-                if model.trendSettings.officialSources.enabled {
-                    wizardField(
-                        "SEC 联系邮箱",
-                        text: Binding(
-                            get: { model.trendSettings.officialSources.secContactEmail },
-                            set: { model.trendSettings.officialSources.secContactEmail = $0 }
-                        ),
-                        placeholder: "name@example.com"
-                    )
-                }
             }
             .padding(AppPalette.spaceM)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppPalette.cardStrong, in: RoundedRectangle(cornerRadius: AppPalette.controlRadius))
         }
         .onChange(of: model.trendSettings.alphaVantage.apiKey) { _, _ in
-            model.saveTrendAnalysisSettings()
-        }
-        .onChange(of: model.trendSettings.officialSources.enabled) { _, _ in
             model.saveTrendAnalysisSettings()
         }
     }

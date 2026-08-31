@@ -220,14 +220,12 @@ extension AppModel {
                             context: context,
                             researchSnapshot: researchSnapshot,
                             settings: provider,
-                            officialSourceSettings: trendSettings.officialSources
                         )
                     } else {
                         result = try await nextHourGuidanceAgent.run(
                             context: context,
                             researchSnapshot: researchSnapshot,
                             settings: provider,
-                            officialSourceSettings: trendSettings.officialSources
                         )
                     }
                     await AIAgentDiagnosticLog.record("run_completed", payload: result)

@@ -73,7 +73,6 @@ struct SubmitTrendReportTool: TrendResearchTool {
         let sourceStatuses = await Self.normalizedSourceStatuses(
             snapshot: snapshot,
             ledger: context.evidenceLedger,
-            officialSourceConfigured: context.officialSourceSettings.isSECConfigured,
             alphaVantageConfigured: context.alphaVantageSettings.isConfigured,
             scope: context.scope
         )
@@ -219,7 +218,6 @@ struct SubmitTrendReportTool: TrendResearchTool {
     private static func externalSignalStatus(for evidence: [TrendEvidence]) -> TrendExternalSignalStatus {
         if evidence.contains(where: {
             $0.metadata.sourceKind.isExternalResearch
-                || $0.id.hasPrefix("official:sec:")
         }) {
             return .available
         }
@@ -232,7 +230,6 @@ struct SubmitTrendReportTool: TrendResearchTool {
     private static func normalizedSourceStatuses(
         snapshot: TrendResearchSnapshot,
         ledger: TrendEvidenceLedger,
-        officialSourceConfigured: Bool,
         alphaVantageConfigured: Bool,
         scope: TrendResearchRunScope
     ) async -> [TrendSourceStatus] {
@@ -241,44 +238,11 @@ struct SubmitTrendReportTool: TrendResearchTool {
             uniquingKeysWith: { first, _ in first }
         )
         let allEvidence = await ledger.allEvidence()
-        let officialEvidence = allEvidence.filter {
-            $0.metadata.sourceKind.isOfficialPrimary || $0.id.hasPrefix("official:sec:")
-        }
-        let eligibleOfficialTargets = snapshot.eligibleSECResearchTickers
-        if !scope.usesOfficialAndVendorResearch {
-            // 本模块未请求官方源，保留快照中的 notRequested/notConfigured 状态。
-        } else if eligibleOfficialTargets.isEmpty {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: .notRequested,
-                receivedAt: snapshot.createdAt,
-                detail: "当前快照没有可映射到 SEC 的美国股票代码。"
-            )
-        } else if officialSourceConfigured {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: officialEvidence.isEmpty ? .failed : .success,
-                asOf: officialEvidence.compactMap { $0.publishedAt ?? $0.retrievedAt }.max(),
-                receivedAt: officialEvidence.map(\.retrievedAt).max() ?? snapshot.createdAt,
-                errorCode: officialEvidence.isEmpty ? "no_usable_official_evidence" : nil,
-                itemCount: officialEvidence.count,
-                detail: officialEvidence.isEmpty
-                    ? "SEC 官方源已尝试，但没有形成可用、可引用的证据。"
-                    : nil
-            )
-        } else {
-            bySource[.officialSource] = TrendSourceStatus(
-                source: .officialSource,
-                status: .notConfigured,
-                receivedAt: snapshot.createdAt,
-                detail: "SEC 官方源需要启用并填写联系邮箱。"
-            )
-        }
         let alphaEvidence = allEvidence.filter {
             $0.metadata.sourceKind == .licensedMarketData
                 || $0.id.hasPrefix("vendor:alphavantage:")
         }
-        if !scope.usesOfficialAndVendorResearch {
+        if !scope.usesVendorResearch {
             // 本模块未请求供应商数据，保留快照状态。
         } else if snapshot.eligibleAlphaVantageSymbols.isEmpty {
             bySource[.alphaVantage] = TrendSourceStatus(

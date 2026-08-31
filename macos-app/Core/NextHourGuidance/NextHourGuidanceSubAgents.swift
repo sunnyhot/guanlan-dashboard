@@ -91,15 +91,13 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
     func runAnalysisAgents(
         context: NextHourGuidanceContext,
         snapshot: TrendResearchSnapshot,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings
+        settings: TrendAIProviderSettings
     ) async throws -> (MarketSignalAssessment, NewsEventAssessment, PortfolioContextAssessment) {
         async let market = runMarketSignalAgent(
             context: context, settings: settings
         )
         async let news = runNewsEventAgent(
-            context: context, settings: settings,
-            officialSourceSettings: officialSourceSettings
+            context: context, settings: settings
         )
         async let portfolio = runPortfolioContextAgent(
             context: context, snapshot: snapshot, settings: settings
@@ -175,16 +173,10 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
 
     private func runNewsEventAgent(
         context: NextHourGuidanceContext,
-        settings: TrendAIProviderSettings,
-        officialSourceSettings: OfficialSourceSettings
+        settings: TrendAIProviderSettings
     ) async throws -> NewsEventAssessment {
         var tools: [AgentToolDefinition] = []
 
-        // official_sec_research
-        if officialSourceSettings.isSECConfigured {
-            let secDef = registry.definitions.first { $0.function.name == "official_sec_research" }
-            if let secDef { tools.append(secDef) }
-        }
 
         let submitSchema: AgentJSONValue = [
             "type": "object",
@@ -406,13 +398,12 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
     }
 
     private func makeDummyContext() -> TrendResearchToolContext {
-        // 子 Agent 的工具执行（web_search/lookthrough）需要一个 ToolContext。
+        // 子 Agent 的工具执行（lookthrough）需要一个 ToolContext。
         // 实际运行时由编排器注入真实的 Ledger/Snapshot/settings；
         // 这里只在模型未调用工具就提交时作为兜底（不会执行真实搜索）。
         TrendResearchToolContext(
             snapshot: TrendResearchSnapshot.placeholder,
             evidenceLedger: TrendEvidenceLedger(),
-            officialSourceSettings: .empty,
             alphaVantageSettings: .empty
         )
     }

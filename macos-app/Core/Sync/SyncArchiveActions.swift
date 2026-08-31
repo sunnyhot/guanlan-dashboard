@@ -153,7 +153,7 @@ extension AppModel {
         try saveJSON(payload.alfaPortfolios, to: dir.appendingPathComponent("alfa-portfolios.json"), encoder: encoder)
 
         // 趋势设置:API Key 存 Keychain(已在 applySyncPayload 做了),JSON 只存 config
-        // 保留现有 settings 的其余字段(officialSources/privacy/autoAnalysis),只覆盖 provider/alphaVantage
+        // 保留现有 settings 的其余字段(privacy/autoAnalysis),只覆盖 provider/alphaVantage
         var trendForFile = trendSettings
         trendForFile.provider = payload.trendSettings.provider
         trendForFile.alphaVantage = payload.trendSettings.alphaVantage
