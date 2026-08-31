@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.0/QiemanDashboard-4.8.0.zip",
-    "name" : "QiemanDashboard-4.8.0.zip",
-    "sha256" : "32ab5467507eccf53f229cef5a7d86bc46b4ff02b68e39d1feb527bcabbb64f3",
-    "size" : 8362328
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.1/QiemanDashboard-4.8.1.zip",
+    "name" : "QiemanDashboard-4.8.1.zip",
+    "sha256" : "1472bb04ddae86e84f105ca55600595ea0ea8b456b43b90ca7851aa40c8067ea",
+    "size" : 8295177
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.0/QiemanDashboard-4.8.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.1/QiemanDashboard-4.8.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.8.0.zip",
-      "size" : 8362328
+      "name" : "QiemanDashboard-4.8.1.zip",
+      "size" : 8295177
     }
   ],
-  "body" : "版本号同步 v4.8.0\n拒批修复方向3——提交前upfront告知无因果行情路径的基金清单(prompt三处契约注入),模型直接写原因待确认;顺带修正全量契约中两行遗留的web:tavily指令\n拒批死循环双修复——持仓批次全错一次性返回(消灭打地鼠循环)+无因果证据的涨跌归因App自动降级为原因待确认; feat: NewsNow财经热榜接入为Agent工具get_financial_headlines(恢复新闻维度)\n移除 Tavily 联网搜索子系统——客户端/工具/限流器/设置/同步/粘贴启发/UI 全链路下线；机会模块留空、盘中买卖门禁永久生效、遗留密钥自动清理；保留旧报告解码所需枚举 case\n策略规则回测层 M9 + 文档同步——技能量化条件历史求值(胜率/盈亏比/回撤)、baseline 第10节决策引擎契约、AGENTS.md 模块表更新\n多Agent研究流水线 M8——四档模式(quick/standard/full/specialist)、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、M4护栏链合成、LLM失败确定性兜底、仪表盘直抽信号\nscope guard 已知代码集合补上穿透持仓的底层与贡献基金代码，不误伤合法的穿透关联查询\nAgent 运行时升级 M7——工具签名参数值规范化(等价代码格式共享缓存)、单步最小预算止损(剩余<8s不发计费请求)、市场快照完全越界 scope guard\n策略技能系统 M6——15个策略技能移植(Swift常量库,量化口径保留)、默认纪律基线注入、市场状态路由(trend/sideways/volatile/sectorHot)\n信号闭环 M5——趋势行动候选抽取为结构化信号(价格正则/标的解析)、市价结算(先止损/跳空开盘价/到期未触发)、反向失效、胜率记忆校准、一对象一文件Store\n决策契约与护栏 M4——市场阶段7态判定与行为禁令、数据质量→置信度封顶、结构稳定器(支撑压力资金流降级+分数钳制+审计字段)\n规则技术分析引擎 M3——MA/乖离/量价/支撑压力/MACD/RSI 六模块加权评分+逐条理由、canonical 分数带单一事实源、Agent 新工具 get_daily_kline\n市场数据引擎 M2——东财/腾讯K线双源、东财全市场快照、NewsNow热榜、引擎fallback门面 + Agent 新工具 get_market_breadth\n市场数据引擎 M1——统一行情契约/腾讯全字段/新浪全市场快照/广度计算/熔断限速缓存 + 八层决策引擎总体计划",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.0",
-  "name" : "QiemanDashboard v4.8.0",
-  "notes" : "版本号同步 v4.8.0\n拒批修复方向3——提交前upfront告知无因果行情路径的基金清单(prompt三处契约注入),模型直接写原因待确认;顺带修正全量契约中两行遗留的web:tavily指令\n拒批死循环双修复——持仓批次全错一次性返回(消灭打地鼠循环)+无因果证据的涨跌归因App自动降级为原因待确认; feat: NewsNow财经热榜接入为Agent工具get_financial_headlines(恢复新闻维度)\n移除 Tavily 联网搜索子系统——客户端/工具/限流器/设置/同步/粘贴启发/UI 全链路下线；机会模块留空、盘中买卖门禁永久生效、遗留密钥自动清理；保留旧报告解码所需枚举 case\n策略规则回测层 M9 + 文档同步——技能量化条件历史求值(胜率/盈亏比/回撤)、baseline 第10节决策引擎契约、AGENTS.md 模块表更新\n多Agent研究流水线 M8——四档模式(quick/standard/full/specialist)、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、M4护栏链合成、LLM失败确定性兜底、仪表盘直抽信号\nscope guard 已知代码集合补上穿透持仓的底层与贡献基金代码，不误伤合法的穿透关联查询\nAgent 运行时升级 M7——工具签名参数值规范化(等价代码格式共享缓存)、单步最小预算止损(剩余<8s不发计费请求)、市场快照完全越界 scope guard\n策略技能系统 M6——15个策略技能移植(Swift常量库,量化口径保留)、默认纪律基线注入、市场状态路由(trend/sideways/volatile/sectorHot)\n信号闭环 M5——趋势行动候选抽取为结构化信号(价格正则/标的解析)、市价结算(先止损/跳空开盘价/到期未触发)、反向失效、胜率记忆校准、一对象一文件Store\n决策契约与护栏 M4——市场阶段7态判定与行为禁令、数据质量→置信度封顶、结构稳定器(支撑压力资金流降级+分数钳制+审计字段)\n规则技术分析引擎 M3——MA/乖离/量价/支撑压力/MACD/RSI 六模块加权评分+逐条理由、canonical 分数带单一事实源、Agent 新工具 get_daily_kline\n市场数据引擎 M2——东财/腾讯K线双源、东财全市场快照、NewsNow热榜、引擎fallback门面 + Agent 新工具 get_market_breadth\n市场数据引擎 M1——统一行情契约/腾讯全字段/新浪全市场快照/广度计算/熔断限速缓存 + 八层决策引擎总体计划",
+  "body" : "版本号同步 v4.8.1\n终审爆量四修复——模块入库级证据清洗(幻觉ID剔除/周期降级/行动剔除/disclaimer补写/warning容错解码)、修复预算随基金数缩放、新工具get_evidence_index治幻觉源头\n移除 SEC 官方源子系统——客户端/工具/设置字段/UI 全链路下线；officialSource 状态恒 notConfigured，外部信号仅由 AlphaVantage 驱动；保留旧报告解码所需枚举 case",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.1",
+  "name" : "QiemanDashboard v4.8.1",
+  "notes" : "版本号同步 v4.8.1\n终审爆量四修复——模块入库级证据清洗(幻觉ID剔除/周期降级/行动剔除/disclaimer补写/warning容错解码)、修复预算随基金数缩放、新工具get_evidence_index治幻觉源头\n移除 SEC 官方源子系统——客户端/工具/设置字段/UI 全链路下线；officialSource 状态恒 notConfigured，外部信号仅由 AlphaVantage 驱动；保留旧报告解码所需枚举 case",
   "published_at" : "",
-  "sha256" : "32ab5467507eccf53f229cef5a7d86bc46b4ff02b68e39d1feb527bcabbb64f3",
-  "tag" : "v4.8.0",
-  "tag_name" : "v4.8.0",
-  "version" : "4.8.0"
+  "sha256" : "1472bb04ddae86e84f105ca55600595ea0ea8b456b43b90ca7851aa40c8067ea",
+  "tag" : "v4.8.1",
+  "tag_name" : "v4.8.1",
+  "version" : "4.8.1"
 }
