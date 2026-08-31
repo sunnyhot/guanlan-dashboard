@@ -239,6 +239,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
     - **Harness 抽取风险高**：`TrendResearchAgent` 与 Prompt/状态/提交模块强耦合，新建 Agent 时宜先复制受控子集（参考 `NextHourGuidance` 做法），等三条工作流稳定再反向抽取，**勿提前抽象**
     - **`FundLookThrough.swift`(944) 已较成熟**：能算 industries/assetClasses/coverage/unknown weight/陈旧披露，返回 `PortfolioLookThroughSnapshot`，组合暴露类改造可直接复用，不必从 `PortfolioDiagnostics` 退化起步
     - **改造宜垂直切片**：单一 Case 类型（如 concentrationRisk）走通完整链路（Models→Store→Policy→UI）再扩展，避免横向 Phase 产生长期无人消费的半成品
+16. **ad-hoc 签名身份漂移导致钥匙串授权弹窗（已根治）** — ad-hoc 签名每次构建身份都变，macOS 钥匙串 ACL 不认新签名，App 更新后读取 Keychain 密钥弹授权窗。现用自签名稳定身份：`scripts/create_signing_identity.sh` 一次性生成证书（10 年）+ 专用钥匙串 + per-user 信任（产物在 `build/signing/`，gitignore 排除）；`build_macos_app.sh` 自动挂载该身份签名，CI 从 secrets `MACOS_CODESIGN_P12_BASE64`/`MACOS_CODESIGN_PASSWORD` 导入（缺失回退 ad-hoc）。经验：`security import` 的 P12 需传统算法（SHA-1/3DES）；自签名证书必须 `add-trusted-cert` 否则 codesign 报 no identity found；`find-identity` 只认搜索列表内的钥匙串；`list-keychains` 输出行带前导空格须 trim。另：Keychain 清理逻辑禁止「先读再删」（读取会弹窗，点拒绝后死循环），直接删不弹窗
 
 ## Agent 工作指南
 

@@ -126,7 +126,51 @@ TXT
 
 echo "[6/8] 进行 Bundle 签名"
 xattr -cr "$APP_DIR" 2>/dev/null || true
-codesign --force --deep --sign "$SIGN_IDENTITY" --timestamp=none "$APP_DIR"
+
+# 稳定签名身份：本地存在 scripts/create_signing_identity.sh 生成的专用钥匙串时，
+# 自动改用它替代 ad-hoc。ad-hoc 每次构建的代码身份都不同，macOS 钥匙串 ACL
+# 不认新签名，App 更新后读取 Keychain 密钥会反复弹授权窗（2026-08-31 实证）。
+SIGNING_DIR="$ROOT_DIR/build/signing"
+SIGNING_KEYCHAIN="$SIGNING_DIR/qieman-signing.keychain-db"
+STABLE_SIGN_IDENTITY="Qieman Dashboard Self-Signing"
+USE_STABLE_IDENTITY=0
+KEYCHAIN_BACKUP=()
+restore_keychain_search_list() {
+  if [ "${#KEYCHAIN_BACKUP[@]}" -gt 0 ]; then
+    security list-keychains -d user -s "${KEYCHAIN_BACKUP[@]}"
+  fi
+  return 0
+}
+if [ "$SIGN_IDENTITY" = "-" ] && [ -f "$SIGNING_KEYCHAIN" ] && [ -f "$SIGNING_DIR/env" ]; then
+  # shellcheck disable=SC1091
+  source "$SIGNING_DIR/env"
+  if security unlock-keychain -p "$QIEMAN_SIGNING_KEYCHAIN_PASS" "$SIGNING_KEYCHAIN" 2>/dev/null; then
+    while IFS= read -r kc; do
+      # list-keychains 输出每行带前导空格，不 trim 会把损坏路径写回列表
+      kc="${kc//\"/}"
+      kc="${kc#"${kc%%[![:space:]]*}"}"
+      [ -n "$kc" ] && KEYCHAIN_BACKUP+=("$kc")
+    done < <(security list-keychains -d user)
+    security list-keychains -d user -s "${KEYCHAIN_BACKUP[@]}" "$SIGNING_KEYCHAIN"
+    # find-identity 只认搜索列表内的钥匙串，必须挂进去后全局查
+    if security find-identity -v -p codesigning 2>/dev/null | grep -q "$STABLE_SIGN_IDENTITY"; then
+      SIGN_IDENTITY="$STABLE_SIGN_IDENTITY"
+      USE_STABLE_IDENTITY=1
+      echo "  使用稳定签名身份: $STABLE_SIGN_IDENTITY"
+    else
+      restore_keychain_search_list
+      echo "  (专用钥匙串内无有效身份，可能缺信任设置，重跑 scripts/create_signing_identity.sh；回退 ad-hoc)"
+    fi
+  else
+    echo "  (专用钥匙串解锁失败，回退 ad-hoc 签名)"
+  fi
+fi
+if ! codesign --force --deep --sign "$SIGN_IDENTITY" --timestamp=none "$APP_DIR"; then
+  restore_keychain_search_list
+  echo "❌ codesign 失败"
+  exit 1
+fi
+restore_keychain_search_list
 
 echo "[7/8] 验证签名与可执行性"
 codesign --verify --deep --strict "$APP_DIR"
@@ -134,7 +178,11 @@ if spctl_output="$(spctl --assess --type execute "$APP_DIR" 2>&1)"; then
   echo "Gatekeeper 校验通过"
 else
   echo "Gatekeeper 结果: ${spctl_output}"
-  echo "提示: 当前产物是本地 ad-hoc 签名，适合自用与测试；若要对外分发并消除系统警告，还需要 Apple Developer 证书与 notarization。"
+  echo "提示: 产物为自签名（稳定身份，钥匙串授权不弹窗），Gatekeeper 仍会提示未知开发者；对外正式分发需 Apple Developer 证书与 notarization。"
+fi
+if [ "$USE_STABLE_IDENTITY" = "1" ]; then
+  echo "  designated requirement（应跨构建保持一致）:"
+  codesign -d -r- "$APP_DIR" 2>/dev/null | grep '^designated' || true
 fi
 
 echo "[8/8] 生成分发压缩包"

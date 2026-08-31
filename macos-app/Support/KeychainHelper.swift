@@ -41,7 +41,10 @@ enum KeychainHelper {
         // errSecMissingEntitlement(-34018)，**macOS 上 Key 从未写入成功过**
         // （旧版静默吞掉 =「AI 模型配置不生效」）。
         // 正确组合（双 binary 实验验证）：legacy keychain + kSecAttrAccessible
-        // ——无 ACL 绑定，ad-hoc 重签（自动更新）后跨 binary 读写均成功。
+        // ——无 ACL 绑定，ad-hoc 重签（自动更新）后写入可用。
+        // 但 2026-08-31 实证：ad-hoc 身份每次构建都变，读取旧签名创建的项
+        // 仍会触发授权弹窗；根治靠稳定签名身份（见
+        // scripts/create_signing_identity.sh 与 build_macos_app.sh）。
         // 显式不设 kSecUseDataProtectionKeychain（同样缺 entitlement 会 -34018）。
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         #else

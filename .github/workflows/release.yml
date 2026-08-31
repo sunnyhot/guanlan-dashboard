@@ -25,13 +25,55 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Import signing identity
+        id: signing
+        env:
+          MACOS_CODESIGN_P12_BASE64: ${{ secrets.MACOS_CODESIGN_P12_BASE64 }}
+          MACOS_CODESIGN_PASSWORD: ${{ secrets.MACOS_CODESIGN_PASSWORD }}
+        run: |
+          # 稳定自签名身份：让每次构建满足同一 designated requirement，
+          # 避免 App 更新后读取 Keychain 密钥反复弹授权窗。
+          # secrets 未配置时回退 ad-hoc，保证构建不中断。
+          if [ -z "$MACOS_CODESIGN_P12_BASE64" ] || [ -z "$MACOS_CODESIGN_PASSWORD" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "未配置 MACOS_CODESIGN_* secrets，回退 ad-hoc 签名"
+            exit 0
+          fi
+          KEYCHAIN_PATH="$RUNNER_TEMP/qieman-signing.keychain-db"
+          KEYCHAIN_PASS=$(uuidgen)
+          CERT_PATH="$RUNNER_TEMP/qieman-codesign.p12"
+          CRT_PATH="$RUNNER_TEMP/qieman-codesign.crt"
+          printf '%s' "$MACOS_CODESIGN_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CODESIGN_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH" >/dev/null
+          # 自签名证书需 per-user 信任设置，否则 codesign 报 no identity found
+          openssl pkcs12 -in "$CERT_PATH" -nokeys -clcerts -passin pass:"$MACOS_CODESIGN_PASSWORD" -out "$CRT_PATH"
+          security add-trusted-cert -r trustRoot -p codeSign "$CRT_PATH"
+          EXISTING=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
+          security list-keychains -d user -s $EXISTING "$KEYCHAIN_PATH"
+          rm -f "$CERT_PATH" "$CRT_PATH"
+          if security find-identity -v -p codesigning 2>/dev/null | grep -q "Qieman Dashboard Self-Signing"; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "identity=Qieman Dashboard Self-Signing" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ 签名身份导入后不可见，回退 ad-hoc"
+          fi
+
       - name: Build macOS App
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
-          SIGN_IDENTITY: '-'
+          SIGN_IDENTITY: ${{ steps.signing.outputs.enabled == 'true' && steps.signing.outputs.identity || '-' }}
           TARGET_ARCH: arm64
         run: |
           bash scripts/build_macos_app.sh
+
+      - name: Cleanup signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/qieman-signing.keychain-db" 2>/dev/null || true
 
       - name: Generate release notes
         id: notes

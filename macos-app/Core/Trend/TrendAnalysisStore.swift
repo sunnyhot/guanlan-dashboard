@@ -68,10 +68,11 @@ struct TrendAnalysisSettingsStore {
     }
 
     /// Tavily 联网搜索已下线（2026-08-28）：清理用户 Keychain/UserDefaults 里的孤儿密钥。
+    /// 直接删除，不做「先读再删」——读取旧签名创建的 Keychain 项会触发系统授权弹窗，
+    /// 用户一旦点「拒绝」，删除永远不执行，弹窗每次加载设置都重现（2026-08-31 实证）。
+    /// 删除操作本身不弹窗。
     private func removeLegacyTavilyKey() {
-        if readSecret(KeychainHelper.Account.tavilyKey) != nil {
-            KeychainHelper.delete(account: KeychainHelper.Account.tavilyKey)
-        }
+        KeychainHelper.delete(account: KeychainHelper.Account.tavilyKey)
         userDefaults.removeObject(forKey: "qieman.trend.tavily.key")
     }
 
