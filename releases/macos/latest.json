@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.2/QiemanDashboard-4.8.2.zip",
-    "name" : "QiemanDashboard-4.8.2.zip",
-    "sha256" : "7aa99702a17d0c5c03eaee6df364bc20d4ac05022685efdf85c7ff6f0accd380",
-    "size" : 8298174
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.3/QiemanDashboard-4.8.3.zip",
+    "name" : "QiemanDashboard-4.8.3.zip",
+    "sha256" : "49e535efb91bbd36ebafbf91df987b1f1d25f5a88a3cca268e184c3ae2da8d46",
+    "size" : 8605087
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.2/QiemanDashboard-4.8.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.3/QiemanDashboard-4.8.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.8.2.zip",
-      "size" : 8298174
+      "name" : "QiemanDashboard-4.8.3.zip",
+      "size" : 8605087
     }
   ],
-  "body" : "CI 签名改走 build_macos_app.sh 统一挂载路径，根治 codesign 挂起\nCI 签名信任改走 sudo admin 域 + 超时兜底，避免 headless 卡死\n版本号同步 v4.8.2\n自签名稳定身份根治钥匙串授权弹窗 + Tavily 清理改为直接删除",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.2",
-  "name" : "QiemanDashboard v4.8.2",
-  "notes" : "CI 签名改走 build_macos_app.sh 统一挂载路径，根治 codesign 挂起\nCI 签名信任改走 sudo admin 域 + 超时兜底，避免 headless 卡死\n版本号同步 v4.8.2\n自签名稳定身份根治钥匙串授权弹窗 + Tavily 清理改为直接删除",
+  "body" : "版本号同步 v4.8.3\nL1 广度预暖与注入 + iOS 市场信号面板，八层引擎 App 集成收尾\n八层引擎 App 集成接线——L6 信号闭环全自动 + L7 流水线/L8 回测入口",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.3",
+  "name" : "QiemanDashboard v4.8.3",
+  "notes" : "版本号同步 v4.8.3\nL1 广度预暖与注入 + iOS 市场信号面板，八层引擎 App 集成收尾\n八层引擎 App 集成接线——L6 信号闭环全自动 + L7 流水线/L8 回测入口",
   "published_at" : "",
-  "sha256" : "7aa99702a17d0c5c03eaee6df364bc20d4ac05022685efdf85c7ff6f0accd380",
-  "tag" : "v4.8.2",
-  "tag_name" : "v4.8.2",
-  "version" : "4.8.2"
+  "sha256" : "49e535efb91bbd36ebafbf91df987b1f1d25f5a88a3cca268e184c3ae2da8d46",
+  "tag" : "v4.8.3",
+  "tag_name" : "v4.8.3",
+  "version" : "4.8.3"
 }
