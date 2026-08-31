@@ -48,10 +48,24 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN_PATH"
           security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CODESIGN_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASS" "$KEYCHAIN_PATH" >/dev/null
-          # 自签名证书需 per-user 信任设置，否则 codesign 报 no identity found
+          # 自签名证书需信任设置，否则 codesign 报 no identity found。
+          # headless 环境用户域 add-trusted-cert 会等 GUI 授权（2026-08-31 卡死 16 分钟实证），
+          # 必须走 sudo + admin 域（runner 免密 sudo）；再套超时兜底，任何一步挂起都回退 ad-hoc。
+          run_with_timeout() {
+            local secs=$1; shift
+            "$@" & local pid=$!
+            ( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) & local wd=$!
+            wait "$pid"; local rc=$?
+            kill "$wd" 2>/dev/null; wait "$wd" 2>/dev/null || true
+            return $rc
+          }
           openssl pkcs12 -in "$CERT_PATH" -nokeys -clcerts -passin pass:"$MACOS_CODESIGN_PASSWORD" -out "$CRT_PATH"
-          security add-trusted-cert -r trustRoot -p codeSign "$CRT_PATH"
-          EXISTING=$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')
+          if ! run_with_timeout 120 sudo security add-trusted-cert -d -r trustRoot -p codeSign "$CRT_PATH"; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ add-trusted-cert 失败/超时，回退 ad-hoc 签名"
+            exit 0
+          fi
+          EXISTING=$(security list-keychains -d user | tr -d '"' | sed 's/^[[:space:]]*//' | tr '\n' ' ')
           security list-keychains -d user -s $EXISTING "$KEYCHAIN_PATH"
           rm -f "$CERT_PATH" "$CRT_PATH"
           if security find-identity -v -p codesigning 2>/dev/null | grep -q "Qieman Dashboard Self-Signing"; then
