@@ -46,10 +46,11 @@ extension AppModel {
     // MARK: - 研究执行(核心)
 
     private func runDecisionCaseResearch(case_: DecisionCase, trigger: String) async {
-        // 互斥 guard:与趋势分析/下一小时研判互斥
+        // 互斥 guard:与趋势分析/下一小时研判/市场研究流水线互斥
         guard trendGenerationState != .generating,
               nextHourGuidanceGenerationState != .generating,
-              decisionCaseResearchState != .generating
+              decisionCaseResearchState != .generating,
+              marketResearchState != .generating
         else {
             setDecisionCaseResearchError("其他 AI 任务正在运行，请稍后再试。", for: case_.id)
             return

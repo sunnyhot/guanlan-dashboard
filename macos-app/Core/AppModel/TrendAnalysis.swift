@@ -102,6 +102,8 @@ extension AppModel {
         guard let trendAnalysisReportFileURL else { return }
         do {
             try TrendAnalysisReportStore().save(report, to: trendAnalysisReportFileURL)
+            // L6 信号闭环（2026-08-31）：报告落盘即抽取行动候选入库（去重/校准/反向失效）
+            ingestMarketSignalsFromReport(report)
         } catch {
             lastTrendError = error.localizedDescription
         }
@@ -654,6 +656,7 @@ extension AppModel {
         guard trendGenerationState != .generating else { return }
         guard nextHourGuidanceGenerationState != .generating else { return }
         guard decisionCaseResearchState != .generating else { return }
+        guard marketResearchState != .generating else { return }
 
         let generatedAt = createdAt ?? Self.timestampString()
         guard let slot = trendSettings.dueModuleAutoAnalysisSlot(at: generatedAt) else { return }

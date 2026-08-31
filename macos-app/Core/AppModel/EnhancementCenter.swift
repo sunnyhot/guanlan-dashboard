@@ -20,6 +20,7 @@ extension AppModel {
         loadNextHourGuidanceState()
         loadTrendTrackingState()
         loadInvestmentIntelligenceState()
+        loadMarketSignals()
     }
 
     func loadManagerWatchTimeline() {

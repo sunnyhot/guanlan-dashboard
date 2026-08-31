@@ -36,6 +36,7 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Radar: View, LongTerm
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
             longTermContent
+            MarketSignalSection()
             recordsSection
         }
         .sheet(item: $selectedCase) { decisionCase in
