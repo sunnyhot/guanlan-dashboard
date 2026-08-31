@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.1/QiemanDashboard-4.8.1.zip",
-    "name" : "QiemanDashboard-4.8.1.zip",
-    "sha256" : "1472bb04ddae86e84f105ca55600595ea0ea8b456b43b90ca7851aa40c8067ea",
-    "size" : 8295177
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.2/QiemanDashboard-4.8.2.zip",
+    "name" : "QiemanDashboard-4.8.2.zip",
+    "sha256" : "7aa99702a17d0c5c03eaee6df364bc20d4ac05022685efdf85c7ff6f0accd380",
+    "size" : 8298174
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.1/QiemanDashboard-4.8.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.2/QiemanDashboard-4.8.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.8.1.zip",
-      "size" : 8295177
+      "name" : "QiemanDashboard-4.8.2.zip",
+      "size" : 8298174
     }
   ],
-  "body" : "版本号同步 v4.8.1\n终审爆量四修复——模块入库级证据清洗(幻觉ID剔除/周期降级/行动剔除/disclaimer补写/warning容错解码)、修复预算随基金数缩放、新工具get_evidence_index治幻觉源头\n移除 SEC 官方源子系统——客户端/工具/设置字段/UI 全链路下线；officialSource 状态恒 notConfigured，外部信号仅由 AlphaVantage 驱动；保留旧报告解码所需枚举 case",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.1",
-  "name" : "QiemanDashboard v4.8.1",
-  "notes" : "版本号同步 v4.8.1\n终审爆量四修复——模块入库级证据清洗(幻觉ID剔除/周期降级/行动剔除/disclaimer补写/warning容错解码)、修复预算随基金数缩放、新工具get_evidence_index治幻觉源头\n移除 SEC 官方源子系统——客户端/工具/设置字段/UI 全链路下线；officialSource 状态恒 notConfigured，外部信号仅由 AlphaVantage 驱动；保留旧报告解码所需枚举 case",
+  "body" : "CI 签名改走 build_macos_app.sh 统一挂载路径，根治 codesign 挂起\nCI 签名信任改走 sudo admin 域 + 超时兜底，避免 headless 卡死\n版本号同步 v4.8.2\n自签名稳定身份根治钥匙串授权弹窗 + Tavily 清理改为直接删除",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.2",
+  "name" : "QiemanDashboard v4.8.2",
+  "notes" : "CI 签名改走 build_macos_app.sh 统一挂载路径，根治 codesign 挂起\nCI 签名信任改走 sudo admin 域 + 超时兜底，避免 headless 卡死\n版本号同步 v4.8.2\n自签名稳定身份根治钥匙串授权弹窗 + Tavily 清理改为直接删除",
   "published_at" : "",
-  "sha256" : "1472bb04ddae86e84f105ca55600595ea0ea8b456b43b90ca7851aa40c8067ea",
-  "tag" : "v4.8.1",
-  "tag_name" : "v4.8.1",
-  "version" : "4.8.1"
+  "sha256" : "7aa99702a17d0c5c03eaee6df364bc20d4ac05022685efdf85c7ff6f0accd380",
+  "tag" : "v4.8.2",
+  "tag_name" : "v4.8.2",
+  "version" : "4.8.2"
 }
