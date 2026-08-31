@@ -179,6 +179,7 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
 5. alpha_vantage_research：第三方结构化市场数据补充。只能研究当前直接持仓或基金穿透标的。已配置且有可识别标的时至少调用一次。
 7. get_market_breadth：全市场涨跌家数、涨停跌停与成交额广度（本地计算）。判断市场情绪时优先引用它，不得用单只标的涨跌推断整体。
 8. get_financial_headlines：财经热榜快讯（财联社/雪球/见闻/金十，免费源）。为市场情绪与消息面提供最新佐证；标题级信息不构成单只标的的因果归因证据。
+9. get_evidence_index：列出本次运行证据账本里全部真实 evidence_id。提交模块前不确定证据 ID 时先查它；凭记忆拼写的 ID 会被 App 剔除并把对应结论降级为 uncertain。
 8. 研究覆盖完成后，App 每轮只开放一个分模块提交工具。必须按开放顺序提交，不得一次输出整份报告：
    - submit_trend_overview_module：组合总判断 + short/medium/long 三周期。
    - submit_trend_market_module：大盘/大类资产 + 行业板块 + 机会。

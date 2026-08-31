@@ -524,7 +524,17 @@ struct SubmitTrendAssetBatchTool: TrendResearchTool {
             context: context,
             moduleName: "持仓基金分批"
         ) { store, data in
-            try await store.storeAssetBatch(JSONDecoder().decode(TrendReportAssetBatchModule.self, from: data))
+            var module = try JSONDecoder().decode(TrendReportAssetBatchModule.self, from: data)
+            let evidence = await context.evidenceLedger.allEvidence()
+            let (sanitized, removedIDs) = TrendReportEvidenceSanitizer.sanitizedAssetBatch(module, evidence: evidence)
+            module = sanitized
+            if !removedIDs.isEmpty {
+                await AIAgentDiagnosticLog.record(
+                    "evidence_ids_sanitized",
+                    message: "持仓批次剔除 \(removedIDs.count) 个账本不存在的证据 ID（App 兜底，不拒批）"
+                )
+            }
+            try await store.storeAssetBatch(module)
         }
     }
 }
@@ -550,7 +560,17 @@ struct SubmitTrendActionsModuleTool: TrendResearchTool {
             context: context,
             moduleName: "操作与风险"
         ) { store, data in
-            try await store.storeActions(JSONDecoder().decode(TrendReportActionsModule.self, from: data))
+            var module = try JSONDecoder().decode(TrendReportActionsModule.self, from: data)
+            let evidence = await context.evidenceLedger.allEvidence()
+            let (sanitized, droppedActions, removedIDs) = TrendReportEvidenceSanitizer.sanitizedActions(module, evidence: evidence)
+            module = sanitized
+            if !droppedActions.isEmpty || !removedIDs.isEmpty {
+                await AIAgentDiagnosticLog.record(
+                    "actions_sanitized",
+                    message: "剔除 \(droppedActions.count) 条无本地事实证据的行动、\(removedIDs.count) 个幻觉证据 ID"
+                )
+            }
+            try await store.storeActions(module)
         }
     }
 }
@@ -656,4 +676,248 @@ private func moduleValidationMessages(from contentJSON: String) -> [String] {
 
 private func describeModuleError(_ error: Error) -> String {
     AgentDecodingErrorFormatter.describe(error, trailingPeriod: true)
+}
+
+// MARK: - 2026-08-31 终审爆量修复：模块入库级证据清洗（App 兜底，不拒批）
+
+/// 三个根因的对策（v4.8.0 后首个真实运行实证）：
+/// ① 模型幻觉证据 ID（上下文压缩后凭记忆重建，前缀对但账本里没有）；
+/// ② 模块验收只查前缀、终审才查存在性/关联性 → 错误沉默累积到预算耗尽时爆出；
+/// ③ 琐碎 schema 错耗尽共享修复预算。
+/// 清洗发生在模块入库前：幻觉 ID 剔除 → 周期降 uncertain → 行动剔除，终审规则前置完成。
+enum TrendReportEvidenceSanitizer {
+    static func cleanedClaim(
+        _ claim: TrendClaimEvidence,
+        validIDs: Set<String>
+    ) -> (claim: TrendClaimEvidence, removed: [String]) {
+        let supporting = claim.supportingEvidenceIDs.filter { validIDs.contains($0) }
+        let counter = claim.counterEvidenceIDs.filter { validIDs.contains($0) }
+        let context = claim.contextEvidenceIDs.filter { validIDs.contains($0) }
+        let removedSupporting = claim.supportingEvidenceIDs.filter { !validIDs.contains($0) }
+        let removedCounter = claim.counterEvidenceIDs.filter { !validIDs.contains($0) }
+        let removedContext = claim.contextEvidenceIDs.filter { !validIDs.contains($0) }
+        let removed = (removedSupporting + removedCounter + removedContext).deduplicatedPreservingOrder()
+        guard !removed.isEmpty else { return (claim, []) }
+        let cleaned = TrendClaimEvidence(
+            supportingEvidenceIDs: supporting,
+            counterEvidenceIDs: counter,
+            contextEvidenceIDs: context,
+            exemptionReason: claim.exemptionReason
+        )
+        return (cleaned, removed)
+    }
+
+    /// 周期级兜底：清完 ID 后 supporting 为空、或无一与该基金关联、且方向不是 uncertain
+    /// → 降 uncertain + exemptionReason + rationale 补「待观察信号」+ whatWouldChange 兜底。
+    static func sanitizedHorizon(
+        _ horizon: TrendHorizonView,
+        fundCode: String?,
+        fundName: String,
+        evidenceByID: [String: TrendEvidence]
+    ) -> (horizon: TrendHorizonView, removed: [String]) {
+        let validIDs = Set(evidenceByID.keys)
+        let (cleanedClaim, removed) = cleanedClaim(horizon.claimEvidence, validIDs: validIDs)
+        guard horizon.direction != .uncertain else {
+            return (rebuild(horizon, claim: filledExemption(cleanedClaim), forceDowngrade: false), removed)
+        }
+        let supportingEvidence = cleanedClaim.supportingEvidenceIDs.compactMap { evidenceByID[$0] }
+        let hasAssociated = supportingEvidence.contains { evidence in
+            evidence.metadata.isAssociated(entityCode: fundCode, entityName: fundName)
+        }
+        if hasAssociated, removed.isEmpty {
+            return (horizon, [])  // 完全健康，原样返回
+        }
+        if hasAssociated {
+            return (rebuild(horizon, claim: cleanedClaim, forceDowngrade: false), removed)
+        }
+        // 降级路径
+        var claim = cleanedClaim
+        claim = filledExemption(claim)
+        return (rebuild(horizon, claim: claim, forceDowngrade: true), removed)
+    }
+
+    private static func filledExemption(_ claim: TrendClaimEvidence) -> TrendClaimEvidence {
+        let reason = (claim.exemptionReason ?? "").isEmpty
+            ? "App 降级：缺少与该标的关联的可引用支持证据"
+            : claim.exemptionReason!
+        return TrendClaimEvidence(
+            supportingEvidenceIDs: claim.supportingEvidenceIDs,
+            counterEvidenceIDs: claim.counterEvidenceIDs,
+            contextEvidenceIDs: claim.contextEvidenceIDs,
+            exemptionReason: reason
+        )
+    }
+
+    private static func rebuild(
+        _ horizon: TrendHorizonView,
+        claim: TrendClaimEvidence,
+        forceDowngrade: Bool
+    ) -> TrendHorizonView {
+        var direction = horizon.direction
+        var rationale = horizon.rationale
+        var whatWouldChange = horizon.whatWouldChange
+        var counterSignals = horizon.counterSignals
+        if forceDowngrade {
+            direction = .uncertain
+            if !rationale.contains("待观察信号") {
+                rationale = rationale + " 待观察信号：出现可关联的行情或研究证据后重估方向。"
+            }
+        }
+        if whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            whatWouldChange = "取到可关联证据后升级方向判断。"
+        }
+        if counterSignals.isEmpty {
+            counterSignals = ["证据不足，当前方向判断不成立。"]
+        }
+        return TrendHorizonView(
+            horizon: horizon.horizon,
+            direction: direction,
+            confidence: horizon.confidence,
+            rationale: rationale,
+            whatWouldChange: whatWouldChange,
+            counterSignals: counterSignals,
+            claimEvidence: claim
+        )
+    }
+
+    /// 持仓批次清洗：资产级 claim + 逐 horizon + impactText 归因前缀证据核对。
+    static func sanitizedAssetBatch(
+        _ module: TrendReportAssetBatchModule,
+        evidence: [TrendEvidence]
+    ) -> (module: TrendReportAssetBatchModule, removedIDs: [String]) {
+        let evidenceByID = Dictionary(uniqueKeysWithValues: evidence.map { ($0.id, $0) })
+        let validIDs = Set(evidenceByID.keys)
+        var removed: [String] = []
+        var assets: [TrendAssetView] = []
+        for asset in module.assetTrends {
+            let (assetClaim, assetRemoved) = cleanedClaim(asset.claimEvidence, validIDs: validIDs)
+            removed += assetRemoved
+            var horizons: [TrendHorizonView] = []
+            for source in asset.horizons {
+                let (sanitizedHorizonResult, horizonRemoved) = sanitizedHorizon(
+                    source, fundCode: asset.code, fundName: asset.name, evidenceByID: evidenceByID
+                )
+                horizons.append(sanitizedHorizonResult)
+                removed += horizonRemoved
+            }
+            // 归因证据前缀里引用的幻觉 ID：TrendAssetDailyAttributionPolicy 只查前缀；
+            // 这里顺带把 impactText 归因但 supporting 全幻觉的情况交给既有降级（v4.8.0 修复 2）。
+            var rebuilt = asset
+            rebuilt = TrendAssetView(
+                id: asset.id, name: asset.name, code: asset.code, sector: asset.sector,
+                impactText: asset.impactText, horizons: horizons,
+                rationale: asset.rationale, counterSignals: asset.counterSignals,
+                claimEvidence: assetClaim
+            )
+            assets.append(rebuilt)
+        }
+        return (TrendReportAssetBatchModule(assetTrends: assets), removed.deduplicatedPreservingOrder())
+    }
+
+    /// 操作与风险模块清洗：ID 剔除 → 无本地事实证据的行动整条剔除；
+    /// keyAssets 补 counterSignals；disclaimer 补「非投资建议」。
+    static func sanitizedActions(
+        _ module: TrendReportActionsModule,
+        evidence: [TrendEvidence]
+    ) -> (module: TrendReportActionsModule, droppedActions: [String], removedIDs: [String]) {
+        let evidenceByID = Dictionary(uniqueKeysWithValues: evidence.map { ($0.id, $0) })
+        let validIDs = Set(evidenceByID.keys)
+        var removed: [String] = []
+        var dropped: [String] = []
+
+        var keptActions: [TrendActionCandidate] = []
+        for action in module.actions {
+            let (claim, actionRemoved) = cleanedClaim(action.claimEvidence, validIDs: validIDs)
+            removed += actionRemoved
+            let hasLocalFact = claim.supportingEvidenceIDs.contains { id in
+                guard let evidence = evidenceByID[id] else { return false }
+                let isLocal = evidence.metadata.sourceKind == .portfolioSnapshot
+                    || evidence.metadata.sourceKind == .marketQuote
+                return isLocal && evidence.metadata.isAssociated(
+                    entityCode: nil,
+                    entityName: action.targetName
+                )
+            }
+            if !hasLocalFact {
+                dropped.append(action.title)
+                continue
+            }
+            var rebuilt = action
+            rebuilt = TrendActionCandidate(
+                id: action.id, kind: action.kind, title: action.title, detail: action.detail,
+                targetName: action.targetName, confidence: action.confidence,
+                whatWouldChange: action.whatWouldChange,
+                triggerConditions: action.triggerConditions,
+                invalidatingConditions: action.invalidatingConditions,
+                claimEvidence: claim
+            )
+            keptActions.append(rebuilt)
+        }
+
+        let keyAssets = module.keyAssets.map { asset -> TrendAssetView in
+            let (claim, keyRemoved) = cleanedClaim(asset.claimEvidence, validIDs: validIDs)
+            removed += keyRemoved
+            var counters = asset.counterSignals
+            if counters.isEmpty { counters = ["关键假设变化需重新评估。"] }
+            return TrendAssetView(
+                id: asset.id, name: asset.name, code: asset.code, sector: asset.sector,
+                impactText: asset.impactText, horizons: asset.horizons,
+                rationale: asset.rationale, counterSignals: counters, claimEvidence: claim
+            )
+        }
+
+        var disclaimer = module.disclaimer
+        if !disclaimer.contains("非投资建议") {
+            disclaimer = disclaimer + " 本内容为 AI 研判参考，非投资建议。"
+        }
+
+        let cleaned = TrendReportActionsModule(
+            keyAssets: keyAssets,
+            actions: keptActions,
+            warnings: module.warnings,
+            disclaimer: disclaimer
+        )
+        return (cleaned, dropped, removed.deduplicatedPreservingOrder())
+    }
+}
+
+extension Array where Element == String {
+    /// 保序去重。
+    fileprivate func deduplicatedPreservingOrder() -> [String] {
+        var seen: Set<String> = []
+        return filter { seen.insert($0).inserted }
+    }
+}
+
+// MARK: - get_evidence_index（修复 4：治幻觉源头——随时可查真实证据 ID）
+
+struct EvidenceIndexTool: TrendResearchTool {
+    static let maxEntries = 200
+
+    let name = "get_evidence_index"
+    let description = "列出本次运行证据账本里的全部真实 evidence_id（含标题与来源）。提交任何模块前如果不确定证据 ID，先查本工具；引用不存在的 ID 会被 App 剔除并降级对应结论。"
+    let parameters: AgentJSONValue = [
+        "type": "object",
+        "properties": [:],
+        "additionalProperties": false
+    ]
+
+    func execute(argumentsJSON: String, context: TrendResearchToolContext) async -> TrendResearchToolResult {
+        let all = await context.evidenceLedger.allEvidence()
+        let entries = all.prefix(Self.maxEntries)
+        let rows: [[String: Any]] = entries.map { evidence in
+            [
+                "evidence_id": evidence.id,
+                "title": String(evidence.title.prefix(30)),
+                "source": evidence.sourceName,
+            ]
+        }
+        let data: [String: Any] = [
+            "count": entries.count,
+            "total": all.count,
+            "entries": rows,
+            "note": "提交模块引用证据时必须从这里或工具返回的 evidence_ids 取值，不要凭记忆拼写"
+        ]
+        return .content(TrendResearchToolEnvelope.success(data))
+    }
 }

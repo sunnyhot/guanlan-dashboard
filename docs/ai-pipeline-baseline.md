@@ -387,6 +387,12 @@ execute(argumentsJSON, context)
 
 ### 7.3 TrendAnalysisValidator 校验项
 
+> **2026-08-31 终审爆量四修复（v4.8.0 后首个真实运行实证）**：模块入库级 `TrendReportEvidenceSanitizer`
+> 前置完成终审规则——①幻觉证据 ID 剔除(对照账本)；②周期缺关联支持证据→App 降 uncertain+补
+> exemptionReason/待观察信号/whatWouldChange；③行动无本地事实证据→整条剔除，keyAssets 补
+> counterSignals，disclaimer 自动补写「非投资建议」，TrendWarning 解码 impact→detail 回退；
+> ④修复预算随基金数缩放(基础+每 8 只基金 1 次)；⑤新工具 `get_evidence_index` 随时可查真实证据 ID。
+
 定义在 `Core/Trend/TrendAnalysisValidator.swift:21`。`validate(_:expectedFundCodes:expectedPrivacyMode:) -> TrendValidationResult` 检查:
 
 - 三个 horizon(short/medium/long)齐全且各一次

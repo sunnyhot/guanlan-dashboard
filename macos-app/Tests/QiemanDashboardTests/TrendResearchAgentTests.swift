@@ -103,11 +103,20 @@ final class TrendResearchAgentTests: XCTestCase {
             try moduleSubmissionResponse(report: report, stage: .overview, id: "overview"),
             try moduleSubmissionResponse(report: report, stage: .market, id: "market")
         ]
-        let invalidActions = try moduleCall(
-            report: report,
-            stage: .actions,
+        // 2026-08-31 起 disclaimer 缺失由 App 自动补写（终审爆量修复 2），
+        // 改用不可兜底的硬规则触发同一终止路径：actions 超 5 条上限。
+        let actionItem = #"{"id":"a","kind":"watch","title":"t","detail":"d","targetName":null,"confidence":{"score":50,"label":"中"},"whatWouldChange":"w","triggerConditions":["t"],"invalidatingConditions":["i"],"claimEvidence":{}}"#
+        let oversizedActions = (0..<6).map { index in
+            actionItem.replacingOccurrences(of: "\"id\":\"a\"", with: "\"id\":\"a\(index)\"")
+        }.joined(separator: ",")
+        let oversizedArguments = #"{"keyAssets":[],"actions":["@ACTIONS@"],"warnings":[],"disclaimer":"含非投资建议"}"#
+            .replacingOccurrences(of: "@ACTIONS@", with: oversizedActions)
+        let invalidActions = AgentToolCall(
             id: "bad-actions",
-            disclaimerOverride: "仅供参考。"
+            function: AgentToolFunctionCall(
+                name: TrendReportModuleToolName.actions,
+                arguments: oversizedArguments
+            )
         )
         responses.append(.success(toolCallResponse([invalidActions])))
         responses.append(.success(toolCallResponse([invalidActions])))

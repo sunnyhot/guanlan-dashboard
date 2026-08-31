@@ -21,6 +21,7 @@ struct TrendResearchToolRegistry: Sendable {
             MarketBreadthTool(engine: marketDataEngine),
             DailyKlineTool(engine: marketDataEngine),
             FinancialHeadlinesTool(engine: marketDataEngine),
+            EvidenceIndexTool(),
             AlphaVantageResearchTool(
                 client: alphaVantageClient,
                 cache: alphaVantageCache

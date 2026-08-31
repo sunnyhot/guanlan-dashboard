@@ -1251,13 +1251,28 @@ struct TrendWarning: Codable, Identifiable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.decode(String.self, forKey: .title)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? title
-        detail = try container.decode(String.self, forKey: .detail)
+        // 2026-08-31 实证：模型把 detail 写成 impact——解码容错而不是整模块拒批
+        if let text = try? container.decode(String.self, forKey: .detail), !text.isEmpty {
+            detail = text
+        } else if let text = try? container.decode(String.self, forKey: .impact), !text.isEmpty {
+            detail = text
+        } else {
+            detail = ""
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(detail, forKey: .detail)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id
         case title
         case detail
+        case impact
     }
 }
 

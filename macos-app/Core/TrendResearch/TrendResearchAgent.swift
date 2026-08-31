@@ -215,6 +215,11 @@ struct TrendResearchAgent: Sendable {
     static let alphaVantageToolName = "alpha_vantage_research"
     static let submitToolName = "submit_trend_report"
     static let moduleSubmitToolNames = TrendReportModuleToolName.all
+    /// 修复预算 = 基础 + 每 8 只基金 1 次额外额度（大组合终审错误多，预算必须够用）。
+    static func effectiveInvalidSubmissionBudget(fundCount: Int, base: Int) -> Int {
+        base + max(0, fundCount / TrendReportDraftStore.assetBatchSize)
+    }
+
     /// 一次有意义的 LLM 往返所需最小秒数（对拍 DSA runner 的 _MIN_STEP_BUDGET_S）。
     /// 剩余预算为正但低于此值时按 budgetSkip 终止，不浪费一次计费请求。
     static let minimumStepBudgetSeconds: Double = 8
@@ -296,6 +301,11 @@ struct TrendResearchAgent: Sendable {
             sectorCount: snapshot.sectors.count,
             reportAssetCount: snapshot.expectedFundCodes.count,
             scope: scope
+        )
+        // 2026-08-31 修复 3：修复预算随组合规模扩张——琐碎 schema 错不再挤占终审修复额度。
+        let invalidSubmissionBudget = Self.effectiveInvalidSubmissionBudget(
+            fundCount: snapshot.expectedFundCodes.count,
+            base: policy.maxInvalidSubmissions
         )
         // 整次运行总预算随组合规模动态扩张；固定值对大组合偏紧。
         let effectiveTotal = policy.effectiveTotalTimeout(
@@ -586,7 +596,7 @@ struct TrendResearchAgent: Sendable {
                             alphaVantageSettings: alphaVantageSettings,
                             reportDraftStore: reportDraftStore
                         )
-                        context.invalidSubmissionBudget = policy.maxInvalidSubmissions
+                        context.invalidSubmissionBudget = invalidSubmissionBudget
                         context.invalidSubmissionsUsed = invalidSubmissions
                         rawToolResult = await registry.execute(call, context: context)
                         executedByID[call.id] = rawToolResult
@@ -668,7 +678,7 @@ struct TrendResearchAgent: Sendable {
                     if isSubmit, toolResult.isError, !missingRequiredTool {
                         invalidSubmissions += 1
                         let errors = Self.parseErrors(from: toolResult.contentJSON)
-                        let remaining = max(0, policy.maxInvalidSubmissions - invalidSubmissions)
+                        let remaining = max(0, invalidSubmissionBudget - invalidSubmissions)
                         await eventHandler(.reportValidationFailed(errors: errors, remainingAttempts: remaining))
                         // 拒批教训前移:立即以醒目 correction 注入(去重),让后续批次
                         // 不再犯同类证据/格式错误——线上修复循环的放大器正是重复拒批。
@@ -678,7 +688,7 @@ struct TrendResearchAgent: Sendable {
                                 seen: &injectedRejectionLessons
                             )
                         )
-                        if invalidSubmissions > policy.maxInvalidSubmissions {
+                        if invalidSubmissions > invalidSubmissionBudget {
                             throw TrendResearchAgentError.invalidSubmissionLimitExceeded(errors: errors)
                         }
                     }
@@ -831,7 +841,10 @@ struct TrendResearchAgent: Sendable {
                 evidenceLedger: ledger,
                 reportDraftStore: draftStore
             )
-            context.invalidSubmissionBudget = policy.maxInvalidSubmissions
+            context.invalidSubmissionBudget = Self.effectiveInvalidSubmissionBudget(
+                fundCount: snapshot.expectedFundCodes.count,
+                base: policy.maxInvalidSubmissions
+            )
             context.invalidSubmissionsUsed = invalidUsed
             return context
         }
