@@ -252,7 +252,6 @@ struct EnhancementSectionView: View {
                 .font(.subheadline)
                 .foregroundStyle(IOSDesign.muted)
             intelligenceCasesContent
-            intelligenceRecordsContent
         }
     }
 
@@ -550,74 +549,6 @@ struct EnhancementSectionView: View {
                 )
             }
         }
-    }
-
-    // MARK: 投资智能 - 决策记录
-
-    @ViewBuilder
-    private var intelligenceRecordsContent: some View {
-        let reviewDue = model.reviewDueDecisionCases
-        let history = model.historicalDecisionCases
-
-        if reviewDue.isEmpty && history.isEmpty {
-            Text("暂无复盘记录")
-                .font(.system(size: 14))
-                .foregroundColor(IOSDesign.muted)
-                .padding()
-        } else {
-            if !reviewDue.isEmpty {
-                Text("待复盘 (\(reviewDue.count))")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(IOSDesign.ink)
-                ForEach(reviewDue) { cs in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(cs.title).font(.subheadline.weight(.medium))
-                            if let due = cs.reviewDueAt {
-                                Text("到期：\(due.prefix(10))").font(.caption).foregroundStyle(IOSDesign.muted)
-                            }
-                        }
-                        Spacer()
-                        Button("复盘") { reviewCase = cs }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                    }
-                    .padding(IOSDesign.spaceS)
-                    .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
-                }
-            }
-
-            if !history.isEmpty {
-                Text("历史 (\(history.count))")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(IOSDesign.ink)
-                    .padding(.top)
-                ForEach(history.prefix(10)) { cs in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(cs.title).font(.system(size: 13, weight: .medium))
-                        Text("关闭:\(String(cs.resolvedAt ?? cs.updatedAt).prefix(10))")
-                            .font(.system(size: 11)).foregroundColor(IOSDesign.muted)
-                    }
-                    .padding(IOSDesign.spaceS)
-                    .background(IOSDesign.paper, in: RoundedRectangle(cornerRadius: IOSDesign.radiusS))
-                }
-            }
-
-            DisclosureGroup("旧趋势跟踪清单") {
-                trackingContent.padding(.top, IOSDesign.spaceS)
-            }
-            .font(.subheadline.weight(.semibold))
-            .tint(IOSDesign.muted)
-        }
-    }
-
-    private func iosPortfolioMetric(_ title: String, _ value: String) -> some View {
-        HStack {
-            Text(title).font(.subheadline).foregroundStyle(IOSDesign.muted)
-            Spacer()
-            Text(value).font(.headline).foregroundStyle(IOSDesign.ink)
-        }
-        .padding(.vertical, IOSDesign.spaceS)
     }
 
     // MARK: 研判(旧,降级为"依据")

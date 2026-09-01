@@ -10,8 +10,6 @@ import SwiftUI
 struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View {
     @EnvironmentObject private var model: AppModel
 
-    @State private var selectedCase: DecisionCase?
-    @State private var reviewCase: DecisionCase?
     @State private var isShowingProfile = false
     /// 按紧迫度注入的内容区段(盘中 / 组合长期)。
     let intradayContent: Intraday
@@ -34,67 +32,10 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View
                 .investmentSectionAnchor(.closeReview)
             longTermContent
             MarketSignalSection()
-            recordsSection
-        }
-        .sheet(item: $selectedCase) { decisionCase in
-            DecisionCaseDetailSheet(caseID: decisionCase.id)
-                .environmentObject(model)
-        }
-        .sheet(item: $reviewCase) { decisionCase in
-            DecisionReviewSheet(caseID: decisionCase.id)
-                .environmentObject(model)
         }
         .sheet(isPresented: $isShowingProfile) {
             UserDecisionProfilePanel()
                 .environmentObject(model)
-        }
-    }
-
-    // MARK: - 判断记录与阶段复盘
-
-    private var recordsSection: some View {
-        SectionCard(
-            title: "判断与复盘",
-            subtitle: "当时的判断和后来的结果，方便回头看",
-            icon: "clock.arrow.circlepath"
-        ) {
-            VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                if !model.reviewDueDecisionCases.isEmpty {
-                    VStack(alignment: .leading, spacing: AppPalette.spaceS) {
-                        Text("待复盘")
-                            .font(AppPalette.appFont(.headline, weight: .semibold))
-                            .foregroundStyle(AppPalette.ink)
-                        ForEach(model.reviewDueDecisionCases) { decisionCase in
-                            HStack(spacing: AppPalette.spaceM) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(decisionCase.title)
-                                        .font(AppPalette.appFont(.body, weight: .semibold))
-                                        .foregroundStyle(AppPalette.ink)
-                                    Text(reviewText(for: decisionCase))
-                                        .font(AppPalette.appFont(.caption))
-                                        .foregroundStyle(AppPalette.muted)
-                                }
-                                Spacer()
-                                Button("开始复盘") { reviewCase = decisionCase }
-                                    .buttonStyle(.appPrimary)
-                                    .controlSize(.small)
-                            }
-                            .padding(.vertical, AppPalette.spaceS)
-                            Divider()
-                        }
-                    }
-                }
-
-                DecisionHistoryView(cases: model.historicalDecisionCases) { selectedCase = $0 }
-
-                if model.reviewDueDecisionCases.isEmpty && model.historicalDecisionCases.isEmpty {
-                    InvestmentEmptyState(
-                        icon: "clock.arrow.circlepath",
-                        title: "闭环刚刚开始",
-                        detail: "关注一个决策事项后，系统会在约定时间提醒复盘。"
-                    )
-                }
-            }
         }
     }
 

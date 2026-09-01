@@ -594,9 +594,10 @@ final class UIExperienceRegressionTests: XCTestCase {
         let portfolioStart = try XCTUnwrap(
             today.range(of: "func portfolioLongTermReportView")
         )
+        // 2026-09-01:行动候选展示区已删,组合研判段落以验证区段收尾。
         let portfolioEnd = try XCTUnwrap(
             today.range(
-                of: "// 行动候选",
+                of: "func portfolioVerificationSection",
                 range: portfolioStart.upperBound..<today.endIndex
             )
         )
@@ -735,10 +736,11 @@ final class UIExperienceRegressionTests: XCTestCase {
         let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
         let center = try source(at: "Views_macOS/EnhancementCenterView.swift")
 
-        // 写入入口已切:按钮走 addDecisionCase,不再调旧 addTrackingItem
-        XCTAssertTrue(today.contains("model.addDecisionCase(from: action, report: report)"))
+        // 2026-09-01:行动候选展示区(连同「加入关注」按钮)已从面板删除;
+        // addDecisionCase 写入路径保留在 Core,旧 addTrackingItem 仍不得回流 UI。
         XCTAssertFalse(today.contains("model.addTrackingItem("))
-        XCTAssertTrue(today.contains("model.hasDecisionCase(for: action, report: report)"))
+        XCTAssertFalse(today.contains("model.addDecisionCase(from: action, report: report)"))
+        XCTAssertFalse(today.contains("model.hasDecisionCase(for: action, report: report)"))
 
         // 旧清单 UI 退场:区段与展开状态都不存在
         XCTAssertFalse(today.contains("legacyTrackingDisclosure"))

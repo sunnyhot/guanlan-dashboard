@@ -180,7 +180,6 @@ extension EnhancementCenterView {
                 trendHorizonGrid(report.horizons)
             }
             portfolioAssetTrendSection(report)
-            todayActionCandidates(report)
             portfolioVerificationSection(report)
         }
     }
@@ -196,113 +195,6 @@ extension EnhancementCenterView {
         }
     }
 
-    // 行动候选:默认收起为 3 条,「还有 N 条」展开;原因/触发/失效/置信度 + 加入跟踪
-    func todayActionCandidates(_ report: TrendAnalysisReport) -> some View {
-        let actions = showsAllActionCandidates
-            ? report.actions
-            : Array(report.actions.prefix(3))
-        let hiddenCount = report.actions.count - actions.count
-        return VStack(alignment: .leading, spacing: AppPalette.spaceM) {
-            trendReportSectionTitle("行动候选", icon: "checklist")
-            if report.actions.isEmpty {
-                trendEmptyState("暂无行动候选", detail: "当前报告没有建议新增观察、调仓复核或计划调整动作。")
-            } else {
-                VStack(spacing: AppPalette.spaceS) {
-                    ForEach(actions) { action in
-                        todayActionCard(action, report: report)
-                    }
-                    // W5.1:不再静默截断——收起时给出「还有 N 条」的显式入口。
-                    if hiddenCount > 0 {
-                        Button {
-                            withAnimation(AppPalette.motionStandard) {
-                                showsAllActionCandidates = true
-                            }
-                        } label: {
-                            Label("还有 \(hiddenCount) 条,查看全部行动候选", systemImage: "chevron.down")
-                                .font(AppPalette.appFont(.footnote, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.appSecondary)
-                    } else if report.actions.count > 3 {
-                        Button {
-                            withAnimation(AppPalette.motionStandard) {
-                                showsAllActionCandidates = false
-                            }
-                        } label: {
-                            Label("收起,只看前 3 条", systemImage: "chevron.up")
-                                .font(AppPalette.appFont(.footnote, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.appSecondary)
-                    }
-                }
-            }
-        }
-        .onDisappear {
-            // 切换报告区段时复位收起态,避免旧展开状态影响新报告的默认体验。
-            if showsAllActionCandidates { showsAllActionCandidates = false }
-        }
-    }
-
-    func todayActionCard(_ action: TrendActionCandidate, report: TrendAnalysisReport) -> some View {
-        let tracked = model.hasDecisionCase(for: action, report: report)
-        let tint = todayActionTint(action.kind)
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(action.title)
-                    .font(AppPalette.appFont(.body, weight: .bold))
-                    .foregroundStyle(AppPalette.ink)
-                    .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-                TintedCapsuleBadge(
-                    text: action.kind.displayText,
-                    tint: tint,
-                    font: AppPalette.appFont(.caption, weight: .bold),
-                    horizontalPadding: 6,
-                    verticalPadding: 2
-                )
-                trendConfidenceMeter(action.confidence)
-                Spacer(minLength: 6)
-                Button {
-                    model.addDecisionCase(from: action, report: report)
-                } label: {
-                    Label(tracked ? "已关注" : "加入关注", systemImage: tracked ? "checkmark.circle.fill" : "bell.badge")
-                        .font(AppPalette.appFont(.footnote, weight: .semibold))
-                }
-                .buttonStyle(.appSecondary)
-                .tint(tint)
-                .disabled(tracked)
-            }
-
-            Text(action.detail)
-                .font(AppPalette.appFont(.footnote))
-                .foregroundStyle(AppPalette.muted)
-                .lineSpacing(3).fixedSize(horizontal: false, vertical: true)
-
-            // W5.1:关注后当场可设复查时间,消除「关注后再去别处设时间」的断点。
-            if tracked, let caseItem = model.decisionCase(for: action, report: report) {
-                reviewDueRow(caseItem, tint: tint)
-            }
-
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: AppPalette.spaceS) {
-                    todayConditionLine("触发", action.triggerConditions, tint: AppPalette.info)
-                    todayConditionLine("失效", action.invalidatingConditions, tint: AppPalette.warning)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    todayConditionLine("触发", action.triggerConditions, tint: AppPalette.info)
-                    todayConditionLine("失效", action.invalidatingConditions, tint: AppPalette.warning)
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .staticSurface(
-            tint: tint,
-            fill: AppPalette.cardStrong,
-            strokeOpacity: 0.18,
-            activeStrokeOpacity: 0.40
-        )
-    }
 
     @ViewBuilder
     func todayConditionLine(_ title: String, _ items: [String], tint: Color) -> some View {

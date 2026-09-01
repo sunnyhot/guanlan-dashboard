@@ -3,8 +3,6 @@ import SwiftUI
 struct EnhancementCenterView: View {
     @EnvironmentObject var model: AppModel
     @State var selectedTrendEvidenceDetail: TrendEvidenceDetailSelection?
-    /// W5.1:行动候选默认收起为 3 条,点「还有 N 条」展开全部。
-    @State var showsAllActionCandidates = false
     /// W2.4(缩窄版):详细模式开关——控制证据账本/风险边界块显隐,全局记忆。
     @AppStorage(AppStorageKey.researchDetailMode) var showsResearchDetailMode = false
 
