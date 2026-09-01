@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.1/QiemanDashboard-4.9.1.zip",
-    "name" : "QiemanDashboard-4.9.1.zip",
-    "sha256" : "1b34bf46b678ec3a4955cf4e22feed66bfb24abb2399780dfc11328934d8ae59",
-    "size" : 8649341
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.2/QiemanDashboard-4.9.2.zip",
+    "name" : "QiemanDashboard-4.9.2.zip",
+    "sha256" : "e3a3095be1bd4cdaaaa842ddff4547dae709c0946bfecd4e0c6cc77f2d86046a",
+    "size" : 8519610
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.1/QiemanDashboard-4.9.1.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.2/QiemanDashboard-4.9.2.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.1.zip",
-      "size" : 8649341
+      "name" : "QiemanDashboard-4.9.2.zip",
+      "size" : 8519610
     }
   ],
-  "body" : "版本号同步 v4.9.1\n趋势 Agent 硬截止迟到根治——截止 watchdog 与字节到达解耦 + 单请求输出上限\n流式合批投递测试改为有界轮询——CI 满载下 80ms 固定睡眠不够(调度延迟超窗口),本地 10 连跑全绿实证为时序抖动",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.1",
-  "name" : "QiemanDashboard v4.9.1",
-  "notes" : "版本号同步 v4.9.1\n趋势 Agent 硬截止迟到根治——截止 watchdog 与字节到达解耦 + 单请求输出上限\n流式合批投递测试改为有界轮询——CI 满载下 80ms 固定睡眠不够(调度延迟超窗口),本地 10 连跑全绿实证为时序抖动",
+  "body" : "版本号同步 v4.9.2\n下线「行动候选」与「判断与复盘」两个展示区块\n全市场机会雷达下线收编——大盘强弱并入每日收盘复盘\n终审拒批死循环四连修——W4 入库即修补 / name 补 code / 降级不再被清空模块挡住",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.2",
+  "name" : "QiemanDashboard v4.9.2",
+  "notes" : "版本号同步 v4.9.2\n下线「行动候选」与「判断与复盘」两个展示区块\n全市场机会雷达下线收编——大盘强弱并入每日收盘复盘\n终审拒批死循环四连修——W4 入库即修补 / name 补 code / 降级不再被清空模块挡住",
   "published_at" : "",
-  "sha256" : "1b34bf46b678ec3a4955cf4e22feed66bfb24abb2399780dfc11328934d8ae59",
-  "tag" : "v4.9.1",
-  "tag_name" : "v4.9.1",
-  "version" : "4.9.1"
+  "sha256" : "e3a3095be1bd4cdaaaa842ddff4547dae709c0946bfecd4e0c6cc77f2d86046a",
+  "tag" : "v4.9.2",
+  "tag_name" : "v4.9.2",
+  "version" : "4.9.2"
 }
