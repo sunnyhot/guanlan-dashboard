@@ -160,6 +160,10 @@ final class TrendReportModuleToolsTests: XCTestCase {
 
         // 2026-09-01 根治:无前缀不再拒批(2026-08-31 实证同一批 8 只基金连续
         // 4 轮不写前缀耗尽修复预算),由 App 保守补「原因待确认：」,原文保留。
+        // (closeReview 已接管 market 模块,基线不再预填,需显式提交以便组装。)
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
         try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: [invalid]))
 
         let assembled = await store.assembledReport(snapshot: makeSnapshot(codes: ["000001"]))
@@ -199,6 +203,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
             counterSignals: []
         )
 
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
         try await store.storeAssetBatch(
             TrendReportAssetBatchModule(assetTrends: [withCausal, withoutCausal])
         )
@@ -236,6 +243,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
             scope: .closeReview,
             baselineReport: reportWithAssets([makeAsset(code: "000001"), makeAsset(code: "000002")])
         )
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
         try await store.storeAssetBatch(
             TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
         )
@@ -262,6 +272,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
             expectedFundCodes: ["000001"],
             scope: .closeReview,
             baselineReport: reportWithAssets([makeAsset(code: "000001")])
+        )
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
         )
         let degraded = await store.degradedReport(
             snapshot: makeSnapshot(codes: ["000001"]),
@@ -302,7 +315,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertEqual(assembled?.marketOutlook.first?.name, "市场环境")
     }
 
-    func testCloseReviewOnlyRequestsAssetBatches() async throws {
+    func testCloseReviewRequestsMarketThenAssetBatches() async throws {
+        // 2026-09-01 下线收编:closeReview 接管 market 模块(marketRadar 09:00 调度已停),
+        // 大盘强弱随每日收盘复盘更新;基线 market 不再预填。
         let code = "000001"
         let base = reportWithAssets([makeAsset(code: code)])
         let store = TrendReportDraftStore(
@@ -312,8 +327,14 @@ final class TrendReportModuleToolsTests: XCTestCase {
         )
 
         var progress = await store.progress()
+        XCTAssertEqual(progress.nextToolName, TrendReportModuleToolName.market)
+        XCTAssertEqual(progress.totalSections, 2)
+
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
+        progress = await store.progress()
         XCTAssertEqual(progress.nextToolName, TrendReportModuleToolName.assetBatch)
-        XCTAssertEqual(progress.totalSections, 1)
 
         try await store.storeAssetBatch(
             TrendReportAssetBatchModule(assetTrends: [makeAsset(code: code)])
@@ -322,9 +343,8 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertTrue(progress.isComplete)
 
         let assembled = await store.assembledReport(snapshot: makeSnapshot(codes: [code]))
-        // W4:复用的基线 market 模块经 BaselineContractPatch 满足明确性契约后透传
-        // (方向词前缀 + uncertain 待观察信号出口),其余字段不变。
-        XCTAssertEqual(assembled?.marketOutlook, TrendBaselineContractPatch.markets(base.marketOutlook))
+        // market 用本次提交的;组合/行动仍从基线复用。
+        XCTAssertEqual(assembled?.marketOutlook, TrendBaselineContractPatch.markets([makeMarketOutlook()]))
         XCTAssertEqual(assembled?.portfolio, base.portfolio)
         XCTAssertEqual(assembled?.assetTrends.count, 1)
     }

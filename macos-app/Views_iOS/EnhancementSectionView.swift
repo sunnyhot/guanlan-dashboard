@@ -151,7 +151,7 @@ struct EnhancementSectionView: View {
                 VStack(alignment: .leading, spacing: IOSDesign.spaceS) {
                     Label("AI 研判尚未配置", systemImage: "wand.and.stars")
                         .font(.subheadline.weight(.bold))
-                    Text("配置模型后可生成盘中指引、收盘复盘、长期研判与全市场雷达。")
+                    Text("配置模型后可生成盘中指引、收盘复盘与长期研判。")
                         .font(.footnote)
                         .foregroundStyle(IOSDesign.muted)
                     Button("开始配置模型") {

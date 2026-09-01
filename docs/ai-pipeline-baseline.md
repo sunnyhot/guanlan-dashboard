@@ -60,10 +60,12 @@
 
 | scope | 自动时刻 | 本次生成 | 复用 |
 |---|---|---|---|
-| `marketRadar` | 每日 09:00 | marketOutlook / sectors / opportunities | 组合、持仓、行动 |
-| `closeReview` | 每日 21:00 | assetTrends（当日涨跌归因） | 市场雷达、组合长期判断、行动 |
+| `marketRadar` | **已下线（2026-09-01）**，09:00 自动槽与 UI 入口移除，scope 枚举保留作存量兼容 | marketOutlook / sectors / opportunities | 组合、持仓、行动 |
+| `closeReview` | 每日 21:00 | marketOutlook / sectors（**2026-09-01 起接管**，大盘强弱随复盘更新）+ assetTrends（当日涨跌归因） | 组合长期判断、行动 |
 | `longTerm` | 每周日 20:00（错过后下一个 20:00 窗口补跑） | portfolio / horizons / assetTrends / keyAssets / actions | 市场雷达 |
 | `full` | 首次无基线或显式完整分析 | 全部模块 | 无 |
+
+> **2026-09-01 下线收编注记（全市场机会雷达）**：Tavily 移除后 marketRadar 每日净产出仅 marketOutlook 几条（opportunities/sectors 恒空），UI 卡片还引导用户「重新生成」一个永远不会有结果的功能。处置：①`TrendModuleAutoAnalysisSchedule.dueSlot` 删除 09:00 槽（早间无自动运行）；②closeReview 的 `requiredModuleToolNames` 加入 market 模块（`[market, assetBatch]`，轮次/工具预算 +1，prompt 契约同步）——大盘强弱每日随收盘复盘更新，基线 market 不再预填；③双端 UI 死卡片/容器 Radar 槽/「市场雷达完成」通知开关/研究时间线 marketRadar 链移除；④`TrendAnalysisReport.opportunities` 等模型字段与 `TrendResearchRunScope.marketRadar` 枚举保留（schema/存量解码兼容），`InvestmentTodayResearchRow.Kind.marketRadar` 行构建保留但由 `marketSignalCount > 0` 门控永不出现。
 
 盘中链路 B 仍按原交易时段运行。`TrendReportDraftStore` 以旧报告预填非本次模块，旧 evidence 同步写入新运行 Ledger；最终仍必须经过 `SubmitTrendReportTool` 统一归一化和完整 Validator。市场雷达若检测到持仓代码已经变化、增量合并无法保持完整性，会一次性回退为 `full`。
 

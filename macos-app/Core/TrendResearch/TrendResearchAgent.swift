@@ -131,9 +131,11 @@ struct TrendResearchRunPolicy: Sendable {
         case .marketRadar:
             return (18, 28)
         case .closeReview:
+            // 2026-09-01 收编:closeReview 接管 market 模块(marketRadar 09:00 调度已停),
+            // +1 轮 +1 工具调用预算。
             return (
-                min(expandedMaxTurns, 8 + extraPages + max(1, reportBatchCount)),
-                min(expandedMaxToolCalls, 16 + extraPages + max(1, reportBatchCount))
+                min(expandedMaxTurns, 9 + extraPages + max(1, reportBatchCount)),
+                min(expandedMaxToolCalls, 17 + extraPages + max(1, reportBatchCount))
             )
         case .longTerm:
             return (

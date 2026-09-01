@@ -3,27 +3,25 @@ import SwiftUI
 /// 投资智能单页通览。
 ///
 /// 区段按紧迫度排列(W2.1):今日研判摘要 → 研判基础(W2.2 上移,读结论先看基础)
-/// → 实时进度 → 盘中指引 → 全市场机会 → 收盘复盘 → 组合长期研判 → 判断记录。
+/// → 实时进度 → 盘中指引 → 收盘复盘(含大盘强弱) → 组合长期研判 → 判断记录。
 /// 顶部只复盘全市场，不展示持仓收益、DecisionCase 或组合画像。
 /// 分区统一使用全站 `SectionCard` 容器，与总览/持仓/平台板块保持同一视觉系统。
-struct InvestmentIntelligenceDashboardView<Intraday: View, Radar: View, LongTerm: View>: View {
+/// 2026-09-01:「全市场机会」独立区段随 marketRadar 下线移除——大盘强弱并入收盘复盘。
+struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View {
     @EnvironmentObject private var model: AppModel
 
     @State private var selectedCase: DecisionCase?
     @State private var reviewCase: DecisionCase?
     @State private var isShowingProfile = false
-    /// 按紧迫度注入的三个内容区段(盘中 / 全市场雷达 / 组合长期)。
+    /// 按紧迫度注入的内容区段(盘中 / 组合长期)。
     let intradayContent: Intraday
-    let radarContent: Radar
     let longTermContent: LongTerm
 
     init(
         @ViewBuilder intradayContent: () -> Intraday,
-        @ViewBuilder radarContent: () -> Radar,
         @ViewBuilder longTermContent: () -> LongTerm
     ) {
         self.intradayContent = intradayContent()
-        self.radarContent = radarContent()
         self.longTermContent = longTermContent()
     }
 
@@ -32,7 +30,6 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, Radar: View, LongTerm
             credibilitySection
             TrendLiveLogPanel()
             intradayContent
-            radarContent
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
             longTermContent

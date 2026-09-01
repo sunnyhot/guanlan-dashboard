@@ -2,19 +2,25 @@ import XCTest
 @testable import QiemanDashboard
 
 final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
-    func testWeekdayUsesMarketRadarBeforeCloseAndCloseReviewAfterCloseWindow() {
+    func testWeekdayHasNoMorningSlotAfterRadarRetirement() {
+        // 2026-09-01 下线收编:marketRadar 09:00 槽移除,大盘强弱并入 21:00 收盘复盘。
         XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: "2026-08-10 08:59:00",
                 lastCompletedKeys: [:]
             )
         )
-        XCTAssertEqual(
+        XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: "2026-08-10 09:00:00",
                 lastCompletedKeys: [:]
-            )?.scope,
-            .marketRadar
+            )
+        )
+        XCTAssertNil(
+            TrendModuleAutoAnalysisSchedule.dueSlot(
+                at: "2026-08-10 15:30:00",
+                lastCompletedKeys: [:]
+            )
         )
         XCTAssertEqual(
             TrendModuleAutoAnalysisSchedule.dueSlot(
@@ -54,14 +60,14 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
     }
 
     func testCompletedModuleSlotIsNotRepeated() {
-        let timestamp = "2026-08-10 09:30:00"
+        let timestamp = "2026-08-10 21:30:00"
         let first = TrendModuleAutoAnalysisSchedule.dueSlot(
             at: timestamp,
             lastCompletedKeys: [:]
         )
         XCTAssertNotNil(first)
 
-        let completed = [TrendResearchRunScope.marketRadar.rawValue: first?.key ?? ""]
+        let completed = [TrendResearchRunScope.closeReview.rawValue: first?.key ?? ""]
         XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: timestamp,

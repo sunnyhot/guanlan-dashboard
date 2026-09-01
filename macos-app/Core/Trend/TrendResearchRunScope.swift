@@ -37,7 +37,13 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
         case .marketRadar:
             [TrendReportModuleToolName.market]
         case .closeReview:
-            [TrendReportModuleToolName.assetBatch]
+            // 2026-09-01 下线收编:Tavily 移除后 marketRadar 每日净产出仅 marketOutlook
+            // 几条(opportunities/sectors 恒空),09:00 独立调度已停——大盘强弱改由
+            // 每日收盘复盘顺带更新,复用其已有的大盘行情 context。
+            [
+                TrendReportModuleToolName.market,
+                TrendReportModuleToolName.assetBatch,
+            ]
         case .longTerm:
             [
                 TrendReportModuleToolName.overview,
@@ -111,7 +117,10 @@ struct TrendScheduledModuleSlot: Hashable, Sendable {
     let key: String
 }
 
-/// 固定错峰运行：市场雷达早晨、收盘复盘晚上、长期研判每周一次。
+/// 固定错峰运行：收盘复盘晚上（含大盘强弱更新）、长期研判每周一次。
+/// 2026-09-01 下线注记：marketRadar 09:00 槽移除——Tavily 移除后其每日净产出仅
+/// marketOutlook 几条（opportunities/sectors 恒空），已收编进 closeReview 的 market
+/// 模块；scope 枚举与手动路径保留作存量兼容，UI 入口已删。
 enum TrendModuleAutoAnalysisSchedule {
     static let marketRadarTime = "09:00"
     static let closeReviewTime = "21:00"
@@ -138,15 +147,6 @@ enum TrendModuleAutoAnalysisSchedule {
             return uncompletedSlot(
                 scope: .longTerm,
                 key: "\(mostRecentSunday(day)) \(longTermTime)",
-                lastCompletedKeys: lastCompletedKeys,
-                lastGeneratedAtByScope: lastGeneratedAtByScope
-            )
-        }
-
-        if minute >= 9 * 60 {
-            return uncompletedSlot(
-                scope: .marketRadar,
-                key: "\(day) \(marketRadarTime)",
                 lastCompletedKeys: lastCompletedKeys,
                 lastGeneratedAtByScope: lastGeneratedAtByScope
             )

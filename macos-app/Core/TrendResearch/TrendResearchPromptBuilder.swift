@@ -83,11 +83,12 @@ submit_trend_market_module JSON：
 {"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","whatWouldChange":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[{"id":"","name":"","category":"index|assetClass|sector","scope":"marketWide","direction":"","confidence":{},"rationale":"","whatWouldChange":"","triggerConditions":[],"invalidatingConditions":[],"evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}]}
 """
         case .closeReview:
-            mission = "只更新今日收盘复盘所需的逐只持仓涨跌归因。市场雷达与长期组合模块从缓存报告复用，不做联网行业扫描，不生成行动建议。"
+            mission = "更新今日收盘复盘：大盘/大类资产强弱判断与逐只持仓涨跌归因。组合结论与行动模块从缓存报告复用，不生成行动建议。"
             flow = """
-依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot 读取基金净值和底层证券当日涨跌。随后只用 submit_trend_asset_batch 分批提交 remaining_fund_codes，每批最多 \(TrendReportDraftStore.assetBatchSize) 只。
+依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot 读取主要指数、基金净值和底层证券当日涨跌，可用 get_market_breadth 补充全市场广度。先调用 submit_trend_market_module 提交大盘/大类资产判断（指数放 marketOutlook、行业放 sectors，opportunities 本次留空），随后只用 submit_trend_asset_batch 分批提交 remaining_fund_codes，每批最多 \(TrendReportDraftStore.assetBatchSize) 只。
 """
             contract = """
+submit_trend_market_module JSON：{"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","whatWouldChange":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[]}
 submit_trend_asset_batch JSON：{"assetTrends":[{"id":"","name":"","code":"","sector":"","impactText":"","horizons":[short/medium/long 三个 horizon],"rationale":"","counterSignals":[],"claimEvidence":{}}]}
 impactText 必须以「涨跌归因：」或「原因待确认：」开头。只有 market:stock:* 或 vendor:alphavantage:* 能支撑因果归因；静态持仓名单、持仓占比、市值、累计盈利和净值涨跌本身都不是涨跌原因。没有可引用的行情/结构化证据时一律写「原因待确认：」并说明缺少哪类数据。公开持仓有披露滞后，使用「可能主要由」「与……一致」。
 \(Self.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: alphaVantageConfigured))

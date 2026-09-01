@@ -585,10 +585,9 @@ final class UIExperienceRegressionTests: XCTestCase {
             at: "Core/InvestmentIntelligence/MarketOpportunityEngine.swift"
         )
 
-        XCTAssertTrue(today.contains("title: \"全市场机会雷达\""))
-        // W3.4:雷达副标题优先显示「上次生成时间 + 节奏」,无记录时回退这句内容说明。
-        XCTAssertTrue(today.contains("市场强弱主线、触发条件与失效信号"))
-        XCTAssertTrue(today.contains("moduleFreshnessText(.marketRadar"))
+        // 2026-09-01:「全市场机会雷达」卡片随 marketRadar 下线整体移除
+        //(大盘强弱并入收盘复盘);组合长期研判区段仍在。
+        XCTAssertFalse(today.contains("title: \"全市场机会雷达\""))
         XCTAssertTrue(today.contains("title: \"我的组合长期研判\""))
         XCTAssertTrue(today.contains("portfolioLongTermReportView(report)"))
 
@@ -644,12 +643,12 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertTrue(center.contains("ScrollViewReader"))
         XCTAssertTrue(center.contains("investmentSectionAnchors"))
         XCTAssertTrue(today.contains("investmentSectionAnchor(.intraday)"))
-        XCTAssertTrue(today.contains("investmentSectionAnchor(.marketRadar)"))
         XCTAssertTrue(today.contains("investmentSectionAnchor(.longTerm)"))
 
-        // 空态引流与 memo 化:面板不再直接调 analyze
+        // 空态引流仍在;机会分析入口已随 marketRadar 卡片下线移出面板
+        //(marketOpportunities 转由 Core 摘要/verdict 消费,面板不再直接引用)。
         XCTAssertTrue(today.contains("IntradayEmptyHintView"))
-        XCTAssertTrue(today.contains("model.marketOpportunities"))
+        XCTAssertFalse(today.contains("model.marketOpportunities"))
         XCTAssertFalse(today.contains("MarketOpportunityEngine.analyze"))
     }
 

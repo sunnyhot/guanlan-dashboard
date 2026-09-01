@@ -1208,9 +1208,6 @@ extension AppModel {
         if let intraday = nextHourGuidanceReport?.generatedAt {
             chains["intraday"] = intraday
         }
-        if let radar = trendSettings.moduleGeneratedAt(.marketRadar) {
-            chains["marketRadar"] = radar
-        }
         if let close = best(
             trendSettings.moduleGeneratedAt(.closeReview),
             marketCloseReviewArchive?.generatedAt

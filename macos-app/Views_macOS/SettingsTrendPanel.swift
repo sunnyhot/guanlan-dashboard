@@ -335,16 +335,6 @@ struct TrendSettingsPanel: View {
                 SettingsDivider(isInset: true)
 
                 SettingsToggleRow(
-                    title: "市场雷达完成",
-                    detail: "每日 09:00 全市场机会更新后通知(默认关)",
-                    icon: "scope",
-                    tint: AppPalette.brand,
-                    isOn: notificationBinding(\.marketRadarSuccessEnabled)
-                )
-
-                SettingsDivider(isInset: true)
-
-                SettingsToggleRow(
                     title: "长期研判完成",
                     detail: "每周日 20:00 组合研判更新后通知(默认关)",
                     icon: "briefcase.fill",

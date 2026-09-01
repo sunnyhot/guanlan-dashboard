@@ -137,17 +137,18 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 21:00:00")
         await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 22:00:00")
 
-        XCTAssertEqual(agent.runCount, 2)
-        XCTAssertEqual(
-            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue],
-            "2026-06-22 09:00"
+        // 2026-09-01 下线收编:marketRadar 09:00 槽已删,早间轮询不再触发运行;
+        // 21:00 closeReview 窗口只跑一次。
+        XCTAssertEqual(agent.runCount, 1)
+        XCTAssertNil(
+            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue]
         )
         XCTAssertEqual(
             model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.closeReview.rawValue],
             "2026-06-22 21:00"
         )
         XCTAssertEqual(model.trendProgressLogs.first?.message, "完整 AI 分析已启动")
-        // 雷达通知默认关、复盘通知默认开:只应收到一条 closeReview 成功通知。
+        // 复盘通知默认开:只应收到一条 closeReview 成功通知。
         XCTAssertEqual(notificationSpy.notices.count, 1)
         XCTAssertEqual(notificationSpy.notices.first?.scope, .closeReview)
         XCTAssertEqual(notificationSpy.notices.first?.outcome, .succeeded)
@@ -164,13 +165,13 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         )
         model.trendResearchAgent = agent
 
-        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 09:00:00")
-        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 10:00:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 21:00:00")
+        await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 22:00:00")
 
         XCTAssertEqual(agent.runCount, 1)
         XCTAssertEqual(
-            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue],
-            "2026-06-22 09:00"
+            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.closeReview.rawValue],
+            "2026-06-22 21:00"
         )
         // 自动失败默认通知(手动失败不打扰)。
         XCTAssertEqual(notificationSpy.notices.count, 1)
@@ -285,7 +286,8 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         XCTAssertTrue(model.unreadAIResearchCount == 0, "无任何内容时不提示")
 
         // 从未访问过,但有内容 → 算 1 条未读,引导进去看一次。
-        model.trendSettings.markModuleGenerated(scope: .marketRadar, generatedAt: "2026-06-22 09:30:00")
+        // (marketRadar 链路时间戳已于 2026-09-01 下线移除,改用 closeReview 验证。)
+        model.trendSettings.markModuleGenerated(scope: .closeReview, generatedAt: "2026-06-22 21:30:00")
         XCTAssertEqual(model.unreadAIResearchCount, 1)
 
         // 访问后清零。

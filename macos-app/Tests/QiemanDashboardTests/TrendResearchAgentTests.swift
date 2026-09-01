@@ -90,6 +90,8 @@ final class TrendResearchAgentTests: XCTestCase {
             .success(toolCallResponse([
                 AgentToolCall(id: "a1", function: AgentToolFunctionCall(name: "get_portfolio_assets", arguments: #"{"cursor":0,"limit":20}"#))
             ])),
+            // 2026-09-01 收编:closeReview 先提交 market 模块(大盘强弱随复盘更新)。
+            try moduleSubmissionResponse(report: baseline, stage: .market, id: "m1"),
             .success(toolCallResponse([
                 AgentToolCall(id: "b1", function: AgentToolFunctionCall(name: "submit_trend_asset_batch", arguments: batchArguments))
             ])),

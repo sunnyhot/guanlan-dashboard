@@ -9,9 +9,6 @@ extension EnhancementCenterView {
             InvestmentIntelligenceDashboardView {
                 intradaySection
                     .investmentSectionAnchor(.intraday)
-            } radarContent: {
-                marketOpportunitySection
-                    .investmentSectionAnchor(.marketRadar)
             } longTermContent: {
                 portfolioLongTermSection
                     .investmentSectionAnchor(.longTerm)
@@ -105,45 +102,6 @@ extension EnhancementCenterView {
         }
     }
 
-    // MARK: - ② 全市场机会雷达
-
-    var marketOpportunitySection: some View {
-        let opportunities = model.marketOpportunities
-
-        return SectionCard(
-            title: "全市场机会雷达",
-            subtitle: moduleFreshnessText(.marketRadar, cadence: "每日 09:00 自动")
-                ?? "市场强弱主线、触发条件与失效信号",
-            icon: "scope",
-            trailing: {
-                Spacer()
-                Button {
-                    model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
-                } label: {
-                    Label(
-                        marketRadarButtonTitle,
-                        systemImage: "globe.asia.australia"
-                    )
-                }
-                .buttonStyle(.appSecondary)
-                .controlSize(.small)
-                .disabled(
-                    !model.trendSettings.provider.isConfigured
-                )
-            }
-        ) {
-            VStack(alignment: .leading, spacing: AppPalette.spaceL) {
-                // 进度统一在页面顶部的 TrendLiveLogPanel 展示（唯一进度区）。
-
-                InvestmentDirectionView(
-                    analysis: opportunities,
-                    hasTrendReport: model.trendReport != nil,
-                    isProviderConfigured: model.trendSettings.provider.isConfigured
-                )
-            }
-        }
-    }
-
     // MARK: - ③ 我的组合长期研判
 
     var portfolioLongTermSection: some View {
@@ -207,20 +165,6 @@ extension EnhancementCenterView {
         return formatter.string(from: Date())
     }
 
-    /// 全市场机会雷达生成中：marketRadar 或 full scope 在跑。
-    private var isGeneratingMarketRadar: Bool {
-        guard model.trendGenerationState == .generating else { return false }
-        let scope = model.trendResearchScope
-        return scope == .marketRadar || scope == .full
-    }
-
-    /// W3.7:雷达按钮三态——运行中 / 已排队 / 空闲。
-    private var marketRadarButtonTitle: String {
-        if isGeneratingMarketRadar { return "扫描中…" }
-        if model.queuedUserRequestedScope == .marketRadar { return "已排队" }
-        return "更新市场雷达"
-    }
-
     /// W3.7:长期研判按钮三态。
     private var longTermButtonTitle: String {
         if model.trendGenerationState == .generating { return "更新中…" }
@@ -245,7 +189,7 @@ extension EnhancementCenterView {
         let assets = report.assetTrends.isEmpty ? report.keyAssets : report.assetTrends
         return VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             trendReportSectionTitle("持仓趋势与重点风险", icon: "chart.bar.doc.horizontal")
-            Text("只展示当前组合内的基金与资产，不重复全市场机会卡片。")
+            Text("只展示当前组合内的基金与资产。")
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
             trendAssetList(assets)

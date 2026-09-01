@@ -335,16 +335,8 @@ final class TrendDashboardSummaryTests: XCTestCase {
         XCTAssertFalse(todaySource.contains("TrendLiveLogPanel()"))
         XCTAssertTrue(dashboardSource.contains("TrendLiveLogPanel()"))
         XCTAssertFalse(todaySource.contains("researchEvidenceDisclosure"))
-        let directionStart = try XCTUnwrap(todaySource.range(of: "var marketOpportunitySection"))
-        let directionEnd = try XCTUnwrap(
-            todaySource.range(
-                of: "// MARK: - ③ 我的组合长期研判",
-                range: directionStart.upperBound..<todaySource.endIndex
-            )
-        )
-        let directionSource = todaySource[directionStart.lowerBound..<directionEnd.lowerBound]
-        XCTAssertFalse(directionSource.contains("TrendLiveLogPanel()"))
-        XCTAssertTrue(directionSource.contains("InvestmentDirectionView("))
+        // 2026-09-01:「全市场机会雷达」卡片随 marketRadar 下线整体移除,
+        // 对应段落源码断言同步删除(实时进度唯一入口仍是 TrendLiveLogPanel)。
         XCTAssertTrue(liveLogSource.contains("model.trendResearchScope.displayName"))
         XCTAssertTrue(liveLogSource.contains("model.trendResearchProgress.fraction"))
         XCTAssertTrue(liveLogSource.contains("ScrollViewReader"))
