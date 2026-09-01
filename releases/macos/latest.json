@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.0/QiemanDashboard-4.9.0.zip",
-    "name" : "QiemanDashboard-4.9.0.zip",
-    "sha256" : "d41b0ba5ab39050a40ac78ca81665788f5cc0e3ab5a76862475fe1dd94f2ec2c",
-    "size" : 8631681
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.1/QiemanDashboard-4.9.1.zip",
+    "name" : "QiemanDashboard-4.9.1.zip",
+    "sha256" : "1b34bf46b678ec3a4955cf4e22feed66bfb24abb2399780dfc11328934d8ae59",
+    "size" : 8649341
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.0/QiemanDashboard-4.9.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.1/QiemanDashboard-4.9.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.0.zip",
-      "size" : 8631681
+      "name" : "QiemanDashboard-4.9.1.zip",
+      "size" : 8649341
     }
   ],
-  "body" : "版本号同步 v4.9.0\n趋势 Agent 终局根治——格式兜底、预算硬截止、fanout 接线、超批接受、降级完成",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.0",
-  "name" : "QiemanDashboard v4.9.0",
-  "notes" : "版本号同步 v4.9.0\n趋势 Agent 终局根治——格式兜底、预算硬截止、fanout 接线、超批接受、降级完成",
+  "body" : "版本号同步 v4.9.1\n趋势 Agent 硬截止迟到根治——截止 watchdog 与字节到达解耦 + 单请求输出上限\n流式合批投递测试改为有界轮询——CI 满载下 80ms 固定睡眠不够(调度延迟超窗口),本地 10 连跑全绿实证为时序抖动",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.1",
+  "name" : "QiemanDashboard v4.9.1",
+  "notes" : "版本号同步 v4.9.1\n趋势 Agent 硬截止迟到根治——截止 watchdog 与字节到达解耦 + 单请求输出上限\n流式合批投递测试改为有界轮询——CI 满载下 80ms 固定睡眠不够(调度延迟超窗口),本地 10 连跑全绿实证为时序抖动",
   "published_at" : "",
-  "sha256" : "d41b0ba5ab39050a40ac78ca81665788f5cc0e3ab5a76862475fe1dd94f2ec2c",
-  "tag" : "v4.9.0",
-  "tag_name" : "v4.9.0",
-  "version" : "4.9.0"
+  "sha256" : "1b34bf46b678ec3a4955cf4e22feed66bfb24abb2399780dfc11328934d8ae59",
+  "tag" : "v4.9.1",
+  "tag_name" : "v4.9.1",
+  "version" : "4.9.1"
 }
