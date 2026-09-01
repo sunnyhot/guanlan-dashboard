@@ -43,6 +43,7 @@ struct GatewayAgentClient: TrendResearchAgentClient {
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int? = nil,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date? = nil,
@@ -70,6 +71,7 @@ struct GatewayAgentClient: TrendResearchAgentClient {
             tools: tools.map(Self.domainTool),
             toolChoice: Self.domainToolChoice(toolChoice),
             temperature: temperature,
+            maxOutputTokens: maxOutputTokens,
             purpose: purpose,
             deadline: deadline
         )

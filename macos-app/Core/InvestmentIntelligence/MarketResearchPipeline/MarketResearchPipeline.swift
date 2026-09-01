@@ -630,6 +630,7 @@ struct MarketResearchPipeline: Sendable {
             tools: [],
             toolChoice: .auto,
             temperature: 0.3,
+            maxOutputTokens: nil,
             settings: settings,
             timeout: settings.timeoutSeconds,
             deadline: nil,

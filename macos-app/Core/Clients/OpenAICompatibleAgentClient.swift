@@ -161,7 +161,8 @@ struct OpenAICompatibleAgentClient: Sendable {
             guard (200..<300).contains(http.statusCode) else {
                 let data = try await Self.collect(
                     bytes,
-                    deadline: hardDeadline,
+                    hardDeadline: hardDeadline,
+                    runDeadline: deadline,
                     timeoutSeconds: effectiveTimeout
                 )
                 throw OpenAICompatibleAgentClientError.requestFailed(
@@ -187,7 +188,8 @@ struct OpenAICompatibleAgentClient: Sendable {
                 // 也有代理漏写 text/event-stream。完整收集后同时兼容这两类响应。
                 let data = try await Self.collect(
                     bytes,
-                    deadline: hardDeadline,
+                    hardDeadline: hardDeadline,
+                    runDeadline: deadline,
                     timeoutSeconds: effectiveTimeout
                 )
                 if Self.looksLikeEventStream(data) {
@@ -321,20 +323,35 @@ struct OpenAICompatibleAgentClient: Sendable {
 
     private static func collect(
         _ bytes: URLSession.AsyncBytes,
-        deadline: Date,
+        hardDeadline: Date,
+        runDeadline: Date?,
         timeoutSeconds: Double
     ) async throws -> Data {
-        var data = Data()
-        for try await byte in bytes {
-            if data.count.isMultiple(of: 4_096), Date() >= deadline {
+        // 整段收集的绝对截止取两者较早者：请求级 hardDeadline 或运行级 runDeadline。
+        let effectiveDeadline = if let runDeadline, runDeadline < hardDeadline {
+            runDeadline
+        } else {
+            hardDeadline
+        }
+        return try await withRunDeadlineWatchdog(effectiveDeadline) {
+            var data = Data()
+            do {
+                for try await byte in bytes {
+                    if data.count.isMultiple(of: 4_096), Date() >= effectiveDeadline {
+                        throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
+                    }
+                    data.append(byte)
+                }
+            } catch {
+                // 与流式路径同源的取消翻译：截止期到点的取消按超时上报（collect 无
+                // 「保住已完成响应」语义，只收错误 body / 整段 JSON）。
+                guard Date() >= effectiveDeadline else { throw error }
+            }
+            if Date() >= effectiveDeadline {
                 throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
             }
-            data.append(byte)
+            return data
         }
-        if Date() >= deadline {
-            throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
-        }
-        return data
     }
 
     private static func decodeCompletion(
@@ -405,13 +422,67 @@ struct OpenAICompatibleAgentClient: Sendable {
         )
     }
 
+    /// 截止 watchdog：与字节到达解耦的硬截断。
+    ///
+    /// 2026-09-01 根治（runID 0A55B952 实证）：流内全部检查（空闲超时/硬截止/心跳）
+    /// 都挂在换行字节分支上，「socket 层有活动但无换行字节」的挂死会绕过一切；
+    /// 唯一兜底 URLSession timeoutInterval 又会被传输层活动续命，导致运行截止后
+    /// 19 分钟才收场。watchdog 到点直接取消消费任务，终局语义由消费任务的取消
+    /// 翻译决定（主体已完成保住响应，否则按运行截止超时上报）。
+    private static func withRunDeadlineWatchdog<T: Sendable>(
+        _ runDeadline: Date?,
+        _ operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        guard let runDeadline else { return try await operation() }
+        // 消费者跑在独立 Task 里（TaskGroup child 拿不到句柄、无法被 watchdog 定点
+        // 取消）；watchdog 在 group child 里睡到截止点后取消消费者。外部取消经
+        // onCancel 同样直达消费者，用户取消运行的语义不被 watchdog 层吞掉。
+        let consumer = Task { try await operation() }
+        return try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(max(0, runDeadline.timeIntervalSinceNow) * 1_000_000_000)
+                    )
+                    consumer.cancel()
+                }
+                defer { group.cancelAll() }
+                return try await consumer.value
+            }
+        } onCancel: {
+            consumer.cancel()
+        }
+    }
+
     private static func decodeStreamingResponse(
         _ bytes: URLSession.AsyncBytes,
         statusCode: Int,
         startedAt: Date,
         timeoutSeconds: Double,
         runDeadline: Date? = nil,
-        progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?,
+        progressHandler: (@Sendable (AgentStreamProgress) async -> Void)? = nil,
+        deltaHandler: (@Sendable (AgentStreamDelta) async -> Void)? = nil
+    ) async throws -> AgentCompletionResult {
+        try await withRunDeadlineWatchdog(runDeadline) {
+            try await consumeStreamLines(
+                bytes,
+                statusCode: statusCode,
+                startedAt: startedAt,
+                timeoutSeconds: timeoutSeconds,
+                runDeadline: runDeadline,
+                progressHandler: progressHandler,
+                deltaHandler: deltaHandler
+            )
+        }
+    }
+
+    private static func consumeStreamLines(
+        _ bytes: URLSession.AsyncBytes,
+        statusCode: Int,
+        startedAt: Date,
+        timeoutSeconds: Double,
+        runDeadline: Date?,
+        progressHandler: (@Sendable (AgentStreamProgress) async -> Void)? = nil,
         deltaHandler: (@Sendable (AgentStreamDelta) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
         var accumulator = AgentStreamingResponseAccumulator()
@@ -448,66 +519,79 @@ struct OpenAICompatibleAgentClient: Sendable {
         // 不使用 AsyncBytes.lines：它会忽略 SSE 事件之间的空行，进而把相邻
         // `data: {...}\n\ndata: {...}` 错误拼成同一个 JSON。这里直接按原始字节
         // 分行，保留空行作为事件边界。
-        for try await byte in bytes {
-            guard byte == 0x0A else {
-                lineBuffer.append(byte)
-                continue
-            }
-            // 流式超时改为“分片间空闲”：收到字节即续期，超过空闲上限无新数据才收工。
-            // 这样推理模型(GLM 等)的长流式响应只要持续吐片就能完成；彻底无字节的卡死由
-            // URLSession 的 timeoutInterval 兜底。
-            // 2026-09-01 根治:整次运行的绝对截止时间(runDeadline)在流式中途到达时
-            // 硬终止——持续吐片但总时长失控不再无界(此前「整体上限由 Agent 轮间预算
-            // 保证」的假设被 2026-08-31 实证击穿:单轮流式 405-725s,轮间检查形同虚设)。
-            // 主体已 finish 只差 usage 尾包时到点则保住已完成响应(usage 保守估算兜底)。
-            let idleLimit = accumulator.isFinished
-                ? min(timeoutSeconds, Self.postFinishUsageGraceSeconds)
-                : timeoutSeconds
-            let now = Date()
-            if let runDeadline, now >= runDeadline {
-                if accumulator.isFinished {
-                    break
+        do {
+            for try await byte in bytes {
+                guard byte == 0x0A else {
+                    lineBuffer.append(byte)
+                    continue
                 }
-                throw OpenAICompatibleAgentClientError.runDeadlineExceeded(runDeadline)
-            }
-            if now.timeIntervalSince(lastActivityAt) >= idleLimit {
-                if accumulator.isFinished {
-                    break
-                }
-                throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
-            }
-            lastActivityAt = now
-
-            let rawLine = String(decoding: lineBuffer, as: UTF8.self)
-            lineBuffer.removeAll(keepingCapacity: true)
-            reachedDone = try consumeSSELine(
-                rawLine,
-                eventDataLines: &eventDataLines,
-                accumulator: &accumulator,
-                statusCode: statusCode
-            )
-            if accumulator.receivedChunkCount > lastReportedChunkCount {
+                // 流式超时改为“分片间空闲”：收到字节即续期，超过空闲上限无新数据才收工。
+                // 这样推理模型(GLM 等)的长流式响应只要持续吐片就能完成。
+                // 2026-09-01 根治:整次运行的绝对截止时间(runDeadline)在流式中途到达时
+                // 硬终止——持续吐片但总时长失控不再无界(此前「整体上限由 Agent 轮间预算
+                // 保证」的假设被 2026-08-31 实证击穿:单轮流式 405-725s,轮间检查形同虚设)。
+                // 主体已 finish 只差 usage 尾包时到点则保住已完成响应(usage 保守估算兜底)。
+                // 同日追加根治(runID 0A55B952):换行分支内的检查对「无换行字节」的挂死
+                // 不可见,由外层 withRunDeadlineWatchdog 到点取消本循环,取消翻译在下方
+                // catch 统一处理;「彻底无字节由 URLSession timeoutInterval 兜底」的旧假设
+                // 已被传输层活动续命空闲计时器的实证击穿。
+                let idleLimit = accumulator.isFinished
+                    ? min(timeoutSeconds, Self.postFinishUsageGraceSeconds)
+                    : timeoutSeconds
                 let now = Date()
-                if accumulator.receivedChunkCount == 1 {
-                    await progressHandler?(
-                        .firstChunk(elapsed: now.timeIntervalSince(startedAt))
-                    )
-                    lastProgressReportedAt = now
-                    lastReportedChunkCount = accumulator.receivedChunkCount
-                } else if now.timeIntervalSince(lastProgressReportedAt) >= 10 {
-                    await progressHandler?(
-                        .active(
-                            chunkCount: accumulator.receivedChunkCount,
-                            elapsed: now.timeIntervalSince(startedAt)
+                if let runDeadline, now >= runDeadline {
+                    if accumulator.isFinished {
+                        break
+                    }
+                    throw OpenAICompatibleAgentClientError.runDeadlineExceeded(runDeadline)
+                }
+                if now.timeIntervalSince(lastActivityAt) >= idleLimit {
+                    if accumulator.isFinished {
+                        break
+                    }
+                    throw OpenAICompatibleAgentClientError.timedOut(timeoutSeconds)
+                }
+                lastActivityAt = now
+
+                let rawLine = String(decoding: lineBuffer, as: UTF8.self)
+                lineBuffer.removeAll(keepingCapacity: true)
+                reachedDone = try consumeSSELine(
+                    rawLine,
+                    eventDataLines: &eventDataLines,
+                    accumulator: &accumulator,
+                    statusCode: statusCode
+                )
+                if accumulator.receivedChunkCount > lastReportedChunkCount {
+                    let now = Date()
+                    if accumulator.receivedChunkCount == 1 {
+                        await progressHandler?(
+                            .firstChunk(elapsed: now.timeIntervalSince(startedAt))
                         )
-                    )
-                    lastProgressReportedAt = now
-                    lastReportedChunkCount = accumulator.receivedChunkCount
+                        lastProgressReportedAt = now
+                        lastReportedChunkCount = accumulator.receivedChunkCount
+                    } else if now.timeIntervalSince(lastProgressReportedAt) >= 10 {
+                        await progressHandler?(
+                            .active(
+                                chunkCount: accumulator.receivedChunkCount,
+                                elapsed: now.timeIntervalSince(startedAt)
+                            )
+                        )
+                        lastProgressReportedAt = now
+                        lastReportedChunkCount = accumulator.receivedChunkCount
+                    }
+                }
+                await emitPendingStreamDeltas()
+                if reachedDone {
+                    break
                 }
             }
-            await emitPendingStreamDeltas()
-            if reachedDone {
-                break
+        } catch {
+            // 截止期取消翻译：watchdog 到点取消（或错误恰逢截止）时，主体已完成
+            // 则保住已完成响应（usage 保守估算兜底，与换行触发的到点分支同语义），
+            // 否则按运行截止超时上报；截止未到的错误（含外部取消）原样上抛。
+            guard let runDeadline, Date() >= runDeadline else { throw error }
+            guard accumulator.isFinished else {
+                throw OpenAICompatibleAgentClientError.runDeadlineExceeded(runDeadline)
             }
         }
 

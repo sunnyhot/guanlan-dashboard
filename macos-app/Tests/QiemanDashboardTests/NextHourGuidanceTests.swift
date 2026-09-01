@@ -372,6 +372,7 @@ private final class FakeNextHourAgentClient: TrendResearchAgentClient, @unchecke
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date?,

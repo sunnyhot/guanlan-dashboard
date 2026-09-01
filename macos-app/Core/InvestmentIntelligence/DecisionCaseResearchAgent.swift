@@ -136,6 +136,7 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
                 tools: tools,
                 toolChoice: .auto,
                 temperature: Self.temperature,
+                maxOutputTokens: nil,
                 settings: settings,
                 timeout: remainingTimeout,
                 deadline: nil,

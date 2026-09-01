@@ -333,6 +333,31 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(client.requestedTimeouts.compactMap { $0 }, [180, 180, 180, 180])
     }
 
+    /// 2026-09-01 根治(runID 0A55B952):每次模型请求都带输出 token 上限,
+    /// 服务端截断退化生成(配合 .length 重发机制),不再发出无上限请求。
+    func testEveryModelRequestCarriesMaxOutputTokensCap() async throws {
+        let snapshot = makeEmptySnapshot()
+        let report = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
+        var responses: [Result<AgentCompletionResult, Error>] = [
+            .success(toolCallResponse([
+                AgentToolCall(id: "o1", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
+            ]))
+        ]
+        responses += try moduleSubmissionResponses(report: report, prefix: "cap")
+        let client = ScriptedTrendAgentClient(responses)
+        let agent = TrendResearchAgent(client: client)
+
+        _ = try await agent.run(snapshot: snapshot, settings: testSettings()) { _ in }
+
+        XCTAssertEqual(
+            client.requestedMaxOutputTokens,
+            Array(repeating: TrendResearchRunPolicy().maxOutputTokensPerRequest, count: client.responsesConsumed),
+            "所有模型请求（研究轮与提交轮）都应携带 policy 的输出上限"
+        )
+    }
+
     func testTimedOutSubmissionAutomaticallyConvergesAndRetries() async throws {
         let snapshot = makeEmptySnapshot()
         let report = TrendAnalysisReport
@@ -606,6 +631,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
     private var responses: [Result<AgentCompletionResult, Error>]
     private var requestToolNames: [[String]] = []
     private var recordedRequestTimeouts: [Double?] = []
+    private var recordedMaxOutputTokens: [Int?] = []
     private(set) var responsesConsumed = 0
 
     init(_ responses: [Result<AgentCompletionResult, Error>]) {
@@ -617,6 +643,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date?,
@@ -626,6 +653,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         responsesConsumed += 1
         requestToolNames.append(tools.map(\.function.name))
         recordedRequestTimeouts.append(timeout)
+        recordedMaxOutputTokens.append(maxOutputTokens)
         let next = responses.isEmpty
             ? Result<AgentCompletionResult, Error>.failure(URLError(.badServerResponse))
             : responses.removeFirst()
@@ -649,6 +677,12 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         lock.lock()
         defer { lock.unlock() }
         return recordedRequestTimeouts
+    }
+
+    var requestedMaxOutputTokens: [Int?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedMaxOutputTokens
     }
 }
 

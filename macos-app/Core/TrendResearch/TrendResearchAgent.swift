@@ -29,6 +29,7 @@ protocol TrendResearchAgentClient: Sendable {
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date?,
@@ -37,13 +38,14 @@ protocol TrendResearchAgentClient: Sendable {
 }
 
 extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
-    // 协议见证：客户端 complete 新增了 maxOutputTokens/deadline 参数（带默认值），
-    // 与协议签名不再逐字匹配，这里显式桥接；旧链路语义不变（不限输出长度、无运行截止）。
+    // 协议见证：真实 complete 还有 onStreamDelta 尾参（协议不暴露），显式桥接；
+    // maxOutputTokens/deadline 直通传输层。
     func complete(
         messages: [AgentChatMessage],
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date?,
@@ -54,7 +56,7 @@ extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
             tools: tools,
             toolChoice: toolChoice,
             temperature: temperature,
-            maxOutputTokens: nil,
+            maxOutputTokens: maxOutputTokens,
             settings: settings,
             timeout: timeout,
             deadline: deadline,
@@ -96,6 +98,11 @@ struct TrendResearchRunPolicy: Sendable {
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
     var temperature: Double = 0.2
+    /// 单次请求输出 token 上限。2026-09-01 实证（runID 0A55B952）：glm-5.3-flash
+    /// 在巨型单行 submit 载荷上可持续生成约 49 分钟无界输出（此前请求不设上限），
+    /// 服务端截断配合 Agent 的 .length 重发机制兜住退化生成。32K 远大于最大合法
+    /// 提交（整份 29 只报告 ≈ 1 万 token + 推理链），不影响正常输出。
+    var maxOutputTokensPerRequest: Int? = 32_768
 
     init() {}
 
@@ -453,6 +460,7 @@ struct TrendResearchAgent: Sendable {
                         tools: toolsForRequest,
                         toolChoice: .auto,
                         temperature: policy.temperature,
+                        maxOutputTokens: policy.maxOutputTokensPerRequest,
                         settings: settings,
                         timeout: perRequestTimeout,
                         deadline: runDeadline,
@@ -1066,6 +1074,7 @@ struct TrendResearchAgent: Sendable {
                 tools: [submitDefinition],
                 toolChoice: .auto,
                 temperature: policy.temperature,
+                maxOutputTokens: policy.maxOutputTokensPerRequest,
                 settings: settings,
                 // 2026-09-01 根治:此前 timeout: nil(回退用户配置且只是空闲语义),
                 // fanout 批次生成完全不受预算约束——2026-08-31 实证 fanout 白烧 874s

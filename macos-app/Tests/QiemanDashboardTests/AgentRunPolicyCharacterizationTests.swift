@@ -43,6 +43,8 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(policy.expandedTotalTimeoutSeconds, 3600)
         XCTAssertEqual(policy.temperature, 0.2, accuracy: 0.001)
         XCTAssertEqual(policy.maxToolResultBytes, 32 * 1024)
+        // 2026-09-01 根治(runID 0A55B952):单请求输出上限 32K,封住退化生成的无界输出。
+        XCTAssertEqual(policy.maxOutputTokensPerRequest, 32_768)
 
         // 静态默认值
         XCTAssertEqual(TrendResearchRunPolicy.defaultPerRequestTimeoutSeconds, 180)

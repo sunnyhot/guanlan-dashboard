@@ -7,6 +7,7 @@ import XCTest
 final class OpenAICompatibleAgentClientTests: XCTestCase {
     override func tearDown() {
         MockAgentURLProtocol.requestHandler = nil
+        MockAgentURLProtocol.hangingBodyHandler = nil
         super.tearDown()
     }
 
@@ -307,6 +308,96 @@ final class OpenAICompatibleAgentClientTests: XCTestCase {
         XCTAssertEqual(result.stopReason, .stop)
     }
 
+    // 2026-09-01 根治回归（runID 0A55B952）：「socket 层有活动但无换行字节」的挂死
+    // 曾绕过流内全部检查（空闲超时/硬截止都在换行分支里），运行截止后 19 分钟才由
+    // URLSession 空闲计时器收场。watchdog 必须与字节到达解耦、在截止点附近切断。
+
+    func testClientCutsNewlineFreeStreamHangAtRunDeadline() async throws {
+        // 半截 SSE 事件：有字节、无换行——换行分支里的任何检查都不会执行。
+        MockAgentURLProtocol.hangingBodyHandler = { request in
+            (
+                Self.okResponse(for: request, contentType: "text/event-stream; charset=utf-8"),
+                Data(#"data: {"choices":[{"index":0,"delta":{"role":"assistant","content""#.utf8)
+            )
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        let startedAt = Date()
+        do {
+            _ = try await client.complete(
+                messages: [AgentChatMessage(role: .user, content: "u")],
+                tools: [],
+                toolChoice: .auto,
+                settings: providerSettings(),
+                timeout: 60,  // 空闲 60s 不触发，排除 URLSession 兜底抢先收场
+                deadline: Date().addingTimeInterval(0.5)
+            )
+            XCTFail("预期运行截止超时")
+        } catch {
+            guard case OpenAICompatibleAgentClientError.runDeadlineExceeded = error else {
+                XCTFail("预期 runDeadlineExceeded，实际：\(error)")
+                return
+            }
+        }
+        XCTAssertLessThan(
+            Date().timeIntervalSince(startedAt),
+            15,
+            "watchdog 应在截止点附近切断，而不是等空闲超时或挂死"
+        )
+    }
+
+    func testClientPreservesFinishedStreamWhenDeadlineFiresDuringUsageTail() async throws {
+        // 主体已完成（finish_reason=stop）、无 [DONE]、无 usage 尾包，之后挂死：
+        // watchdog 到点取消时必须保住已完成响应（usage 保守估算兜底）。
+        // 注意多行字面量的 join 语义:事件行后需要「两个换行」才有空行边界,
+        // 因此字面量里事件行之后要有两个空行。
+        let stream = """
+        data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"主体已完成"},"finish_reason":"stop"}]}
+
+
+        """
+        MockAgentURLProtocol.hangingBodyHandler = { request in
+            (
+                Self.okResponse(for: request, contentType: "text/event-stream; charset=utf-8"),
+                Data(stream.utf8)
+            )
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        // deadline 留足字节消费时间（测试并发调度下逐字节迭代有延迟）；
+        // 消费完事件后挂在等 usage 尾包，watchdog 到点取消时事件已完整。
+        let result = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            settings: providerSettings(),
+            timeout: 60,
+            deadline: Date().addingTimeInterval(2.0)
+        )
+
+        XCTAssertEqual(result.assistantMessage.content, "主体已完成")
+        XCTAssertEqual(result.finishReason, "stop")
+        XCTAssertEqual(result.stopReason, .stop)
+    }
+
+    func testClientEncodesMaxOutputTokensCap() async throws {
+        MockAgentURLProtocol.requestHandler = { request in
+            let body = try Self.requestBodyData(request)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(json["max_tokens"] as? Int, 32_768)
+            return (Self.okResponse(for: request), Self.textMessageResponse(content: "ok"))
+        }
+
+        let client = OpenAICompatibleAgentClient(session: Self.mockSession())
+        _ = try await client.complete(
+            messages: [AgentChatMessage(role: .user, content: "u")],
+            tools: [],
+            toolChoice: .auto,
+            maxOutputTokens: 32_768,
+            settings: providerSettings()
+        )
+    }
+
     func testClientEncodesAssistantToolCallAndToolResultMessages() async throws {
         let assistantMessage = AgentChatMessage(
             role: .assistant,
@@ -547,12 +638,28 @@ private struct ResponseError: Error {
 
 private final class MockAgentURLProtocol: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    /// 模拟「投喂部分字节后流挂死」：投完 data 后不调 didFinishLoading，
+    /// 连接保持打开且无后续字节——只有截止 watchdog 能在这种流上收场。
+    static var hangingBodyHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
 
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        if let hangingHandler = Self.hangingBodyHandler {
+            do {
+                let (response, data) = try hangingHandler(request)
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                if !data.isEmpty {
+                    client?.urlProtocol(self, didLoad: data)
+                }
+                // 刻意不调 didFinishLoading：模拟服务端生成停滞、连接不关闭。
+            } catch {
+                client?.urlProtocol(self, didFailWithError: error)
+            }
+            return
+        }
         guard let handler = Self.requestHandler else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
             return

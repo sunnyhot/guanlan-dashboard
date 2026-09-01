@@ -23,6 +23,7 @@ private final class FakePipelineClient: TrendResearchAgentClient, @unchecked Sen
         tools: [AgentToolDefinition],
         toolChoice: AgentToolChoice,
         temperature: Double,
+        maxOutputTokens: Int?,
         settings: TrendAIProviderSettings,
         timeout: Double?,
         deadline: Date?,
