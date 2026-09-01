@@ -240,12 +240,23 @@ final class GatewayAgentClientTests: XCTestCase {
         }
         batcher.add(.content, "你")
         batcher.add(.content, "好")
-        // 窗口未到：不投递
+        // 窗口未到：不投递（50ms 窗口内 10ms 采样，窗口不可能提前到期）
         try await Task.sleep(nanoseconds: 10_000_000)
         XCTAssertTrue(collector.progress.isEmpty)
-        // 窗口到期：一批按序投递
-        try await Task.sleep(nanoseconds: 80_000_000)
-        XCTAssertEqual(collector.progress, [.contentDelta("你"), .contentDelta("好")])
+        // 窗口到期：一批按序投递。CI 满载时投递任务的调度延迟可远超窗口本身
+        // （2026-09-01 CI 实证固定睡眠 80ms 不够），改为 2 秒有界轮询等待。
+        let expected: [AgentStreamProgress] = [.contentDelta("你"), .contentDelta("好")]
+        var delivered = false
+        var last: [AgentStreamProgress] = []
+        for _ in 0..<200 {
+            last = await collector.progress
+            if last == expected {
+                delivered = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertTrue(delivered, "窗口到期后 2 秒内应按序投递，实际：\(last)")
         // flush 立即投递
         batcher.add(.reasoning, "想")
         await batcher.flush()
