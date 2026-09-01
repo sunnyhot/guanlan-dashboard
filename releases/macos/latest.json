@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.3/QiemanDashboard-4.8.3.zip",
-    "name" : "QiemanDashboard-4.8.3.zip",
-    "sha256" : "49e535efb91bbd36ebafbf91df987b1f1d25f5a88a3cca268e184c3ae2da8d46",
-    "size" : 8605087
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.0/QiemanDashboard-4.9.0.zip",
+    "name" : "QiemanDashboard-4.9.0.zip",
+    "sha256" : "d41b0ba5ab39050a40ac78ca81665788f5cc0e3ab5a76862475fe1dd94f2ec2c",
+    "size" : 8631681
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.8.3/QiemanDashboard-4.8.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.0/QiemanDashboard-4.9.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.8.3.zip",
-      "size" : 8605087
+      "name" : "QiemanDashboard-4.9.0.zip",
+      "size" : 8631681
     }
   ],
-  "body" : "版本号同步 v4.8.3\nL1 广度预暖与注入 + iOS 市场信号面板，八层引擎 App 集成收尾\n八层引擎 App 集成接线——L6 信号闭环全自动 + L7 流水线/L8 回测入口",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.8.3",
-  "name" : "QiemanDashboard v4.8.3",
-  "notes" : "版本号同步 v4.8.3\nL1 广度预暖与注入 + iOS 市场信号面板，八层引擎 App 集成收尾\n八层引擎 App 集成接线——L6 信号闭环全自动 + L7 流水线/L8 回测入口",
+  "body" : "版本号同步 v4.9.0\n趋势 Agent 终局根治——格式兜底、预算硬截止、fanout 接线、超批接受、降级完成",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.0",
+  "name" : "QiemanDashboard v4.9.0",
+  "notes" : "版本号同步 v4.9.0\n趋势 Agent 终局根治——格式兜底、预算硬截止、fanout 接线、超批接受、降级完成",
   "published_at" : "",
-  "sha256" : "49e535efb91bbd36ebafbf91df987b1f1d25f5a88a3cca268e184c3ae2da8d46",
-  "tag" : "v4.8.3",
-  "tag_name" : "v4.8.3",
-  "version" : "4.8.3"
+  "sha256" : "d41b0ba5ab39050a40ac78ca81665788f5cc0e3ab5a76862475fe1dd94f2ec2c",
+  "tag" : "v4.9.0",
+  "tag_name" : "v4.9.0",
+  "version" : "4.9.0"
 }
