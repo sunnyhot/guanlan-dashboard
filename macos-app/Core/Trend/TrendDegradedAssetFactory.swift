@@ -23,16 +23,20 @@ enum TrendDegradedAssetFactory {
     /// 报告级 Validator 要求每资产三个周期齐全;模型批次缺 horizons 时入库即补,
     /// 否则失败会被推迟到终审,而终审的修复预算更昂贵。
     /// rationale 措辞沿用 SubmitTrendReportTool「待观察信号」先例,保证过校验。
-    static func synthesizedHorizons(reason: String) -> [TrendHorizonView] {
+    /// entityLabel:降级组装 overview 模块时传「组合」,默认「该基金」。
+    static func synthesizedHorizons(
+        reason: String,
+        entityLabel: String = "该基金"
+    ) -> [TrendHorizonView] {
         TrendHorizon.allCases.map { horizon in
             let displayName = horizonDisplayNames[horizon] ?? horizon.rawValue
             return TrendHorizonView(
                 horizon: horizon,
                 direction: .uncertain,
                 confidence: TrendConfidence(score: 30, label: TrendConfidence.label(for: 30)),
-                rationale: "本轮未完成该基金的\(displayName)判断，证据不足。待观察信号:\(reason)；下次运行覆盖本基金后重估。",
+                rationale: "本轮未完成\(entityLabel)的\(displayName)判断，证据不足。待观察信号:\(reason)；下次运行覆盖后重估。",
                 whatWouldChange: reason + "解除后重估方向。",
-                counterSignals: ["该基金行情与证据补齐后重估本周期。"],
+                counterSignals: ["\(entityLabel)行情与证据补齐后重估本周期。"],
                 claimEvidence: TrendClaimEvidence(exemptionReason: reason)
             )
         }

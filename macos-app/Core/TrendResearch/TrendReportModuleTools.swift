@@ -178,7 +178,15 @@ actor TrendReportDraftStore {
               !module.portfolio.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw TrendReportDraftError.invalidModule("组合模块的 headline 和 summary 不能为空。")
         }
-        overview = module
+        // 2026-09-01 傍晚根治(runID 4B624F1C):W4 文案类缺陷(uncertain 缺「待观察信号」
+        // 出口/首句缺方向词/whatWouldChange 空)入库即由 App 确定性补写——此前会沉默到
+        // 整报告终审才爆,错误归属 horizons 却清空整个 overview 要求模型全量重提,
+        // flash 模型整包重建易抄丢字段,修复预算白烧。修补只往文案兜底方向改,
+        // 不动方向/证据语义,与 BaselineContractPatch 修基线数据同一先例。
+        overview = TrendReportOverviewModule(
+            portfolio: module.portfolio,
+            horizons: TrendBaselineContractPatch.horizons(module.horizons)
+        )
     }
 
     func storeMarket(_ module: TrendReportMarketModule) throws {
@@ -203,7 +211,12 @@ actor TrendReportDraftStore {
                 "机会「\(invalidOpportunity.name)」缺少 scope=marketWide；opportunities 只能提交独立全市场扫描结果。"
             )
         }
-        market = module
+        // 与 storeOverview 同源:W4 文案类缺陷入库即补(见 runID 4B624F1C 注记)。
+        market = TrendReportMarketModule(
+            marketOutlook: TrendBaselineContractPatch.markets(module.marketOutlook),
+            sectors: TrendBaselineContractPatch.sectors(module.sectors),
+            opportunities: TrendBaselineContractPatch.opportunities(module.opportunities)
+        )
     }
 
     func storeAssetBatch(_ module: TrendReportAssetBatchModule) throws {
@@ -391,7 +404,13 @@ actor TrendReportDraftStore {
         guard module.actions.count <= 5 else {
             throw TrendReportDraftError.invalidModule("actions 最多保留 5 条。")
         }
-        actions = module
+        // 与 storeOverview 同源:W4 文案类缺陷入库即补(见 runID 4B624F1C 注记)。
+        actions = TrendReportActionsModule(
+            keyAssets: module.keyAssets,
+            actions: TrendBaselineContractPatch.actions(module.actions),
+            warnings: module.warnings,
+            disclaimer: module.disclaimer
+        )
     }
 
     func progress() -> TrendReportDraftProgress {
@@ -485,9 +504,16 @@ actor TrendReportDraftStore {
         snapshot: TrendResearchSnapshot,
         reason: String
     ) -> TrendAnalysisReport? {
-        guard let overview, let market, let actions, !assetTrendsByCode.isEmpty else {
+        // 2026-09-01 傍晚根治(runID 4B624F1C):终局降级不再被 overview/actions 缺失挡住
+        //——prepareRepairs 清空模块后预算即耗尽的运行,已暂存批次(29 只全覆盖)此前
+        // 因 overview 刚被清空而整 run 报废。缺失模块保守合成;market 仍必须存在
+        //(终检要求 marketOutlook/sectors 至少一项,空集合过不了终检;增量运行 market
+        // 恒复用基线,实证不会缺)。
+        guard let market, !assetTrendsByCode.isEmpty else {
             return nil
         }
+        let overviewModule = overview ?? Self.synthesizedOverviewModule(reason: reason)
+        let actionsModule = actions ?? Self.synthesizedActionsModule(reason: reason)
         var merged = assetTrendsByCode
         let assetsByNormalizedCode: [String: TrendContextAsset] = Dictionary(
             snapshot.assets.compactMap { asset in
@@ -515,18 +541,46 @@ actor TrendReportDraftStore {
             dataAsOf: snapshot.dataAsOf,
             privacyMode: snapshot.privacyMode,
             externalSignalStatus: .unavailable,
-            portfolio: overview.portfolio,
-            horizons: overview.horizons,
+            portfolio: overviewModule.portfolio,
+            horizons: overviewModule.horizons,
             marketOutlook: market.marketOutlook,
             sectors: market.sectors,
             opportunities: market.opportunities,
-            keyAssets: actions.keyAssets,
+            keyAssets: actionsModule.keyAssets,
             assetTrends: orderedAssetTrends,
-            actions: actions.actions,
+            actions: actionsModule.actions,
             evidence: [],
-            warnings: actions.warnings,
-            disclaimer: actions.disclaimer,
+            warnings: actionsModule.warnings,
+            disclaimer: actionsModule.disclaimer,
             schemaVersion: TrendAnalysisReport.currentSchemaVersion
+        )
+    }
+
+    /// 降级组装时 overview 模块缺失的保守占位:组合总判断标注未完成,
+    /// 三周期 uncertain(带待观察信号出口,过 W4 终检)。
+    private static func synthesizedOverviewModule(reason: String) -> TrendReportOverviewModule {
+        TrendReportOverviewModule(
+            portfolio: TrendPortfolioSummary(
+                headline: "组合研判未完成",
+                riskLevel: .medium,
+                summary: "原因待确认：\(reason)，本轮未完成组合总判断；已覆盖持仓的分析见下。",
+                claimEvidence: TrendClaimEvidence(exemptionReason: "\(reason)，组合总判断未完成。")
+            ),
+            horizons: TrendDegradedAssetFactory.synthesizedHorizons(
+                reason: reason,
+                entityLabel: "组合"
+            )
+        )
+    }
+
+    /// 降级组装时 actions 模块缺失的保守占位:无行动、无警告,
+    /// disclaimer 保留「非投资建议」终检措辞。
+    private static func synthesizedActionsModule(reason: String) -> TrendReportActionsModule {
+        TrendReportActionsModule(
+            keyAssets: [],
+            actions: [],
+            warnings: [],
+            disclaimer: "本报告为\(reason)后的降级组装结果，非投资建议。"
         )
     }
 
@@ -589,7 +643,7 @@ actor TrendReportDraftStore {
             .compactMap { expectedFundCodesByNormalized[$0] }
     }
 
-    private static func normalizedCode(_ value: String?) -> String? {
+    static func normalizedCode(_ value: String?) -> String? {
         guard let value else { return nil }
         let normalized = value.uppercased().filter { $0.isLetter || $0.isNumber }
         return normalized.isEmpty ? nil : normalized
@@ -671,6 +725,17 @@ struct SubmitTrendAssetBatchTool: TrendResearchTool {
             moduleName: "持仓基金分批"
         ) { store, data in
             var module = try JSONDecoder().decode(TrendReportAssetBatchModule.self, from: data)
+            // 2026-09-01 傍晚根治(runID 4B624F1C):模型常写 name 漏 code(当天 4 批全因
+            // 「缺少有效 code」各烧一轮修复预算)。name 与冻结快照精确匹配时 App
+            // 确定性补写,不再拒批;匹配不到维持原错误。
+            let (resolvedModule, resolvedNames) = Self.resolveMissingCodes(module, snapshot: context.snapshot)
+            if !resolvedNames.isEmpty {
+                module = resolvedModule
+                await AIAgentDiagnosticLog.record(
+                    "asset_codes_resolved",
+                    message: "按名称补写 \(resolvedNames.count) 只基金的缺失 code（App 兜底，不拒批）"
+                )
+            }
             let evidence = await context.evidenceLedger.allEvidence()
             let (sanitized, removedIDs) = TrendReportEvidenceSanitizer.sanitizedAssetBatch(module, evidence: evidence)
             module = sanitized
@@ -682,6 +747,45 @@ struct SubmitTrendAssetBatchTool: TrendResearchTool {
             }
             try await store.storeAssetBatch(module)
         }
+    }
+
+    /// name 与冻结快照精确匹配(trim 后全等;不做模糊匹配避免错配)时补写缺失
+    /// code,其余条目原样返回。返回补写成功的基金名列表供诊断。
+    static func resolveMissingCodes(
+        _ module: TrendReportAssetBatchModule,
+        snapshot: TrendResearchSnapshot
+    ) -> (module: TrendReportAssetBatchModule, resolvedNames: [String]) {
+        let codeByTrimmedName: [String: String] = Dictionary(
+            snapshot.assets.compactMap { asset -> (String, String)? in
+                guard let code = asset.code else { return nil }
+                let assetName = asset.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !assetName.isEmpty else { return nil }
+                return (assetName, code)
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        guard !codeByTrimmedName.isEmpty else { return (module, []) }
+
+        var resolvedNames: [String] = []
+        let assets = module.assetTrends.map { asset -> TrendAssetView in
+            guard TrendReportDraftStore.normalizedCode(asset.code) == nil else { return asset }
+            let trimmedName = asset.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let code = codeByTrimmedName[trimmedName] else { return asset }
+            resolvedNames.append(asset.name)
+            return TrendAssetView(
+                id: asset.id,
+                name: asset.name,
+                code: code,
+                sector: asset.sector,
+                impactText: asset.impactText,
+                horizons: asset.horizons,
+                rationale: asset.rationale,
+                counterSignals: asset.counterSignals,
+                claimEvidence: asset.claimEvidence
+            )
+        }
+        guard !resolvedNames.isEmpty else { return (module, []) }
+        return (TrendReportAssetBatchModule(assetTrends: assets), resolvedNames)
     }
 }
 
@@ -905,9 +1009,12 @@ enum TrendReportEvidenceSanitizer {
         var counterSignals = horizon.counterSignals
         if forceDowngrade {
             direction = .uncertain
-            if !rationale.contains("待观察信号") {
-                rationale = rationale + " 待观察信号：出现可关联的行情或研究证据后重估方向。"
-            }
+        }
+        // 2026-09-01 傍晚根治:补出口条件从「降级为 uncertain」扩到「本来就是 uncertain」
+        //——模型自报 uncertain 且 rationale 无出口时此前原样放行,终审 W4 契约必拒
+        //(runID 4B624F1C:同一错误 16 轮重发仍复现,修不掉)。
+        if direction == .uncertain, !rationale.contains("待观察信号") {
+            rationale = rationale + " 待观察信号：出现可关联的行情或研究证据后重估方向。"
         }
         if whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             whatWouldChange = "取到可关联证据后升级方向判断。"

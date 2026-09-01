@@ -421,8 +421,9 @@ execute(argumentsJSON, context)
   2. `direction==uncertain` 的 rationale 必须含「待观察信号:…」出口;
   3. horizons/sectors/opportunities/actions 的 `whatWouldChange`(作废/升级条件)非空(marketOutlook 无此字段)。
   配套机制:
-  - **App 强制降级补写**:`SubmitTrendReportTool.normalized(forceShortUncertainReasons:)` 把短期降为 uncertain 时,由 App 在 rationale 末尾追加「待观察信号:…」并在 whatWouldChange 为空时兜底——降级场景不依赖模型补写。
-  - **基线复用补丁**:`TrendBaselineContractPatch`(增量运行复用旧基线数据时,由 App 补方向词前缀/待观察信号/作废条件),防止旧报告把增量运行的新报告整份拒批;模型本次提交的新数据不做静默修补。
+      - **App 强制降级补写**:`SubmitTrendReportTool.normalized(forceShortUncertainReasons:)` 把短期降为 uncertain 时,由 App 在 rationale 末尾追加「待观察信号:…」并在 whatWouldChange 为空时兜底——降级场景不依赖模型补写。
+      - **基线复用补丁**:`TrendBaselineContractPatch`(增量运行复用旧基线数据时,由 App 补方向词前缀/待观察信号/作废条件),防止旧报告把增量运行的新报告整份拒批。
+      - **2026-09-01 傍晚追加(runID 4B624F1C 实证,W4 修补扩展到全部入库数据)**:「模型新数据不做静默修补」语义废止——`storeOverview`/`storeMarket`/`storeActions` 入库时对模型提交的数据同样跑 `TrendBaselineContractPatch`(方向词前缀/uncertain 出口/whatWouldChange 兜底)。实证死链:模型自报 uncertain 无出口的 horizons 入库放行 → 沉默 9 轮到整报告终审才爆 → `prepareRepairs` 清空整个 overview 要求全量重提 → flash 模型整包重建抄丢字段 → 16 轮重发同错复现 → 修复预算耗尽。`TrendReportEvidenceSanitizer.rebuild` 的补出口条件同步从「降级为 uncertain」扩到「本来就是 uncertain」。同批落地:①asset batch 模型写 name 漏 code 时按冻结快照精确匹配补写(`SubmitTrendAssetBatchTool.resolveMissingCodes`,匹配不到维持原错误);②`degradedReport` 对缺失的 overview/actions 保守合成(`TrendDegradedAssetFactory.synthesizedHorizons` 加 entityLabel),不再被 `prepareRepairs` 刚清空的模块挡住——29 只全暂存的运行不因 overview 尾巴问题整 run 报废;market 仍必须已入库(终检要求 marketOutlook/sectors 至少一项,增量运行恒复用基线)。
   - **2026-08-28 拒批死循环双修复(v4.7.0 线上实证,基金 000369/019524)**:
     1. `storeAssetBatch` 一批内全部基金错误一次性返回(首错即 throw 时期每轮只报一只,整批重交每轮 2-3.5 分钟);
     2. 「涨跌归因：」+无因果证据(`market:stock:`/`vendor:alphavantage:` 前缀)→ App 入库前自动降级为「原因待确认：(缺少可佐证的底层证券当日行情或外部研究证据。原描述：…)」——Tavily 下线后 40 只行情上限外的基金零路径通关,结构性拒批必然复发,此兜底为治本。

@@ -383,6 +383,146 @@ final class TrendReportModuleToolsTests: XCTestCase {
         )
     }
 
+    // MARK: - 2026-09-01 傍晚根治：W4 入库修补 / code 补写 / 降级合成（runID 4B624F1C）
+
+    /// 模型自报 uncertain 且 rationale 无「待观察信号」出口、无方向词、whatWouldChange 空
+    /// ——此前入库原样放行、终审必拒且修不掉(16 轮重发仍复现)。现在入库即由 App 修补。
+    func testStoreOverviewPatchesW4ClarityOnEntry() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+        let base = TrendAnalysisReport.fixture(
+            generatedAt: "2026-09-01 20:00:00",
+            externalSignalStatus: .partial
+        )
+        let confidence = base.horizons.first?.confidence
+            ?? TrendConfidence(score: 50, label: TrendConfidence.label(for: 50))
+        let rawHorizons: [TrendHorizonView] = [
+            TrendHorizonView(
+                horizon: .short,
+                direction: .uncertain,
+                confidence: confidence,
+                rationale: "多空交织，需要继续跟踪。",
+                whatWouldChange: "",
+                counterSignals: ["若量能放大则重估。"],
+                claimEvidence: .empty
+            )
+        ] + base.horizons.filter { $0.horizon != .short }
+
+        try await store.storeOverview(
+            TrendReportOverviewModule(portfolio: base.portfolio, horizons: rawHorizons)
+        )
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
+        )
+        try await store.storeActions(
+            TrendReportActionsModule(
+                keyAssets: [],
+                actions: [],
+                warnings: [],
+                disclaimer: "非投资建议，仅供个人研究参考。"
+            )
+        )
+
+        let snapshot = makeSnapshot(codes: ["000001"])
+        let assembledOptional = await store.assembledReport(snapshot: snapshot)
+        let assembled = try XCTUnwrap(assembledOptional)
+        let short = try XCTUnwrap(assembled.horizons.first { $0.horizon == .short })
+        XCTAssertTrue(short.rationale.contains("待观察信号"), "uncertain 周期应补出口，实际：\(short.rationale)")
+        XCTAssertTrue(
+            TrendAnalysisValidator.directionLeadWords.contains {
+                TrendVerdictPresentation.split(rationale: short.rationale).headline.contains($0)
+            },
+            "首句应补方向词，实际：\(short.rationale)"
+        )
+        XCTAssertFalse(
+            short.whatWouldChange.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            "whatWouldChange 应兜底非空"
+        )
+    }
+
+    /// 清洗器的 uncertain 早退分支同样补出口（与入库修补双保险）。
+    func testSanitizedHorizonAppendsExitToSelfReportedUncertain() {
+        let horizon = TrendHorizonView(
+            horizon: .medium,
+            direction: .uncertain,
+            confidence: TrendConfidence(score: 40, label: TrendConfidence.label(for: 40)),
+            rationale: "证据不足，暂难定向。",
+            whatWouldChange: "",
+            counterSignals: [],
+            claimEvidence: .empty
+        )
+        let (result, _) = TrendReportEvidenceSanitizer.sanitizedHorizon(
+            horizon,
+            fundCode: nil,
+            fundName: "测试",
+            evidenceByID: [:]
+        )
+        XCTAssertTrue(result.rationale.contains("待观察信号"), "实际：\(result.rationale)")
+        XCTAssertFalse(result.whatWouldChange.isEmpty)
+        XCTAssertEqual(result.direction, .uncertain, "自报 uncertain 不改变方向")
+    }
+
+    /// 模型写 name 漏 code 时按冻结快照精确匹配补写，不再拒批烧修复预算。
+    func testAssetBatchResolvesMissingCodeByName() {
+        let snapshot = makeSnapshot(codes: ["000001", "000002"])
+        let missingCode = TrendAssetView(
+            id: "asset-missing",
+            name: "基金000001",
+            code: nil,
+            sector: "A股",
+            impactText: "涨跌归因：跟随板块上涨。",
+            horizons: [],
+            rationale: "观察。",
+            counterSignals: ["若行情变化则重新评估。"],
+            claimEvidence: .empty
+        )
+        let unknownName = TrendAssetView(
+            id: "asset-unknown",
+            name: "不存在的基金",
+            code: nil,
+            sector: "A股",
+            impactText: "涨跌归因：跟随板块上涨。",
+            horizons: [],
+            rationale: "观察。",
+            counterSignals: ["若行情变化则重新评估。"],
+            claimEvidence: .empty
+        )
+
+        let (module, resolvedNames) = SubmitTrendAssetBatchTool.resolveMissingCodes(
+            TrendReportAssetBatchModule(assetTrends: [missingCode, unknownName]),
+            snapshot: snapshot
+        )
+
+        XCTAssertEqual(resolvedNames, ["基金000001"], "只补写能精确匹配的")
+        XCTAssertEqual(module.assetTrends.first?.code, "000001")
+        XCTAssertNil(module.assetTrends.last?.code, "匹配不到的保持原样，维持后续校验错误")
+    }
+
+    /// overview/actions 被 prepareRepairs 清空后预算耗尽：降级组装不再返回 nil，
+    /// 29 只已暂存批次的运行不至于整 run 报废。
+    func testDegradedReportSynthesizesMissingOverviewAndActions() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
+        )
+
+        let snapshot = makeSnapshot(codes: ["000001"])
+        let degradedOptional = await store.degradedReport(snapshot: snapshot, reason: "修复预算耗尽")
+        let degraded = try XCTUnwrap(degradedOptional, "overview/actions 缺失时应保守合成而不是放弃降级")
+        XCTAssertEqual(degraded.portfolio.headline, "组合研判未完成")
+        XCTAssertTrue(degraded.disclaimer.contains("非投资建议"))
+        XCTAssertTrue(
+            degraded.horizons.allSatisfy { $0.direction == .uncertain && $0.rationale.contains("待观察信号") },
+            "合成周期应保守 uncertain 且带出口"
+        )
+        XCTAssertEqual(degraded.assetTrends.count, 1, "已暂存批次保留真实分析")
+    }
+
     private func makeSnapshot(codes: [String]) -> TrendResearchSnapshot {
         let assets = codes.map {
             TrendContextAsset(
