@@ -213,19 +213,25 @@ actor TrendReportDraftStore {
                 "持仓模块不能为空；本批请提交最多 \(Self.assetBatchSize) 只尚未覆盖的基金。"
             )
         }
-        guard module.assetTrends.count <= Self.assetBatchSize else {
-            throw TrendReportDraftError.invalidModule(
-                "单批最多提交 \(Self.assetBatchSize) 只基金，当前提交了 \(module.assetTrends.count) 只。"
-            )
-        }
+        // 2026-09-01 根治:超批不再拒批(2026-08-31 实证模型把 24 只塞进一批,
+        // 拒批后修复轮 418s 仍失败,fanout 整段 874s 白烧)。schema 的 maxItems 仍是
+        // 输出规模指导,但违反时照常逐只校验入库,remaining 自然收缩。
         // v4.6.1:「原因待确认」缺边界措辞时由 App 补写而不是拒批
         // (真实运行实证的拒批死循环修复,详见 policy 注释)。
         // 2026-08-28 死循环修复二连:①无因果证据的「涨跌归因：」先降级为「原因待确认：」
         // (首错即 throw 时期,排在 40 只行情上限外的基金必然拒批且修不完);
         // ②一批内全部基金的问题一次性返回,消灭「每轮只报一只」的打地鼠循环。
+        // 2026-09-01 根治续:③无前缀/空 impactText 由 App 确定性补前缀(不再拒批);
+        // ④缺 horizons 由 App 合成保守三周期(终审要求三周期齐全,推迟到终审更贵);
+        // ⑤supporting 证据为空时 App 补结构性豁免并把周期降为 uncertain——终审
+        //   「缺 supporting 必须 uncertain+exemptionReason」是隐形双条件,
+        //   2026-08-31 fanout 修复轮正死于「资产缺 supportingEvidenceIDs」。
         let assetTrends = module.assetTrends
+            .map(Self.assetWithAttributionPrefix)
             .map(Self.assetWithAttributionDowngrade)
             .map(Self.assetWithAttributionBoundary)
+            .map(Self.assetWithStructuralClaimExemption)
+            .map(Self.assetWithSynthesizedHorizons)
 
         var submittedCodes = Set<String>()
         var batchErrors: [String] = []
@@ -272,6 +278,91 @@ actor TrendReportDraftStore {
         let patched = TrendAssetDailyAttributionPolicy.appendingMissingEvidenceBoundaryIfNeeded(asset.impactText)
         guard patched != asset.impactText else { return asset }
         return replaceImpactText(patched, on: asset)
+    }
+
+    /// 2026-09-01:无前缀/空 impactText 由 App 按因果证据确定性补前缀(先于降级/边界补写,
+    /// 三者用同一证据判定字段,不会互相矛盾)。
+    private static func assetWithAttributionPrefix(_ asset: TrendAssetView) -> TrendAssetView {
+        let prefixed = TrendAssetDailyAttributionPolicy.normalizedAttributionText(
+            asset.impactText,
+            hasCausalEvidence: TrendAssetDailyAttributionPolicy.containsCausalEvidence(
+                asset.claimEvidence.supportingEvidenceIDs
+            )
+        )
+        guard prefixed != asset.impactText else { return asset }
+        return replaceImpactText(prefixed, on: asset)
+    }
+
+    /// 2026-09-01:缺 horizons 的条目由 App 合成保守三周期,失败不再推迟到终审。
+    private static func assetWithSynthesizedHorizons(_ asset: TrendAssetView) -> TrendAssetView {
+        guard asset.horizons.isEmpty else { return asset }
+        return TrendAssetView(
+            id: asset.id,
+            name: asset.name,
+            code: asset.code,
+            sector: asset.sector,
+            impactText: asset.impactText,
+            horizons: TrendDegradedAssetFactory.synthesizedHorizons(
+                reason: "模型本轮未提供周期判断"
+            ),
+            rationale: asset.rationale,
+            counterSignals: asset.counterSignals,
+            claimEvidence: asset.claimEvidence
+        )
+    }
+
+    /// 2026-09-01:supporting 为空时 App 补结构性豁免、周期降 uncertain——
+    /// 终审规则(TrendClaimEvidencePolicy)对空 supporting 硬性要求
+    /// uncertain + exemptionReason 双条件,模型只看到拒批不知道要补豁免。
+    /// 与清洗器(v4.8.1 剔幻觉 ID 后的降级)同一先例:只往保守方向改写,
+    /// 保留 counter/context 证据与原文。
+    private static func assetWithStructuralClaimExemption(_ asset: TrendAssetView) -> TrendAssetView {
+        let patchedClaim: TrendClaimEvidence
+        if asset.claimEvidence.supportingEvidenceIDs.isEmpty,
+           asset.claimEvidence.exemptionReason == nil {
+            patchedClaim = TrendClaimEvidence(
+                supportingEvidenceIDs: [],
+                counterEvidenceIDs: asset.claimEvidence.counterEvidenceIDs,
+                contextEvidenceIDs: asset.claimEvidence.contextEvidenceIDs,
+                exemptionReason: "模型未引用支持证据，按证据不足处理。"
+            )
+        } else {
+            patchedClaim = asset.claimEvidence
+        }
+        let patchedHorizons = asset.horizons.map { horizon in
+            guard horizon.claimEvidence.supportingEvidenceIDs.isEmpty else { return horizon }
+            guard horizon.direction != .uncertain
+                || horizon.claimEvidence.exemptionReason == nil else { return horizon }
+            return TrendHorizonView(
+                horizon: horizon.horizon,
+                direction: .uncertain,
+                confidence: horizon.confidence,
+                rationale: horizon.rationale,
+                whatWouldChange: horizon.whatWouldChange,
+                counterSignals: horizon.counterSignals,
+                claimEvidence: TrendClaimEvidence(
+                    supportingEvidenceIDs: [],
+                    counterEvidenceIDs: horizon.claimEvidence.counterEvidenceIDs,
+                    contextEvidenceIDs: horizon.claimEvidence.contextEvidenceIDs,
+                    exemptionReason: horizon.claimEvidence.exemptionReason
+                        ?? "周期判断未引用支持证据，按证据不足处理。"
+                )
+            )
+        }
+        guard patchedClaim != asset.claimEvidence || patchedHorizons != asset.horizons else {
+            return asset
+        }
+        return TrendAssetView(
+            id: asset.id,
+            name: asset.name,
+            code: asset.code,
+            sector: asset.sector,
+            impactText: asset.impactText,
+            horizons: patchedHorizons,
+            rationale: asset.rationale,
+            counterSignals: asset.counterSignals,
+            claimEvidence: patchedClaim
+        )
     }
 
     private static func replaceImpactText(_ text: String, on asset: TrendAssetView) -> TrendAssetView {
@@ -383,10 +474,65 @@ actor TrendReportDraftStore {
         )
     }
 
+    /// 2026-09-01 根治(W5):预算终局/环节失败时用已暂存批次组装降级报告——
+    /// 已覆盖基金保留真实分析,未覆盖基金由 App 合成保守条目(uncertain + 低置信 +
+    /// 「原因待确认」),已暂存工作永不白烧(2026-08-31 实证:29 只覆盖 21 只时
+    /// 整 run 报废,~30 分钟产出清零)。前置:四模块就绪(增量 scope 下 overview/
+    /// market/actions 由 baseline 预填)且至少暂存 1 只基金;否则返回 nil,
+    /// 由调用方维持现行失败契约。组装后仍走 finalizeAssembledReport 同一条
+    /// 终检链,校验不过同样返回 nil——降级不绕过质量门。
+    func degradedReport(
+        snapshot: TrendResearchSnapshot,
+        reason: String
+    ) -> TrendAnalysisReport? {
+        guard let overview, let market, let actions, !assetTrendsByCode.isEmpty else {
+            return nil
+        }
+        var merged = assetTrendsByCode
+        let assetsByNormalizedCode: [String: TrendContextAsset] = Dictionary(
+            snapshot.assets.compactMap { asset in
+                asset.code.map { (Self.normalizedCode($0) ?? $0, asset) }
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        for code in remainingFundCodes {
+            let normalized = Self.normalizedCode(code) ?? code
+            guard merged[normalized] == nil else { continue }
+            let contextAsset = assetsByNormalizedCode[normalized]
+            merged[normalized] = TrendDegradedAssetFactory.budgetExhaustedAsset(
+                code: code,
+                name: contextAsset?.name ?? code,
+                sector: contextAsset?.sector ?? "未分类",
+                reason: reason
+            )
+        }
+        let orderedAssetTrends = expectedFundCodesByNormalized.keys.sorted().compactMap {
+            merged[$0]
+        }
+        return TrendAnalysisReport(
+            id: UUID(),
+            generatedAt: "",
+            dataAsOf: snapshot.dataAsOf,
+            privacyMode: snapshot.privacyMode,
+            externalSignalStatus: .unavailable,
+            portfolio: overview.portfolio,
+            horizons: overview.horizons,
+            marketOutlook: market.marketOutlook,
+            sectors: market.sectors,
+            opportunities: market.opportunities,
+            keyAssets: actions.keyAssets,
+            assetTrends: orderedAssetTrends,
+            actions: actions.actions,
+            evidence: [],
+            warnings: actions.warnings,
+            disclaimer: actions.disclaimer,
+            schemaVersion: TrendAnalysisReport.currentSchemaVersion
+        )
+    }
+
     /// 完整 Validator 仍可能发现跨模块问题。只清空涉及的模块，让模型局部修复，
     /// 不要求重新生成已经通过的其它模块。
-    func prepareRepairs(for messages: [String]) {
-        let joined = messages.joined(separator: "\n")
+    func prepareRepairs(for messages: [String]) {        let joined = messages.joined(separator: "\n")
         var matched = false
         if joined.contains("组合结论")
             || joined.contains("短中长期")
@@ -503,7 +649,7 @@ struct SubmitTrendMarketModuleTool: TrendResearchTool {
 
 struct SubmitTrendAssetBatchTool: TrendResearchTool {
     let name = TrendReportModuleToolName.assetBatch
-    let description = "分批提交已持有基金趋势。每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。"
+    let description = "分批提交已持有基金趋势。每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。前缀缺失、超批或字段缺失时 App 会保守兜底改写而不拒批，但归因质量取决于你引用的证据。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [

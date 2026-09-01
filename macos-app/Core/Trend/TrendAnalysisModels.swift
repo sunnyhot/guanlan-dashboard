@@ -988,13 +988,19 @@ struct TrendAssetView: Codable, Identifiable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decode(String.self, forKey: .name)
+        // 2026-09-01:文本字段缺失不再解码报废(2026-08-31 实证模型会提交纯元数据条目,
+        // 「缺少字段 impactText」整批拒批直接烧掉修复预算)。统一落到保守占位,
+        // 由 storeAssetBatch 的归一化链补前缀/补 horizons。
         code = try container.decodeIfPresent(String.self, forKey: .code)
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? code ?? "未知基金"
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? code ?? name
-        sector = try container.decode(String.self, forKey: .sector)
-        impactText = try container.decode(String.self, forKey: .impactText)
+        sector = try container.decodeIfPresent(String.self, forKey: .sector) ?? "未分类"
+        impactText = try container.decodeIfPresent(String.self, forKey: .impactText) ?? ""
         horizons = try container.decodeIfPresent([TrendHorizonView].self, forKey: .horizons) ?? []
-        rationale = try container.decode(String.self, forKey: .rationale)
+        rationale = try container.decodeIfPresent(
+            String.self,
+            forKey: .rationale
+        ) ?? TrendDegradedAssetFactory.missingRationale
         counterSignals = try container.decodeIfPresent([String].self, forKey: .counterSignals) ?? []
         claimEvidence = try container.decodeIfPresent(
             TrendClaimEvidence.self,

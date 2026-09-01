@@ -138,6 +138,7 @@ struct DecisionCaseResearchAgent: DecisionCaseResearchAgentProtocol, Sendable {
                 temperature: Self.temperature,
                 settings: settings,
                 timeout: remainingTimeout,
+                deadline: nil,
                 streamProgress: nil
             )
 

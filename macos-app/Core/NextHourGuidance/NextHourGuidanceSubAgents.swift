@@ -328,6 +328,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
                 temperature: temperature,
                 settings: settings,
                 timeout: max(30, Self.perAgentTimeout - elapsed),
+                deadline: nil,
                 streamProgress: nil
             )
             messages.append(result.assistantMessage)

@@ -199,6 +199,9 @@ struct ModelCompletionRequest: Sendable, Hashable {
     var temperature: Double
     var maxOutputTokens: Int?
     var purpose: String
+    /// 整次运行的绝对截止时间(2026-09-01):provider 转发给传输层做流式硬截断。
+    /// nil 表示该请求不受运行级截止时间约束。
+    var deadline: Date?
 
     init(
         messages: [ModelChatMessage],
@@ -206,7 +209,8 @@ struct ModelCompletionRequest: Sendable, Hashable {
         toolChoice: ModelToolChoice = .auto,
         temperature: Double = 0.2,
         maxOutputTokens: Int? = nil,
-        purpose: String
+        purpose: String,
+        deadline: Date? = nil
     ) {
         self.messages = messages
         self.tools = tools
@@ -214,6 +218,7 @@ struct ModelCompletionRequest: Sendable, Hashable {
         self.temperature = temperature
         self.maxOutputTokens = maxOutputTokens
         self.purpose = purpose
+        self.deadline = deadline
     }
 }
 
@@ -280,6 +285,9 @@ enum ModelProviderError: Error, Equatable, Sendable {
     case timedOut(providerID: String, seconds: Double)
     case requestFailed(providerID: String, statusCode: Int?, detail: String?)
     case invalidResponse(providerID: String, detail: String)
+    /// 整次运行的绝对截止时间在流式中途到达(2026-09-01)。不可重试——
+    /// 重试只会再次超截止时间。
+    case runDeadlineExceeded(providerID: String)
 
     /// 同 provider 内是否值得重试（超时 / 429 / 5xx / 网络失败）。
     /// 配置类与协议类错误重试无意义，但 failover 到下一 provider 仍合理。
@@ -290,7 +298,8 @@ enum ModelProviderError: Error, Equatable, Sendable {
         case .requestFailed(_, let statusCode, _):
             guard let statusCode else { return true }
             return statusCode == 429 || (500..<600).contains(statusCode)
-        case .missingConfiguration, .invalidConfiguration, .invalidResponse:
+        case .missingConfiguration, .invalidConfiguration, .invalidResponse,
+             .runDeadlineExceeded:
             return false
         }
     }

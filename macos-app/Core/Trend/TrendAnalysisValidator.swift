@@ -336,9 +336,18 @@ struct TrendAnalysisValidator {
             ))
         }
         for asset in report.keyAssets + report.assetTrends {
+            // 2026-09-01 根治:资产条目没有方向字段,此前固定传 nil——nil 永远
+            // 不等于 uncertain,「空 supporting + exemptionReason」的豁免通道
+            // 对资产永远关死,无行情基金(债基/QDII/行情上限外)物理上过不了
+            // 终审(2026-08-31 fanout 修复轮死因)。语义修正:impactText
+            // 「原因待确认：」即证据不足态,等价 uncertain;「涨跌归因：」
+            // 仍要求 supporting 非空(归因声明必须有证据)。
+            let assetDirection: TrendDirection = asset.impactText.hasPrefix(
+                TrendAssetDailyAttributionPolicy.unavailablePrefix
+            ) ? .uncertain : .neutral
             messages.append(contentsOf: policy.validateClaim(
                 label: "资产「\(asset.name)」",
-                direction: nil,
+                direction: assetDirection,
                 evidence: asset.claimEvidence,
                 evidenceByID: evidenceByID,
                 entityCode: asset.code,

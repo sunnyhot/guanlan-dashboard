@@ -86,6 +86,7 @@ struct OpenAICompatibleModelProvider: ModelProvider {
                 maxOutputTokens: request.maxOutputTokens,
                 settings: settings,
                 timeout: timeout,
+                deadline: request.deadline,
                 streamProgress: { progress in
                     await onEvent(Self.domainStreamEvent(progress))
                 },
@@ -257,6 +258,8 @@ extension OpenAICompatibleModelProvider {
             return .invalidConfiguration(providerID: providerID, detail: "base URL 无效")
         case .timedOut(let seconds):
             return .timedOut(providerID: providerID, seconds: seconds)
+        case .runDeadlineExceeded:
+            return .runDeadlineExceeded(providerID: providerID)
         case .requestFailed(let statusCode, let detail):
             return .requestFailed(providerID: providerID, statusCode: statusCode, detail: detail)
         case .invalidResponse(let detail):

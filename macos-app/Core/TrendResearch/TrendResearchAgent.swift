@@ -31,13 +31,14 @@ protocol TrendResearchAgentClient: Sendable {
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult
 }
 
 extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
-    // 协议见证：客户端 complete 新增了 maxOutputTokens 参数（带默认值），
-    // 与协议签名不再逐字匹配，这里显式桥接；旧链路语义不变（不限输出长度）。
+    // 协议见证：客户端 complete 新增了 maxOutputTokens/deadline 参数（带默认值），
+    // 与协议签名不再逐字匹配，这里显式桥接；旧链路语义不变（不限输出长度、无运行截止）。
     func complete(
         messages: [AgentChatMessage],
         tools: [AgentToolDefinition],
@@ -45,6 +46,7 @@ extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         try await complete(
@@ -55,6 +57,7 @@ extension OpenAICompatibleAgentClient: TrendResearchAgentClient {
             maxOutputTokens: nil,
             settings: settings,
             timeout: timeout,
+            deadline: deadline,
             streamProgress: streamProgress
         )
     }
@@ -83,7 +86,12 @@ struct TrendResearchRunPolicy: Sendable {
     var maxPlainTextResponses: Int = 2
     var perRequestTimeoutSeconds: Double = Self.defaultPerRequestTimeoutSeconds
     var totalTimeoutSeconds: Double = Self.defaultTotalTimeoutSeconds
-    var expandedTotalTimeoutSeconds: Double = 1800
+    /// 2026-09-01 根治:上限从 1800 提到 3600,让 `effectiveTotalTimeout` 的
+    /// 随组合规模扩容(1800 + 4s/只)真正生效——之前 base=cap=1800,
+    /// min(1800, 1800+4n) 恒等于 1800,扩容是死代码。2026-08-31 实证单轮流式
+    /// 405-725s,fanout 874s 失败回退后 1800s 必然撞墙。
+    /// 晚闸门换完成度:超预算时走降级完成(W5),不再整 run 报废。
+    var expandedTotalTimeoutSeconds: Double = 3600
     var totalTimeoutPerAssetSeconds: Double = 4
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
@@ -222,7 +230,10 @@ struct TrendResearchAgent: Sendable {
 
     /// 一次有意义的 LLM 往返所需最小秒数（对拍 DSA runner 的 _MIN_STEP_BUDGET_S）。
     /// 剩余预算为正但低于此值时按 budgetSkip 终止，不浪费一次计费请求。
-    static let minimumStepBudgetSeconds: Double = 8
+    /// 单步最小预算护栏:2026-09-01 从 8s 提到 60s——8s 形同虚设(2026-08-31 实证
+    /// 剩 23s 照样放行第 10 轮,流式 405s 超限 382s 才终止)。60s 仍远小于正常单轮,
+    /// 但能拦住「注定跑不完一轮」的请求,让预算止损真正发生。
+    static let minimumStepBudgetSeconds: Double = 60
 
     init(
         // 经 LLM 网关：预算 / 记账 / trace 立即生效；重试关闭（本 Agent 自带
@@ -311,6 +322,9 @@ struct TrendResearchAgent: Sendable {
         let effectiveTotal = policy.effectiveTotalTimeout(
             assetCount: snapshot.assets.count
         )
+        // 2026-09-01 根治:运行截止时间下传到每次模型请求,流式持续输出也受硬约束
+        // (此前只在轮与轮之间检查,单轮流式 405-725s 可无界超时)。
+        let runDeadline = started.addingTimeInterval(effectiveTotal)
 
         await AIAgentDiagnosticLog.record(
             "agent_configured",
@@ -356,6 +370,7 @@ struct TrendResearchAgent: Sendable {
                 ledger: ledger,
                 policy: policy,
                 started: started,
+                runDeadline: runDeadline,
                 eventHandler: eventHandler
             ) {
                 return report
@@ -440,13 +455,29 @@ struct TrendResearchAgent: Sendable {
                         temperature: policy.temperature,
                         settings: settings,
                         timeout: perRequestTimeout,
+                        deadline: runDeadline,
                         streamProgress: { progress in
                             await eventHandler(
                                 .modelStreamProgress(turn: currentTurn, progress: progress)
                             )
                         }
                     )
+                } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
+                    // 运行截止时间在流式中途到达:不可恢复,直接终局
+                    //(终局路径会尝试用已暂存批次降级完成,见 degradeIfPossible)。
+                    throw TrendResearchAgentError.totalTimeoutExceeded(limit: effectiveTotal)
                 } catch OpenAICompatibleAgentClientError.timedOut {
+                    // 空闲超时恢复前先复查总预算:预算已耗尽/不足时不再花第二轮等待
+                    //(2026-08-31 实证:超时恢复重试可再吃 180s 纯等待)。
+                    let remainingForRecovery = runDeadline.timeIntervalSinceNow
+                    if remainingForRecovery <= 0 {
+                        throw TrendResearchAgentError.totalTimeoutExceeded(limit: effectiveTotal)
+                    }
+                    if remainingForRecovery < Self.minimumStepBudgetSeconds {
+                        throw TrendResearchAgentError.budgetSkipBeforeRequest(
+                            remaining: remainingForRecovery
+                        )
+                    }
                     guard consecutiveRequestTimeoutRecoveries < policy.maxRequestTimeoutRecoveries else {
                         throw TrendResearchAgentError.modelRequestTimeoutRecoveryExceeded(
                             timeout: perRequestTimeout
@@ -736,6 +767,22 @@ struct TrendResearchAgent: Sendable {
             await eventHandler(.cancelled)
             throw CancellationError()
         } catch let error as TrendResearchAgentError {
+            // 2026-09-01 根治(W5):终局错误先尝试降级完成——已暂存批次不白烧
+            //(2026-08-31 实证:29 只覆盖 21 只时整 run 报废,~30 分钟产出清零)。
+            // 零暂存或降级终检不过时返回 nil,走下方现行失败契约(基线 §2.5 不破)。
+            if let degraded = await degradeIfPossible(
+                snapshot: snapshot,
+                settings: settings,
+                scope: scope,
+                draftStore: reportDraftStore,
+                ledger: ledger,
+                started: started,
+                reason: Self.degradationReason(for: error),
+                toolCallAudits: toolCallAudits,
+                eventHandler: eventHandler
+            ) {
+                return degraded
+            }
             await AIAgentDiagnosticLog.record(
                 "run_failed",
                 message: error.localizedDescription
@@ -756,6 +803,21 @@ struct TrendResearchAgent: Sendable {
             await eventHandler(.failed(message: error.localizedDescription))
             throw error
         } catch {
+            // 2026-09-01 根治(W5):非预期错误同样先尝试降级完成(网络/服务故障
+            // 中断时,已暂存的批次仍有价值)。
+            if let degraded = await degradeIfPossible(
+                snapshot: snapshot,
+                settings: settings,
+                scope: scope,
+                draftStore: reportDraftStore,
+                ledger: ledger,
+                started: started,
+                reason: "本轮运行因模型服务错误提前终止",
+                toolCallAudits: toolCallAudits,
+                eventHandler: eventHandler
+            ) {
+                return degraded
+            }
             await AIAgentDiagnosticLog.record(
                 "run_failed",
                 message: error.localizedDescription
@@ -808,6 +870,91 @@ struct TrendResearchAgent: Sendable {
     /// 低于该基金数不值得并行(交互循环通常一两轮搞定)。
     private static let fanOutMinimumFundCount = 12
 
+    /// W5:终局错误的降级理由——进入未覆盖基金 impactText 的用户可见文案,
+    /// 用短稳定措辞而不是带「请重试」指引的 errorDescription。
+    private static func degradationReason(for error: TrendResearchAgentError) -> String {
+        switch error {
+        case .turnLimitExceeded:
+            return "本轮运行达到轮次上限"
+        case .toolCallLimitExceeded:
+            return "本轮运行达到工具调用上限"
+        case .invalidSubmissionLimitExceeded:
+            return "本轮报告校验未通过次数达到上限"
+        case .missingToolCalls, .missingConfiguration:
+            return TrendDegradedAssetFactory.budgetExhaustedReason
+        case .totalTimeoutExceeded, .budgetSkipBeforeRequest,
+             .modelRequestTimeoutRecoveryExceeded:
+            return TrendDegradedAssetFactory.budgetExhaustedReason
+        }
+    }
+
+    /// W5:用已暂存批次组装降级报告并走 finalizeAssembledReport 同一条终检链。
+    /// 组装前提不满足(零暂存/模块缺失)或终检不过 → nil,调用方维持失败契约。
+    private func degradeIfPossible(
+        snapshot: TrendResearchSnapshot,
+        settings: TrendAIProviderSettings,
+        scope: TrendResearchRunScope,
+        draftStore: TrendReportDraftStore,
+        ledger: TrendEvidenceLedger,
+        started: Date,
+        reason: String,
+        toolCallAudits: [TrendAgentToolCallAudit],
+        eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
+    ) async -> TrendAnalysisReport? {
+        let progress = await draftStore.progress()
+        let expectedCount = max(snapshot.expectedFundCodes.count, 1)
+        let remainingCount = progress.remainingFundCodes.count
+        guard let assembled = await draftStore.degradedReport(
+            snapshot: snapshot,
+            reason: reason
+        ) else { return nil }
+        let context = TrendResearchToolContext(
+            snapshot: snapshot,
+            scope: scope,
+            evidenceLedger: ledger,
+            reportDraftStore: draftStore
+        )
+        let finalizeResult = await finalizeAssembledReport(assembled, context: context)
+        guard case .report(let report)? = finalizeResult.completion else {
+            let errors = Self.parseErrors(from: finalizeResult.contentJSON)
+            await AIAgentDiagnosticLog.record(
+                "run_degrade_finalize_failed",
+                payload: AgentJSONValue.object([
+                    "errors": .array(errors.prefix(5).map { .string($0) }),
+                ])
+            )
+            await eventHandler(
+                .harnessGuidance(
+                    message: "降级组装未通过终审，维持失败契约：\(errors.prefix(2).joined(separator: "；"))"
+                )
+            )
+            return nil
+        }
+        let stagedCount = max(expectedCount - remainingCount, 0)
+        let guidance =
+            "运行预算终局：已用 \(stagedCount)/\(expectedCount) 只基金的暂存结果降级生成报告，其余按「原因待确认」处理（\(reason)）。"
+        await eventHandler(.harnessGuidance(message: guidance))
+        await AIAgentDiagnosticLog.record(
+            "run_degraded_completed",
+            payload: AgentJSONValue.object([
+                "staged_funds": .number(Double(stagedCount)),
+                "degraded_funds": .number(Double(remainingCount)),
+                "reason": .string(reason),
+            ])
+        )
+        let artifact = TrendAgentRunArtifact.make(
+            snapshot: snapshot,
+            settings: settings,
+            report: report,
+            completedAt: ISO8601DateFormatter().string(from: Date()),
+            toolCalls: toolCallAudits,
+            canonicalEvidence: await ledger.allEvidence()
+        )
+        await eventHandler(.auditArtifactReady(artifact))
+        await eventHandler(.completed(duration: Date().timeIntervalSince(started)))
+        return report
+    }
+
     private func closeReviewFanOut(
         snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
@@ -816,6 +963,7 @@ struct TrendResearchAgent: Sendable {
         ledger: TrendEvidenceLedger,
         policy: TrendResearchRunPolicy,
         started: Date,
+        runDeadline: Date,
         eventHandler: @escaping @MainActor @Sendable (TrendResearchAgentEvent) async -> Void
     ) async throws -> TrendAnalysisReport? {
         let codes = snapshot.expectedFundCodes
@@ -919,7 +1067,12 @@ struct TrendResearchAgent: Sendable {
                 toolChoice: .auto,
                 temperature: policy.temperature,
                 settings: settings,
-                timeout: nil,
+                // 2026-09-01 根治:此前 timeout: nil(回退用户配置且只是空闲语义),
+                // fanout 批次生成完全不受预算约束——2026-08-31 实证 fanout 白烧 874s
+                // 后回退交互,总预算已被耗掉近半。现在与交互轮同规则:
+                // 空闲上限 180s + 运行截止时间硬约束。
+                timeout: policy.perRequestTimeoutSeconds,
+                deadline: runDeadline,
                 streamProgress: nil
             )
             return result.toolCalls.first { $0.function.name == TrendReportModuleToolName.assetBatch }
@@ -927,46 +1080,101 @@ struct TrendResearchAgent: Sendable {
 
         var invalidUsed = 0
         var failedBatches: [(codes: [String], errors: [String])] = []
-        try await withThrowingTaskGroup(of: (Int, AgentToolCall?).self) { group in
-            for (index, batch) in batches.enumerated() {
-                group.addTask { (index, try await generateBatch(batch, repairFeedback: nil)) }
-            }
-            for try await (index, call) in group {
-                guard let call else {
-                    failedBatches.append((batches[index], ["未返回提交工具调用"]))
-                    continue
+        // 2026-09-01 根治:fanout 阶段纳入总预算(此前整段零检查,`started`/`policy`
+        // 传进来却没用)。预算不足一个最小步时直接回退交互循环,由轮间守卫统一终局。
+        guard runDeadline.timeIntervalSinceNow >= Self.minimumStepBudgetSeconds else {
+            await AIAgentDiagnosticLog.record(
+                "fanout_skipped_budget_exhausted",
+                payload: AgentJSONValue.object([
+                    "remaining_seconds": .number(runDeadline.timeIntervalSinceNow),
+                ])
+            )
+            return nil
+        }
+        do {
+            try await withThrowingTaskGroup(of: (Int, AgentToolCall?).self) { group in
+                for (index, batch) in batches.enumerated() {
+                    group.addTask { (index, try await generateBatch(batch, repairFeedback: nil)) }
                 }
-                let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
-                await AIAgentDiagnosticLog.recordToolResult(
-                    turn: 0,
-                    call: call,
-                    contentJSON: result.contentJSON,
-                    modelContentJSON: result.contentJSON,
-                    isError: result.isError
-                )
-                await eventHandler(
-                    .toolFinished(
-                        name: TrendReportModuleToolName.assetBatch,
-                        summary: "fanout 批次 \(index + 1)/\(batches.count):\(Self.summary(of: result))"
+                for try await (index, call) in group {
+                    guard let call else {
+                        failedBatches.append((batches[index], ["未返回提交工具调用"]))
+                        continue
+                    }
+                    let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
+                    await AIAgentDiagnosticLog.recordToolResult(
+                        turn: 0,
+                        call: call,
+                        contentJSON: result.contentJSON,
+                        modelContentJSON: result.contentJSON,
+                        isError: result.isError
                     )
-                )
-                if result.isError {
-                    invalidUsed += 1
-                    failedBatches.append((batches[index], Self.parseErrors(from: result.contentJSON)))
+                    await eventHandler(
+                        .toolFinished(
+                            name: TrendReportModuleToolName.assetBatch,
+                            summary: "fanout 批次 \(index + 1)/\(batches.count):\(Self.summary(of: result))"
+                        )
+                    )
+                    if result.isError {
+                        invalidUsed += 1
+                        failedBatches.append((batches[index], Self.parseErrors(from: result.contentJSON)))
+                    }
                 }
             }
+        } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
+            // 批次生成的流式输出撞运行截止时间:回退交互循环,轮间守卫会统一终局/降级。
+            await AIAgentDiagnosticLog.record(
+                "fanout_deadline_exceeded",
+                payload: AgentJSONValue.object([:])
+            )
+            return nil
         }
 
         // 3) 失败批次各修复一次(串行、带拒批教训);再失败 → 整体回退交互循环。
         for (batchCodes, errors) in failedBatches {
-            guard invalidUsed <= policy.maxInvalidSubmissions,
-                  let call = try await generateBatch(
-                      batchCodes,
-                      repairFeedback: errors.prefix(2).joined(separator: ";")
-                  ) else {
+            // 修复轮发起前查预算:预算不足时不再烧修复轮,直接回退。
+            let remaining = runDeadline.timeIntervalSinceNow
+            guard remaining >= Self.minimumStepBudgetSeconds else {
                 await AIAgentDiagnosticLog.record(
                     "fanout_repair_gave_up",
-                    payload: AgentJSONValue.object([:])
+                    payload: AgentJSONValue.object([
+                        "reason": .string("预算剩余 \(Int(remaining.rounded()))s,不足以发起修复轮"),
+                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "last_errors": .array(errors.prefix(3).map { .string($0) }),
+                    ])
+                )
+                return nil
+            }
+            guard invalidUsed <= policy.maxInvalidSubmissions else {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_repair_gave_up",
+                    payload: AgentJSONValue.object([
+                        "reason": .string("修复预算耗尽"),
+                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                    ])
+                )
+                return nil
+            }
+            let repairCall: AgentToolCall?
+            do {
+                repairCall = try await generateBatch(
+                    batchCodes,
+                    repairFeedback: errors.prefix(2).joined(separator: ";")
+                )
+            } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_deadline_exceeded",
+                    payload: AgentJSONValue.object(["phase": .string("repair")])
+                )
+                return nil
+            }
+            guard let call = repairCall else {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_repair_gave_up",
+                    payload: AgentJSONValue.object([
+                        "reason": .string("修复轮未返回提交工具调用"),
+                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                    ])
                 )
                 return nil
             }
@@ -981,7 +1189,10 @@ struct TrendResearchAgent: Sendable {
             if result.isError {
                 await AIAgentDiagnosticLog.record(
                     "fanout_repair_failed",
-                    payload: AgentJSONValue.object([:])
+                    payload: AgentJSONValue.object([
+                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "errors": .array(Self.parseErrors(from: result.contentJSON).prefix(3).map { .string($0) }),
+                    ])
                 )
                 return nil
             }

@@ -38,7 +38,9 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(policy.maxPlainTextResponses, 2)
         XCTAssertEqual(policy.perRequestTimeoutSeconds, 180)
         XCTAssertEqual(policy.totalTimeoutSeconds, 1800)
-        XCTAssertEqual(policy.expandedTotalTimeoutSeconds, 1800)
+        // 2026-09-01 根治:1800 → 3600,激活 effectiveTotalTimeout 的随组合扩容
+        //(此前 base=cap=1800,扩容恒等于 1800 是死代码)。
+        XCTAssertEqual(policy.expandedTotalTimeoutSeconds, 3600)
         XCTAssertEqual(policy.temperature, 0.2, accuracy: 0.001)
         XCTAssertEqual(policy.maxToolResultBytes, 32 * 1024)
 
@@ -46,6 +48,14 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(TrendResearchRunPolicy.defaultPerRequestTimeoutSeconds, 180)
         XCTAssertEqual(TrendResearchRunPolicy.defaultTotalTimeoutSeconds, 1800)
         XCTAssertEqual(TrendResearchRunPolicy.defaultMaxRequestTimeoutRecoveries, 1)
+    }
+
+    /// 2026-09-01:总预算扩容不再是死代码——1800 + 4s/只,被 3600 上限钳制。
+    func testEffectiveTotalTimeoutScalesWithAssetCount() {
+        let policy = TrendResearchRunPolicy()
+        XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 0), 1800)
+        XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 29), 1916, "1800 + 29×4")
+        XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 10_000), 3600, "被 expanded 上限钳制")
     }
 
     // MARK: - effectiveLimits 扩张钳制

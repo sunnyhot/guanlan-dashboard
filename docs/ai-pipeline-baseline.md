@@ -73,6 +73,8 @@
 
 **2026-08-19 复盘生成提速注记(#1/#2/#3/#5)**:①分批批量 5→8(`TrendReportDraftStore.assetBatchSize`,schema/描述/prompt 均随常量);②submit 拒批后,校验错误以「拒批教训」correction 前移注入(每条去重一次、单次最多两条),避免后续批次重复同类拒批;③已接受的 asset batch 提交,其 assistant tool_call 参数在后续上下文中替换为短桩(id/名称保留,callID 链不断;诊断日志仍存全量);④closeReview 且持有基金 ≥12 时,Agent 先走**批次并行 fan-out**:harness 预取只读数据 → 每批一次并行单轮生成 → 复用同一提交校验与组装终检链;任何环节失败返回 nil 回退原交互循环(草稿已暂存的批次保留,按 remaining 继续)——行为契约不变,仅生成方式并行化。fan-out 的 E2E 测试缺口暂以契约源码断言 + 生产运行验证覆盖。
 
+**2026-09-01 根治注记(fan-out 预算接线)**:fan-out 阶段纳入整次运行总预算——批次生成从 `timeout: nil` 改为「空闲上限 180s + 运行截止时间硬约束」;并行波次前与每个修复轮前检查剩余预算(不足一个最小步即回退交互循环);批次生成/修复撞截止时间以 `fanout_deadline_exceeded` 记录并回退。同时 `fanout_repair_failed`/`fanout_repair_gave_up` 诊断 payload 补记批次代码与错误摘要(此前为空对象不可观测)。超大批次(>8 只)不再拒批:storeAssetBatch 去掉硬 guard,照常逐只校验入库,schema 的 maxItems 保留为输出规模指导(2026-08-31 实证模型把 24 只塞一批被拒,修复轮 418s 仍失败,整段 874s 白烧)。
+
 中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily，`marketRadar` 不读取个人持仓工具。
 
 ### 2.1 调用图
@@ -153,6 +155,8 @@ AppModel 持有 `var trendResearchAgent: any TrendResearchAgentProtocol`(默认 
 
 `effectiveLimits` 随 assetCount/sectorCount/reportAssetCount 扩张,但被 expanded 硬上限钳制。
 
+**2026-09-01 根治注记(预算强制化,2026-08-31 晚五连败实证)**:①`expandedTotalTimeoutSeconds` 1800→3600,`effectiveTotalTimeout` = min(3600, 1800 + 4s/只) 的扩容从死代码变为真实生效(此前 base=cap=1800 恒等于 1800);②运行截止时间(deadline = started + effectiveTotal)下传到每一次模型请求,客户端流式字节循环在分片边界硬检查——持续吐片但总时长失控不再无界(实证单轮流式 405-725s、超总预算 382s 才终止);新错误 `OpenAICompatibleAgentClientError.runDeadlineExceeded` 与可恢复的空闲超时 `.timedOut` 区分,Agent 把它直接映射为 `totalTimeoutExceeded` 终局,空闲超时恢复前也先复查剩余预算;③`minimumStepBudgetSeconds` 8→60(此前剩 23s 照样放行);④主体已 finish 只差 usage 尾包的流在截止时间到点时保住已完成响应(usage 保守估算)。`TrendResearchAgentClient` 协议与 `GatewayAgentClient`/`OpenAICompatibleModelProvider`/`OpenAICompatibleAgentClient` 相应新增 `deadline: Date?` 参数(默认 nil,NextHour/MarketResearchPipeline/DecisionCase 调用方显式传 nil 保持原行为)。
+
 ### 2.4 Harness 强制不变量
 
 submit 前必须满足(否则 submit 被拒并要求重试):
@@ -167,6 +171,7 @@ submit 前必须满足(否则 submit 被拒并要求重试):
 - Tavily 额度、鉴权或服务不可用时进入安全降级：停止重复联网请求，保留本地行情/穿透/官方证据形成复盘，但强制清空 `opportunities` 与 `actions`，不得用模型记忆或持仓长期观点填充全市场机会。
 - 基金 F10 `statistical_industries` 属于宽泛统计行业口径，只用于披露结构说明；不得直接生成投资板块卡片或作为 `sectors` 名称，投资板块必须结合底层证券、ETF/基金主题和持仓来源归纳。
 - `assetTrends.impactText` 必须提供带底层证券行情/外部研究证据的「涨跌归因」，或明确输出「原因待确认」；不得用市值、累计盈亏、持仓占比、穿透名单或净值涨跌本身替代原因。
+  - **2026-09-01 根治注记(前缀判定 App 侧化)**:prompt 仍要求模型写前缀(质量导向),但入库时 `storeAssetBatch` 归一化链兜底——无前缀/空 impactText 由 `TrendAssetDailyAttributionPolicy.normalizedAttributionText` 确定性补前缀(supporting 含 `market:stock:`/`vendor:alphavantage:` → 「涨跌归因：」,否则 → 「原因待确认：」,原文保留);缺 horizons 由 `TrendDegradedAssetFactory` 合成保守三周期;supporting 为空时 App 补结构性豁免并把周期降 uncertain;`TrendAssetView` 文本字段(impactText/name/sector/rationale)解码容错到保守占位。终审侧 `TrendAnalysisValidator` 对资产条目的 direction 从固定 nil 修正为「原因待确认：」等价 uncertain(豁免通道对无行情基金首次可走通)。格式类拒批自此不再是可观测的失败路径。
 
 工具结果按 `executedByID`/`executedBySignature` 缓存复用；受控全市场目标按结构化 `research_target` 使用跨运行磁盘缓存，不因模型改写查询文案而重复消耗额度；web_search 不可恢复失败会熔断，额度/鉴权失败还会跨运行冷却。
 
@@ -174,6 +179,8 @@ submit 前必须满足(否则 submit 被拒并要求重试):
 
 任何错误或取消,都**先**发 `.auditArtifactReady(makeFailure(...))` **再**发 `.failed`/`.cancelled`。
 `makeFailure` artifact 含 toolCalls / canonicalEvidence / message 字段(被 `AgentRunPolicyCharacterizationTests.testFailureArtifactContainsStructuredFields` 冻结)。
+
+**2026-09-01 根治注记(终局降级完成)**:取消路径契约不变;非取消的终局错误(总预算/轮次/工具/修复预算耗尽、模型服务错误)先尝试 `degradeIfPossible`——已暂存 ≥1 只基金且四模块可组装时,用 `TrendReportDraftStore.degradedReport` 组装降级报告(已覆盖基金保留真实分析,未覆盖基金由 `TrendDegradedAssetFactory.budgetExhaustedAsset` 合成保守条目),走 `finalizeAssembledReport` 同一条终检链,通过则以 `.completed` 收尾(正常成功 artifact + guidance 文案 + `run_degraded_completed` 诊断),不通过或零暂存则维持上述失败契约。降级报告由 AppModel 走既有成功路径落盘。配套:`SubmitTrendReportTool` 对处置为 insufficientEvidence 的报告统一强制 short 周期降 uncertain + 行动清空(此前仅在数据源不足路径降级,无研究证据路径漏降,会被 Validator 的 disposition 一致性检查整份拒批)。
 
 ---
 

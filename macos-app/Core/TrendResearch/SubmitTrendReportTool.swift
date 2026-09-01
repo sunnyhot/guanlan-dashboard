@@ -143,6 +143,30 @@ struct SubmitTrendReportTool: TrendResearchTool {
             evidence: canonical,
             insufficientReasons: insufficientReasons
         )
+        // 2026-09-01 根治:处置为 insufficientEvidence 时——无论触发原因是数据源
+        // 不足(insufficientReasons 路径,上方已降级)还是无研究证据(此路径此前
+        // 漏降级)——统一强制 short 周期降 uncertain + 行动清空,与 Validator 的
+        // disposition 一致性检查对齐。降级完成路径(W5)带基线 short 方向时
+        // 不再因此整份拒批。对已降级条目重复归一化是幂等 no-op。
+        var finalHorizons = normalizedHorizons
+        var finalKeyAssets = normalizedKeyAssets
+        var finalAssetTrends = normalizedAssetTrends
+        var finalActions = normalizedActions
+        if disposition == .insufficientEvidence {
+            let reasons = insufficientReasons.isEmpty
+                ? ["证据不足以支撑方向性行动建议"]
+                : insufficientReasons
+            finalHorizons = normalizedHorizons.map {
+                Self.normalized($0, forceShortUncertainReasons: reasons)
+            }
+            finalKeyAssets = normalizedKeyAssets.map {
+                Self.normalized($0, forceShortUncertainReasons: reasons)
+            }
+            finalAssetTrends = normalizedAssetTrends.map {
+                Self.normalized($0, forceShortUncertainReasons: reasons)
+            }
+            finalActions = []
+        }
         let sourceWarnings = sourceStatuses.compactMap { status -> TrendWarning? in
             guard let detail = status.warningText else { return nil }
             return TrendWarning(
@@ -170,13 +194,13 @@ struct SubmitTrendReportTool: TrendResearchTool {
             privacyMode: snapshot.privacyMode,
             externalSignalStatus: externalSignalStatus,
             portfolio: decoded.portfolio,
-            horizons: normalizedHorizons,
+            horizons: finalHorizons,
             marketOutlook: normalizedMarket,
             sectors: normalizedSectors,
             opportunities: normalizedOpportunities,
-            keyAssets: normalizedKeyAssets,
-            assetTrends: normalizedAssetTrends,
-            actions: normalizedActions,
+            keyAssets: finalKeyAssets,
+            assetTrends: finalAssetTrends,
+            actions: finalActions,
             evidence: canonical,
             warnings: warnings,
             disclaimer: decoded.disclaimer,

@@ -28,6 +28,30 @@ enum TrendAssetDailyAttributionPolicy {
         return value
     }
 
+    /// 2026-09-01 根治:无前缀/空的 impactText 不再拒批,由 App 确定性补前缀。
+    /// 规则与 validationMessage 的证据检查同源:causal 证据在 supportingEvidenceIDs
+    /// 里 → 补「涨跌归因：」(证据支撑归因声明);否则 → 补「原因待确认：」(保守降级)。
+    /// 判定是纯字符串前缀匹配——模型写不写前缀、写哪种前缀,都不再影响运行存活。
+    /// 2026-08-31 实证:glm-5.3-flash 对同一批 8 只无行情基金连续 4 轮不写前缀,
+    /// 修复预算被格式问题耗尽后撞 1800 秒墙,整 run 报废。
+    static func normalizedAttributionText(
+        _ impactText: String,
+        hasCausalEvidence: Bool
+    ) -> String {
+        if let value = normalized(impactText) {
+            guard value.hasPrefix(attributionPrefix) || value.hasPrefix(unavailablePrefix) else {
+                return (hasCausalEvidence ? attributionPrefix : unavailablePrefix) + value
+            }
+            return value
+        }
+        return unavailablePrefix + TrendDegradedAssetFactory.missingImpactText
+    }
+
+    /// supporting 证据里是否含因果归因来源(底层证券行情 / AlphaVantage)。
+    static func containsCausalEvidence(_ evidenceIDs: [String]) -> Bool {
+        evidenceIDs.contains(where: isCausalEvidenceID)
+    }
+
     static func validationMessage(for asset: TrendAssetView) -> String? {
         guard let value = normalized(asset.impactText) else {
             return "基金 \(asset.code ?? asset.name) 的 impactText 不能为空。"

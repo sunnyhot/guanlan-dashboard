@@ -25,6 +25,111 @@ final class TrendResearchAgentTests: XCTestCase {
         XCTAssertEqual(result.dataAsOf, "2026-07-24 09:58:00")
     }
 
+    func testRunDeadlineExceededDegradesWithStagedBatches() async throws {
+        // W5 根治:预算终局时已暂存批次不白烧。closeReview 覆盖 1/2 只基金后
+        // 流式中途撞运行截止时间,应降级生成报告(1 只真实 + 1 只保守占位),
+        // 而不是抛 totalTimeoutExceeded 丢弃全部进度(2026-08-31 五连败场景)。
+        let codes = ["000001", "000002"]
+        let assets = codes.map {
+            TrendContextAsset(
+                id: $0,
+                name: "基金\($0)",
+                code: $0,
+                assetType: PersonalAssetType.fund.displayName,
+                sector: "A股",
+                statusText: "已持有",
+                weightText: nil,
+                profitPct: nil,
+                estimateChangePct: nil,
+                pendingTradeCount: 0,
+                activePlanCount: 0,
+                pausedPlanCount: 0,
+                endedPlanCount: 0,
+                marketValue: nil,
+                costValue: nil,
+                profitAmount: nil,
+                pendingCashAmount: nil,
+                estimatedNextPlanAmount: nil,
+                totalCumulativePlanAmount: nil
+            )
+        }
+        let snapshot = TrendResearchSnapshot(
+            runID: UUID(),
+            createdAt: "2026-07-26 10:00:00",
+            dataAsOf: "2026-07-26 09:58:00",
+            privacyMode: .sanitized,
+            portfolio: TrendContextPortfolio(
+                assetCount: 2,
+                holdingCount: 2,
+                activePlanCount: 0,
+                pendingAssetCount: 0,
+                totalMarketValue: nil,
+                totalPendingCashAmount: nil,
+                totalEstimatedNextPlanAmount: nil,
+                totalEffectiveHoldingAmount: nil
+            ),
+            assets: assets,
+            sectors: [],
+            platformSignals: [],
+            managerSignals: [],
+            marketQuotes: [],
+            insightHeadline: "",
+            sourceWarnings: []
+        )
+        let baseline = TrendAnalysisReport
+            .fixture(generatedAt: "2026-07-25 10:00:00", externalSignalStatus: .partial)
+            .groundedForSubmission(snapshot: snapshot)
+
+        let stagedEntry = #"{"code":"000001","name":"基金一","sector":"A股","impactText":"原因待确认：测试快照没有底层证券当日行情。","rationale":"观察。","counterSignals":["若行情变化则重新评估。"]}"#
+        let batchArguments = #"{"assetTrends":[@E@]}"#
+            .replacingOccurrences(of: "@E@", with: stagedEntry)
+        let responses: [Result<AgentCompletionResult, Error>] = [
+            .success(toolCallResponse([
+                AgentToolCall(id: "o", function: AgentToolFunctionCall(name: "get_portfolio_overview", arguments: "{}"))
+            ])),
+            .success(toolCallResponse([
+                AgentToolCall(id: "a1", function: AgentToolFunctionCall(name: "get_portfolio_assets", arguments: #"{"cursor":0,"limit":20}"#))
+            ])),
+            .success(toolCallResponse([
+                AgentToolCall(id: "b1", function: AgentToolFunctionCall(name: "submit_trend_asset_batch", arguments: batchArguments))
+            ])),
+            .failure(OpenAICompatibleAgentClientError.runDeadlineExceeded(Date())),
+        ]
+        let client = ScriptedTrendAgentClient(responses)
+        let agent = TrendResearchAgent(client: client)
+
+        let result = try await agent.run(
+            snapshot: snapshot,
+            settings: testSettings(),
+            scope: .closeReview,
+            baselineReport: baseline
+        ) { _ in }
+
+        XCTAssertEqual(result.assetTrends.count, 2)
+        let staged = result.assetTrends.first { $0.code == "000001" }
+        XCTAssertEqual(staged?.impactText, "原因待确认：测试快照没有底层证券当日行情。")
+        let filler = try XCTUnwrap(result.assetTrends.first { $0.code == "000002" })
+        XCTAssertTrue(filler.impactText.contains("时间预算耗尽"), "实际：\(filler.impactText)")
+        XCTAssertEqual(filler.horizons.count, 3)
+    }
+
+    func testRunDeadlineErrorRoundTripAndNonRetryable() {
+        // W2:截止时间错误不可重试,且三层错误映射(client→provider→gateway)
+        // 保持可识别,Agent 才能把它与可恢复的空闲超时区分开。
+        let domain = ModelProviderError.runDeadlineExceeded(providerID: "p")
+        XCTAssertFalse(domain.isRetryable, "截止时间重试只会再次超时")
+        let transport = GatewayAgentClient.transportError(domain)
+        guard case .runDeadlineExceeded = transport else {
+            XCTFail("应映射回 runDeadlineExceeded，实际：\(transport)")
+            return
+        }
+        XCTAssertEqual(
+            OpenAICompatibleModelProvider.domainError(transport, providerID: "p"),
+            domain,
+            "三层映射应无损往返"
+        )
+    }
+
     func testPlainTextFirstThenRecoversToTools() async throws {
         let snapshot = makeEmptySnapshot()
         let report = TrendAnalysisReport
@@ -514,6 +619,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         lock.lock()
@@ -549,6 +655,7 @@ final class ScriptedTrendAgentClient: TrendResearchAgentClient, @unchecked Senda
 private actor TrendAgentEventRecorder {
     private(set) var timeoutEventCount = 0
     private(set) var validationErrors: [String] = []
+    private var summaries: [String] = []
 
     func record(_ event: TrendResearchAgentEvent) {
         if case .modelRequestTimedOut = event {
@@ -557,5 +664,28 @@ private actor TrendAgentEventRecorder {
         if case .reportValidationFailed(let errors, _) = event {
             validationErrors.append(contentsOf: errors)
         }
+        switch event {
+        case .started: summaries.append("started")
+        case .harnessConfigured(let turns, let calls): summaries.append("configured(\(turns)/\(calls))")
+        case .moduleProgress(let done, let total, let next): summaries.append("progress(\(done)/\(total),next=\(next ?? "-"))")
+        case .harnessGuidance(let message): summaries.append("guidance:\(message.prefix(80))")
+        case .turnStarted(let turn): summaries.append("turn\(turn)")
+        case .modelRequestStarted(let turn): summaries.append("req\(turn)")
+        case .modelRequestTimedOut: summaries.append("reqTimeout")
+        case .modelStreamProgress: break
+        case .modelResponseReceived: summaries.append("resp")
+        case .modelCorrection(let message): summaries.append("correction:\(message.prefix(80))")
+        case .toolStarted(let name): summaries.append("tool:\(name)")
+        case .toolFinished(let name, let summary): summaries.append("toolDone:\(name)|\(summary.prefix(100))")
+        case .reportValidationFailed: summaries.append("validationFailed")
+        case .auditArtifactReady: summaries.append("artifact")
+        case .completed(let duration): summaries.append("completed(\(Int(duration)))")
+        case .failed(let message): summaries.append("FAILED:\(message.prefix(120))")
+        case .cancelled: summaries.append("cancelled")
+        }
+    }
+
+    func debugSummary() -> String {
+        summaries.joined(separator: " | ")
     }
 }

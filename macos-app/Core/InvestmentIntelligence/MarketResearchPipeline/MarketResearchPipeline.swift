@@ -632,6 +632,7 @@ struct MarketResearchPipeline: Sendable {
             temperature: 0.3,
             settings: settings,
             timeout: settings.timeoutSeconds,
+            deadline: nil,
             streamProgress: nil
         )
         let text = result.assistantMessage.content ?? ""

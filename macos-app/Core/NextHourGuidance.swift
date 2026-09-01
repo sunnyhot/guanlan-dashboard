@@ -915,6 +915,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 temperature: 0.1,
                 settings: settings,
                 timeout: min(90, settings.timeoutSeconds, remainingTotal),
+                deadline: nil,
                 streamProgress: nil
             )
             messages.append(result.assistantMessage)
@@ -1349,6 +1350,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 temperature: 0.2,
                 settings: settings,
                 timeout: min(90, settings.timeoutSeconds),
+                deadline: nil,
                 streamProgress: nil
             )
             messages.append(result.assistantMessage)

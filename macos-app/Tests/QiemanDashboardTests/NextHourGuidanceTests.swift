@@ -374,6 +374,7 @@ private final class FakeNextHourAgentClient: TrendResearchAgentClient, @unchecke
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         lock.lock()

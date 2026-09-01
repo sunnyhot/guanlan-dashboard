@@ -45,6 +45,7 @@ struct GatewayAgentClient: TrendResearchAgentClient {
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date? = nil,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         guard settings.isConfigured else {
@@ -69,7 +70,8 @@ struct GatewayAgentClient: TrendResearchAgentClient {
             tools: tools.map(Self.domainTool),
             toolChoice: Self.domainToolChoice(toolChoice),
             temperature: temperature,
-            purpose: purpose
+            purpose: purpose,
+            deadline: deadline
         )
         do {
             let streamBridge = Self.makeStreamBridge(streamProgress)
@@ -218,6 +220,8 @@ extension GatewayAgentClient {
             return .invalidBaseURL
         case .timedOut(_, let seconds):
             return .timedOut(seconds)
+        case .runDeadlineExceeded:
+            return .runDeadlineExceeded(Date())
         case .requestFailed(_, let statusCode, let detail):
             return .requestFailed(statusCode: statusCode, detail: detail)
         case .invalidResponse(_, let detail):

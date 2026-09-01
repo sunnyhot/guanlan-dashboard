@@ -308,6 +308,7 @@ final class FakeDecisionCaseResearchClient: TrendResearchAgentClient, @unchecked
         temperature: Double,
         settings: TrendAIProviderSettings,
         timeout: Double?,
+        deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
         lock.lock()

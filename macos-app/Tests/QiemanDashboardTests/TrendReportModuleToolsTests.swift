@@ -124,24 +124,29 @@ final class TrendReportModuleToolsTests: XCTestCase {
         }
     }
 
-    func testDraftRejectsOversizedAssetBatch() async throws {
+    func testDraftAcceptsOversizedAssetBatchInsteadOfRejecting() async throws {
         let codes = (1...9).map { String(format: "%06d", $0) }
         let store = TrendReportDraftStore(expectedFundCodes: codes)
 
-        do {
-            try await store.storeAssetBatch(
-                TrendReportAssetBatchModule(
-                    assetTrends: codes.map { makeAsset(code: $0) }
-                )
+        // 2026-09-01 根治:超批不再拒批(2026-08-31 实证模型把 24 只塞进一批,
+        // 拒批后 fanout 修复轮 418s 仍失败,整段 874s 白烧)。照常逐只校验入库,
+        // remaining 自然收缩;schema 的 maxItems 仍是输出规模指导。
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(
+                assetTrends: codes.map { makeAsset(code: $0) }
             )
-            XCTFail("Expected oversized batch rejection")
-        } catch let error as TrendReportDraftError {
-            XCTAssertTrue(error.localizedDescription.contains("最多"))
-        }
+        )
+        let progress = await store.progress()
+        XCTAssertTrue(progress.remainingFundCodes.isEmpty, "9 只一批应全部入库")
     }
 
-    func testDraftRejectsStaticHoldingDescriptionAsDailyAttribution() async throws {
-        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+    func testDraftPrefixesMissingAttributionConservatively() async throws {
+        // closeReview 基线预填 overview/market/actions,便于读回暂存后的条目。
+        let store = TrendReportDraftStore(
+            expectedFundCodes: ["000001"],
+            scope: .closeReview,
+            baselineReport: reportWithAssets([makeAsset(code: "000001")])
+        )
         let invalid = TrendAssetView(
             id: "asset-000001",
             name: "测试基金",
@@ -153,14 +158,116 @@ final class TrendReportModuleToolsTests: XCTestCase {
             counterSignals: ["若行情变化则重新评估。"]
         )
 
-        do {
-            try await store.storeAssetBatch(
-                TrendReportAssetBatchModule(assetTrends: [invalid])
+        // 2026-09-01 根治:无前缀不再拒批(2026-08-31 实证同一批 8 只基金连续
+        // 4 轮不写前缀耗尽修复预算),由 App 保守补「原因待确认：」,原文保留。
+        try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: [invalid]))
+
+        let assembled = await store.assembledReport(snapshot: makeSnapshot(codes: ["000001"]))
+        let stored = try XCTUnwrap(assembled?.assetTrends.first)
+        XCTAssertTrue(stored.impactText.hasPrefix("原因待确认："))
+        XCTAssertTrue(stored.impactText.contains("组合核心持仓"), "原文保留为描述")
+        XCTAssertEqual(stored.horizons.count, 3, "缺 horizons 由 App 合成保守三周期")
+    }
+
+    func testDraftPrefixSelectionFollowsCausalEvidence() async throws {
+        let store = TrendReportDraftStore(
+            expectedFundCodes: ["000001", "000002"],
+            scope: .closeReview,
+            baselineReport: reportWithAssets([makeAsset(code: "000001"), makeAsset(code: "000002")])
+        )
+        let withCausal = TrendAssetView(
+            id: "asset-000001",
+            name: "基金一",
+            code: "000001",
+            sector: "A股",
+            impactText: "重仓股上涨带动净值回升。",
+            horizons: [],
+            rationale: "观察。",
+            counterSignals: [],
+            claimEvidence: TrendClaimEvidence(
+                supportingEvidenceIDs: ["market:stock:600519:2026-08-31 16:00:00"]
             )
-            XCTFail("Expected non-causal impact text rejection")
-        } catch let error as TrendReportDraftError {
-            XCTAssertTrue(error.localizedDescription.contains("必须以「涨跌归因：」或「原因待确认：」开头"))
-        }
+        )
+        let withoutCausal = TrendAssetView(
+            id: "asset-000002",
+            name: "基金二",
+            code: "000002",
+            sector: "A股",
+            impactText: "净值微跌，来源不明。",
+            horizons: [],
+            rationale: "观察。",
+            counterSignals: []
+        )
+
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [withCausal, withoutCausal])
+        )
+
+        // 前缀选择 = 因果证据判定:supporting 含 market:stock: → 「涨跌归因：」;
+        // 否则 → 「原因待确认：」(与 validationMessage 同一规则,确定性推导)。
+        let assembled = await store.assembledReport(
+            snapshot: makeSnapshot(codes: ["000001", "000002"])
+        )
+        let trends = try XCTUnwrap(assembled?.assetTrends)
+        XCTAssertEqual(trends.count, 2)
+        XCTAssertEqual(trends[0].code, "000001")
+        XCTAssertTrue(trends[0].impactText.hasPrefix("涨跌归因："), "实际：\(trends[0].impactText)")
+        XCTAssertTrue(trends[1].impactText.hasPrefix("原因待确认："), "实际：\(trends[1].impactText)")
+    }
+
+    func testAssetViewDecodingMissingFieldsFallsBackToPlaceholders() throws {
+        // 2026-08-31 实证:模型第 9 轮只交 code/id 元数据,「缺少字段 impactText」
+        // 解码即整批报废。现在解码容错落到保守占位,入库时再补前缀/horizons。
+        let json = #"{"assetTrends":[{"code":"000001","id":"fund:fundmkt:off_exchange:code:000001"}]}"#
+        let module = try JSONDecoder().decode(
+            TrendReportAssetBatchModule.self,
+            from: Data(json.utf8)
+        )
+        let asset = try XCTUnwrap(module.assetTrends.first)
+        XCTAssertEqual(asset.name, "000001", "name 缺失回退 code")
+        XCTAssertEqual(asset.sector, "未分类")
+        XCTAssertEqual(asset.impactText, "")
+        XCTAssertFalse(asset.rationale.isEmpty, "rationale 缺失回退保守占位")
+    }
+
+    func testDegradedReportFillsRemainingFundsConservatively() async throws {
+        let store = TrendReportDraftStore(
+            expectedFundCodes: ["000001", "000002"],
+            scope: .closeReview,
+            baselineReport: reportWithAssets([makeAsset(code: "000001"), makeAsset(code: "000002")])
+        )
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
+        )
+
+        // W5:只覆盖 1/2 时,降级组装保留已暂存条目,为剩余基金合成保守条目。
+        let degraded = await store.degradedReport(
+            snapshot: makeSnapshot(codes: ["000001", "000002"]),
+            reason: "本轮时间预算耗尽"
+        )
+        let trends = try XCTUnwrap(degraded?.assetTrends)
+        XCTAssertEqual(trends.count, 2)
+        XCTAssertEqual(trends[0].code, "000001")
+        XCTAssertEqual(trends[0].impactText, "原因待确认：测试快照没有底层证券当日行情。")
+        let filler = try XCTUnwrap(trends.last)
+        XCTAssertEqual(filler.code, "000002")
+        XCTAssertTrue(filler.impactText.hasPrefix("原因待确认："))
+        XCTAssertTrue(filler.impactText.contains("本轮时间预算耗尽"))
+        XCTAssertEqual(filler.horizons.count, 3)
+        XCTAssertTrue(filler.horizons.allSatisfy { $0.direction == .uncertain })
+    }
+
+    func testDegradedReportRequiresAtLeastOneStagedFund() async throws {
+        let store = TrendReportDraftStore(
+            expectedFundCodes: ["000001"],
+            scope: .closeReview,
+            baselineReport: reportWithAssets([makeAsset(code: "000001")])
+        )
+        let degraded = await store.degradedReport(
+            snapshot: makeSnapshot(codes: ["000001"]),
+            reason: "本轮时间预算耗尽"
+        )
+        XCTAssertNil(degraded, "零暂存时维持失败契约,不产生降级报告")
     }
 
     func testMarketRadarOnlyRequestsMarketModuleAndReusesBaseline() async throws {
@@ -348,20 +455,21 @@ final class AssetBatchRejectionLoopFixTests: XCTestCase {
     }
 
     func testBatchCollectsAllFundErrorsAtOnce() async throws {
+        // 2026-09-01 起「错前缀」由 App 补前缀不再报错;「一批全错一次性列出」
+        // 的契约改用不可兜底的错误类别(未知代码)验证。
         let store = TrendReportDraftStore(expectedFundCodes: ["000001", "000002", "000003"])
         let batch = [
-            asset(code: "000001", impactText: "市值较高，持仓集中。"),          // 错前缀
-            asset(code: "000002", impactText: "涨跌归因：跟随板块上涨。"),      // 无证据 → 自动降级（不再报错）
-            asset(code: "000003", impactText: "组合核心，长期持有。"),          // 错前缀
+            asset(code: "999991", impactText: "涨跌归因：跟随板块上涨。"),
+            asset(code: "999992", impactText: "涨跌归因：跟随板块上涨。"),
         ]
         do {
             try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: batch))
-            XCTFail("两只错前缀基金应整批拒收")
+            XCTFail("两只未知代码基金应整批拒收")
         } catch let error as TrendReportDraftError {
             let message = error.localizedDescription
             XCTAssertTrue(message.contains("2 个问题"), "一次性列出全部问题，实际：\(message)")
-            XCTAssertTrue(message.contains("000001"))
-            XCTAssertTrue(message.contains("000003"))
+            XCTAssertTrue(message.contains("999991"))
+            XCTAssertTrue(message.contains("999992"))
         }
     }
 

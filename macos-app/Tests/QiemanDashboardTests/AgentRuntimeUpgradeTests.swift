@@ -68,7 +68,9 @@ final class TrendResearchArgumentCanonicalizerTests: XCTestCase {
 
 final class TrendResearchBudgetSkipTests: XCTestCase {
     func testMinimumStepBudgetConstant() {
-        XCTAssertEqual(TrendResearchAgent.minimumStepBudgetSeconds, 8, accuracy: 0.001, "对拍 DSA _MIN_STEP_BUDGET_S")
+        // 2026-09-01 根治:8 → 60(2026-08-31 实证剩 23s 照样放行,流式 405s 超限
+        // 382s 才终止;60s 仍远小于正常单轮,但能拦住注定跑不完的请求)。
+        XCTAssertEqual(TrendResearchAgent.minimumStepBudgetSeconds, 60, accuracy: 0.001)
     }
 
     func testBudgetSkipErrorDistinctFromTimeout() {

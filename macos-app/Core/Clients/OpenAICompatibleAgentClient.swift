@@ -27,6 +27,10 @@ enum OpenAICompatibleAgentClientError: Error, LocalizedError {
     case invalidBaseURL
     case requestFailed(statusCode: Int?, detail: String?)
     case timedOut(Double)
+    /// 2026-09-01 根治:整次运行的截止时间在流式中途到达。与 `.timedOut`(分片间
+    /// 空闲超时,可恢复)语义区分——截止时间不可恢复,调用方应直接终局,
+    /// 不能当慢模型再吃一轮重试(2026-08-31 实证单轮流式 405-725s 超总预算 382s)。
+    case runDeadlineExceeded(Date)
     case invalidResponse(String)
 
     var errorDescription: String? {
@@ -46,6 +50,8 @@ enum OpenAICompatibleAgentClientError: Error, LocalizedError {
             return "趋势分析模型请求失败。\(suffix)"
         case .timedOut(let seconds):
             return "趋势分析模型请求超时：\(Int(seconds.rounded())) 秒内未完成有效响应。请检查模型服务状态或稍后重试。"
+        case .runDeadlineExceeded:
+            return "整次运行的截止时间已在流式输出中途到达。"
         case .invalidResponse(let detail):
             return "模型接口返回格式不符合 OpenAI-compatible chat/completions：\(detail)"
         }
@@ -94,6 +100,8 @@ struct OpenAICompatibleAgentClient: Sendable {
     ///
     /// 普通文本响应（无 tool_calls）不是错误，由调用方决定如何处理。
     /// `timeout` 非空时覆盖 settings 的请求超时，用于 Agent 运行策略的单次请求上限。
+    /// `deadline` 是整次运行的绝对截止时间(可选):流式持续输出也受它硬约束,
+    /// 到点即终止——`timeout` 只管「分片间空闲」,管不了「持续吐片但总时长失控」。
     func complete(
         messages: [AgentChatMessage],
         tools: [AgentToolDefinition],
@@ -102,6 +110,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         maxOutputTokens: Int? = nil,
         settings: TrendAIProviderSettings,
         timeout: Double? = nil,
+        deadline: Date? = nil,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)? = nil,
         onStreamDelta: (@Sendable (AgentStreamDelta) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
@@ -169,6 +178,7 @@ struct OpenAICompatibleAgentClient: Sendable {
                     statusCode: http.statusCode,
                     startedAt: requestStartedAt,
                     timeoutSeconds: effectiveTimeout,
+                    runDeadline: deadline,
                     progressHandler: streamProgress,
                     deltaHandler: onStreamDelta
                 )
@@ -400,6 +410,7 @@ struct OpenAICompatibleAgentClient: Sendable {
         statusCode: Int,
         startedAt: Date,
         timeoutSeconds: Double,
+        runDeadline: Date? = nil,
         progressHandler: (@Sendable (AgentStreamProgress) async -> Void)?,
         deltaHandler: (@Sendable (AgentStreamDelta) async -> Void)? = nil
     ) async throws -> AgentCompletionResult {
@@ -444,13 +455,21 @@ struct OpenAICompatibleAgentClient: Sendable {
             }
             // 流式超时改为“分片间空闲”：收到字节即续期，超过空闲上限无新数据才收工。
             // 这样推理模型(GLM 等)的长流式响应只要持续吐片就能完成；彻底无字节的卡死由
-            // URLSession 的 timeoutInterval 兜底，整体上限由 Agent 整次运行总预算保证。
-            // finish_reason 已到但 usage 未到时，只等一个短窗口（尾包紧跟语义
-            // 终包，等不到说明该服务不发 usage——保守估算兜底，不耗满全超时）。
+            // URLSession 的 timeoutInterval 兜底。
+            // 2026-09-01 根治:整次运行的绝对截止时间(runDeadline)在流式中途到达时
+            // 硬终止——持续吐片但总时长失控不再无界(此前「整体上限由 Agent 轮间预算
+            // 保证」的假设被 2026-08-31 实证击穿:单轮流式 405-725s,轮间检查形同虚设)。
+            // 主体已 finish 只差 usage 尾包时到点则保住已完成响应(usage 保守估算兜底)。
             let idleLimit = accumulator.isFinished
                 ? min(timeoutSeconds, Self.postFinishUsageGraceSeconds)
                 : timeoutSeconds
             let now = Date()
+            if let runDeadline, now >= runDeadline {
+                if accumulator.isFinished {
+                    break
+                }
+                throw OpenAICompatibleAgentClientError.runDeadlineExceeded(runDeadline)
+            }
             if now.timeIntervalSince(lastActivityAt) >= idleLimit {
                 if accumulator.isFinished {
                     break
