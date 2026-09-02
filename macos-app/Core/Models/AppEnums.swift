@@ -56,24 +56,10 @@ enum AIResearchTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 通知深链锚点 → Tab 联动。
-    var sectionAnchor: InvestmentTodayResearchRow.Kind {
-        switch self {
-        case .intraday: return .intraday
-        case .closeReview: return .closeReview
-        case .longTerm: return .longTerm
-        }
-    }
-
-    static func tab(for anchor: InvestmentTodayResearchRow.Kind) -> AIResearchTab? {
-        switch anchor {
-        case .intraday: return .intraday
-        case .closeReview: return .closeReview
-        case .longTerm: return .longTerm
-        case .marketRadar: return nil
-        }
-    }
+    /// 通知深链锚点联动见 InvestmentTodayResearchSummary.swift 里的 AIResearchTab
+    /// extension(基础枚举层不反向依赖展示层类型)。
 }
+
 
 enum PlatformAdjustmentViewMode: String, CaseIterable, Identifiable {
     case longWin

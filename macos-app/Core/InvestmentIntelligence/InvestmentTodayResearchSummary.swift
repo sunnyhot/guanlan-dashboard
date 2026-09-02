@@ -185,3 +185,18 @@ extension AppModel {
         enhancementState.marketOpportunityMemoHitCount
     }
 }
+
+
+// MARK: - AI 研判 Tab ↔ 研判区段锚点联动（2026-09-02）
+
+extension AIResearchTab {
+    /// 通知深链锚点 → Tab 联动：目标区段在未选中的 Tab 里时先切换再滚动。
+    static func tab(for anchor: InvestmentTodayResearchRow.Kind) -> AIResearchTab? {
+        switch anchor {
+        case .intraday: return .intraday
+        case .closeReview: return .closeReview
+        case .longTerm: return .longTerm
+        case .marketRadar: return nil
+        }
+    }
+}
