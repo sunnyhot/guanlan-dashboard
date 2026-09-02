@@ -520,6 +520,74 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertNil(module.assetTrends.last?.code, "匹配不到的保持原样，维持后续校验错误")
     }
 
+    /// 2026-09-02 根治(runID AD2D63F9 第 15 轮):重交已入库基金不再整批拒——重复
+    /// 条目跳过、同批健康基金照常入库,已暂存版本保留首次入库内容。此前重交 161725
+    /// 连坐同批 8 只健康基金,把最后的修复预算烧在重抄上后撞预算止损。
+    func testDuplicateFundSubmissionIsSkippedNotBatchRejected() async throws {
+        let codes = ["000001", "000002", "000003"]
+        let store = TrendReportDraftStore(expectedFundCodes: codes)
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
+        )
+        let duplicateResubmission = TrendAssetView(
+            id: "asset-000001-dup", name: "基金000001", code: "000001", sector: "A股",
+            impactText: "原因待确认：重复提交。",
+            horizons: [], rationale: "重复版本不应覆盖已暂存内容。",
+            counterSignals: ["若行情方向变化则重新评估。"]
+        )
+        // 000001 已入库（重复）、000002 批内重复两次、000003 健康
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [
+                duplicateResubmission,
+                makeAsset(code: "000002"),
+                makeAsset(code: "000002"),
+                makeAsset(code: "000003"),
+            ])
+        )
+        let progress = await store.progress()
+        XCTAssertEqual(progress.remainingFundCodes, [], "重复不再连坐，三只基金全部覆盖")
+
+        let degradedOptional = await store.degradedReport(
+            snapshot: makeSnapshot(codes: codes), reason: "预算耗尽"
+        )
+        let degraded = try XCTUnwrap(degradedOptional)
+        XCTAssertEqual(degraded.assetTrends.count, 3)
+        XCTAssertEqual(
+            degraded.assetTrends.first { $0.code == "000001" }?.rationale,
+            "基于当前持仓与行情观察。",
+            "重复提交被丢弃，保留首次入库版本"
+        )
+    }
+
+    /// 2026-09-02 根治(runID AD2D63F9):被 prepareRepairs 清空后模型用 code+name
+    /// 短表单恢复覆盖,空壳条目的资产级 counterSignals 无人兜底,沉默到终审才爆并
+    /// 连续拖死降级组装。现在归一化链保守补写。
+    func testStubAssetBatchGetsCounterSignalsFallback() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+        try await store.storeMarket(
+            TrendReportMarketModule(marketOutlook: [makeMarketOutlook()], sectors: [], opportunities: [])
+        )
+        let stub = TrendAssetView(
+            id: "asset-000001", name: "基金000001", code: "000001", sector: "A股",
+            impactText: "", horizons: [], rationale: "观察。", counterSignals: [], claimEvidence: .empty
+        )
+        try await store.storeAssetBatch(TrendReportAssetBatchModule(assetTrends: [stub]))
+        let degradedOptional = await store.degradedReport(
+            snapshot: makeSnapshot(codes: ["000001"]), reason: "预算耗尽"
+        )
+        let degraded = try XCTUnwrap(degradedOptional)
+        let staged = try XCTUnwrap(degraded.assetTrends.first)
+        XCTAssertFalse(staged.counterSignals.isEmpty, "空 counterSignals 应被保守兜底")
+        XCTAssertTrue(staged.impactText.hasPrefix("原因待确认："), "空 impactText 仍由前缀兜底")
+        XCTAssertTrue(
+            staged.horizons.allSatisfy { $0.direction == .uncertain },
+            "缺 horizons 仍由保守合成兜底"
+        )
+    }
+
     /// overview/actions 被 prepareRepairs 清空后预算耗尽：降级组装不再返回 nil，
     /// 29 只已暂存批次的运行不至于整 run 报废。
     func testDegradedReportSynthesizesMissingOverviewAndActions() async throws {

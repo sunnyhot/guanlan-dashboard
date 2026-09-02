@@ -176,6 +176,7 @@ submit 前必须满足(否则 submit 被拒并要求重试):
 - 基金 F10 `statistical_industries` 属于宽泛统计行业口径，只用于披露结构说明；不得直接生成投资板块卡片或作为 `sectors` 名称，投资板块必须结合底层证券、ETF/基金主题和持仓来源归纳。
 - `assetTrends.impactText` 必须提供带底层证券行情/外部研究证据的「涨跌归因」，或明确输出「原因待确认」；不得用市值、累计盈亏、持仓占比、穿透名单或净值涨跌本身替代原因。
   - **2026-09-01 根治注记(前缀判定 App 侧化)**:prompt 仍要求模型写前缀(质量导向),但入库时 `storeAssetBatch` 归一化链兜底——无前缀/空 impactText 由 `TrendAssetDailyAttributionPolicy.normalizedAttributionText` 确定性补前缀(supporting 含 `market:stock:`/`vendor:alphavantage:` → 「涨跌归因：」,否则 → 「原因待确认：」,原文保留);缺 horizons 由 `TrendDegradedAssetFactory` 合成保守三周期;supporting 为空时 App 补结构性豁免并把周期降 uncertain;`TrendAssetView` 文本字段(impactText/name/sector/rationale)解码容错到保守占位。终审侧 `TrendAnalysisValidator` 对资产条目的 direction 从固定 nil 修正为「原因待确认：」等价 uncertain(豁免通道对无行情基金首次可走通)。格式类拒批自此不再是可观测的失败路径。
+  - **2026-09-02 根治注记(keyAssets 同链清洗 + 重复去重 + counterSignals 兜底,runID AD2D63F9)**:①终审对 `keyAssets` 与 `assetTrends` 走同一条周期校验,但 `sanitizedActions` 此前对 keyAssets 只清幻觉 ID 不做关联降级——keyAsset 周期引底仓股票/组合级证据(与该基金无关联)时入库沉默、终审必拒,错误文案含「资产「」又触发 prepareRepairs 清空全部已暂存批次,健康运行与 W5 降级组装双双死于此;现 keyAssets 周期与 assetTrends 同走 `sanitizedHorizon`(未关联 supporting → uncertain+豁免+待观察信号)。②`storeAssetBatch` 归一化链补资产级 counterSignals 保守兜底——被清空后模型用 code+name 短表单恢复覆盖,空壳条目反证条件缺失沉默到终审。③已入库/批内重复基金直接跳过不再整批拒(与「超批不再拒批」同一先例),已暂存版本保留首次入库内容;remaining_fund_codes 自然把模型引回未覆盖基金。
 
 工具结果按 `executedByID`/`executedBySignature` 缓存复用；受控全市场目标按结构化 `research_target` 使用跨运行磁盘缓存，不因模型改写查询文案而重复消耗额度；web_search 不可恢复失败会熔断，额度/鉴权失败还会跨运行冷却。
 

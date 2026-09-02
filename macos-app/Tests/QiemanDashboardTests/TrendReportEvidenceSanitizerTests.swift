@@ -96,6 +96,53 @@ final class TrendReportEvidenceSanitizerTests: XCTestCase {
         XCTAssertTrue(sanitized.disclaimer.contains("非投资建议"), "disclaimer 被补写")
     }
 
+    /// 2026-09-02 根治(runID AD2D63F9):keyAsset 周期引底仓股票/组合级证据(与该基金
+    /// 无关联)此前只清幻觉 ID 不做关联降级,终审必拒且错误文案触发 prepareRepairs
+    /// 清空全部已暂存批次,健康运行与降级组装双双死于此。现在 keyAssets 与
+    /// assetTrends 走同一条 sanitizedHorizon 清洗链。
+    func testKeyAssetHorizonWithUnassociatedSupportDowngraded() {
+        let stockEvidence = evidence(
+            id: "vendor:alphavantage:daily:300308.SHZ:2026-09-01",
+            entityCode: "300308.SHZ"
+        )
+        let portfolioEvidence = evidence(id: "portfolio:overview:RUN-1", entityName: "组合")
+        let fundEvidence = evidence(
+            id: "market:fund-estimate:007346:2026-09-02 11:31:00",
+            entityCode: "007346"
+        )
+        let keyAsset = TrendAssetView(
+            id: "k1", name: "易方达科技创新混合A", code: "007346", sector: "场外基金",
+            impactText: "涨跌归因：重仓股深调拖累。",
+            horizons: [
+                horizon(direction: .bearish, supporting: ["vendor:alphavantage:daily:300308.SHZ:2026-09-01"]),
+                horizon(direction: .neutralPositive, supporting: ["portfolio:overview:RUN-1"]),
+                horizon(direction: .bullish, supporting: ["market:fund-estimate:007346:2026-09-02 11:31:00"]),
+            ],
+            rationale: "r",
+            counterSignals: [],
+            claimEvidence: .empty
+        )
+        let module = TrendReportActionsModule(
+            keyAssets: [keyAsset], actions: [], warnings: [], disclaimer: "仅供参考"
+        )
+        let (sanitized, _, _) = TrendReportEvidenceSanitizer.sanitizedActions(
+            module, evidence: [stockEvidence, portfolioEvidence, fundEvidence]
+        )
+        let horizons = sanitized.keyAssets[0].horizons
+        XCTAssertEqual(horizons[0].direction, .uncertain, "底仓股票证据与基金无关联 → 降级")
+        XCTAssertEqual(
+            horizons[0].claimEvidence.exemptionReason,
+            "App 降级：缺少与该标的关联的可引用支持证据"
+        )
+        XCTAssertTrue(horizons[0].rationale.contains("待观察信号"))
+        XCTAssertEqual(horizons[1].direction, .uncertain, "组合级证据与基金无关联 → 降级")
+        XCTAssertEqual(horizons[2].direction, .bullish, "基金自身行情证据关联 → 保留原方向")
+        XCTAssertEqual(
+            horizons[2].claimEvidence.supportingEvidenceIDs,
+            ["market:fund-estimate:007346:2026-09-02 11:31:00"]
+        )
+    }
+
     func testWarningDecodesImpactFallback() throws {
         let json = #"{"id":"w1","title":"红利高估值风险","impact":"若利率转向可能补跌。"}"#
         let warning = try JSONDecoder().decode(TrendWarning.self, from: Data(json.utf8))

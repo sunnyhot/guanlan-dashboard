@@ -245,9 +245,11 @@ actor TrendReportDraftStore {
             .map(Self.assetWithAttributionBoundary)
             .map(Self.assetWithStructuralClaimExemption)
             .map(Self.assetWithSynthesizedHorizons)
+            .map(Self.assetWithCounterSignalsFallback)
 
         var submittedCodes = Set<String>()
         var batchErrors: [String] = []
+        var acceptedAssets: [TrendAssetView] = []
         for asset in assetTrends {
             guard let normalized = Self.normalizedCode(asset.code) else {
                 batchErrors.append("持仓基金「\(asset.name)」缺少有效 code。")
@@ -257,10 +259,14 @@ actor TrendReportDraftStore {
                 batchErrors.append("基金 \(asset.code ?? asset.name) 不在本次待覆盖持仓中。")
                 continue
             }
+            // 2026-09-02 根治(runID AD2D63F9 第 15 轮):已入库或本批内重复的基金直接跳过,
+            // 不再整批拒——重交已入库基金连坐同批健康基金,把最后的修复预算烧在重抄上。
+            // 已暂存版本已过校验,重复提交无信息量,丢弃即可;工具结果里的
+            // remaining_fund_codes 自然把模型引回未覆盖基金。与「超批不再拒批」同一先例。
             guard assetTrendsByCode[normalized] == nil, submittedCodes.insert(normalized).inserted else {
-                batchErrors.append("基金 \(asset.code ?? asset.name) 已提交，请只提交 remaining_fund_codes 中的基金。")
                 continue
             }
+            acceptedAssets.append(asset)
             if let message = TrendAssetDailyAttributionPolicy.validationMessage(for: asset) {
                 batchErrors.append(message)
             }
@@ -272,7 +278,7 @@ actor TrendReportDraftStore {
             )
         }
 
-        for asset in assetTrends {
+        for asset in acceptedAssets {
             if let normalized = Self.normalizedCode(asset.code) {
                 assetTrendsByCode[normalized] = asset
             }
@@ -320,6 +326,25 @@ actor TrendReportDraftStore {
             ),
             rationale: asset.rationale,
             counterSignals: asset.counterSignals,
+            claimEvidence: asset.claimEvidence
+        )
+    }
+
+    /// 2026-09-02 根治(runID AD2D63F9):终审要求每条已持有基金趋势带反证条件,
+    /// 但归一化链此前无人补写资产级 counterSignals——被 prepareRepairs 清空后模型用
+    /// code+name 短表单恢复覆盖,空壳条目周期可合成、反证条件缺失沉默到终审才爆,
+    /// 连续两轮把降级组装也一起拖死。保守兜底,不宣称因果,与 missingRationale 同先例。
+    private static func assetWithCounterSignalsFallback(_ asset: TrendAssetView) -> TrendAssetView {
+        guard asset.counterSignals.isEmpty else { return asset }
+        return TrendAssetView(
+            id: asset.id,
+            name: asset.name,
+            code: asset.code,
+            sector: asset.sector,
+            impactText: asset.impactText,
+            horizons: asset.horizons,
+            rationale: asset.rationale,
+            counterSignals: ["模型未提供反证条件，关键假设或行情变化后重估。"],
             claimEvidence: asset.claimEvidence
         )
     }
@@ -703,7 +728,7 @@ struct SubmitTrendMarketModuleTool: TrendResearchTool {
 
 struct SubmitTrendAssetBatchTool: TrendResearchTool {
     let name = TrendReportModuleToolName.assetBatch
-    let description = "分批提交已持有基金趋势。每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。前缀缺失、超批或字段缺失时 App 会保守兜底改写而不拒批，但归因质量取决于你引用的证据。"
+    let description = "分批提交已持有基金趋势。每次最多 \(TrendReportDraftStore.assetBatchSize) 只，只提交 remaining_fund_codes。impactText 必须提供有行情证据的「涨跌归因：」，或在证据不足时明确写「原因待确认：」；静态持仓结构不能冒充涨跌原因。前缀缺失、超批、字段缺失或重复提交已入库基金时 App 会保守兜底/忽略而不拒批，但归因质量取决于你引用的证据。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [
@@ -1112,9 +1137,22 @@ enum TrendReportEvidenceSanitizer {
             removed += keyRemoved
             var counters = asset.counterSignals
             if counters.isEmpty { counters = ["关键假设变化需重新评估。"] }
+            // 2026-09-02 根治(runID AD2D63F9):终审对 keyAssets 与 assetTrends 走同一条
+            // 周期校验,但此处此前只清幻觉 ID 不做关联降级——keyAsset 周期引底仓股票/
+            // 组合级证据(与该基金无关联)时入库沉默,终审必拒;错误文案含「资产「」又触发
+            // prepareRepairs 清空全部已暂存批次,健康运行与 W5 降级组装双双死于此。
+            // 与 assetTrends 同一条 sanitizedHorizon 清洗链(未关联 supporting → uncertain)。
+            var horizons: [TrendHorizonView] = []
+            for source in asset.horizons {
+                let (sanitizedHorizonResult, horizonRemoved) = sanitizedHorizon(
+                    source, fundCode: asset.code, fundName: asset.name, evidenceByID: evidenceByID
+                )
+                horizons.append(sanitizedHorizonResult)
+                removed += horizonRemoved
+            }
             return TrendAssetView(
                 id: asset.id, name: asset.name, code: asset.code, sector: asset.sector,
-                impactText: asset.impactText, horizons: asset.horizons,
+                impactText: asset.impactText, horizons: horizons,
                 rationale: asset.rationale, counterSignals: counters, claimEvidence: claim
             )
         }
