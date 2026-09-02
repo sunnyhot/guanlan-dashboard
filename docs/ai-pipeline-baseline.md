@@ -77,6 +77,8 @@
 
 **2026-09-01 根治注记(fan-out 预算接线)**:fan-out 阶段纳入整次运行总预算——批次生成从 `timeout: nil` 改为「空闲上限 180s + 运行截止时间硬约束」;并行波次前与每个修复轮前检查剩余预算(不足一个最小步即回退交互循环);批次生成/修复撞截止时间以 `fanout_deadline_exceeded` 记录并回退。同时 `fanout_repair_failed`/`fanout_repair_gave_up` 诊断 payload 补记批次代码与错误摘要(此前为空对象不可观测)。超大批次(>8 只)不再拒批:storeAssetBatch 去掉硬 guard,照常逐只校验入库,schema 的 maxItems 保留为输出规模指导(2026-08-31 实证模型把 24 只塞一批被拒,修复轮 418s 仍失败,整段 874s 白烧)。
 
+**2026-09-02 追加(controller 前置限时,与链路 B 同源同修)**:长期研判/收盘复盘/雷达共用的 `generateTrendAnalysis` 前置(能力探测→行情刷新→穿透披露→底层证券行情)此前同样无任何时限,半开网络下 `.generating` 永久挂起、运行日志停在「刷新趋势研判行情」。现共用 `withAIPreambleTimeout`(chain「趋势研判」):能力探测 120s(`trendCapabilityProbeTimeoutSeconds`),数据冻结三步各自 180s(`trendDataRefreshTimeoutSeconds`,冷缓存穿透披露最重故比盘中宽);超时/失败走 `preambleTimeout` telemetry + failed 状态 + 可读错误;设置页「检测连接」按钮同修。Agent 主体与 fan-out 的既有预算/截止不变。
+
 中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily，`marketRadar` 不读取个人持仓工具。
 
 ### 2.1 调用图
@@ -212,7 +214,7 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 手动入口: startNextHourGuidance() → dueSlot 或 manualSlot → generateNextHourGuidance(userInitiated: true)
 ```
 
-**2026-09-02 根治注记(前置阶段限时保护)**:步骤 1-5 的前置链路此前无任何时限——网络半开(连接建立但不出数据,URLSession 空闲计时器被传输层字节活动续命,与 2026-09-01 Agent 流式链路同源)时 `.generating` 永久挂起、按钮停在「研判中…」、槽位尝试键长期占用(2026-09-02 14:29 实证:点击后 10 分钟零推进、无日志无失败写入)。现在前置分两段限时(`withNextHourPreambleTimeout`,先完成者胜、到点取消底层任务并抛可读超时错误进入 failed):①数据刷新(持仓+指数)120s;②研究准备(能力探测/穿透+广度)120s。操作自身错误与取消语义原样传播;手动重试不受槽位去重影响,自动调度下一窗口照常重试;Agent 主体 300s 预算不变。进度视图同步显示已耗时,超时常量语义由 `NextHourGuidancePreambleTimeoutTests.testTimeoutConstantsStayGenerousForHealthyPaths` 锚定。
+**2026-09-02 根治注记(前置阶段限时保护)**:步骤 1-5 的前置链路此前无任何时限——网络半开(连接建立但不出数据,URLSession 空闲计时器被传输层字节活动续命,与 2026-09-01 Agent 流式链路同源)时 `.generating` 永久挂起、按钮停在「研判中…」、槽位尝试键长期占用(2026-09-02 14:29 实证:点击后 10 分钟零推进、无日志无失败写入)。现在前置分两段限时(`withAIPreambleTimeout`,与链路 A controller 前置共用;先完成者胜、到点取消底层任务并抛可读超时错误进入 failed):①数据刷新(持仓+指数)120s;②研究准备(能力探测/穿透+广度)120s。操作自身错误与取消语义原样传播;手动重试不受槽位去重影响,自动调度下一窗口照常重试;Agent 主体 300s 预算不变。进度视图同步显示已耗时,超时常量语义由 `NextHourGuidancePreambleTimeoutTests.testTimeoutConstantsStayGenerousForHealthyPaths` 锚定。
 
 **2026-09-02 追加(本地财经热榜取代联网搜索新闻面)**:盘中链路注入 NewsNow 热榜(财联社/华尔街见闻/雪球热门股票,免 token;全源失败静默降级为无新闻,上限 30 条,纳入研究准备 120s 限时窗)。context 新增 `marketNews`(nil 时行为与旧版一致);`get_live_market_context` 将热榜条目以 `.webSearch` 类型登记进证据账本(id `news:newsnow:{source}:{hash}`,publisherKey=热榜源,财联社/华尔街见闻记 authoritative),标题与候选标的名确定性匹配生成 entityNames——与标的无关的条目通不过 `validateExecution` 的关联校验,买卖门禁实质为「热榜须覆盖该标的相关事件」。V1 用户提示词删除「任何标的都不得 buy/sell」一刀切禁令(改述为证据条件);V2 新闻子 Agent 从「无工具却要求逐标的搜索」改为基于注入热榜作答;P5 回指取证措辞同步。盘中区段常驻「联网搜索已下线」警告横幅移除(报告来源状态仍如实标注)。回归测试 `NextHourNewsEvidenceTests` ×4。
 

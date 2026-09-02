@@ -146,9 +146,10 @@ extension AppModel {
         // (2026-09-01)对齐:到点取消底层任务,以可读错误进入 failed;手动重试
         // 不受槽位去重影响,自动调度下一窗口照常重试。
         do {
-            try await withNextHourPreambleTimeout(
-                seconds: Self.nextHourDataRefreshTimeoutSeconds,
-                kind: .dataRefresh
+            try await withAIPreambleTimeout(
+                chain: "盘中研判",
+                phase: .dataRefresh,
+                seconds: Self.nextHourDataRefreshTimeoutSeconds
             ) { [weak self] in
                 guard let self else { throw CancellationError() }
                 if !self.activeUserPortfolioHoldings.isEmpty, !self.isRefreshingPortfolio {
@@ -185,9 +186,10 @@ extension AppModel {
             if trendProviderCapabilities?.providerFingerprint != provider.fingerprint
                 || trendProviderCapabilities?.supportsToolCalls != true {
                 // 同前置数据刷新:能力探测是一次 LLM 往返,半开网络下同样会无限等。
-                let capabilities = try await withNextHourPreambleTimeout(
-                    seconds: Self.nextHourResearchPreparationTimeoutSeconds,
-                    kind: .researchPreparation
+                let capabilities = try await withAIPreambleTimeout(
+                    chain: "盘中研判",
+                    phase: .researchPreparation,
+                    seconds: Self.nextHourResearchPreparationTimeoutSeconds
                 ) { [weak self] in
                     guard let self else { throw CancellationError() }
                     return try await self.trendCapabilityProbe(provider)
@@ -201,9 +203,10 @@ extension AppModel {
             }
 
             // 穿透与广度合计共用一份研究准备时限(正常穿透命中缓存秒回、广度预暖)。
-            let prepared = try await withNextHourPreambleTimeout(
-                seconds: Self.nextHourResearchPreparationTimeoutSeconds,
-                kind: .researchPreparation
+            let prepared = try await withAIPreambleTimeout(
+                chain: "盘中研判",
+                phase: .researchPreparation,
+                seconds: Self.nextHourResearchPreparationTimeoutSeconds
             ) { [weak self] in
                 guard let self else { throw CancellationError() }
                 let lookThrough = await self.makeNextHourLookThrough(
@@ -735,24 +738,29 @@ extension AppModel {
     }
 }
 
-// MARK: - 2026-09-02 前置阶段限时保护（半开网络根治）
+// MARK: - 前置阶段限时保护（半开网络根治；盘中/趋势研判链路共用）
 
 extension AppModel {
-    /// 前置阶段超时上限。正常数据刷新 ~10-30s、能力探测 ~5-30s（一次 LLM 往返）、
+    /// 盘中链路前置超时上限。正常数据刷新 ~10-30s、能力探测 ~5-30s（一次 LLM 往返）、
     /// 穿透命中缓存秒回；120s 上限只拦「连得上但不出数据」的半开连接，
-    /// 不影响任何健康路径。Agent 主体仍有自己的 300s 运行预算，不在本保护范围。
+    /// 不影响任何健康路径。Agent 主体仍有自己的运行预算，不在本保护范围。
     static let nextHourDataRefreshTimeoutSeconds: Double = 120
     static let nextHourResearchPreparationTimeoutSeconds: Double = 120
+    /// 趋势研判（长期/收盘复盘/雷达共用 generateTrendAnalysis 入口）：
+    /// 能力探测 120s；数据冻结（持仓行情刷新+穿透披露+底层证券行情，冷缓存时最重）180s。
+    static let trendCapabilityProbeTimeoutSeconds: Double = 120
+    static let trendDataRefreshTimeoutSeconds: Double = 180
 }
 
-/// 前置阶段限时执行器：操作与计时器先完成者胜——
+/// 前置阶段限时执行器（链路通用）：操作与计时器先完成者胜——
 /// · 操作正常返回 → 取消计时器、原样返回；
 /// · 到点 → 取消底层操作（含其内部 URLSession 请求）并抛出可读超时错误；
-/// · 操作自身错误（含取消）原样传播，保持外层 `catch is CancellationError`
+/// · 操作自身错误（含取消）原样传播，保持调用方 `catch is CancellationError`
 ///   的既有取消语义。
-func withNextHourPreambleTimeout<T>(
+func withAIPreambleTimeout<T>(
+    chain: String,
+    phase: AIPreambleTimeoutError.Phase,
     seconds: Double,
-    kind: NextHourGuidancePreambleTimeoutError.Kind,
     operation: @escaping @MainActor () async throws -> T
 ) async throws -> T {
     try await withThrowingTaskGroup(of: T.self) { group in
@@ -761,11 +769,11 @@ func withNextHourPreambleTimeout<T>(
         }
         group.addTask {
             try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            throw NextHourGuidancePreambleTimeoutError(kind: kind, seconds: seconds)
+            throw AIPreambleTimeoutError(chain: chain, phase: phase, seconds: seconds)
         }
         do {
             guard let first = try await group.next() else {
-                throw NextHourGuidancePreambleTimeoutError(kind: kind, seconds: seconds)
+                throw AIPreambleTimeoutError(chain: chain, phase: phase, seconds: seconds)
             }
             group.cancelAll()
             try? await group.waitForAll()
@@ -778,19 +786,21 @@ func withNextHourPreambleTimeout<T>(
     }
 }
 
-/// 盘中研判前置阶段超时（数据刷新/研究准备）。
+/// AI 研判链路前置阶段超时（能力探测/数据刷新/研究准备）。
 /// 半开网络下 URLSession 空闲计时器被传输层字节活动续命（2026-09-01 已在
 /// Agent 流式链路实证同源问题），此前前置无任何时限会让 .generating 永久挂起。
-struct NextHourGuidancePreambleTimeoutError: LocalizedError {
-    enum Kind: String {
+struct AIPreambleTimeoutError: LocalizedError {
+    enum Phase: String, Sendable {
         case dataRefresh = "数据刷新"
         case researchPreparation = "研究准备"
+        case capabilityProbe = "能力探测"
     }
 
-    let kind: Kind
+    let chain: String
+    let phase: Phase
     let seconds: Double
 
     var errorDescription: String? {
-        "盘中研判前置\(kind.rawValue)超时（\(Int(seconds.rounded())) 秒）：网络连接疑似半开（连得上但不出数据），已终止本次运行。请检查网络后重试。"
+        "\(chain)前置\(phase.rawValue)超时（\(Int(seconds.rounded())) 秒）：网络连接疑似半开（连得上但不出数据），已终止本次运行。请检查网络后重试。"
     }
 }

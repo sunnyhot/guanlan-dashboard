@@ -209,7 +209,14 @@ extension AppModel {
         lastTrendError = ""
 
         do {
-            let capabilities = try await trendCapabilityProbe(trendSettings.provider)
+            let capabilities = try await withAIPreambleTimeout(
+                chain: "趋势研判",
+                phase: .capabilityProbe,
+                seconds: Self.trendCapabilityProbeTimeoutSeconds
+            ) { [weak self] in
+                guard let self else { throw CancellationError() }
+                return try await self.trendCapabilityProbe(self.trendSettings.provider)
+            }
             trendProviderCapabilities = capabilities
             if capabilities.supportsToolCalls {
                 trendConnectionState = .succeeded
@@ -303,7 +310,14 @@ extension AppModel {
             || trendProviderCapabilities?.supportsToolCalls != true {
             appendTrendProgress("检测 \(provider.model) 的工具调用能力", level: .activity)
             do {
-                let capabilities = try await trendCapabilityProbe(provider)
+                let capabilities = try await withAIPreambleTimeout(
+                    chain: "趋势研判",
+                    phase: .capabilityProbe,
+                    seconds: Self.trendCapabilityProbeTimeoutSeconds
+                ) { [weak self] in
+                    guard let self else { throw CancellationError() }
+                    return try await self.trendCapabilityProbe(provider)
+                }
                 trendProviderCapabilities = capabilities
                 guard capabilities.supportsToolCalls else {
                     telemetryResult = "unsupportedModel"
@@ -328,10 +342,31 @@ extension AppModel {
 
         appendTrendProgress("开始\(scope.displayName)：\(provider.model)", level: .activity)
 
-        let marketSourceStatuses = await refreshTrendResearchMarketData(
-            generatedAt: generatedAt,
-            scope: scope
-        )
+        // 2026-09-02 根治:与盘中链路同源的前置无时限洞——半开网络(连接建立但
+        // 不出数据)时 .generating 永久挂起、运行日志停在「刷新趋势研判行情」。
+        // 数据冻结(行情刷新+穿透披露+底层证券行情)三步各自限时,超时以可读
+        // 错误进入 failed;Agent 主体已有自己的运行预算,不在本保护范围。
+        let marketSourceStatuses: [TrendSourceStatus]
+        do {
+            let currentScope = scope
+            marketSourceStatuses = try await withAIPreambleTimeout(
+                chain: "趋势研判",
+                phase: .dataRefresh,
+                seconds: Self.trendDataRefreshTimeoutSeconds
+            ) { [weak self] in
+                guard let self else { throw CancellationError() }
+                return await self.refreshTrendResearchMarketData(
+                    generatedAt: generatedAt,
+                    scope: currentScope
+                )
+            }
+        } catch {
+            telemetryResult = "preambleTimeout"
+            trendGenerationState = .failed
+            lastTrendError = error.localizedDescription
+            appendTrendProgress("前置数据冻结失败", detail: lastTrendError, level: .error)
+            return
+        }
 
         let fundCodes = trendResearchFundCodes()
         let resolvedScope = TrendReportDraftStore.effectiveScope(
@@ -362,7 +397,23 @@ extension AppModel {
                 detail: "\(Set(fundCodes).count) 只基金；股票、债券、行业与资产配置",
                 level: .activity
             )
-            let batch = await fundLookThroughClient.fetchDisclosures(fundCodes: fundCodes)
+            let batch: FundLookThroughBatchResult
+            do {
+                batch = try await withAIPreambleTimeout(
+                    chain: "趋势研判",
+                    phase: .dataRefresh,
+                    seconds: Self.trendDataRefreshTimeoutSeconds
+                ) { [weak self] in
+                    guard let self else { throw CancellationError() }
+                    return await self.fundLookThroughClient.fetchDisclosures(fundCodes: fundCodes)
+                }
+            } catch {
+                telemetryResult = "preambleTimeout"
+                trendGenerationState = .failed
+                lastTrendError = error.localizedDescription
+                appendTrendProgress("前置数据冻结失败", detail: lastTrendError, level: .error)
+                return
+            }
             lookThrough = PortfolioLookThroughCalculator.make(
                 rows: personalAssetRows,
                 disclosures: batch.disclosures,
@@ -405,10 +456,26 @@ extension AppModel {
                         detail: "读取每只基金前三大披露股票的当日涨跌，用于解释净值变化",
                         level: .activity
                     )
-                    let fetchedQuotes = await platformClient.fetchStockQuotes(
-                        codes: attributionCodes,
-                        forceRefresh: true
-                    )
+                    let fetchedQuotes: [String: NativeStockQuote]
+                    do {
+                        fetchedQuotes = try await withAIPreambleTimeout(
+                            chain: "趋势研判",
+                            phase: .dataRefresh,
+                            seconds: Self.trendDataRefreshTimeoutSeconds
+                        ) { [weak self] in
+                            guard let self else { throw CancellationError() }
+                            return await self.platformClient.fetchStockQuotes(
+                                codes: attributionCodes,
+                                forceRefresh: true
+                            )
+                        }
+                    } catch {
+                        telemetryResult = "preambleTimeout"
+                        trendGenerationState = .failed
+                        lastTrendError = error.localizedDescription
+                        appendTrendProgress("前置数据冻结失败", detail: lastTrendError, level: .error)
+                        return
+                    }
                     underlyingStockQuotes = fetchedQuotes.filter { $0.value.hasUsableData }
                     let attributedCount = underlyingStockQuotes.values.count(where: {
                         $0.changePct != nil
