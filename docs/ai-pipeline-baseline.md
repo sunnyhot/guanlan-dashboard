@@ -71,7 +71,7 @@
 
 各模块的新鲜度时间独立保存在 `TrendAnalysisSettings.lastModuleGeneratedAt`。增量更新只推进当前模块时间；`full` 同时推进三项。旧配置首次加载时用旧报告 `generatedAt` 初始化三项，避免早晨市场雷达更新后把昨晚的收盘复盘误标为“今天已复盘”。
 
-收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受次日市场雷达覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
+收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。**2026-09-02 追加：昨日判断验证（对账切片）**——closeReview 快照冻结时把上一次复盘快照的 marketPulse 方向与今日指数行情做确定性对账（`CloseReviewJudgmentAudit`，|涨跌幅|≥0.2% 才结算、neutral/uncertain 记无结论不奖罚），结果三路消费：注入 closeReview prompt（模型可见昨日命中情况）、写入冻结快照 `yesterdayJudgmentAudit` 字段（旧 JSON 缺键解码宽容）、双端复盘区段「昨日判断验证」展示。纯本地零 LLM 成本；这是 L6 信号闭环精神的最小落地，全套信号化（触发价/胜率校准）待本切片验证价值后再评估。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受次日市场雷达覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
 
 **2026-08-19 复盘生成提速注记(#1/#2/#3/#5)**:①分批批量 5→8(`TrendReportDraftStore.assetBatchSize`,schema/描述/prompt 均随常量);②submit 拒批后,校验错误以「拒批教训」correction 前移注入(每条去重一次、单次最多两条),避免后续批次重复同类拒批;③已接受的 asset batch 提交,其 assistant tool_call 参数在后续上下文中替换为短桩(id/名称保留,callID 链不断;诊断日志仍存全量);④closeReview 且持有基金 ≥12 时,Agent 先走**批次并行 fan-out**:harness 预取只读数据 → 每批一次并行单轮生成 → 复用同一提交校验与组装终检链;任何环节失败返回 nil 回退原交互循环(草稿已暂存的批次保留,按 remaining 继续)——行为契约不变,仅生成方式并行化。fan-out 的 E2E 测试缺口暂以契约源码断言 + 生产运行验证覆盖。
 
@@ -567,7 +567,7 @@ Decision LLM 输出 → `RiskOverrideStateMachine`（风险否决，单向保守
 
 核心库与 Agent 工具已完成；App 侧接线全部落地：
 - **L6 信号闭环全自动**：趋势报告落盘自动 ingest（`saveTrendAnalysisReport` → 抽取/去重/反向失效/胜率校准，`MarketSignalActions.ingestMarketSignalsFromReport`）；每日盘后 15:35 起 60s 轮询触发 `settleDueSignals`（每天一次，UserDefaults `qieman.marketSignals.lastSettleDay` 记日）；Store 落在 `investment-intelligence/market-signals/`
-- **L7 流水线 UI 入口**：AI 指引页「市场信号与研究」面板（macOS `MarketSignalSection.swift` / iOS `IOSMarketSignalPanel.swift`），输入标的 + 四档深度手动触发（`runMarketResearch`）；`marketResearchState` 纳入四向互斥 guard（趋势/下一小时/专项研究/流水线，guard 顺序遵守第 8 节）；candidateSignal 自动入库进 L6
+- **L7 流水线 UI 入口（2026-09-02 已下线）**：「市场信号与研究」双端面板移除（实证零使用：L6 信号存储从未有过数据、L7/L8 从未运行过一次），`marketResearchState` 退出互斥 guard、信号结算 15:35 轮询停用；**Core（MarketSignals/Pipeline/Backtest/胜率校准）全部保留**，`runMarketResearch`/`settleDueSignals` 等 AppModel 方法与测试不动，重启只需恢复 UI 接线。L6 的「判断可验证」精神由收盘复盘的昨日判断对账切片承接（见第 2.0 节注记）
 - **L8 回测入口**：同面板策略技能 Picker + 标的 → `runStrategyBacktest` 拉约一年日 K 规则回测（纯本地计算，无 LLM、不占互斥）
 - **L1 广度预暖 + 注入**：`MarketDataEngine.shared` 全局单例（缓存/熔断共享，各处自建实例会使 TTL 缓存失效）；交易日 09:00–15:30 由 60s 调度循环预暖广度缓存（`MarketDataWarmup`，TTL 10 分钟内 Agent 工具秒回）；`NextHourGuidanceContext.marketBreadth` 预取注入——V1 经 contextToolResult 以 `market:breadth:{date}` 同口径登记证据，V2 市场 Agent user message 直带广度摘要；字段缺省 nil 与旧版行为完全一致（解码兼容有测试锁定）
 - **展示**：双端活跃/最近结算信号列表 + 全局胜率记忆摘要；方向与结算红涨绿跌走 `AppPalette.marketGain/marketLoss`

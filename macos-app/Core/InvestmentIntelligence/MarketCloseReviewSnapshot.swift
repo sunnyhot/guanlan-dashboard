@@ -65,6 +65,8 @@ struct MarketCloseReviewSnapshot: Codable, Hashable {
     let tomorrowWatch: [String]
     let evidenceText: String?
     let dataBoundary: String
+    /// 2026-09-02:昨日 marketPulse 方向 vs 今日行情的确定性对账（生成时写入）。
+    var yesterdayJudgmentAudit: [YesterdayJudgmentAuditEntry]? = nil
 
     static func make(
         report: TrendAnalysisReport?,

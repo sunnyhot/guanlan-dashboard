@@ -190,6 +190,8 @@ struct TrendResearchSnapshot: Sendable, Hashable, Codable {
     let platformSignals: [TrendResearchSignal]
     let managerSignals: [TrendResearchSignal]
     let marketQuotes: [TrendResearchQuote]
+    /// 2026-09-02:closeReview 运行前算好的昨日判断对账（prompt 注入与冻结快照共用）。
+    var closeReviewYesterdayAudit: [YesterdayJudgmentAuditEntry]? = nil
     /// 基于基金公开定期报告计算的组合穿透快照。比例字段不含金额，适用于两种隐私模式。
     let lookThrough: PortfolioLookThroughSnapshot?
 
@@ -208,6 +210,7 @@ struct TrendResearchSnapshot: Sendable, Hashable, Codable {
         platformSignals: [TrendResearchSignal],
         managerSignals: [TrendResearchSignal],
         marketQuotes: [TrendResearchQuote],
+        closeReviewYesterdayAudit: [YesterdayJudgmentAuditEntry]? = nil,
         lookThrough: PortfolioLookThroughSnapshot? = nil,
         insightHeadline: String,
         sourceWarnings: [String],
@@ -223,6 +226,7 @@ struct TrendResearchSnapshot: Sendable, Hashable, Codable {
         self.platformSignals = platformSignals
         self.managerSignals = managerSignals
         self.marketQuotes = marketQuotes
+        self.closeReviewYesterdayAudit = closeReviewYesterdayAudit
         self.lookThrough = lookThrough
         self.insightHeadline = insightHeadline
         self.sourceWarnings = sourceWarnings
@@ -282,7 +286,8 @@ struct TrendResearchSnapshotBuilder {
         createdAt: String,
         dataAsOf: String,
         sourceWarnings: [String],
-        sourceStatuses: [TrendSourceStatus] = []
+        sourceStatuses: [TrendSourceStatus] = [],
+        closeReviewYesterdayAudit: [YesterdayJudgmentAuditEntry]? = nil
     ) -> TrendResearchSnapshot {
         // 复用现有 ContextBuilder 得到脱敏后的 portfolio/assets/sectors/insightHeadline。
         // platformActions 传空：结构化信号由快照自身持有，不再用字符串化版本。
@@ -327,6 +332,7 @@ struct TrendResearchSnapshotBuilder {
             platformSignals: platformSignals,
             managerSignals: managerSignals,
             marketQuotes: marketQuotes,
+            closeReviewYesterdayAudit: closeReviewYesterdayAudit,
             lookThrough: lookThrough,
             insightHeadline: context.insightHeadline,
             sourceWarnings: sourceWarnings,

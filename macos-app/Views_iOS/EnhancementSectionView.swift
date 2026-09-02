@@ -59,7 +59,6 @@ struct EnhancementSectionView: View {
                     // 判断与复盘:活跃事项 + 待复盘 + 历史
                     iosJudgementSection
                     // 市场信号与研究（L6 闭环 / L7 流水线 / L8 回测，2026-08-31）
-                    IOSMarketSignalPanel()
                 } else {
                     // 旧分段(兼容)
                     Picker("", selection: $segment) {
@@ -397,6 +396,31 @@ struct EnhancementSectionView: View {
                                         .font(.caption)
                                         .foregroundStyle(IOSDesign.muted)
                                 }
+                            }
+                        }
+                    }
+
+                    if let audit = review.yesterdayJudgmentAudit, !audit.isEmpty,
+                       let summary = CloseReviewJudgmentAudit.summaryText(audit) {
+                        Divider()
+                        Text("昨日判断验证").font(.headline).foregroundStyle(IOSDesign.ink)
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(IOSDesign.muted)
+                        ForEach(audit.filter { $0.outcome != .inconclusive }) { entry in
+                            HStack(spacing: 6) {
+                                Image(
+                                    systemName: entry.outcome == .hit
+                                        ? "checkmark.circle.fill"
+                                        : "xmark.circle.fill"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(
+                                    entry.outcome == .hit ? Color.green : Color.red
+                                )
+                                Text(entry.verdictText)
+                                    .font(.caption)
+                                    .foregroundStyle(IOSDesign.muted)
                             }
                         }
                     }

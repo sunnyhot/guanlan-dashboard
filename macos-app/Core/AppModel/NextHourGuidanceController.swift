@@ -55,7 +55,6 @@ extension AppModel {
                 self.prewarmMarketBreadthIfNeeded()
                 await self.runNextHourGuidanceIfNeeded()
                 await self.runDailyTrendAnalysisIfNeeded()
-                await self.runMarketSignalSettlementIfNeeded()
             }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 60_000_000_000)
@@ -64,7 +63,6 @@ extension AppModel {
                 self.prewarmMarketBreadthIfNeeded()
                 await self.runNextHourGuidanceIfNeeded()
                 await self.runDailyTrendAnalysisIfNeeded()
-                await self.runMarketSignalSettlementIfNeeded()
             }
         }
     }
@@ -74,7 +72,6 @@ extension AppModel {
         guard trendGenerationState != .generating else { return }
         guard nextHourGuidanceGenerationState != .generating else { return }
         guard decisionCaseResearchState != .generating else { return }
-        guard marketResearchState != .generating else { return }
 
         let timestamp = createdAt ?? Self.timestampString()
         guard let slot = NextHourGuidanceSchedule.default.dueSlot(
@@ -108,8 +105,7 @@ extension AppModel {
         }
         guard trendGenerationState != .generating,
               nextHourGuidanceGenerationState != .generating,
-              decisionCaseResearchState != .generating,
-              marketResearchState != .generating else {
+              decisionCaseResearchState != .generating else {
             return
         }
 

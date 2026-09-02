@@ -438,7 +438,8 @@ extension AppModel {
             lookThrough: lookThrough,
             underlyingStockQuotes: underlyingStockQuotes,
             additionalSourceWarnings: lookThroughWarnings,
-            sourceStatuses: marketSourceStatuses + [fundDisclosureStatus]
+            sourceStatuses: marketSourceStatuses + [fundDisclosureStatus],
+            includeYesterdayAudit: scope == .closeReview
         )
         let alphaText = trendSettings.alphaVantage.isConfigured
             ? "Alpha Vantage 已配置"
@@ -513,16 +514,17 @@ extension AppModel {
             )
             trendSettings.clearAutoFailureStreak(scope: requestedScope)
             if requestedScope == .closeReview {
-                let snapshot = MarketCloseReviewSnapshot.make(
+                var closeReviewSnapshot = MarketCloseReviewSnapshot.make(
                     report: report,
                     portfolioSnapshot: userPortfolioSnapshot,
                     generationState: .succeeded,
                     currentTimestamp: report.generatedAt,
                     closeReviewGeneratedAt: report.generatedAt
                 )
+                closeReviewSnapshot.yesterdayJudgmentAudit = snapshot.closeReviewYesterdayAudit
                 let archive = MarketCloseReviewArchive(
                     generatedAt: report.generatedAt,
-                    snapshot: snapshot
+                    snapshot: closeReviewSnapshot
                 )
                 marketCloseReviewArchive = archive
                 saveMarketCloseReviewArchive(archive)
@@ -656,7 +658,6 @@ extension AppModel {
         guard trendGenerationState != .generating else { return }
         guard nextHourGuidanceGenerationState != .generating else { return }
         guard decisionCaseResearchState != .generating else { return }
-        guard marketResearchState != .generating else { return }
 
         let generatedAt = createdAt ?? Self.timestampString()
         guard let slot = trendSettings.dueModuleAutoAnalysisSlot(at: generatedAt) else { return }
@@ -681,7 +682,8 @@ extension AppModel {
         lookThrough: PortfolioLookThroughSnapshot?,
         underlyingStockQuotes: [String: NativeStockQuote],
         additionalSourceWarnings: [String],
-        sourceStatuses: [TrendSourceStatus]
+        sourceStatuses: [TrendSourceStatus],
+        includeYesterdayAudit: Bool = false
     ) -> TrendResearchSnapshot {
         let extendedSourceStatuses = sourceStatuses + trendSignalSourceStatuses(
             receivedAt: generatedAt
@@ -708,6 +710,14 @@ extension AppModel {
 
         let sourceAsOf = extendedSourceStatuses.compactMap(\.asOf).max()
 
+        // 2026-09-02:昨日判断对账在快照冻结时算好——旧复盘快照的方向 vs 今日指数行情,
+        // 供 closeReview prompt 注入与冻结快照展示共用(纯本地,零 LLM 成本)。
+        let yesterdayAudit: [YesterdayJudgmentAuditEntry]? = includeYesterdayAudit
+            ? CloseReviewJudgmentAudit.audit(
+                pulse: marketCloseReviewArchive?.snapshot.marketPulse ?? [],
+                indexQuotes: marketIndexQuotes
+            )
+            : nil
         return TrendResearchSnapshotBuilder().build(
             rows: personalAssetRows,
             summary: personalAssetSummary,
@@ -725,7 +735,8 @@ extension AppModel {
             createdAt: generatedAt,
             dataAsOf: sourceAsOf ?? generatedAt,
             sourceWarnings: sourceWarnings,
-            sourceStatuses: extendedSourceStatuses
+            sourceStatuses: extendedSourceStatuses,
+            closeReviewYesterdayAudit: yesterdayAudit
         )
     }
 

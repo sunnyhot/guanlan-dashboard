@@ -31,7 +31,6 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View
             MarketCloseReviewSection()
                 .investmentSectionAnchor(.closeReview)
             longTermContent
-            MarketSignalSection()
         }
         .sheet(isPresented: $isShowingProfile) {
             UserDecisionProfilePanel()

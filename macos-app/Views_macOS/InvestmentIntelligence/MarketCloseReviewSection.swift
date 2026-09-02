@@ -46,6 +46,44 @@ struct MarketCloseReviewSection: View {
 
                 MarketCloseReviewHeaderView(review: review)
 
+                if let audit = review.yesterdayJudgmentAudit, !audit.isEmpty,
+                   let summary = CloseReviewJudgmentAudit.summaryText(audit) {
+                    VStack(alignment: .leading, spacing: AppPalette.spaceS) {
+                        Label("昨日判断验证", systemImage: "checkmark.seal")
+                            .font(AppPalette.appFont(.subheadline, weight: .semibold))
+                            .foregroundStyle(AppPalette.ink)
+                        Text(summary)
+                            .font(AppPalette.appFont(.caption, weight: .medium))
+                            .foregroundStyle(AppPalette.muted)
+                        ForEach(audit.filter { $0.outcome != .inconclusive }) { entry in
+                            HStack(spacing: AppPalette.spaceS) {
+                                Image(
+                                    systemName: entry.outcome == .hit
+                                        ? "checkmark.circle.fill"
+                                        : "xmark.circle.fill"
+                                )
+                                .font(AppPalette.appFont(.caption))
+                                .foregroundStyle(
+                                    entry.outcome == .hit
+                                        ? AppPalette.positive
+                                        : AppPalette.marketLoss
+                                )
+                                Text(entry.verdictText)
+                                    .font(AppPalette.appFont(.caption))
+                                    .foregroundStyle(AppPalette.muted)
+                            }
+                        }
+                    }
+                    .padding(AppPalette.spaceM)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .staticSurface(
+                        tint: AppPalette.info,
+                        fill: AppPalette.cardStrong,
+                        strokeOpacity: AppPalette.strokeSubtle,
+                        activeStrokeOpacity: 0.30
+                    )
+                }
+
                 // 进度统一在页面顶部的 TrendLiveLogPanel 展示（唯一进度区）。
 
                 if let portfolioReview = review.portfolioReview {

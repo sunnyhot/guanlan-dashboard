@@ -72,6 +72,7 @@ struct TrendResearchPromptBuilder: Sendable {
         let mission: String
         let flow: String
         let contract: String
+        var yesterdayAuditText = ""
         switch scope {
         case .marketRadar:
             mission = "只更新全市场机会雷达。不得读取、评价或推断个人持仓；上一份报告中的组合、持仓与行动模块由 App 原样复用。"
@@ -84,6 +85,16 @@ submit_trend_market_module JSON：
 """
         case .closeReview:
             mission = "更新今日收盘复盘：大盘/大类资产强弱判断与逐只持仓涨跌归因。组合结论与行动模块从缓存报告复用，不生成行动建议。"
+            // 2026-09-02:昨日判断验证摘要注入——模型生成今日判断时能看到昨天的
+            // 命中情况(判断有了记忆与问责;对账为 App 确定性计算,非模型自评)。
+            if let audit = snapshot.closeReviewYesterdayAudit,
+               let summary = CloseReviewJudgmentAudit.summaryText(audit) {
+                let details = audit
+                    .filter { $0.outcome != .inconclusive }
+                    .map(\.verdictText)
+                    .joined(separator: "；")
+                yesterdayAuditText = "\n【昨日判断验证（App 对账）】\n\(summary)。\(details)\n生成今日判断时参考历史命中情况，方向转变需给出明确证据。"
+            }
             flow = """
 依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot 读取主要指数、基金净值和底层证券当日涨跌，可用 get_market_breadth 补充全市场广度。先调用 submit_trend_market_module 提交大盘/大类资产判断（指数放 marketOutlook、行业放 sectors，opportunities 本次留空），随后只用 submit_trend_asset_batch 分批提交 remaining_fund_codes，每批最多 \(TrendReportDraftStore.assetBatchSize) 只。
 """
@@ -127,6 +138,7 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
 \(contract)
 通用 horizon 含 horizon/direction/confidence/rationale/whatWouldChange/counterSignals/claimEvidence。confidence.score 为 0...100，label 按 ≥75 高、≥45 中、否则低。claimEvidence 固定为 supportingEvidenceIDs/counterEvidenceIDs/contextEvidenceIDs/exemptionReason，只能引用工具返回的 evidence_ids。方向性结论没有相关支持证据时必须 direction=uncertain 并填写 exemptionReason。行动必须有触发与失效条件；资金动作证据不足时降为 watch。
 \(Self.clarityContract)
+\(yesterdayAuditText)
 \(privacy)
 不得输出绝对买卖指令；最终声明非投资建议。
 """
