@@ -166,7 +166,7 @@ extension AppModel {
         }
         if rules != nil {
             guard await notificationManager.requestAuthorizationIfNeeded() else {
-                errorMessage = "系统通知权限未开启。请在系统设置中允许“且慢主理人”发送通知。"
+                errorMessage = "系统通知权限未开启。请在系统设置中允许“观澜”发送通知。"
                 return false
             }
         }

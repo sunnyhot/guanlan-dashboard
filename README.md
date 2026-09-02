@@ -1,4 +1,4 @@
-# 且慢主理人看板 / Qieman Manager Dashboard
+# 观澜 / Guanlan（原「且慢主理人看板」）
 
 > 原生 macOS / iOS SwiftUI App：且慢（Qieman）投资平台的个人看板——持仓管理、主理人动态追踪、AI 投资研判，纯 Swift 实现，无 Python、无本地 HTTP 服务。
 

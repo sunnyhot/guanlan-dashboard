@@ -126,7 +126,7 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
             .appendingPathComponent("QiemanDashboardApp.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("Window(\"且慢主理人\", id: AppSceneIdentifier.mainWindow)"))
+        XCTAssertTrue(source.contains("Window(\"观澜\", id: AppSceneIdentifier.mainWindow)"))
         XCTAssertTrue(source.contains(".defaultSize(width: 1200, height: 800)"))
         XCTAssertTrue(source.contains("registerMainWindowSceneOpener"))
         XCTAssertFalse(source.contains("WindowGroup {"))
@@ -265,8 +265,8 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
-        first.title = "且慢主理人"
-        second.title = "且慢主理人"
+        first.title = "观澜"
+        second.title = "观澜"
         first.isReleasedWhenClosed = false
         second.isReleasedWhenClosed = false
         first.orderFront(nil)
@@ -305,7 +305,7 @@ final class AppLaunchPresentationPolicyTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
-        scene.title = "且慢主理人"
+        scene.title = "观澜"
         scene.isReleasedWhenClosed = false
         scene.orderFront(nil)
         defer {

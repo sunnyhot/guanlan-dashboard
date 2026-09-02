@@ -121,7 +121,7 @@ jobs:
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           {
             echo "body<<$EOF"
-            echo "## 且慢主理人看板 ${{ steps.version.outputs.tag }}"
+            echo "## 观澜 ${{ steps.version.outputs.tag }}"
             echo ""
             echo "$BULLETS"
             echo ""
@@ -153,7 +153,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: 且慢主理人看板 ${{ steps.version.outputs.tag }}
+          name: 观澜 ${{ steps.version.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
           files: |
             /tmp/QiemanDashboard-${{ steps.version.outputs.version }}.zip

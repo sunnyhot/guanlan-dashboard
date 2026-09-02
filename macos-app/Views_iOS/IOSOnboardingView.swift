@@ -41,7 +41,7 @@ struct IOSOnboardingView: View {
                     .font(.system(size: 32, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            Text("且慢主理人看板")
+            Text("观澜")
                 .font(IOSDesign.serifHeading(28))
                 .foregroundStyle(IOSDesign.ink)
             Text("持仓 · 研判 · 平台动态 · 一站式")

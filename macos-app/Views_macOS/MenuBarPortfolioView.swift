@@ -134,7 +134,7 @@ struct MenuBarPortfolioView: View {
                 }
                 .buttonStyle(.appText)
                 .foregroundStyle(AppPalette.muted)
-                .help("退出且慢主理人看板")
+                .help("退出观澜")
             }
         }
         .padding(14)

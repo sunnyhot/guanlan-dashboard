@@ -689,7 +689,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         if window === mainWindow { return true }
         return window.identifier == Self.mainWindowIdentifier
             || window.identifier == NSUserInterfaceItemIdentifier(AppSceneIdentifier.mainWindow)
-            || window.title == "且慢主理人"
+            || window.title == "观澜"
     }
 
     /// Exposes the stored main window reference for zoom toggling.
@@ -782,7 +782,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
 
     @MainActor private func configureMainWindowIdentity(_ window: NSWindow) {
         window.identifier = Self.mainWindowIdentifier
-        window.title = "且慢主理人"
+        window.title = "观澜"
         if let model {
             window.appearance = model.appearance.nsAppearance
         }
@@ -792,7 +792,7 @@ final class QiemanApplicationDelegate: NSObject, NSApplicationDelegate, UNUserNo
         NSApplication.shared.windows.first { window in
             window.identifier == Self.mainWindowIdentifier && isReusableMainWindow(window)
         } ?? NSApplication.shared.windows.first { window in
-            window.title == "且慢主理人" && isReusableMainWindow(window)
+            window.title == "观澜" && isReusableMainWindow(window)
         } ?? NSApplication.shared.windows.first { window in
             window.isVisible && isReusableMainWindow(window)
         }
@@ -931,7 +931,7 @@ struct QiemanDashboardApp: App {
     }
 
     var body: some Scene {
-        Window("且慢主理人", id: AppSceneIdentifier.mainWindow) {
+        Window("观澜", id: AppSceneIdentifier.mainWindow) {
             ContentView()
                 .environmentObject(model)
                 .tint(AppPalette.brand)

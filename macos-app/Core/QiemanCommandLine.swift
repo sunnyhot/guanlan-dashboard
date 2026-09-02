@@ -462,7 +462,7 @@ struct QiemanCommandLine {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         let appPath = arguments.string("app-path")
-        process.arguments = appPath.isEmpty ? ["-a", "且慢主理人"] : [appPath]
+        process.arguments = appPath.isEmpty ? ["-a", "观澜"] : [appPath]
         try process.run()
         process.waitUntilExit()
         return try QiemanCLI.encodeJSON(

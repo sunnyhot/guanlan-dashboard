@@ -1,4 +1,4 @@
-# AGENTS.md — 且慢主理人看板 (qieman-manager-dashboard)
+# AGENTS.md — 观澜 (qieman-manager-dashboard)
 
 ## 项目概览
 

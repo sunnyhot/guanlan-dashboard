@@ -1,4 +1,4 @@
 interface:
-  display_name: "且慢主理人看板"
+  display_name: "观澜（且慢数据）"
   short_description: "原生查询且慢主理人发言、评论、调仓和持仓"
   default_prompt: "Use $qieman-manager-dashboard to inspect Qieman manager posts, platform trades, holdings, comments, or open the native macOS app."

@@ -16,7 +16,7 @@ struct OnboardingView: View {
                         .font(AppPalette.appFont(.largeTitle, weight: .semibold))
                         .foregroundStyle(.white)
                 }
-                Text("且慢主理人看板")
+                Text("观澜")
                     .font(AppPalette.appFont(.largeTitle, weight: .bold))
                     .foregroundStyle(AppPalette.ink)
                 Text("持仓 · 趋势 · 菜单栏 · 一站式")

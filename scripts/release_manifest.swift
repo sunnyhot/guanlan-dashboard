@@ -42,7 +42,7 @@ let payload: [String: Any] = [
     "html_url": releaseURL,
     "published_at": publishedAt,
     "tag_name": tag,
-    "name": "QiemanDashboard \(tag)",
+    "name": "观澜 \(tag)",
     "body": body,
     "assets": [[
         "name": zipName,

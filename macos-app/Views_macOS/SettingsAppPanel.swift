@@ -186,7 +186,7 @@ extension SettingsSectionView {
             tint: AppPalette.danger
         ) {
             SettingsControlRow(
-                title: "退出且慢主理人",
+                title: "退出观澜",
                 detail: "结束菜单栏组件和所有后台巡检",
                 icon: "power",
                 tint: AppPalette.danger

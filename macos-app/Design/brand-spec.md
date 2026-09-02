@@ -1,4 +1,4 @@
-# 且慢主理人看板 — Design Spec
+# 观澜 — Design Spec
 
 > 方向 B：编辑杂志型（Editorial）。克制、有阅读感、长期主义气质。
 > 符合 swiftui-design-skill 的 Anti-AI-Slop 规则：暖色单重点、serif 标题、大留白、signature detail。
