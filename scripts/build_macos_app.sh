@@ -240,6 +240,16 @@ if ! zipinfo -1 "$ZIP_FILE" | awk -v app="${APP_NAME}.app/" '$0 == app || index(
 fi
 
 echo "✅ 构建产物验证通过 (zip: $ZIP_SIZE bytes)"
+
+# 6. 2026-09-02:本地构建产物从 LaunchServices 注销——避免开发副本累积污染
+# 「打开方式」选择器(本机实证:6 条登记/3 条失效残影)。仅影响本机登记,不影响
+# 产物本身;手动 open 运行开发版会重新登记,下次构建会再次清理。CI 环境无
+# LaunchServices 用户域,guard + || true 保证无害跳过。
+LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [ -x "$LSREG" ]; then
+  "$LSREG" -u "$APP_DIR" >/dev/null 2>&1 || true
+fi
+
 echo "完成"
 echo "App 已生成: $APP_DIR"
 echo "压缩包: $ZIP_FILE"
