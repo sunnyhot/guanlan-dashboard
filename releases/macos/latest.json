@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.2/QiemanDashboard-4.9.2.zip",
-    "name" : "QiemanDashboard-4.9.2.zip",
-    "sha256" : "e3a3095be1bd4cdaaaa842ddff4547dae709c0946bfecd4e0c6cc77f2d86046a",
-    "size" : 8519610
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.3/QiemanDashboard-4.9.3.zip",
+    "name" : "QiemanDashboard-4.9.3.zip",
+    "sha256" : "ef585ef345b7f545668e945370bdc1c612530053ea3e96c5a810ad1e4b266663",
+    "size" : 8378127
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.2/QiemanDashboard-4.9.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.3/QiemanDashboard-4.9.3.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.2.zip",
-      "size" : 8519610
+      "name" : "QiemanDashboard-4.9.3.zip",
+      "size" : 8378127
     }
   ],
-  "body" : "版本号同步 v4.9.2\n下线「行动候选」与「判断与复盘」两个展示区块\n全市场机会雷达下线收编——大盘强弱并入每日收盘复盘\n终审拒批死循环四连修——W4 入库即修补 / name 补 code / 降级不再被清空模块挡住",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.2",
-  "name" : "QiemanDashboard v4.9.2",
-  "notes" : "版本号同步 v4.9.2\n下线「行动候选」与「判断与复盘」两个展示区块\n全市场机会雷达下线收编——大盘强弱并入每日收盘复盘\n终审拒批死循环四连修——W4 入库即修补 / name 补 code / 降级不再被清空模块挡住",
+  "body" : "版本号同步 v4.9.3\nAI 研判 Tab 锚点联动移至展示层 extension——基础枚举层不反向依赖展示层类型\nREADME 更新至当前功能面——AI 研判三链路/alfa 投顾/iOS 端/隐私说明\nKeychain 退役——API Key/同步凭证迁存 UserDefaults，根治授权弹窗\nAI 研判页布局优化——三链路 Tab 化 + 持仓列表摘要截断\n收盘复盘加「昨日判断验证」对账 + 市场信号与研究面板下线",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.3",
+  "name" : "QiemanDashboard v4.9.3",
+  "notes" : "版本号同步 v4.9.3\nAI 研判 Tab 锚点联动移至展示层 extension——基础枚举层不反向依赖展示层类型\nREADME 更新至当前功能面——AI 研判三链路/alfa 投顾/iOS 端/隐私说明\nKeychain 退役——API Key/同步凭证迁存 UserDefaults，根治授权弹窗\nAI 研判页布局优化——三链路 Tab 化 + 持仓列表摘要截断\n收盘复盘加「昨日判断验证」对账 + 市场信号与研究面板下线",
   "published_at" : "",
-  "sha256" : "e3a3095be1bd4cdaaaa842ddff4547dae709c0946bfecd4e0c6cc77f2d86046a",
-  "tag" : "v4.9.2",
-  "tag_name" : "v4.9.2",
-  "version" : "4.9.2"
+  "sha256" : "ef585ef345b7f545668e945370bdc1c612530053ea3e96c5a810ad1e4b266663",
+  "tag" : "v4.9.3",
+  "tag_name" : "v4.9.3",
+  "version" : "4.9.3"
 }
