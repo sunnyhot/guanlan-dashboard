@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.5/QiemanDashboard-4.9.5.zip",
-    "name" : "QiemanDashboard-4.9.5.zip",
-    "sha256" : "cb17de3552106b369d24fa79488c45c181babe0e30a7a74d812ca0a22b624a52",
-    "size" : 8382555
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.6/QiemanDashboard-4.9.6.zip",
+    "name" : "QiemanDashboard-4.9.6.zip",
+    "sha256" : "ebb3ef2af03b2ffb331ae60a3cd3c3771a29a1e1202680754557c802c45c3fda",
+    "size" : 8426270
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.5/QiemanDashboard-4.9.5.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.6/QiemanDashboard-4.9.6.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.5.zip",
-      "size" : 8382555
+      "name" : "QiemanDashboard-4.9.6.zip",
+      "size" : 8426270
     }
   ],
-  "body" : "版本号同步 v4.9.5\n仓库更名 guanlan-dashboard——更新自动更新地址/fallback/文档引用，CLAUDE.md 并入 AGENTS.md\n应用更名「观澜」——去平台品牌化，统一双端展示名/窗口标题/Release 标题",
-  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.5",
-  "name" : "观澜 v4.9.5",
-  "notes" : "版本号同步 v4.9.5\n仓库更名 guanlan-dashboard——更新自动更新地址/fallback/文档引用，CLAUDE.md 并入 AGENTS.md\n应用更名「观澜」——去平台品牌化，统一双端展示名/窗口标题/Release 标题",
+  "body" : "版本号同步 v4.9.6\n趋势研判前置阶段同修限时保护——长期/收盘复盘共用的探测/行情刷新/穿透披露/底层行情各接上限，helper 通用化 withAIPreambleTimeout\n盘中研判接入本地财经热榜(NewsNow)——替代联网搜索新闻面，热榜证据可过买卖门禁；移除常驻下线横幅，修正新闻子 Agent 无工具提示词\n盘中研判前置阶段限时保护——数据刷新/研究准备各 120 秒上限，半开网络不再永久挂起；进度视图显示已耗时",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.6",
+  "name" : "观澜 v4.9.6",
+  "notes" : "版本号同步 v4.9.6\n趋势研判前置阶段同修限时保护——长期/收盘复盘共用的探测/行情刷新/穿透披露/底层行情各接上限，helper 通用化 withAIPreambleTimeout\n盘中研判接入本地财经热榜(NewsNow)——替代联网搜索新闻面，热榜证据可过买卖门禁；移除常驻下线横幅，修正新闻子 Agent 无工具提示词\n盘中研判前置阶段限时保护——数据刷新/研究准备各 120 秒上限，半开网络不再永久挂起；进度视图显示已耗时",
   "published_at" : "",
-  "sha256" : "cb17de3552106b369d24fa79488c45c181babe0e30a7a74d812ca0a22b624a52",
-  "tag" : "v4.9.5",
-  "tag_name" : "v4.9.5",
-  "version" : "4.9.5"
+  "sha256" : "ebb3ef2af03b2ffb331ae60a3cd3c3771a29a1e1202680754557c802c45c3fda",
+  "tag" : "v4.9.6",
+  "tag_name" : "v4.9.6",
+  "version" : "4.9.6"
 }
