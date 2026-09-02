@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.6/QiemanDashboard-4.9.6.zip",
-    "name" : "QiemanDashboard-4.9.6.zip",
-    "sha256" : "ebb3ef2af03b2ffb331ae60a3cd3c3771a29a1e1202680754557c802c45c3fda",
-    "size" : 8426270
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.7/QiemanDashboard-4.9.7.zip",
+    "name" : "QiemanDashboard-4.9.7.zip",
+    "sha256" : "016608e0a3275995b16f07494d00586e4018b65a83a84f2e2c989217c893ef18",
+    "size" : 8432414
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.6/QiemanDashboard-4.9.6.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.7/QiemanDashboard-4.9.7.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.6.zip",
-      "size" : 8426270
+      "name" : "QiemanDashboard-4.9.7.zip",
+      "size" : 8432414
     }
   ],
-  "body" : "版本号同步 v4.9.6\n趋势研判前置阶段同修限时保护——长期/收盘复盘共用的探测/行情刷新/穿透披露/底层行情各接上限，helper 通用化 withAIPreambleTimeout\n盘中研判接入本地财经热榜(NewsNow)——替代联网搜索新闻面，热榜证据可过买卖门禁；移除常驻下线横幅，修正新闻子 Agent 无工具提示词\n盘中研判前置阶段限时保护——数据刷新/研究准备各 120 秒上限，半开网络不再永久挂起；进度视图显示已耗时",
-  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.6",
-  "name" : "观澜 v4.9.6",
-  "notes" : "版本号同步 v4.9.6\n趋势研判前置阶段同修限时保护——长期/收盘复盘共用的探测/行情刷新/穿透披露/底层行情各接上限，helper 通用化 withAIPreambleTimeout\n盘中研判接入本地财经热榜(NewsNow)——替代联网搜索新闻面，热榜证据可过买卖门禁；移除常驻下线横幅，修正新闻子 Agent 无工具提示词\n盘中研判前置阶段限时保护——数据刷新/研究准备各 120 秒上限，半开网络不再永久挂起；进度视图显示已耗时",
+  "body" : "版本号同步 v4.9.7\n应用内更新检测 Homebrew 安装并让位——brew 装的提示 brew upgrade、停用覆盖安装，双更新器不再打架\nREADME 补 Homebrew 安装方式（sunnyhot/tap）\n构建产物自动注销 LaunchServices 登记——开发副本不再污染「打开方式」选择器",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.7",
+  "name" : "观澜 v4.9.7",
+  "notes" : "版本号同步 v4.9.7\n应用内更新检测 Homebrew 安装并让位——brew 装的提示 brew upgrade、停用覆盖安装，双更新器不再打架\nREADME 补 Homebrew 安装方式（sunnyhot/tap）\n构建产物自动注销 LaunchServices 登记——开发副本不再污染「打开方式」选择器",
   "published_at" : "",
-  "sha256" : "ebb3ef2af03b2ffb331ae60a3cd3c3771a29a1e1202680754557c802c45c3fda",
-  "tag" : "v4.9.6",
-  "tag_name" : "v4.9.6",
-  "version" : "4.9.6"
+  "sha256" : "016608e0a3275995b16f07494d00586e4018b65a83a84f2e2c989217c893ef18",
+  "tag" : "v4.9.7",
+  "tag_name" : "v4.9.7",
+  "version" : "4.9.7"
 }
