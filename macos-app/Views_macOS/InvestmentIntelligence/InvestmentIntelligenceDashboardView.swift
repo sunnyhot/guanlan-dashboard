@@ -1,12 +1,10 @@
 import SwiftUI
 
-/// 投资智能单页通览。
-///
-/// 区段按紧迫度排列(W2.1):今日研判摘要 → 研判基础(W2.2 上移,读结论先看基础)
-/// → 实时进度 → 盘中指引 → 收盘复盘(含大盘强弱) → 组合长期研判 → 判断记录。
-/// 顶部只复盘全市场，不展示持仓收益、DecisionCase 或组合画像。
-/// 分区统一使用全站 `SectionCard` 容器，与总览/持仓/平台板块保持同一视觉系统。
-/// 2026-09-01:「全市场机会」独立区段随 marketRadar 下线移除——大盘强弱并入收盘复盘。
+/// 投资智能单页通览:公共头部(研判基础 + 实时日志) + Tab 互斥的三链路内容
+/// (盘中指引 / 收盘复盘含大盘强弱 / 组合长期研判)。
+/// 2026-09-02 布局优化:原「三链路纵向平铺、一屏过载」改为 Tab 切换
+/// (参照平台板块 ModuleTabBar 模式),通知深链锚点联动自动切 Tab;
+/// 分区统一使用全站 `SectionCard` 容器,与总览/持仓/平台板块保持同一视觉系统。
 struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View {
     @EnvironmentObject private var model: AppModel
 
@@ -27,10 +25,24 @@ struct InvestmentIntelligenceDashboardView<Intraday: View, LongTerm: View>: View
         VStack(alignment: .leading, spacing: AppPalette.spaceL) {
             credibilitySection
             TrendLiveLogPanel()
-            intradayContent
-            MarketCloseReviewSection()
-                .investmentSectionAnchor(.closeReview)
-            longTermContent
+            // 2026-09-02 布局优化:三链路大块改 Tab 互斥切换(参照平台板块),
+            // 一屏只承载一条链路;研判基础与实时日志为公共头部。
+            ModuleTabBar(
+                items: AIResearchTab.allCases,
+                selection: $model.selectedAIResearchTab,
+                title: { $0.rawValue },
+                systemImage: { $0.systemImage }
+            ) {
+            }
+            switch model.selectedAIResearchTab {
+            case .intraday:
+                intradayContent
+            case .closeReview:
+                MarketCloseReviewSection()
+                    .investmentSectionAnchor(.closeReview)
+            case .longTerm:
+                longTermContent
+            }
         }
         .sheet(isPresented: $isShowingProfile) {
             UserDecisionProfilePanel()

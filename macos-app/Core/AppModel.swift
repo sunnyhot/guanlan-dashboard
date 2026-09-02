@@ -316,6 +316,11 @@ final class AppModel: ObservableObject {
         set { uiState.selectedPlatformActivityTab = newValue }
     }
 
+    var selectedAIResearchTab: AIResearchTab {
+        get { uiState.selectedAIResearchTab }
+        set { uiState.selectedAIResearchTab = newValue }
+    }
+
     var selectedPlatformAdjustmentViewMode: PlatformAdjustmentViewMode {
         get { uiState.selectedPlatformAdjustmentViewMode }
         set { uiState.selectedPlatformAdjustmentViewMode = newValue }

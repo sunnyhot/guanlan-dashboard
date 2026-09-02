@@ -186,12 +186,37 @@ extension EnhancementCenterView {
 
     func portfolioAssetTrendSection(_ report: TrendAnalysisReport) -> some View {
         let assets = report.assetTrends.isEmpty ? report.keyAssets : report.assetTrends
+        // 2026-09-02:29 只全量平铺是一屏过载的主因——默认前 6 只摘要,「查看全部」展开
+        //(参照持仓板块收益归因的明细折叠模式)。
+        let shown = showsAllAssetTrends ? assets : Array(assets.prefix(6))
+        let hiddenCount = assets.count - shown.count
         return VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             trendReportSectionTitle("持仓趋势与重点风险", icon: "chart.bar.doc.horizontal")
             Text("只展示当前组合内的基金与资产。")
                 .font(AppPalette.appFont(.caption))
                 .foregroundStyle(AppPalette.muted)
-            trendAssetList(assets)
+            trendAssetList(shown)
+            if hiddenCount > 0 || showsAllAssetTrends {
+                Button {
+                    withAnimation(AppPalette.motionStandard) {
+                        showsAllAssetTrends.toggle()
+                    }
+                } label: {
+                    Label(
+                        hiddenCount > 0
+                            ? "还有 \(hiddenCount) 只，查看全部持仓趋势"
+                            : "收起持仓趋势",
+                        systemImage: hiddenCount > 0 ? "chevron.down" : "chevron.up"
+                    )
+                    .font(AppPalette.appFont(.footnote, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.appSecondary)
+            }
+        }
+        .onDisappear {
+            // 切换报告时复位收起态,保持新报告的默认摘要体验。
+            if showsAllAssetTrends { showsAllAssetTrends = false }
         }
     }
 

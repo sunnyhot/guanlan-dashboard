@@ -70,6 +70,7 @@ final class PlatformState: ObservableObject {
 final class UIState: ObservableObject {
     @Published var selectedSection: AppSection = .overview
     @Published var selectedPlatformActivityTab: PlatformActivityTab = .adjustments
+    @Published var selectedAIResearchTab: AIResearchTab = .intraday
     @Published var selectedPlatformAdjustmentViewMode: PlatformAdjustmentViewMode = .longWin
     @Published var showsInDock: Bool = (UserDefaults.standard.object(forKey: AppStorageKey.showsInDock) as? Bool) ?? true {
         didSet {

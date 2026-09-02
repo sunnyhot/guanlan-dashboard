@@ -39,6 +39,42 @@ enum PlatformActivityTab: String, CaseIterable, Identifiable {
     }
 }
 
+/// AI 研判页内容 Tab（2026-09-02 布局优化）：三链路大块互斥切换，
+/// 一屏只承载一条链路——参照平台板块的 ModuleTabBar 模式。
+enum AIResearchTab: String, CaseIterable, Identifiable {
+    case intraday = "盘中指引"
+    case closeReview = "收盘复盘"
+    case longTerm = "组合研判"
+
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .intraday: return "clock.arrow.circlepath"
+        case .closeReview: return "sunset.fill"
+        case .longTerm: return "briefcase.fill"
+        }
+    }
+
+    /// 通知深链锚点 → Tab 联动。
+    var sectionAnchor: InvestmentTodayResearchRow.Kind {
+        switch self {
+        case .intraday: return .intraday
+        case .closeReview: return .closeReview
+        case .longTerm: return .longTerm
+        }
+    }
+
+    static func tab(for anchor: InvestmentTodayResearchRow.Kind) -> AIResearchTab? {
+        switch anchor {
+        case .intraday: return .intraday
+        case .closeReview: return .closeReview
+        case .longTerm: return .longTerm
+        case .marketRadar: return nil
+        }
+    }
+}
+
 enum PlatformAdjustmentViewMode: String, CaseIterable, Identifiable {
     case longWin
     case alfa

@@ -3,6 +3,8 @@ import SwiftUI
 struct EnhancementCenterView: View {
     @EnvironmentObject var model: AppModel
     @State var selectedTrendEvidenceDetail: TrendEvidenceDetailSelection?
+    /// 2026-09-02:长期研判持仓列表默认收起为摘要,点「查看全部」展开(参照持仓板块)。
+    @State var showsAllAssetTrends = false
     /// W2.4(缩窄版):详细模式开关——控制证据账本/风险边界块显隐,全局记忆。
     @AppStorage(AppStorageKey.researchDetailMode) var showsResearchDetailMode = false
 
@@ -44,6 +46,25 @@ struct EnhancementCenterView: View {
             }
             .onChange(of: sectionAnchors.scrollTo) { _, target in
                 guard let target else { return }
+                // 2026-09-02:目标区段在未选中的 Tab 里——先切换,下一 runloop 再滚动
+                //(锚点视图随 Tab 内容渲染后才存在)。
+                if let tab = AIResearchTab.tab(for: target),
+                   model.selectedAIResearchTab != tab {
+                    model.selectedAIResearchTab = tab
+                    DispatchQueue.main.async {
+                        withAnimation(AppPalette.motionStandard) {
+                            proxy.scrollTo(target.rawValue, anchor: .top)
+                        }
+                        sectionAnchors.highlighted = target
+                        sectionAnchors.scrollTo = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak sectionAnchors] in
+                            if sectionAnchors?.highlighted == target {
+                                sectionAnchors?.highlighted = nil
+                            }
+                        }
+                    }
+                    return
+                }
                 withAnimation(AppPalette.motionStandard) {
                     proxy.scrollTo(target.rawValue, anchor: .top)
                 }
