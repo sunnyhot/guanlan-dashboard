@@ -1,4 +1,4 @@
-# AGENTS.md — 观澜 (qieman-manager-dashboard)
+# AGENTS.md — 观澜 (guanlan-dashboard)
 
 ## 项目概览
 

@@ -31,9 +31,9 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 sunnyhot. All rights reserved.</string>
 	<key>QiemanUpdateRepository</key>
-	<string>sunnyhot/qieman-manager-dashboard</string>
+	<string>sunnyhot/guanlan-dashboard</string>
 	<key>QiemanUpdateFeedURL</key>
-	<string>https://github.com/sunnyhot/qieman-manager-dashboard/releases/latest/download/latest.json</string>
+	<string>https://github.com/sunnyhot/guanlan-dashboard/releases/latest/download/latest.json</string>
 	<!-- ATS 例外:同步服务用自签名证书(无域名),系统默认 ATS 拦截。
 	允许同步服务器的 HTTP/HTTPS,其余请求仍受 ATS 保护。
 	正式域名 + Let's Encrypt 后可移除此例外。 -->

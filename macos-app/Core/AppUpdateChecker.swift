@@ -144,7 +144,7 @@ struct AppUpdateChecker {
 
     static var defaultRepository: String {
         let value = Bundle.main.object(forInfoDictionaryKey: "QiemanUpdateRepository") as? String
-        return nonEmpty(value) ?? "sunnyhot/qieman-manager-dashboard"
+        return nonEmpty(value) ?? "sunnyhot/guanlan-dashboard"
     }
 
     static var defaultFeedURLString: String {

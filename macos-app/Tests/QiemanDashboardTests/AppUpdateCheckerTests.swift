@@ -12,14 +12,14 @@ final class AppUpdateCheckerTests: XCTestCase {
             "tag": "v2.6.0",
             "asset": {
                 "name": "QiemanDashboard-2.6.0.zip",
-                "download_url": "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v2.6.0/QiemanDashboard-2.6.0.zip",
+                "download_url": "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v2.6.0/QiemanDashboard-2.6.0.zip",
                 "size": 3126305,
                 "content_type": "application/zip",
                 "sha256": "abc123def456"
             },
             "sha256": "abc123def456",
             "notes": "Release notes here",
-            "html_url": "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v2.6.0",
+            "html_url": "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v2.6.0",
             "published_at": "2026-05-22T10:42:15Z",
             "tag_name": "v2.6.0",
             "name": "QiemanDashboard v2.6.0",
@@ -27,7 +27,7 @@ final class AppUpdateCheckerTests: XCTestCase {
             "assets": [
                 {
                     "name": "QiemanDashboard-2.6.0.zip",
-                    "browser_download_url": "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v2.6.0/QiemanDashboard-2.6.0.zip",
+                    "browser_download_url": "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v2.6.0/QiemanDashboard-2.6.0.zip",
                     "size": 3126305,
                     "content_type": "application/zip"
                 }
@@ -54,12 +54,12 @@ final class AppUpdateCheckerTests: XCTestCase {
             "tag_name": "v2.5.0",
             "name": "QiemanDashboard v2.5.0",
             "body": "Legacy release",
-            "html_url": "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v2.5.0",
+            "html_url": "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v2.5.0",
             "published_at": "2026-05-20T10:00:00Z",
             "assets": [
                 {
                     "name": "QiemanDashboard-2.5.0.zip",
-                    "browser_download_url": "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v2.5.0/QiemanDashboard-2.5.0.zip",
+                    "browser_download_url": "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v2.5.0/QiemanDashboard-2.5.0.zip",
                     "size": 3000000,
                     "content_type": "application/zip"
                 }

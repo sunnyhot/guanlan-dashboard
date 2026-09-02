@@ -69,7 +69,7 @@ git pull --rebase origin main
 发版后可验证更新源：
 
 ```bash
-curl -fsSL "https://github.com/sunnyhot/qieman-manager-dashboard/releases/latest/download/latest.json"
+curl -fsSL "https://github.com/sunnyhot/guanlan-dashboard/releases/latest/download/latest.json"
 ```
 
 CI（`.github/workflows/ci.yml`）对 main 与 PR 跑全量测试。正常发版不要手动上传 zip 或手改 `latest.json`，以免与 Actions 自动流程不一致。
