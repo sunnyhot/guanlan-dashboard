@@ -34,6 +34,19 @@ scripts/qieman following-posts --user-name "ETF拯救世界"
 ```
 提供登录、动态、评论、调仓、持仓、估值与增量巡检等命令，JSON 输出。
 
+## 安装
+
+推荐 Homebrew（自动跟随最新 Release，且不受 Gatekeeper 未公证拦截）：
+
+```bash
+brew tap sunnyhot/tap
+brew install --cask sunnyhot/tap/guanlan
+```
+
+或从 [GitHub Releases](https://github.com/sunnyhot/guanlan-dashboard/releases/latest) 下载 zip 解压到 /Applications。
+
+> 注意：brew 安装的请用 `brew upgrade` 更新、忽略应用内更新弹窗；手动下载安装的使用应用内自动更新。
+
 ## 隐私与数据
 
 所有数据保存在本地（App 沙盒内 JSON 文件，敏感文件 0600 权限）；且慢登录态保存在本地受权限保护的 cookie 文件；AI 模型 Key 存本地，仅在你触发生成时直连你所配置的模型服务。完整诊断日志（含业务数据）只落本机，API Key 等敏感字段递归脱敏。
