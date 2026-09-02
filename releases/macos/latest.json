@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.3/QiemanDashboard-4.9.3.zip",
-    "name" : "QiemanDashboard-4.9.3.zip",
-    "sha256" : "ef585ef345b7f545668e945370bdc1c612530053ea3e96c5a810ad1e4b266663",
-    "size" : 8378127
+    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.4/QiemanDashboard-4.9.4.zip",
+    "name" : "QiemanDashboard-4.9.4.zip",
+    "sha256" : "564fbb37d3d5286f75eb9e39e86104ebdc2ba01f8b31f8c7573bce57698d6df5",
+    "size" : 8382363
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.3/QiemanDashboard-4.9.3.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.4/QiemanDashboard-4.9.4.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.3.zip",
-      "size" : 8378127
+      "name" : "QiemanDashboard-4.9.4.zip",
+      "size" : 8382363
     }
   ],
-  "body" : "版本号同步 v4.9.3\nAI 研判 Tab 锚点联动移至展示层 extension——基础枚举层不反向依赖展示层类型\nREADME 更新至当前功能面——AI 研判三链路/alfa 投顾/iOS 端/隐私说明\nKeychain 退役——API Key/同步凭证迁存 UserDefaults，根治授权弹窗\nAI 研判页布局优化——三链路 Tab 化 + 持仓列表摘要截断\n收盘复盘加「昨日判断验证」对账 + 市场信号与研究面板下线",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.3",
-  "name" : "QiemanDashboard v4.9.3",
-  "notes" : "版本号同步 v4.9.3\nAI 研判 Tab 锚点联动移至展示层 extension——基础枚举层不反向依赖展示层类型\nREADME 更新至当前功能面——AI 研判三链路/alfa 投顾/iOS 端/隐私说明\nKeychain 退役——API Key/同步凭证迁存 UserDefaults，根治授权弹窗\nAI 研判页布局优化——三链路 Tab 化 + 持仓列表摘要截断\n收盘复盘加「昨日判断验证」对账 + 市场信号与研究面板下线",
+  "body" : "版本号同步 v4.9.4\n趋势 Agent 降级终审三连修——keyAssets 补关联降级清洗链 + 空壳批次 counterSignals 兜底 + 重复基金去重入库",
+  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.4",
+  "name" : "QiemanDashboard v4.9.4",
+  "notes" : "版本号同步 v4.9.4\n趋势 Agent 降级终审三连修——keyAssets 补关联降级清洗链 + 空壳批次 counterSignals 兜底 + 重复基金去重入库",
   "published_at" : "",
-  "sha256" : "ef585ef345b7f545668e945370bdc1c612530053ea3e96c5a810ad1e4b266663",
-  "tag" : "v4.9.3",
-  "tag_name" : "v4.9.3",
-  "version" : "4.9.3"
+  "sha256" : "564fbb37d3d5286f75eb9e39e86104ebdc2ba01f8b31f8c7573bce57698d6df5",
+  "tag" : "v4.9.4",
+  "tag_name" : "v4.9.4",
+  "version" : "4.9.4"
 }
