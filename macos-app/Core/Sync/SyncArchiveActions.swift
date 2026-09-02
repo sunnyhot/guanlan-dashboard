@@ -11,25 +11,20 @@ extension AppModel {
     // MARK: - 组装 SyncPayload
 
     /// 从当前内存数据构建同步 payload。清洗运行态字段。
-    /// 注意:trendSettings 的 API Key 从 Keychain 读取后填入(内存短暂存在)。
     func makeSyncPayload(sourceDeviceName: String) -> SyncPayload {
         var settings = trendSettings
-        // API Key:取内存值、Keychain、UserDefaults 三者中第一个非空的。
-        // 不能用 nil 覆盖内存里的非空值(Keychain 弹窗被拒时写入可能失败)。
-        func resolveKey(memValue: String, kcAccount: String, udKey: String) -> String {
+        // API Key:取内存值、本地密钥存储(UserDefaults)中第一个非空的。
+        // 不能用 nil 覆盖内存里的非空值。
+        func resolveKey(memValue: String, account: String) -> String {
             if !memValue.isEmpty { return memValue }
-            if let kc = KeychainHelper.get(account: kcAccount), !kc.isEmpty { return kc }
-            if let ud = UserDefaults.standard.string(forKey: udKey), !ud.isEmpty { return ud }
-            return ""
+            return LocalSecretStore.get(account: account) ?? ""
         }
         settings.provider.apiKey = resolveKey(
             memValue: settings.provider.apiKey,
-            kcAccount: KeychainHelper.Account.openAIKey,
-            udKey: "qieman.trend.openai.key")
+            account: LocalSecretStore.Account.openAIKey)
         settings.alphaVantage.apiKey = resolveKey(
             memValue: settings.alphaVantage.apiKey,
-            kcAccount: KeychainHelper.Account.alphaVantageKey,
-            udKey: "qieman.trend.alphavantage.key")
+            account: LocalSecretStore.Account.alphaVantageKey)
 
         return SyncPayload(
             schemaVersion: SyncPayload.currentSchemaVersion,
@@ -63,11 +58,11 @@ extension AppModel {
 
         // 3. 先把 API Key 存入 Keychain + UserDefaults(双写 fallback)
         if !payload.trendSettings.provider.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.provider.apiKey, account: KeychainHelper.Account.openAIKey)
+            LocalSecretStore.set(payload.trendSettings.provider.apiKey, account: LocalSecretStore.Account.openAIKey)
             UserDefaults.standard.set(payload.trendSettings.provider.apiKey, forKey: "qieman.trend.openai.key")
         }
         if !payload.trendSettings.alphaVantage.apiKey.isEmpty {
-            KeychainHelper.set(payload.trendSettings.alphaVantage.apiKey, account: KeychainHelper.Account.alphaVantageKey)
+            LocalSecretStore.set(payload.trendSettings.alphaVantage.apiKey, account: LocalSecretStore.Account.alphaVantageKey)
             UserDefaults.standard.set(payload.trendSettings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
         }
 

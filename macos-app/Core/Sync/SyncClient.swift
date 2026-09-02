@@ -27,11 +27,11 @@ final class SyncClient {
 
     init(
         userDefaults: UserDefaults = .standard,
-        readSecret: @escaping (String) -> String? = { KeychainHelper.get(account: $0) },
+        readSecret: @escaping (String) -> String? = { LocalSecretStore.get(account: $0) },
         writeSecret: @escaping (String, String) -> Void = { value, account in
-            KeychainHelper.set(value, account: account)
+            LocalSecretStore.set(value, account: account)
         },
-        deleteSecret: @escaping (String) -> Void = { KeychainHelper.delete(account: $0) }
+        deleteSecret: @escaping (String) -> Void = { LocalSecretStore.delete(account: $0) }
     ) {
         self.userDefaults = userDefaults
         self.readSecret = readSecret
@@ -70,22 +70,22 @@ final class SyncClient {
 
     var accessToken: String? {
         get {
-            readSecret(KeychainHelper.Account.syncAccessToken)
+            readSecret(LocalSecretStore.Account.syncAccessToken)
                 ?? userDefaults.string(forKey: StorageKey.accessTokenFallback)
         }
     }
 
     var syncPassword: String? {
         get {
-            readSecret(KeychainHelper.Account.syncPassword)
+            readSecret(LocalSecretStore.Account.syncPassword)
                 ?? userDefaults.string(forKey: StorageKey.passwordFallback)
         }
         set {
             if let pw = newValue, !pw.isEmpty {
-                writeSecret(pw, KeychainHelper.Account.syncPassword)
+                writeSecret(pw, LocalSecretStore.Account.syncPassword)
                 userDefaults.set(pw, forKey: StorageKey.passwordFallback)
             } else {
-                deleteSecret(KeychainHelper.Account.syncPassword)
+                deleteSecret(LocalSecretStore.Account.syncPassword)
                 userDefaults.removeObject(forKey: StorageKey.passwordFallback)
             }
         }
@@ -115,7 +115,7 @@ final class SyncClient {
         let result = try JSONDecoder().decode(RegisterResponse.self, from: data)
         groupId = result.groupId
         deviceId = result.deviceId
-        writeSecret(result.accessToken, KeychainHelper.Account.syncAccessToken)
+        writeSecret(result.accessToken, LocalSecretStore.Account.syncAccessToken)
         userDefaults.set(result.accessToken, forKey: StorageKey.accessTokenFallback)
         syncPassword = password
         lastKnownRevision = 0
@@ -146,7 +146,7 @@ final class SyncClient {
         let result = try JSONDecoder().decode(RegisterResponse.self, from: data)
         groupId = result.groupId
         deviceId = result.deviceId
-        writeSecret(result.accessToken, KeychainHelper.Account.syncAccessToken)
+        writeSecret(result.accessToken, LocalSecretStore.Account.syncAccessToken)
         userDefaults.set(result.accessToken, forKey: StorageKey.accessTokenFallback)
         syncPassword = password
     }
@@ -274,8 +274,8 @@ final class SyncClient {
         deviceId = nil
         lastKnownRevision = 0
         lastSyncTime = nil
-        deleteSecret(KeychainHelper.Account.syncAccessToken)
-        deleteSecret(KeychainHelper.Account.syncPassword)
+        deleteSecret(LocalSecretStore.Account.syncAccessToken)
+        deleteSecret(LocalSecretStore.Account.syncPassword)
         userDefaults.removeObject(forKey: StorageKey.accessTokenFallback)
         userDefaults.removeObject(forKey: StorageKey.passwordFallback)
         userDefaults.removeObject(forKey: StorageKey.deviceID)

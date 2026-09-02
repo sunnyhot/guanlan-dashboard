@@ -301,7 +301,7 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 
 > 2026-08-27(W4.2):TrendHorizonView/TrendSectorView/TrendOpportunity/TrendActionCandidate 新增 `whatWouldChange: String`,旧报告 `decodeIfPresent ?? ""` 兜底,**未 bump schemaVersion**;UI 对空值降级用 counterSignals 首条。
 | 收盘复盘冻结快照 | `market-close-review.json` | prettyPrinted + sortedKeys | **0o600** | 3 | 单文件覆盖，只保留最近一次成功复盘 | `MarketCloseReviewArchiveStore` |
-| 趋势设置 | `trend-analysis-settings.json` | prettyPrinted | **0o600** | 无 | 单文件覆盖 | `TrendAnalysisSettingsStore`(API Key 在 Keychain) |
+| 趋势设置 | `trend-analysis-settings.json` | prettyPrinted | **0o600** | 无 | 单文件覆盖 | `TrendAnalysisSettingsStore`(API Key 在 UserDefaults,2026-09-02 起) |
 | Agent 日志 | `trend-agent.log` | 文本 | **0o600** | 无 | 每次运行覆盖写 header + append 进度 | `TrendAgentRunLogStore` |
 | AI 完整诊断日志 | `ai-analysis-logs/<YYYY-MM-DD>-<scope>-<runID>.jsonl` | 每行独立 JSON + sortedKeys | **0o600**（目录 0o700） | 无 | 最近 20 份且总量不超过 200 MB；始终保留最新一份 | `AIAgentDiagnosticRecorder` |
 | Agent 审计产物 | `trend-agent-runs/<YYYY-MM-DD>-<runID>.json` | prettyPrinted | **0o600** | 无 | **最近 20 个**,超出按 mtime 删除 | `TrendAgentRunArtifactStore` |
@@ -310,6 +310,8 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 | 基金穿透缓存 | `fund-look-through-cache.json` | — | — | — | — | `FundLookThroughClient` |
 | Tavily 搜索缓存 | `~/Library/Caches/QiemanDashboard/AIResearch/Tavily/*.json` | prettyPrinted + sortedKeys | **0o600** | 1 | 每请求一文件，最多 64 个；长期 6 小时、盘中读取门槛 10 分钟 | `TrendWebSearchResponseCache` |
 | (已预留)组合洞察快照 | `portfolio-insight-snapshots.json` | — | — | — | — | URL 已定义,暂无 Store 消费 |
+
+> **2026-09-02 密钥存储迁移注记（Keychain 退役）**：API Key（趋势模型/AlphaVantage）与同步凭证（password/accessToken）自本日起存 UserDefaults（`LocalSecretStore`，account 沿用旧 fallback key `qieman.trend.*`/`qieman.sync.*`）。根因：旧签名身份创建的钥匙串条目被新身份读取会触发授权弹窗，拒绝后每次重现（2026-08-31 实证；稳定签名身份无法覆盖本地开发构建混用场景）。迁移零弹框：UserDefaults 已有值（旧 fallback 通道每次成功读都会回填）直接使用；无值时至多尝试读一次旧 Keychain（标记防重复弹框），随后 delete 全部旧条目（delete 不弹窗）。`KeychainHelper.swift` 已删除，读写经注入闭包（测试不受影响）。
 
 完整诊断日志通过 `AIAgentDiagnosticLog.recorder` TaskLocal 贯穿趋势研究、市场雷达、收盘复盘、长期研判、盘中 V1/V2 子 Agent 与 DecisionCase 专项研究。按执行顺序保存：运行元数据、完整模型 messages/tools 请求、完整 assistant 响应、工具参数、工具原始结果、实际回灌模型的结果、校验错误、重试以及最终报告或失败状态。API Key、Authorization、Cookie、Token、Secret 和 Password 字段递归替换为 `[redacted]`；为了定位持仓归因问题，其余业务数据会保留，因此日志只应在本机受控范围内使用。设置页“AI 研判 → 完整诊断日志”可直接打开目录。
 

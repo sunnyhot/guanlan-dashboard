@@ -134,7 +134,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 |---|---|---|
 | `Design/AppPalette.swift` | 471 | 设计系统：颜色/字体/间距（红涨绿跌在此） |
 | `Support/ValueFormatting.swift` | 88 | 数值格式化工具 |
-| `Support/KeychainHelper.swift` | 104 | Keychain 封装 |
+| `Support/LocalSecretStore.swift` | ~120 | 本地密钥存储（UserDefaults 封装 + 旧 Keychain 一次性迁移，2026-09-02 起 Keychain 退役） |
 | `Support/PlatformBridge.swift` | 70 | 平台桥接 |
 | `Support/QRCodeHelper.swift` | 54 | 二维码工具 |
 | `Tests/` | 12208 (66 文件) | XCTest：更新、窗口、排序、简报、诊断、收益归因、策略雷达、AI 研判（TrendResearchAgent/Validator/Credibility）、alfa 客顾客户端、FundLookThrough、NextHourGuidance、CLI 契约快照等。约 410 个测试方法 |
@@ -209,7 +209,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 1. **@MainActor + ObservableObject** — AppModel 是单一状态容器，所有 View 通过 @EnvironmentObject 访问
 2. **中国股市惯例** — 红涨绿跌，所有涨跌颜色用 AppPalette 统一
 3. **纯 Swift 运行时** — App、爬取能力、CLI 和 Agent 技能不依赖 Python 或 localhost HTTP 服务
-4. **Cookie 认证** — 且慢登录态保存在本地受权限保护的 `qieman.cookie` 文件；`Support/KeychainHelper.swift` 提供 Keychain 封装（注：旧文档提及的 `QiemanCookieManager.swift` 已不存在，登录态管理已重构，改动前先搜全仓库确认现状）
+4. **Cookie 认证** — 且慢登录态保存在本地受权限保护的 `qieman.cookie` 文件；API Key/同步凭证存 UserDefaults（`Support/LocalSecretStore.swift`，2026-09-02 起 Keychain 退役——旧签名创建的钥匙串条目读取会弹授权框且拒绝后每次重现；勿再引入 Keychain 存储密钥）
 5. **自动更新** — GitHub Release + latest.json，AppSelfUpdater 处理下载安装
 6. **数据持久化** — 纯 JSON 文件 + 各独立 Store 类管理（**无 SQLite**：全仓库无 sqlite3/GRDB/FMDB/CREATE TABLE，Package.swift 无数据库依赖）。高频追加对象用「一对象一文件 + index 摘要」而非单大 JSON 数组。`NativeSnapshotStore` 是 Snapshot DTO 的文件 Store，不是数据库。引入 SQLite 属于新增基础设施，需专门评估
 7. **AppModel 拆分** — 核心状态在 AppModel.swift，子功能拆到 AppModel/ 子目录

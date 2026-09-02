@@ -8,11 +8,13 @@ struct TrendAnalysisSettingsStore {
     private let userDefaults: UserDefaults
 
     init(
+        // 2026-09-02 起 API Key 存 UserDefaults(LocalSecretStore),不再碰 Keychain——
+        // 旧签名创建的钥匙串条目读取会弹授权框(见 LocalSecretStore 头注释)。
         readSecret: @escaping (String) -> String? = {
-            KeychainHelper.get(account: $0)
+            LocalSecretStore.get(account: $0)
         },
         writeSecret: @escaping (String, String) -> Void = { value, account in
-            KeychainHelper.set(value, account: account)
+            LocalSecretStore.set(value, account: account)
         },
         userDefaults: UserDefaults = .standard
     ) {
@@ -31,83 +33,55 @@ struct TrendAnalysisSettingsStore {
             defaultValue: .default,
             decoder: decoder
         )
-        // API Key 从 Keychain 读取(JSON 不再存明文 key)。
-        // 迁移:若 Keychain 无值但 JSON 里有旧明文,迁移进 Keychain。
+        // API Key 从 LocalSecretStore(UserDefaults)读取,JSON 不存明文。
+        // LocalSecretStore 内部完成旧 Keychain 的一次性迁移与清理。
         migrateAPIKeysIfNeeded(into: &settings)
-        fillAPIKeysFromKeychain(into: &settings)
+        fillAPIKeysFromSecretStore(into: &settings)
         return settings
     }
 
     func save(_ settings: TrendAnalysisSettings, to fileURL: URL) throws {
-        // 存之前把 API Key 存进 Keychain,JSON 里只存空串(不含明文)。
-        saveAPIKeysToKeychain(settings)
+        // 存之前把 API Key 存进 LocalSecretStore,JSON 里只存空串(不含明文)。
+        saveAPIKeysToSecretStore(settings)
         var sanitized = settings
         sanitized.provider.apiKey = ""
         sanitized.alphaVantage.apiKey = ""
         try JSONFilePersistence.save(sanitized, to: fileURL, encoder: encoder)
     }
 
-    // MARK: - API Key <-> Keychain
+    // MARK: - API Key <-> LocalSecretStore
 
-    /// 从 Keychain 填充 API Key 到 settings(覆盖空串)。
-    private func fillAPIKeysFromKeychain(into settings: inout TrendAnalysisSettings) {
-        // 优先 Keychain，fallback UserDefaults(Keychain 弹窗被拒时)。
-        // 只要成功读到旧 Keychain 值就自动回填 fallback，
-        // 避免后续 App 签名变化或授权被拒时上传空 key。
-        let openAI = resolvedAPIKey(
-            account: KeychainHelper.Account.openAIKey,
-            userDefaultsKey: "qieman.trend.openai.key"
-        )
-        let alpha = resolvedAPIKey(
-            account: KeychainHelper.Account.alphaVantageKey,
-            userDefaultsKey: "qieman.trend.alphavantage.key"
-        )
-        if let key = openAI, !key.isEmpty { settings.provider.apiKey = key }
-        if let key = alpha, !key.isEmpty { settings.alphaVantage.apiKey = key }
-        removeLegacyTavilyKey()
-    }
-
-    /// Tavily 联网搜索已下线（2026-08-28）：清理用户 Keychain/UserDefaults 里的孤儿密钥。
-    /// 直接删除，不做「先读再删」——读取旧签名创建的 Keychain 项会触发系统授权弹窗，
-    /// 用户一旦点「拒绝」，删除永远不执行，弹窗每次加载设置都重现（2026-08-31 实证）。
-    /// 删除操作本身不弹窗。
-    private func removeLegacyTavilyKey() {
-        KeychainHelper.delete(account: KeychainHelper.Account.tavilyKey)
+    /// 从本地密钥存储填充 API Key 到 settings(覆盖空串)。
+    private func fillAPIKeysFromSecretStore(into settings: inout TrendAnalysisSettings) {
+        if let key = readSecret(LocalSecretStore.Account.openAIKey) {
+            settings.provider.apiKey = key
+        }
+        if let key = readSecret(LocalSecretStore.Account.alphaVantageKey) {
+            settings.alphaVantage.apiKey = key
+        }
+        // Tavily 已下线(2026-08-28),清掉旧 UserDefaults 孤儿密钥;
+        // 旧 Keychain 条目(含 Tavily)由 LocalSecretStore 的一次性迁移统一 delete(不弹窗)。
         userDefaults.removeObject(forKey: "qieman.trend.tavily.key")
     }
 
-    private func resolvedAPIKey(account: String, userDefaultsKey: String) -> String? {
-        if let key = readSecret(account), !key.isEmpty {
-            userDefaults.set(key, forKey: userDefaultsKey)
-            return key
-        }
-        if let key = userDefaults.string(forKey: userDefaultsKey), !key.isEmpty {
-            return key
-        }
-        return nil
-    }
-
-    /// 迁移:若 Keychain 无值但 settings 里仍有明文 key(旧版本遗留),存进 Keychain。
+    /// 迁移:存储无值但 settings JSON 里仍有旧明文 key(更早版本遗留)时补写。
     private func migrateAPIKeysIfNeeded(into settings: inout TrendAnalysisSettings) {
-        if readSecret(KeychainHelper.Account.openAIKey) == nil,
+        if readSecret(LocalSecretStore.Account.openAIKey) == nil,
            !settings.provider.apiKey.isEmpty {
-            writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
+            writeSecret(settings.provider.apiKey, LocalSecretStore.Account.openAIKey)
         }
-        if readSecret(KeychainHelper.Account.alphaVantageKey) == nil,
+        if readSecret(LocalSecretStore.Account.alphaVantageKey) == nil,
            !settings.alphaVantage.apiKey.isEmpty {
-            writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)
+            writeSecret(settings.alphaVantage.apiKey, LocalSecretStore.Account.alphaVantageKey)
         }
     }
 
-    /// 把 settings 的 API Key 存进 Keychain。
-    private func saveAPIKeysToKeychain(_ settings: TrendAnalysisSettings) {
+    private func saveAPIKeysToSecretStore(_ settings: TrendAnalysisSettings) {
         if !settings.provider.apiKey.isEmpty {
-            writeSecret(settings.provider.apiKey, KeychainHelper.Account.openAIKey)
-            userDefaults.set(settings.provider.apiKey, forKey: "qieman.trend.openai.key")
+            writeSecret(settings.provider.apiKey, LocalSecretStore.Account.openAIKey)
         }
         if !settings.alphaVantage.apiKey.isEmpty {
-            writeSecret(settings.alphaVantage.apiKey, KeychainHelper.Account.alphaVantageKey)
-            userDefaults.set(settings.alphaVantage.apiKey, forKey: "qieman.trend.alphavantage.key")
+            writeSecret(settings.alphaVantage.apiKey, LocalSecretStore.Account.alphaVantageKey)
         }
     }
 }

@@ -32,8 +32,8 @@ final class SyncArchiveActionsTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         var secrets = [
-            KeychainHelper.Account.syncAccessToken: "token-secret",
-            KeychainHelper.Account.syncPassword: "password-secret",
+            LocalSecretStore.Account.syncAccessToken: "token-secret",
+            LocalSecretStore.Account.syncPassword: "password-secret",
         ]
         let client = SyncClient(
             userDefaults: defaults,
