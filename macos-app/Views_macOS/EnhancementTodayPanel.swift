@@ -49,15 +49,6 @@ extension EnhancementCenterView {
                     NextHourGuidanceFollowupReviewsView(reviews: report.followupReviews)
                 }
 
-                if model.trendSettings.provider.isConfigured {
-                    Label(
-                        "联网搜索已下线：风控规则只允许输出持有建议",
-                        systemImage: "lock.trianglebadge.exclamationmark"
-                    )
-                    .font(AppPalette.appFont(.caption, weight: .medium))
-                    .foregroundStyle(AppPalette.warning)
-                }
-
                 if model.nextHourGuidanceGenerationState == .generating {
                     NextHourGuidanceProgressView(stage: model.nextHourGuidanceProgressStage)
                 }

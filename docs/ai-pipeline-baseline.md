@@ -214,6 +214,8 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 
 **2026-09-02 根治注记(前置阶段限时保护)**:步骤 1-5 的前置链路此前无任何时限——网络半开(连接建立但不出数据,URLSession 空闲计时器被传输层字节活动续命,与 2026-09-01 Agent 流式链路同源)时 `.generating` 永久挂起、按钮停在「研判中…」、槽位尝试键长期占用(2026-09-02 14:29 实证:点击后 10 分钟零推进、无日志无失败写入)。现在前置分两段限时(`withNextHourPreambleTimeout`,先完成者胜、到点取消底层任务并抛可读超时错误进入 failed):①数据刷新(持仓+指数)120s;②研究准备(能力探测/穿透+广度)120s。操作自身错误与取消语义原样传播;手动重试不受槽位去重影响,自动调度下一窗口照常重试;Agent 主体 300s 预算不变。进度视图同步显示已耗时,超时常量语义由 `NextHourGuidancePreambleTimeoutTests.testTimeoutConstantsStayGenerousForHealthyPaths` 锚定。
 
+**2026-09-02 追加(本地财经热榜取代联网搜索新闻面)**:盘中链路注入 NewsNow 热榜(财联社/华尔街见闻/雪球热门股票,免 token;全源失败静默降级为无新闻,上限 30 条,纳入研究准备 120s 限时窗)。context 新增 `marketNews`(nil 时行为与旧版一致);`get_live_market_context` 将热榜条目以 `.webSearch` 类型登记进证据账本(id `news:newsnow:{source}:{hash}`,publisherKey=热榜源,财联社/华尔街见闻记 authoritative),标题与候选标的名确定性匹配生成 entityNames——与标的无关的条目通不过 `validateExecution` 的关联校验,买卖门禁实质为「热榜须覆盖该标的相关事件」。V1 用户提示词删除「任何标的都不得 buy/sell」一刀切禁令(改述为证据条件);V2 新闻子 Agent 从「无工具却要求逐标的搜索」改为基于注入热榜作答;P5 回指取证措辞同步。盘中区段常驻「联网搜索已下线」警告横幅移除(报告来源状态仍如实标注)。回归测试 `NextHourNewsEvidenceTests` ×4。
+
 ### 3.2 Agent 内部
 
 `NextHourGuidanceAgent.run`(`Core/NextHourGuidance.swift:612`):

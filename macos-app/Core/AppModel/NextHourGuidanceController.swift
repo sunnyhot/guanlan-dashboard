@@ -213,7 +213,10 @@ extension AppModel {
                 // L1 广度注入（2026-08-31）：预暖缓存直接带入（TTL 内秒回），
                 // Agent 不必再花 15-30s 冷算 get_market_breadth；拉不到时静默跳过。
                 let breadth = try? await MarketDataEngine.shared.marketBreadth()
-                return (lookThrough: lookThrough, breadth: breadth)
+                // 2026-09-02:本地财经热榜(NewsNow,免 token)注入盘中链路,
+                // 取代已下线联网搜索的新闻面;失败静默降级为 nil。
+                let news = await self.fetchNextHourMarketNews(rows: rows)
+                return (lookThrough: lookThrough, breadth: breadth, news: news)
             }
             let lookThroughResult = prepared.lookThrough
             let breadthStats = prepared.breadth
@@ -222,7 +225,8 @@ extension AppModel {
                 slot: slot,
                 generatedAt: generatedAt,
                 additionalWarnings: lookThroughResult.warnings,
-                marketBreadth: breadthStats.flatMap(NextHourGuidanceBreadthContext.init(stats:))
+                marketBreadth: breadthStats.flatMap(NextHourGuidanceBreadthContext.init(stats:)),
+                marketNews: prepared.news
             )
             let researchSnapshot = makeNextHourResearchSnapshot(
                 rows: rows,
@@ -347,7 +351,8 @@ extension AppModel {
         slot: NextHourGuidanceSlot,
         generatedAt: String,
         additionalWarnings: [String],
-        marketBreadth: NextHourGuidanceBreadthContext? = nil
+        marketBreadth: NextHourGuidanceBreadthContext? = nil,
+        marketNews: [NextHourGuidanceNewsItem]? = nil
     ) -> NextHourGuidanceContext {
         let total = rows.reduce(0) { $0 + $1.effectiveHoldingAmount }
         let assets = rows.map { row in
@@ -410,7 +415,7 @@ extension AppModel {
                 "以下标的报价超过 20 分钟或缺少准确时间，只允许持有：\(staleAssetNames.prefix(8).joined(separator: "、"))"
             )
         }
-        marketDataWarnings.append("联网搜索源已下线（Tavily 已移除），风控规则禁止输出买入或卖出。")
+        marketDataWarnings.append("联网搜索已下线；外部事件证据改用本地财经热榜（NewsNow）。热榜未覆盖该标的相关事件时，禁止输出买入或卖出。")
         let latestActions = (trendReport?.actions ?? []).prefix(5).map {
             "\($0.title)：\($0.detail)"
         }
@@ -444,7 +449,28 @@ extension AppModel {
             latestAssetConclusions: latestAssetConclusions,
             dataRules: rules,
             lastCloseReview: makeLastCloseReviewContext(generatedAt: generatedAt),
-            marketBreadth: marketBreadth
+            marketBreadth: marketBreadth,
+            marketNews: marketNews
+        )
+    }
+
+    /// 2026-09-02:本地财经热榜(NewsNow,免 token,失败静默)注入盘中链路,
+    /// 取代已下线联网搜索的新闻面。财联社+华尔街见闻(权威)与雪球热门股票
+    /// (标的相关度高)三源;全部拉取失败时返回 nil,保持旧版无新闻行为。
+    private func fetchNextHourMarketNews(
+        rows: [PersonalAssetAggregateRow]
+    ) async -> [NextHourGuidanceNewsItem]? {
+        let sources: [NewsFeedSource] = [.cailiansheHot, .wallstreetcnQuick, .xueqiuHotStock]
+        var feeds: [(sourceID: String, items: [NewsFeedItem])] = []
+        for source in sources {
+            if let items = try? await MarketDataEngine.shared.newsFeed(source) {
+                feeds.append((source.rawValue, Array(items.prefix(15))))
+            }
+        }
+        guard !feeds.isEmpty else { return nil }
+        return NextHourGuidanceNewsAssembler.items(
+            feeds: feeds,
+            assetNames: rows.map(\.fundName)
         )
     }
 
@@ -652,7 +678,7 @@ extension AppModel {
                 source: .webSearch,
                 status: .notConfigured,
                 receivedAt: generatedAt,
-                detail: "联网搜索已下线（Tavily 已移除）。"
+                detail: "联网搜索已下线；盘中新闻面改用本地财经热榜（NewsNow：财联社/华尔街见闻/雪球）。"
             ),
         ]
     }

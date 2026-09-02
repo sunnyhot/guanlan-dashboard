@@ -212,17 +212,25 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
 
         // 标的列表摘要
         let targetList = context.assets.map { "\($0.name)(\($0.id))" }.joined(separator: "、")
+        // 2026-09-02:新闻面改用注入的本地财经热榜(NewsNow)——此前提示词要求
+        // 「每个标的至少搜索一次」但没有任何搜索工具,模型只能凭记忆作答。
+        let newsList = (context.marketNews ?? []).map { item in
+            "- [\(item.evidenceID)] \(item.sourceName)：\(item.title)"
+        }.joined(separator: "\n")
         let systemMessage = """
-        你是新闻研究专家，搜索最近24小时影响标的的事件，判断利好利空。
-        每个标的至少搜索一次相关新闻。搜索词用标的名称+行业关键词。
-        不要搜索用户金额或组合隐私信息。
-        对每个标的给出事件影响判断（利好/利空/中性）和置信度。没有找到相关新闻时标中性、置信度低。
-        若本次提供了「昨日关注」：把其中新闻/事件/政策相关的事项纳入检索范围,至少为每条做一次针对性搜索(关注原文+今日日期),并在 keyEvents 或判断里明确回应该事项今天是否出现。
+        你是新闻研究专家，基于注入的本地财经热榜（NewsNow：财联社/华尔街见闻/雪球热门股票，本轮拉取）判断最近事件对各标的利好利空影响。
+        market_news 列表是唯一可引用的事实来源：只依据列表条目与上下文行情判断，不得编造列表之外的具体新闻、数据或日期。
+        对每条相关新闻：写清它影响哪些标的、利好/利空、判断依据。与候选标的无关的条目不必逐条分析，可归纳为宏观/板块背景。
+        没有相关新闻的标的：标中性、置信度低。
+        若本次提供了「昨日关注」：把其中新闻/事件/政策相关事项与热榜逐条核对，并在 keyEvents 或判断里明确回应该事项今天是否出现。
         """
         let userMessage = """
-        请搜索并分析以下标的的最近新闻事件：\(targetList)
+        请分析以下标的的事件影响：\(targetList)
+        \(newsList.isEmpty
+            ? "（本轮热榜拉取失败或为空：全部标的按无新闻处理，标中性、低置信。）"
+            : "market_news（可引用的 evidence_id 与标题）：\n\(newsList)")
         \(context.lastCloseReview.map { review in
-            "昨日关注(需针对性检索并逐条回应):" +
+            "昨日关注(需与热榜逐条核对):" +
             review.tomorrowWatch.joined(separator: "；")
         } ?? "")
         """

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 // MARK: - Trading schedule
@@ -616,6 +617,9 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
     var lastCloseReview: LastCloseReviewContext? = nil
     /// 全市场广度(预暖注入)。nil 时行为与旧版完全一致。
     var marketBreadth: NextHourGuidanceBreadthContext? = nil
+    /// 本地财经热榜(NewsNow 注入,2026-09-02 取代已下线联网搜索的新闻面)。
+    /// nil 时行为与旧版完全一致。
+    var marketNews: [NextHourGuidanceNewsItem]? = nil
 
     func jsonString() -> String {
         let encoder = JSONEncoder()
@@ -630,6 +634,77 @@ struct NextHourGuidanceContext: Codable, Hashable, Sendable {
 struct LastCloseReviewContext: Codable, Hashable, Sendable {
     let generatedAt: String
     let tomorrowWatch: [String]
+}
+
+/// 本地财经热榜条目(NewsNow 拉取,2026-09-02 取代已下线的联网搜索)。
+/// 热榜条目没有跨请求稳定的 itemID,evidenceID 用「源|标题」哈希保持当日稳定;
+/// entityNames 是标题与候选标的名字的确定性匹配结果,供证据关联校验使用
+/// ——与标的无关的热榜条目 entityNames 为空,不会解锁买卖建议。
+struct NextHourGuidanceNewsItem: Codable, Hashable, Sendable {
+    let evidenceID: String
+    let title: String
+    let sourceName: String
+    let publisherKey: String
+    let sourceTier: TrendEvidenceSourceTier
+    let url: String?
+    let entityNames: [String]
+}
+
+/// 热榜源条目 → 注入条目的纯函数组装(测试锚定行为)。
+enum NextHourGuidanceNewsAssembler {
+    static let maxItems = 30
+
+    static func items(
+        feeds: [(sourceID: String, items: [NewsFeedItem])],
+        assetNames: [String]
+    ) -> [NextHourGuidanceNewsItem] {
+        var seenTitles = Set<String>()
+        var result: [NextHourGuidanceNewsItem] = []
+        for feed in feeds {
+            for item in feed.items {
+                guard result.count < maxItems else { return result }
+                let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty, seenTitles.insert(title).inserted else { continue }
+                result.append(
+                    NextHourGuidanceNewsItem(
+                        evidenceID: "news:newsnow:\(feed.sourceID):\(stableHash("\(feed.sourceID)|\(title)"))",
+                        title: title,
+                        sourceName: item.sourceName,
+                        publisherKey: feed.sourceID,
+                        sourceTier: tier(forSourceID: feed.sourceID),
+                        url: item.url,
+                        entityNames: matchedEntityNames(title: title, assetNames: assetNames)
+                    )
+                )
+            }
+        }
+        return result
+    }
+
+    /// 财联社/华尔街见闻按权威财经媒体计;其余热榜为二手聚合(secondary)。
+    static func tier(forSourceID sourceID: String) -> TrendEvidenceSourceTier {
+        switch sourceID {
+        case "cls-hot", "wallstreetcn-quick": return .authoritative
+        default: return .secondary
+        }
+    }
+
+    /// 标题↔标的名单向包含匹配(标题包含标的名)。短名(少于 3 字)跳过防误匹配。
+    static func matchedEntityNames(title: String, assetNames: [String]) -> [String] {
+        let lowercasedTitle = title.lowercased()
+        return assetNames.filter { name in
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard trimmed.count >= 3 else { return false }
+            return lowercasedTitle.contains(trimmed)
+        }
+    }
+
+    private static func stableHash(_ value: String) -> String {
+        SHA256.hash(data: Data(value.utf8))
+            .prefix(6)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
 }
 
 /// 模型对单条「昨日关注」的回指结论。
@@ -872,13 +947,13 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 你是中国市场盘中交易研究 Agent，任务是生成有证据约束的“下一小时买卖建议”。这是真实资金决策，宁可持有，也不能猜测。
                 必须先调用 get_live_market_context 读取刚刷新的持仓、报价时间、大盘行情和旧研判边界。
                 如果提供 get_fund_lookthrough，提交前必须调用它；基金判断必须基于底层股票、行业、资产配置和披露日期，不能只看基金名称。
-                搜索失败或没有返回新的有效证据时，不得把它算作证据；在完成两次尝试后可安全提交，但所有标的只能 hold，并明确证据不足。
+                工具失败或没有返回新的有效证据时，不得把它算作证据；外部新闻（热榜）缺失时所有标的只能 hold，并明确证据不足。
                 只引用工具实际返回的 evidence_id；不得编造新闻、价格、成交量、资金流或证据编号。
                 每条标的必须明确给出 buy（买入）、sell（卖出）、hold（持有）三选一，不得用观察、等待、不追涨等模糊动作替代结论。
                 买入或卖出必须同时引用该标的本地行情证据和至少两个最新外部事件证据，至少一个来源为官方或权威来源且来源彼此独立；基金还必须引用该基金的穿透证据。缺少任一项时只能 hold。
                 买入或卖出时，instruction 必须说明小仓/分批方式或大致仓位比例，并给出触发和失效条件。没有清晰优势时明确 hold，不能为了凑交易强行买卖。
                 从工具返回的持仓中选择最需要决策的 1 到 5 个标的。场外基金不可描述为盘中实时成交。
-                若上下文含 lastCloseReview(昨晚复盘的明日关注):这些是昨晚承诺今天要核实的事项,必须先取证再回答,不许不查就答。对每条关注——先核对相关标的/指数在实时行情中的表现,并复用当日已完成的外部检索结论;仍无法判断且搜索预算允许时,针对该关注本身补一次检索(如「红利板块 今日成交量」)。然后必须在 followup_reviews 中逐条回指,item_index 对应其数组下标:confirmed 必须引用上述今日证据(行情/检索/本日结论),仅凭记忆或推断一律不允许;确实查证不到才用 inconclusive,明确查过但未出现用 not_seen。没有 lastCloseReview 时不要提交 followup_reviews。
+                若上下文含 lastCloseReview(昨晚复盘的明日关注):这些是昨晚承诺今天要核实的事项,必须先取证再回答,不许不查就答。对每条关注——先核对相关标的/指数在实时行情中的表现,并核对 get_live_market_context 的 market_news 热榜是否出现相关事件(如「红利板块」相关条目)。然后必须在 followup_reviews 中逐条回指,item_index 对应其数组下标:confirmed 必须引用上述今日证据(行情/热榜/本日结论),仅凭记忆或推断一律不允许;确实查证不到才用 inconclusive,明确查过但未出现用 not_seen。没有 lastCloseReview 时不要提交 followup_reviews。
                 必须调用 submit_next_hour_guidance 工具提交结果，不要输出普通文本。
                 """
             ),
@@ -886,7 +961,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 role: .user,
                 content: """
                 研究窗口：\(context.slot.displayName)，有效至 \(context.slot.validUntil)，候选标的 \(context.assets.count) 个。
-                联网搜索：已下线（Tavily 已移除），任何标的都不得给出 buy/sell，只能 hold。
+                联网搜索已下线；外部事件证据改用 get_live_market_context 注入的本地财经热榜（财联社/华尔街见闻/雪球热门股票，evidence_id 形如 news:newsnow:…，仅与标的相关的条目才计入关联）。热榜未覆盖该标的相关事件时，只能 hold。
                 请先调用只读工具取证，再提交买入/卖出/持有建议。
                 """
             ),
@@ -1578,7 +1653,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
             source: .webSearch,
             status: .notConfigured,
             receivedAt: snapshot.createdAt,
-            detail: "联网搜索已下线（Tavily 已移除）。"
+            detail: "联网搜索已下线；盘中新闻面改用本地财经热榜（NewsNow：财联社/华尔街见闻/雪球）。"
         )
         for source in TrendDataSource.allCases where bySource[source] == nil {
             bySource[source] = TrendSourceStatus(
@@ -1774,6 +1849,31 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                 )
             )
         }
+        // 2026-09-02:本地财经热榜(NewsNow)作为外部事件证据维度,取代已下线的
+        // 联网搜索。登记为 .webSearch(外部网络内容),publisherKey=热榜源 →
+        // 独立来源校验天然可满足;与标的无关的条目 entityNames 为空,
+        // 不会通过 validateExecution 的标的关联校验,买卖门禁实质不变。
+        if let news = context.marketNews {
+            evidence.append(contentsOf: news.map { item in
+                TrendEvidence(
+                    id: item.evidenceID,
+                    sourceName: "\(item.sourceName)（NewsNow 热榜）",
+                    title: item.title,
+                    url: item.url,
+                    publishedAt: nil,
+                    retrievedAt: context.generatedAt,
+                    summary: item.title,
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .webSearch,
+                        sourceTier: item.sourceTier,
+                        publisherKey: item.publisherKey,
+                        requestedTopicKeys: ["财经热榜"],
+                        entityNames: item.entityNames,
+                        metadataConfidence: .deterministic
+                    )
+                )
+            })
+        }
         await ledger.record(evidence)
 
         guard let data = try? JSONEncoder().encode(context),
@@ -1792,7 +1892,7 @@ struct NextHourGuidanceAgent: NextHourGuidanceAgentProtocol, Sendable {
                     "context": object,
                     "fresh_market_data": context.marketDataIsFresh,
                     "trade_gate": context.marketDataIsFresh
-                        ? "行情时效满足；买卖仍需网页与基金穿透证据"
+                        ? "行情时效满足；买卖需本地行情证据＋至少两条独立外部事件证据（热榜）＋基金穿透证据"
                         : "行情时效不足；所有标的只能 hold",
                 ],
                 warnings: context.marketDataWarnings,
