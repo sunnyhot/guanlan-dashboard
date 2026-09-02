@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.4/QiemanDashboard-4.9.4.zip",
-    "name" : "QiemanDashboard-4.9.4.zip",
-    "sha256" : "564fbb37d3d5286f75eb9e39e86104ebdc2ba01f8b31f8c7573bce57698d6df5",
-    "size" : 8382363
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.5/QiemanDashboard-4.9.5.zip",
+    "name" : "QiemanDashboard-4.9.5.zip",
+    "sha256" : "cb17de3552106b369d24fa79488c45c181babe0e30a7a74d812ca0a22b624a52",
+    "size" : 8382555
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/download/v4.9.4/QiemanDashboard-4.9.4.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.5/QiemanDashboard-4.9.5.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.4.zip",
-      "size" : 8382363
+      "name" : "QiemanDashboard-4.9.5.zip",
+      "size" : 8382555
     }
   ],
-  "body" : "版本号同步 v4.9.4\n趋势 Agent 降级终审三连修——keyAssets 补关联降级清洗链 + 空壳批次 counterSignals 兜底 + 重复基金去重入库",
-  "html_url" : "https://github.com/sunnyhot/qieman-manager-dashboard/releases/tag/v4.9.4",
-  "name" : "QiemanDashboard v4.9.4",
-  "notes" : "版本号同步 v4.9.4\n趋势 Agent 降级终审三连修——keyAssets 补关联降级清洗链 + 空壳批次 counterSignals 兜底 + 重复基金去重入库",
+  "body" : "版本号同步 v4.9.5\n仓库更名 guanlan-dashboard——更新自动更新地址/fallback/文档引用，CLAUDE.md 并入 AGENTS.md\n应用更名「观澜」——去平台品牌化，统一双端展示名/窗口标题/Release 标题",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.5",
+  "name" : "观澜 v4.9.5",
+  "notes" : "版本号同步 v4.9.5\n仓库更名 guanlan-dashboard——更新自动更新地址/fallback/文档引用，CLAUDE.md 并入 AGENTS.md\n应用更名「观澜」——去平台品牌化，统一双端展示名/窗口标题/Release 标题",
   "published_at" : "",
-  "sha256" : "564fbb37d3d5286f75eb9e39e86104ebdc2ba01f8b31f8c7573bce57698d6df5",
-  "tag" : "v4.9.4",
-  "tag_name" : "v4.9.4",
-  "version" : "4.9.4"
+  "sha256" : "cb17de3552106b369d24fa79488c45c181babe0e30a7a74d812ca0a22b624a52",
+  "tag" : "v4.9.5",
+  "tag_name" : "v4.9.5",
+  "version" : "4.9.5"
 }
