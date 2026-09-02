@@ -212,6 +212,8 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 手动入口: startNextHourGuidance() → dueSlot 或 manualSlot → generateNextHourGuidance(userInitiated: true)
 ```
 
+**2026-09-02 根治注记(前置阶段限时保护)**:步骤 1-5 的前置链路此前无任何时限——网络半开(连接建立但不出数据,URLSession 空闲计时器被传输层字节活动续命,与 2026-09-01 Agent 流式链路同源)时 `.generating` 永久挂起、按钮停在「研判中…」、槽位尝试键长期占用(2026-09-02 14:29 实证:点击后 10 分钟零推进、无日志无失败写入)。现在前置分两段限时(`withNextHourPreambleTimeout`,先完成者胜、到点取消底层任务并抛可读超时错误进入 failed):①数据刷新(持仓+指数)120s;②研究准备(能力探测/穿透+广度)120s。操作自身错误与取消语义原样传播;手动重试不受槽位去重影响,自动调度下一窗口照常重试;Agent 主体 300s 预算不变。进度视图同步显示已耗时,超时常量语义由 `NextHourGuidancePreambleTimeoutTests.testTimeoutConstantsStayGenerousForHealthyPaths` 锚定。
+
 ### 3.2 Agent 内部
 
 `NextHourGuidanceAgent.run`(`Core/NextHourGuidance.swift:612`):

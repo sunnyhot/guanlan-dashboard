@@ -139,17 +139,34 @@ extension AppModel {
         nextHourGuidanceArchive.lastAttemptedSlotKey = slot.key
         saveNextHourGuidanceArchive()
 
-        if !activeUserPortfolioHoldings.isEmpty, !isRefreshingPortfolio {
-            try? await refreshUserPortfolio(
-                updateNotice: false,
-                forceQuoteRefresh: true
-            )
+        // 2026-09-02 根治:前置阶段此前无任何时限——网络半开(连接建立但不出
+        // 数据,URLSession 空闲计时器被传输层字节活动续命)时 .generating 永久
+        // 挂起、按钮停在「研判中…」、槽位尝试键长期占用(当天 14:29 实证:点击
+        // 后 10 分钟零推进、无日志无失败写入)。与 Agent 主体的运行截止看门狗
+        // (2026-09-01)对齐:到点取消底层任务,以可读错误进入 failed;手动重试
+        // 不受槽位去重影响,自动调度下一窗口照常重试。
+        do {
+            try await withNextHourPreambleTimeout(
+                seconds: Self.nextHourDataRefreshTimeoutSeconds,
+                kind: .dataRefresh
+            ) { [weak self] in
+                guard let self else { throw CancellationError() }
+                if !self.activeUserPortfolioHoldings.isEmpty, !self.isRefreshingPortfolio {
+                    try? await self.refreshUserPortfolio(
+                        updateNotice: false,
+                        forceQuoteRefresh: true
+                    )
+                }
+                self.nextHourGuidanceProgressStage = .refreshingMarket
+                await self.refreshMarketIndices(
+                    kinds: [.sseComposite, .csi300, .chinext],
+                    updateNotice: false
+                )
+            }
+        } catch {
+            failNextHourGuidance(error)
+            return
         }
-        nextHourGuidanceProgressStage = .refreshingMarket
-        await refreshMarketIndices(
-            kinds: [.sseComposite, .csi300, .chinext],
-            updateNotice: false
-        )
 
         let rows = nextHourEligibleRows(for: slot)
         guard !rows.isEmpty else {
@@ -167,7 +184,14 @@ extension AppModel {
             nextHourGuidanceProgressStage = .preparingResearch
             if trendProviderCapabilities?.providerFingerprint != provider.fingerprint
                 || trendProviderCapabilities?.supportsToolCalls != true {
-                let capabilities = try await trendCapabilityProbe(provider)
+                // 同前置数据刷新:能力探测是一次 LLM 往返,半开网络下同样会无限等。
+                let capabilities = try await withNextHourPreambleTimeout(
+                    seconds: Self.nextHourResearchPreparationTimeoutSeconds,
+                    kind: .researchPreparation
+                ) { [weak self] in
+                    guard let self else { throw CancellationError() }
+                    return try await self.trendCapabilityProbe(provider)
+                }
                 trendProviderCapabilities = capabilities
                 guard capabilities.supportsToolCalls else {
                     throw NextHourGuidanceAgentError.invalidSubmission([
@@ -176,13 +200,23 @@ extension AppModel {
                 }
             }
 
-            let lookThroughResult = await makeNextHourLookThrough(
-                rows: rows,
-                generatedAt: generatedAt
-            )
-            // L1 广度注入（2026-08-31）：预暖缓存直接带入（TTL 内秒回），
-            // Agent 不必再花 15-30s 冷算 get_market_breadth；拉不到时静默跳过。
-            let breadthStats = try? await MarketDataEngine.shared.marketBreadth()
+            // 穿透与广度合计共用一份研究准备时限(正常穿透命中缓存秒回、广度预暖)。
+            let prepared = try await withNextHourPreambleTimeout(
+                seconds: Self.nextHourResearchPreparationTimeoutSeconds,
+                kind: .researchPreparation
+            ) { [weak self] in
+                guard let self else { throw CancellationError() }
+                let lookThrough = await self.makeNextHourLookThrough(
+                    rows: rows,
+                    generatedAt: generatedAt
+                )
+                // L1 广度注入（2026-08-31）：预暖缓存直接带入（TTL 内秒回），
+                // Agent 不必再花 15-30s 冷算 get_market_breadth；拉不到时静默跳过。
+                let breadth = try? await MarketDataEngine.shared.marketBreadth()
+                return (lookThrough: lookThrough, breadth: breadth)
+            }
+            let lookThroughResult = prepared.lookThrough
+            let breadthStats = prepared.breadth
             let context = makeNextHourGuidanceContext(
                 rows: rows,
                 slot: slot,
@@ -270,16 +304,21 @@ extension AppModel {
             }
             await nextHourGuidanceNotificationSender(report)
         } catch is CancellationError {
-            nextHourGuidanceGenerationState = .failed
-            nextHourGuidanceProgressStage = .failed
-            nextHourGuidanceError = "下一小时买卖建议生成已取消。"
-            saveNextHourGuidanceArchive()
+            failNextHourGuidance(CancellationError())
         } catch {
-            nextHourGuidanceGenerationState = .failed
-            nextHourGuidanceProgressStage = .failed
-            nextHourGuidanceError = error.localizedDescription
-            saveNextHourGuidanceArchive()
+            failNextHourGuidance(error)
         }
+    }
+
+    /// 2026-09-02:前置阶段限时保护引入的统一失败出口——取消与一般错误的
+    /// 文案语义与原底部 catch 分支逐字一致。
+    private func failNextHourGuidance(_ error: Error) {
+        nextHourGuidanceGenerationState = .failed
+        nextHourGuidanceProgressStage = .failed
+        nextHourGuidanceError = error is CancellationError
+            ? "下一小时买卖建议生成已取消。"
+            : error.localizedDescription
+        saveNextHourGuidanceArchive()
     }
 
     private func nextHourEligibleRows(
@@ -667,5 +706,65 @@ extension AppModel {
         } catch {
             nextHourGuidanceError = "保存下一小时买卖建议失败：\(error.localizedDescription)"
         }
+    }
+}
+
+// MARK: - 2026-09-02 前置阶段限时保护（半开网络根治）
+
+extension AppModel {
+    /// 前置阶段超时上限。正常数据刷新 ~10-30s、能力探测 ~5-30s（一次 LLM 往返）、
+    /// 穿透命中缓存秒回；120s 上限只拦「连得上但不出数据」的半开连接，
+    /// 不影响任何健康路径。Agent 主体仍有自己的 300s 运行预算，不在本保护范围。
+    static let nextHourDataRefreshTimeoutSeconds: Double = 120
+    static let nextHourResearchPreparationTimeoutSeconds: Double = 120
+}
+
+/// 前置阶段限时执行器：操作与计时器先完成者胜——
+/// · 操作正常返回 → 取消计时器、原样返回；
+/// · 到点 → 取消底层操作（含其内部 URLSession 请求）并抛出可读超时错误；
+/// · 操作自身错误（含取消）原样传播，保持外层 `catch is CancellationError`
+///   的既有取消语义。
+func withNextHourPreambleTimeout<T>(
+    seconds: Double,
+    kind: NextHourGuidancePreambleTimeoutError.Kind,
+    operation: @escaping @MainActor () async throws -> T
+) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        group.addTask {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            throw NextHourGuidancePreambleTimeoutError(kind: kind, seconds: seconds)
+        }
+        do {
+            guard let first = try await group.next() else {
+                throw NextHourGuidancePreambleTimeoutError(kind: kind, seconds: seconds)
+            }
+            group.cancelAll()
+            try? await group.waitForAll()
+            return first
+        } catch {
+            group.cancelAll()
+            try? await group.waitForAll()
+            throw error
+        }
+    }
+}
+
+/// 盘中研判前置阶段超时（数据刷新/研究准备）。
+/// 半开网络下 URLSession 空闲计时器被传输层字节活动续命（2026-09-01 已在
+/// Agent 流式链路实证同源问题），此前前置无任何时限会让 .generating 永久挂起。
+struct NextHourGuidancePreambleTimeoutError: LocalizedError {
+    enum Kind: String {
+        case dataRefresh = "数据刷新"
+        case researchPreparation = "研究准备"
+    }
+
+    let kind: Kind
+    let seconds: Double
+
+    var errorDescription: String? {
+        "盘中研判前置\(kind.rawValue)超时（\(Int(seconds.rounded())) 秒）：网络连接疑似半开（连得上但不出数据），已终止本次运行。请检查网络后重试。"
     }
 }
