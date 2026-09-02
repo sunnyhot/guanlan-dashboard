@@ -45,7 +45,7 @@ brew install --cask sunnyhot/tap/guanlan
 
 或从 [GitHub Releases](https://github.com/sunnyhot/guanlan-dashboard/releases/latest) 下载 zip 解压到 /Applications。
 
-> 注意：brew 安装的请用 `brew upgrade` 更新、忽略应用内更新弹窗；手动下载安装的使用应用内自动更新。
+> 更新：应用会自动检测 Homebrew 安装——brew 装的提示用 `brew upgrade`、不再应用内覆盖安装；手动下载安装的使用应用内自动更新。
 
 ## 隐私与数据
 

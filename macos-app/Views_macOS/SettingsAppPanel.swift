@@ -146,13 +146,19 @@ extension SettingsSectionView {
                     .disabled(model.isCheckingForUpdates)
 
                     if model.availableUpdate != nil {
-                        Button {
-                            Task { await model.downloadAndInstallAvailableUpdate() }
-                        } label: {
-                            Label(model.isInstallingUpdate ? "安装中…" : "下载并安装", systemImage: "square.and.arrow.down")
+                        if model.isHomebrewManagedApp {
+                            Label("由 Homebrew 管理，请用 brew upgrade 更新", systemImage: "terminal")
+                                .font(AppPalette.appFont(.footnote, weight: .medium))
+                                .foregroundStyle(AppPalette.muted)
+                        } else {
+                            Button {
+                                Task { await model.downloadAndInstallAvailableUpdate() }
+                            } label: {
+                                Label(model.isInstallingUpdate ? "安装中…" : "下载并安装", systemImage: "square.and.arrow.down")
+                            }
+                            .buttonStyle(.appSecondary)
+                            .disabled(model.isInstallingUpdate)
                         }
-                        .buttonStyle(.appSecondary)
-                        .disabled(model.isInstallingUpdate)
 
                         Button {
                             model.openAvailableUpdateReleasePage()
@@ -216,7 +222,9 @@ extension SettingsSectionView {
             return "正在检查 GitHub Release"
         }
         if model.availableUpdate != nil {
-            return "发现新版本，可在下方下载并安装"
+            return model.isHomebrewManagedApp
+                ? "发现新版本；本应用由 Homebrew 管理，请 brew upgrade"
+                : "发现新版本，可在下方下载并安装"
         }
         return "当前已是最新版本，也可手动检查"
     }

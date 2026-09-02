@@ -5,7 +5,36 @@ import Foundation
 
 // MARK: - App Update Management
 
+/// 2026-09-02:Homebrew cask 安装检测。brew 安装的应用由 `brew upgrade` 管理,
+/// 应用内更新退位为提示——否则应用内覆盖安装会让 brew 认为 cask 被改动、
+/// 两套更新互相打架。判定:Caskroom 里存在本应用 cask 的版本回执目录
+/// (Apple Silicon /opt/homebrew、Intel /usr/local;不调 brew 命令,零开销;
+/// brew 卸载会移除该目录,检测自动失效)。
+enum HomebrewCaskInstallation {
+    static let caskToken = "guanlan"
+
+    static var defaultCaskroomRoots: [String] {
+        ["/opt/homebrew/Caskroom", "/usr/local/Caskroom"]
+    }
+
+    static func isManaged(caskroomRoots: [String] = defaultCaskroomRoots) -> Bool {
+        caskroomRoots.contains { root in
+            let tokenPath = (root as NSString).appendingPathComponent(caskToken)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: tokenPath, isDirectory: &isDirectory),
+                  isDirectory.boolValue else { return false }
+            let versions = (try? FileManager.default.contentsOfDirectory(atPath: tokenPath)) ?? []
+            return !versions.isEmpty
+        }
+    }
+}
+
 extension AppModel {
+    /// 本应用是否由 Homebrew cask 安装(brew 管升级,应用内安装退位)。
+    var isHomebrewManagedApp: Bool {
+        HomebrewCaskInstallation.isManaged()
+    }
+
     func checkForUpdates(userInitiated: Bool) async {
         guard !isCheckingForUpdates else { return }
         if userInitiated {
@@ -19,8 +48,14 @@ extension AppModel {
             let update = try await updateService.checkForUpdate()
             if let update {
                 availableUpdate = update
-                isPresentingUpdateSheet = true
-                noticeMessage = "发现新版本 \(update.version)，可以下载并重启安装。"
+                if isHomebrewManagedApp {
+                    // brew 管理:仍检查(知道有新版),但不弹安装弹窗、不覆盖安装。
+                    isPresentingUpdateSheet = false
+                    noticeMessage = "发现新版本 \(update.version)。本应用由 Homebrew 管理，请运行 brew upgrade 更新。"
+                } else {
+                    isPresentingUpdateSheet = true
+                    noticeMessage = "发现新版本 \(update.version)，可以下载并重启安装。"
+                }
             } else if userInitiated {
                 noticeMessage = "已经是最新版本：\(updateService.currentVersion)。"
             }
@@ -34,6 +69,10 @@ extension AppModel {
     func downloadAndInstallAvailableUpdate() async {
         guard let update = availableUpdate else { return }
         guard !isInstallingUpdate else { return }
+        if isHomebrewManagedApp {
+            errorMessage = "本应用由 Homebrew 管理，请运行 brew upgrade 更新；应用内覆盖安装已停用。"
+            return
+        }
 
         isInstallingUpdate = true
         errorMessage = ""

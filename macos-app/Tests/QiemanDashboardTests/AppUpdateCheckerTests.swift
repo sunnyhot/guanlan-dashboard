@@ -155,6 +155,47 @@ final class AppUpdateCheckerTests: XCTestCase {
             "GitHub Release 正文"
         )
     }
+
+    // MARK: - Homebrew cask 让位检测（2026-09-02）
+
+    func testHomebrewDetectionFindsCaskroomReceipt() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Caskroom-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        try FileManager.default.createDirectory(
+            atPath: root + "/guanlan/4.9.6",
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(HomebrewCaskInstallation.isManaged(caskroomRoots: [root]), "有版本回执目录 → brew 管理")
+    }
+
+    func testHomebrewDetectionRejectsEmptyOrMissingRoot() throws {
+        let missing = "/tmp/not-exists-\(UUID().uuidString)"
+        XCTAssertFalse(HomebrewCaskInstallation.isManaged(caskroomRoots: [missing]), "路径不存在 → 非 brew 管理")
+
+        let emptyToken = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Caskroom-empty-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: emptyToken) }
+        try FileManager.default.createDirectory(
+            atPath: emptyToken + "/guanlan",
+            withIntermediateDirectories: true
+        )
+        XCTAssertFalse(HomebrewCaskInstallation.isManaged(caskroomRoots: [emptyToken]), "token 目录为空 → 非 brew 管理")
+    }
+
+    func testHomebrewDetectionScansAllRoots() throws {
+        let emptyRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Caskroom-a-\(UUID().uuidString)").path
+        let realRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Caskroom-b-\(UUID().uuidString)").path
+        defer {
+            try? FileManager.default.removeItem(atPath: emptyRoot)
+            try? FileManager.default.removeItem(atPath: realRoot)
+        }
+        try FileManager.default.createDirectory(atPath: emptyRoot + "/other", withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: realRoot + "/guanlan/4.9.6", withIntermediateDirectories: true)
+        XCTAssertTrue(HomebrewCaskInstallation.isManaged(caskroomRoots: [emptyRoot, realRoot]), "任一 root 命中即 brew 管理")
+    }
 }
 
 // Mirror of the private GitHubReleasePayload for testing decode logic
