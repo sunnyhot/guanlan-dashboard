@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.7/QiemanDashboard-4.9.7.zip",
-    "name" : "QiemanDashboard-4.9.7.zip",
-    "sha256" : "016608e0a3275995b16f07494d00586e4018b65a83a84f2e2c989217c893ef18",
-    "size" : 8432414
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.8/QiemanDashboard-4.9.8.zip",
+    "name" : "QiemanDashboard-4.9.8.zip",
+    "sha256" : "50a2a15891a566750c570f5df4ffe73814483401dca47fbeeaaf383b8dbb8c13",
+    "size" : 8442400
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.7/QiemanDashboard-4.9.7.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v4.9.8/QiemanDashboard-4.9.8.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-4.9.7.zip",
-      "size" : 8432414
+      "name" : "QiemanDashboard-4.9.8.zip",
+      "size" : 8442400
     }
   ],
-  "body" : "版本号同步 v4.9.7\n应用内更新检测 Homebrew 安装并让位——brew 装的提示 brew upgrade、停用覆盖安装，双更新器不再打架\nREADME 补 Homebrew 安装方式（sunnyhot/tap）\n构建产物自动注销 LaunchServices 登记——开发副本不再污染「打开方式」选择器",
-  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.7",
-  "name" : "观澜 v4.9.7",
-  "notes" : "版本号同步 v4.9.7\n应用内更新检测 Homebrew 安装并让位——brew 装的提示 brew upgrade、停用覆盖安装，双更新器不再打架\nREADME 补 Homebrew 安装方式（sunnyhot/tap）\n构建产物自动注销 LaunchServices 登记——开发副本不再污染「打开方式」选择器",
+  "body" : "版本号同步 v4.9.8\nai-pipeline-baseline 补 2026-09-03 三条注记——fan-out 并入市场模块直收购官(并发 3 路/修复预算扩容口径)、周期级反证兜底+关联降级补出口+prepareRepairs 点名清除、批次制总预算+单步止损分阶段+usage 与推理链分片计量\n提交轮预算止损分阶段(研究 60s/提交与 fanout 修复 400s,剩 331s 白烧一整轮的口径对齐) + 诊断日志落盘 usage 与推理链/正文分片分类(推理链占比可量化,实测单轮 90%+)\nfan-out 并入市场模块并行生成直收购官——closeReview 此前永缺 market 注定回退交互、~600s 并行成果只能暂存；单元化生成器+分波限流 3 路+修复预算扩容口径+终检失败按点名清除后回退（29 只全程 ~2800s → 预计 ~1100s）\nprepareRepairs 拒批修复按点名基金精准清除——终检错误带基金名,只清被点名者;点名不中回退全清保保守契约（runID 552F6FE4 中 4 只点名连坐 25 只健康基金的销毁机制根治）\n趋势报告入库兜底三连——周期级/keyAssets counterSignals 保守占位、market/sectors/overview 反证条件入库即补、关联降级补「待观察信号」出口并压置信度（runID 552F6FE4 轮 3 全部 11 条拒批类根治）+ 耗时根治计划文档\n趋势 Agent 总预算改按报告批次数扩容——每资产4秒外推对29只只给1916s必撞墙，改为每批8只×400s实测轮耗时(29只→3400s)，批次数由 expectedFundCodes 驱动\nREADME 丰富化——徽章/亮点定位/三链路表格/买卖门禁说明/快速上手/iOS 端与命令行章节\nREADME 自动更新条目补 Homebrew 让位说明",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v4.9.8",
+  "name" : "观澜 v4.9.8",
+  "notes" : "版本号同步 v4.9.8\nai-pipeline-baseline 补 2026-09-03 三条注记——fan-out 并入市场模块直收购官(并发 3 路/修复预算扩容口径)、周期级反证兜底+关联降级补出口+prepareRepairs 点名清除、批次制总预算+单步止损分阶段+usage 与推理链分片计量\n提交轮预算止损分阶段(研究 60s/提交与 fanout 修复 400s,剩 331s 白烧一整轮的口径对齐) + 诊断日志落盘 usage 与推理链/正文分片分类(推理链占比可量化,实测单轮 90%+)\nfan-out 并入市场模块并行生成直收购官——closeReview 此前永缺 market 注定回退交互、~600s 并行成果只能暂存；单元化生成器+分波限流 3 路+修复预算扩容口径+终检失败按点名清除后回退（29 只全程 ~2800s → 预计 ~1100s）\nprepareRepairs 拒批修复按点名基金精准清除——终检错误带基金名,只清被点名者;点名不中回退全清保保守契约（runID 552F6FE4 中 4 只点名连坐 25 只健康基金的销毁机制根治）\n趋势报告入库兜底三连——周期级/keyAssets counterSignals 保守占位、market/sectors/overview 反证条件入库即补、关联降级补「待观察信号」出口并压置信度（runID 552F6FE4 轮 3 全部 11 条拒批类根治）+ 耗时根治计划文档\n趋势 Agent 总预算改按报告批次数扩容——每资产4秒外推对29只只给1916s必撞墙，改为每批8只×400s实测轮耗时(29只→3400s)，批次数由 expectedFundCodes 驱动\nREADME 丰富化——徽章/亮点定位/三链路表格/买卖门禁说明/快速上手/iOS 端与命令行章节\nREADME 自动更新条目补 Homebrew 让位说明",
   "published_at" : "",
-  "sha256" : "016608e0a3275995b16f07494d00586e4018b65a83a84f2e2c989217c893ef18",
-  "tag" : "v4.9.7",
-  "tag_name" : "v4.9.7",
-  "version" : "4.9.7"
+  "sha256" : "50a2a15891a566750c570f5df4ffe73814483401dca47fbeeaaf383b8dbb8c13",
+  "tag" : "v4.9.8",
+  "tag_name" : "v4.9.8",
+  "version" : "4.9.8"
 }
