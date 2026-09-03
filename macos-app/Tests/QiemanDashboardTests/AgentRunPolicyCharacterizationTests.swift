@@ -52,12 +52,29 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         XCTAssertEqual(TrendResearchRunPolicy.defaultMaxRequestTimeoutRecoveries, 1)
     }
 
-    /// 2026-09-01:总预算扩容不再是死代码——1800 + 4s/只,被 3600 上限钳制。
-    func testEffectiveTotalTimeoutScalesWithAssetCount() {
+    /// 2026-09-03 根治(runID 552F6FE4):扩容改为按报告批次数(8只/批 × 400s/轮流式实测)，
+    /// 仍被 3600 上限钳制。旧的每资产 4s 外推对 29 只只给 1916s，必然撞墙。
+    func testEffectiveTotalTimeoutScalesWithReportBatches() {
         let policy = TrendResearchRunPolicy()
         XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 0), 1800)
-        XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 29), 1916, "1800 + 29×4")
-        XCTAssertEqual(policy.effectiveTotalTimeout(assetCount: 10_000), 3600, "被 expanded 上限钳制")
+        // 29 只 → 4 批 → 1800 + 4×400 = 3400
+        XCTAssertEqual(
+            policy.effectiveTotalTimeout(assetCount: 29),
+            3400,
+            "1800 + ceil(29/8)×400"
+        )
+        // 100 只 → 13 批 → 1800+5200 = 7000,被 expanded 上限钳到 3600
+        XCTAssertEqual(
+            policy.effectiveTotalTimeout(assetCount: 100),
+            3600,
+            "被 expanded 上限钳制"
+        )
+        // 报告标的数优先于持仓资产数(snapshot.expectedFundCodes 驱动批次)
+        XCTAssertEqual(
+            policy.effectiveTotalTimeout(assetCount: 50, reportAssetCount: 9),
+            1800 + 2 * 400,
+            "9 只报告标的 → ceil(9/8)=2 批"
+        )
     }
 
     // MARK: - effectiveLimits 扩张钳制

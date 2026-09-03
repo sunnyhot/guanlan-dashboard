@@ -94,7 +94,11 @@ struct TrendResearchRunPolicy: Sendable {
     /// 405-725s,fanout 874s 失败回退后 1800s 必然撞墙。
     /// 晚闸门换完成度:超预算时走降级完成(W5),不再整 run 报废。
     var expandedTotalTimeoutSeconds: Double = 3600
-    var totalTimeoutPerAssetSeconds: Double = 4
+    /// 2026-09-03 根治(runID 552F6FE4):每资产 4 秒的线性外推与实测脱节——29 只组合
+    /// 只扩到 1916s,而单轮 submit 流式实测 352s+、按批(8只/批)需 4 个提交轮,
+    /// 加上取证轮与一次被拒重试,实际需要 ~3000s。改为按报告批次数扩容:每批一整轮
+    /// 模型流式(含推理链)按 400s 估,29 只 → 1800 + 4×400 = 3400s,仍在 3600 cap 内。
+    var totalTimeoutPerReportBatchSeconds: Double = 400
     var maxRequestTimeoutRecoveries: Int = Self.defaultMaxRequestTimeoutRecoveries
     var maxToolResultBytes: Int = 32 * 1024
     var temperature: Double = 0.2
@@ -156,11 +160,19 @@ struct TrendResearchRunPolicy: Sendable {
         }
     }
 
-    /// 整次运行总预算随组合规模扩张：分块报告比单次提交更耗时，固定基线对大组合偏紧。
+    /// 整次运行总预算随报告批次数扩张：每个批次对应一整轮流式生成(实测 352-725s/轮)，
+    /// 而不是按资产数线性外推（每资产实际成本 ≈ 一轮流式耗时/8，远高于 4s）。
     /// 最终受 expandedTotalTimeoutSeconds 约束。
-    func effectiveTotalTimeout(assetCount: Int) -> Double {
+    func effectiveTotalTimeout(
+        assetCount: Int,
+        reportAssetCount: Int? = nil
+    ) -> Double {
+        let reportCount = max(0, reportAssetCount ?? assetCount)
+        let batchCount = (
+            reportCount + TrendReportDraftStore.assetBatchSize - 1
+        ) / TrendReportDraftStore.assetBatchSize
         let scaled = totalTimeoutSeconds
-            + Double(max(0, assetCount)) * totalTimeoutPerAssetSeconds
+            + Double(batchCount) * totalTimeoutPerReportBatchSeconds
         return min(expandedTotalTimeoutSeconds, scaled)
     }
 }
@@ -329,7 +341,8 @@ struct TrendResearchAgent: Sendable {
         )
         // 整次运行总预算随组合规模动态扩张；固定值对大组合偏紧。
         let effectiveTotal = policy.effectiveTotalTimeout(
-            assetCount: snapshot.assets.count
+            assetCount: snapshot.assets.count,
+            reportAssetCount: snapshot.expectedFundCodes.count
         )
         // 2026-09-01 根治:运行截止时间下传到每次模型请求,流式持续输出也受硬约束
         // (此前只在轮与轮之间检查,单轮流式 405-725s 可无界超时)。
