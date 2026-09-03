@@ -100,6 +100,52 @@ final class TrendResearchPerformanceOptimizationTests: XCTestCase {
         XCTAssertTrue(source.contains("fanout_fallback_to_interactive"), "任何失败必须回退交互循环")
         XCTAssertTrue(source.contains("finalizeAssembledReport(assembled"), "fan-out 复用同一终检链")
         XCTAssertTrue(source.contains("withThrowingTaskGroup"), "批次并行生成")
+        // 2026-09-03 根治(runID 552F6FE4 缺陷 A):market 并入并行波,fanout 可直接收官。
+        XCTAssertTrue(
+            source.contains("case market"),
+            "fan-out 单元应包含市场模块(否则 closeReview 永缺 market,注定回退交互)"
+        )
+        XCTAssertTrue(
+            source.contains("SubmitTrendMarketModuleTool()"),
+            "market 单元应挂 submit_trend_market_module 的工具定义"
+        )
+        XCTAssertTrue(
+            source.contains("units.append(.market)"),
+            "market 单元必须实际加入并行波"
+        )
+        XCTAssertTrue(
+            source.contains("static let fanoutMaxConcurrentUnits = 3"),
+            "并发上限 3 路(网关零重试下的限流保险)"
+        )
+        // 2026-09-03 根治(缺陷 ③.6):fanout 修复预算与交互循环同用扩容口径。
+        XCTAssertTrue(
+            source.contains("let invalidBudget = Self.effectiveInvalidSubmissionBudget"),
+            "fan-out 修复预算应用扩容口径,而非基础 maxInvalidSubmissions"
+        )
+    }
+
+    /// closeReview 的 required 模块必须含 market——2026-09-01 机会雷达收编后的
+    /// 契约(基线 market 不预填)。若未来 scope 改动悄悄移除,fanout 直收购官的
+    /// 前提(缺陷 A 根治)失效,本测试先红。
+    func testCloseReviewScopeRequiresMarketModule() {
+        let baseline = TrendAnalysisReport.fixture(
+            generatedAt: "2026-09-03 10:00:00",
+            externalSignalStatus: .partial
+        )
+        let scope = TrendReportDraftStore.effectiveScope(
+            requestedScope: .closeReview,
+            baselineReport: baseline,
+            expectedFundCodes: ["000001", "000002"]
+        )
+        XCTAssertEqual(scope, .closeReview, "有基线+非空持仓 → 保持 closeReview")
+        XCTAssertTrue(
+            scope.requiredModuleToolNameSet.contains(TrendReportModuleToolName.market),
+            "closeReview 必重算 market 模块"
+        )
+        XCTAssertTrue(
+            scope.requiredModuleToolNameSet.contains(TrendReportModuleToolName.assetBatch),
+            "closeReview 必重算基金批次"
+        )
     }
 }
 

@@ -893,6 +893,12 @@ struct TrendResearchAgent: Sendable {
     /// 低于该基金数不值得并行(交互循环通常一两轮搞定)。
     private static let fanOutMinimumFundCount = 12
 
+    /// fan-out 并发上限(2026-09-03):多路流式打同一供应商 key,网关对 trend-research
+    /// 零重试(maxRetriesPerProvider=0),一路 429 即该单元失败进修复。批次+market
+    /// 并入同一波后限 3 路(分波 TaskGroup 而非信号量,行为确定、无取消边界),
+    /// 墙钟增量 < 一个批次轮时长,换限流鲁棒性。
+    static let fanoutMaxConcurrentUnits = 3
+
     /// W5:终局错误的降级理由——进入未覆盖基金 impactText 的用户可见文案,
     /// 用短稳定措辞而不是带「请重试」指引的 errorDescription。
     private static func degradationReason(for error: TrendResearchAgentError) -> String {
@@ -1058,35 +1064,81 @@ struct TrendResearchAgent: Sendable {
         guard fetchedAssets >= codes.count else { return nil }  // 数据没读全 → 交互循环兜底
         let dataPayload = dataBlocks.joined(separator: "\n\n")
 
-        // 2) 并行生成各批(单轮:系统规范 + 预取数据 + 本批基金清单)。
+        // 2) 并行生成各单元(单轮:系统规范 + 预取数据 + 单元指令)。
+        // 2026-09-03 根治(runID 552F6FE4):单元 = 基金批次 + 市场模块。此前 fanout
+        // 只生成批次,而 closeReview 必重算 market(增量 init 清空),assembledReport
+        // 永远缺 market → fanout 注定 return nil 回退交互从头再走,~600s 并行成果
+        // 只剩「暂存进 store 等交互循环用」。market 与批次相互独立,并入同一并行波
+        // 后 fanout 可直收购官(组装终检与成功收尾复用既有第 4/5 步,零新路径)。
         let systemPrompt = promptBuilder.initialMessages(
             snapshot: snapshot,
             scope: scope,
             alphaVantageConfigured: false
         ).first?.content ?? ""
         let assetBatchTool = SubmitTrendAssetBatchTool()
-        let submitDefinition = AgentToolDefinition.function(
+        let assetBatchDefinition = AgentToolDefinition.function(
             name: TrendReportModuleToolName.assetBatch,
             description: assetBatchTool.description,
             parameters: assetBatchTool.parameters
         )
+        let marketTool = SubmitTrendMarketModuleTool()
+        let marketDefinition = AgentToolDefinition.function(
+            name: TrendReportModuleToolName.market,
+            description: marketTool.description,
+            parameters: marketTool.parameters
+        )
 
-        func generateBatch(_ batch: [String], repairFeedback: String?) async throws -> AgentToolCall? {
+        /// fan-out 单元:一个基金批次,或市场模块(与交互路径同一提交契约)。
+        enum FanoutUnit {
+            case assetBatch(codes: [String])
+            case market
+
+            var isMarket: Bool {
+                if case .market = self { return true }
+                return false
+            }
+
+            var toolName: String {
+                isMarket ? TrendReportModuleToolName.market : TrendReportModuleToolName.assetBatch
+            }
+
+            var label: String {
+                switch self {
+                case .assetBatch(let codes): return "批次(\(codes.joined(separator: ",")))"
+                case .market: return "市场模块"
+                }
+            }
+
+            var instruction: String {
+                switch self {
+                case .assetBatch(let codes):
+                    return "本批必须且只提交这些基金:\(codes.joined(separator: ",")),一次提交本批全部基金。"
+                case .market:
+                    return "提交大盘/大类资产判断:主要指数强弱判断放 marketOutlook,行业判断放 sectors,opportunities 本次留空不提交;marketOutlook 与 sectors 至少一项非空且不得重名,每条都必须带 counterSignals 反证条件。"
+                }
+            }
+        }
+
+        func generateSingleTurn(
+            tool: AgentToolDefinition,
+            instruction: String,
+            repairFeedback: String?
+        ) async throws -> AgentToolCall? {
             let repair = repairFeedback.map { "\n\n上一轮校验未通过,务必先修正再提交:\($0)" } ?? ""
             let userPrompt = """
             数据已全部预取(不要调用任何只读工具,数据就在下方):
             \(dataPayload)
 
-            本批必须且只提交这些基金:\(batch.joined(separator: ","))\(repair)
+            \(instruction)\(repair)
 
-            立即调用一次 \(TrendReportModuleToolName.assetBatch) 提交本批全部基金;证据只能引用上方数据中已登记的 evidence_id。
+            立即调用一次 \(tool.function.name);证据只能引用上方数据中已登记的 evidence_id。
             """
             let result = try await client.complete(
                 messages: [
                     AgentChatMessage(role: .system, content: systemPrompt),
                     AgentChatMessage(role: .user, content: userPrompt),
                 ],
-                tools: [submitDefinition],
+                tools: [tool],
                 toolChoice: .auto,
                 temperature: policy.temperature,
                 maxOutputTokens: policy.maxOutputTokensPerRequest,
@@ -1099,63 +1151,101 @@ struct TrendResearchAgent: Sendable {
                 deadline: runDeadline,
                 streamProgress: nil
             )
-            return result.toolCalls.first { $0.function.name == TrendReportModuleToolName.assetBatch }
+            return result.toolCalls.first { $0.function.name == tool.function.name }
         }
 
-        var invalidUsed = 0
-        var failedBatches: [(codes: [String], errors: [String])] = []
-        // 2026-09-01 根治:fanout 阶段纳入总预算(此前整段零检查,`started`/`policy`
-        // 传进来却没用)。预算不足一个最小步时直接回退交互循环,由轮间守卫统一终局。
-        guard runDeadline.timeIntervalSinceNow >= Self.minimumStepBudgetSeconds else {
-            await AIAgentDiagnosticLog.record(
-                "fanout_skipped_budget_exhausted",
-                payload: AgentJSONValue.object([
-                    "remaining_seconds": .number(runDeadline.timeIntervalSinceNow),
-                ])
-            )
-            return nil
-        }
-        do {
-            try await withThrowingTaskGroup(of: (Int, AgentToolCall?).self) { group in
-                for (index, batch) in batches.enumerated() {
-                    group.addTask { (index, try await generateBatch(batch, repairFeedback: nil)) }
-                }
-                for try await (index, call) in group {
-                    guard let call else {
-                        failedBatches.append((batches[index], ["未返回提交工具调用"]))
-                        continue
-                    }
-                    let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
-                    await AIAgentDiagnosticLog.recordToolResult(
-                        turn: 0,
-                        call: call,
-                        contentJSON: result.contentJSON,
-                        modelContentJSON: result.contentJSON,
-                        isError: result.isError
-                    )
-                    await eventHandler(
-                        .toolFinished(
-                            name: TrendReportModuleToolName.assetBatch,
-                            summary: "fanout 批次 \(index + 1)/\(batches.count):\(Self.summary(of: result))"
-                        )
-                    )
-                    if result.isError {
-                        invalidUsed += 1
-                        failedBatches.append((batches[index], Self.parseErrors(from: result.contentJSON)))
-                    }
-                }
+        var units: [FanoutUnit] = batches.map { .assetBatch(codes: $0) }
+        units.append(.market)
+        await AIAgentDiagnosticLog.record(
+            "fanout_started",
+            payload: AgentJSONValue.object([
+                "fund_count": .number(Double(codes.count)),
+                "batch_count": .number(Double(batches.count)),
+                "unit_count": .number(Double(units.count)),
+                "max_concurrent_units": .number(Double(Self.fanoutMaxConcurrentUnits)),
+            ])
+        )
+
+        var unitResults: [(unit: FanoutUnit, call: AgentToolCall?)] = []
+        var waveStart = 0
+        while waveStart < units.count {
+            let wave = units[waveStart..<min(waveStart + Self.fanoutMaxConcurrentUnits, units.count)]
+            waveStart += wave.count
+            // 每波前查预算:不足一个最小步时直接回退交互循环,由轮间守卫统一终局/降级。
+            let remaining = runDeadline.timeIntervalSinceNow
+            guard remaining >= Self.minimumStepBudgetSeconds else {
+                await AIAgentDiagnosticLog.record(
+                    "fanout_skipped_budget_exhausted",
+                    payload: AgentJSONValue.object([
+                        "remaining_seconds": .number(remaining),
+                    ])
+                )
+                return nil
             }
-        } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
-            // 批次生成的流式输出撞运行截止时间:回退交互循环,轮间守卫会统一终局/降级。
-            await AIAgentDiagnosticLog.record(
-                "fanout_deadline_exceeded",
-                payload: AgentJSONValue.object([:])
-            )
-            return nil
+            do {
+                try await withThrowingTaskGroup(of: (FanoutUnit, AgentToolCall?).self) { group in
+                    for unit in wave {
+                        group.addTask {
+                            let definition = unit.isMarket ? marketDefinition : assetBatchDefinition
+                            let call = try await generateSingleTurn(
+                                tool: definition,
+                                instruction: unit.instruction,
+                                repairFeedback: nil
+                            )
+                            return (unit, call)
+                        }
+                    }
+                    for try await (unit, call) in group {
+                        unitResults.append((unit, call))
+                    }
+                }
+            } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
+                // 单元生成的流式输出撞运行截止时间:回退交互循环,轮间守卫会统一终局/降级。
+                await AIAgentDiagnosticLog.record(
+                    "fanout_deadline_exceeded",
+                    payload: AgentJSONValue.object([:])
+                )
+                return nil
+            }
         }
 
-        // 3) 失败批次各修复一次(串行、带拒批教训);再失败 → 整体回退交互循环。
-        for (batchCodes, errors) in failedBatches {
+        // 生成完成后按单元顺序串行入库(批在前、market 在后:market 入库时四模块
+        // 齐全会走 executeTrendModule 的就地组装终检,失败时已按点名清除并进修复)。
+        var invalidUsed = 0
+        var failedUnits: [(unit: FanoutUnit, errors: [String])] = []
+        for (unit, call) in unitResults {
+            guard let call else {
+                failedUnits.append((unit, ["未返回提交工具调用"]))
+                continue
+            }
+            let result = await registry.execute(call, context: makeContext(invalidUsed: invalidUsed))
+            await AIAgentDiagnosticLog.recordToolResult(
+                turn: 0,
+                call: call,
+                contentJSON: result.contentJSON,
+                modelContentJSON: result.contentJSON,
+                isError: result.isError
+            )
+            await eventHandler(
+                .toolFinished(
+                    name: unit.toolName,
+                    summary: "fanout \(unit.label):\(Self.summary(of: result))"
+                )
+            )
+            if result.isError {
+                invalidUsed += 1
+                failedUnits.append((unit, Self.parseErrors(from: result.contentJSON)))
+            }
+        }
+
+        // 3) 失败单元各修复一次(串行、带拒批教训);再失败 → 整体回退交互循环。
+        // 2026-09-03 根治:修复预算改用扩容口径(与交互循环 effectiveInvalidSubmissionBudget
+        // 一致)——market 并入第一波后 5 个并行提交可能全败,基础 4 次口径不够。
+        let invalidBudget = Self.effectiveInvalidSubmissionBudget(
+            fundCount: snapshot.expectedFundCodes.count,
+            base: policy.maxInvalidSubmissions
+        )
+        for (unit, errors) in failedUnits {
             // 修复轮发起前查预算:预算不足时不再烧修复轮,直接回退。
             let remaining = runDeadline.timeIntervalSinceNow
             guard remaining >= Self.minimumStepBudgetSeconds else {
@@ -1163,26 +1253,27 @@ struct TrendResearchAgent: Sendable {
                     "fanout_repair_gave_up",
                     payload: AgentJSONValue.object([
                         "reason": .string("预算剩余 \(Int(remaining.rounded()))s,不足以发起修复轮"),
-                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "unit": .string(unit.label),
                         "last_errors": .array(errors.prefix(3).map { .string($0) }),
                     ])
                 )
                 return nil
             }
-            guard invalidUsed <= policy.maxInvalidSubmissions else {
+            guard invalidUsed <= invalidBudget else {
                 await AIAgentDiagnosticLog.record(
                     "fanout_repair_gave_up",
                     payload: AgentJSONValue.object([
                         "reason": .string("修复预算耗尽"),
-                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "unit": .string(unit.label),
                     ])
                 )
                 return nil
             }
             let repairCall: AgentToolCall?
             do {
-                repairCall = try await generateBatch(
-                    batchCodes,
+                repairCall = try await generateSingleTurn(
+                    tool: unit.isMarket ? marketDefinition : assetBatchDefinition,
+                    instruction: unit.instruction,
                     repairFeedback: errors.prefix(2).joined(separator: ";")
                 )
             } catch OpenAICompatibleAgentClientError.runDeadlineExceeded {
@@ -1197,7 +1288,7 @@ struct TrendResearchAgent: Sendable {
                     "fanout_repair_gave_up",
                     payload: AgentJSONValue.object([
                         "reason": .string("修复轮未返回提交工具调用"),
-                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "unit": .string(unit.label),
                     ])
                 )
                 return nil
@@ -1214,7 +1305,7 @@ struct TrendResearchAgent: Sendable {
                 await AIAgentDiagnosticLog.record(
                     "fanout_repair_failed",
                     payload: AgentJSONValue.object([
-                        "batch_codes": .array(batchCodes.map { .string($0) }),
+                        "unit": .string(unit.label),
                         "errors": .array(Self.parseErrors(from: result.contentJSON).prefix(3).map { .string($0) }),
                     ])
                 )
@@ -1224,13 +1315,19 @@ struct TrendResearchAgent: Sendable {
 
         // 4) 组装 + 终检(与交互路径同一条链)。
         guard let assembled = await draftStore.assembledReport(snapshot: snapshot) else {
+            // 组装缺口(如修复中被 prepareRepairs 点名清除的基金)留给交互循环按
+            // remaining 继续——已暂存健康模块保值,不整块报废。
             return nil
         }
         let finalizeResult = await finalizeAssembledReport(assembled, context: makeContext(invalidUsed: invalidUsed))
         guard case .report(let report)? = finalizeResult.completion else {
+            // 与 executeTrendModule 同链:终检失败先按点名清除涉及模块,再回退交互
+            // 循环——回退后模型只补缺失部分,不再从零重走。
+            let finalizeErrors = Self.parseErrors(from: finalizeResult.contentJSON)
+            await draftStore.prepareRepairs(for: finalizeErrors)
             await eventHandler(
                 .reportValidationFailed(
-                    errors: Self.parseErrors(from: finalizeResult.contentJSON),
+                    errors: finalizeErrors,
                     remainingAttempts: 0
                 )
             )
@@ -1257,7 +1354,8 @@ struct TrendResearchAgent: Sendable {
             "fanout_completed",
             payload: AgentJSONValue.object([
                 "batches": .number(Double(batches.count)),
-                "repaired": .number(Double(failedBatches.count)),
+                "market": .number(1),
+                "repaired": .number(Double(failedUnits.count)),
             ])
         )
         return report
