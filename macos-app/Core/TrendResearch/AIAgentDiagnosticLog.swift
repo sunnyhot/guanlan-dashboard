@@ -37,11 +37,19 @@ struct AIAgentModelResponseTrace: Encodable, Sendable {
     let stopReason: String
     let finishReason: String?
     let durationSeconds: Double
+    /// 2026-09-03 计量(runID 552F6FE4 复盘):token 用量与推理链/正文分片分类。
+    /// 供应商真实计量缺失时为估算(estimated=true);分类计数非流式路径为 0。
+    let usage: AgentTokenUsage?
+    let reasoningChunkCount: Int
+    let contentChunkCount: Int
 
     init(result: AgentCompletionResult, durationSeconds: Double) {
         assistantMessage = result.assistantMessage
         finishReason = result.finishReason
         self.durationSeconds = durationSeconds
+        usage = result.usage
+        reasoningChunkCount = result.reasoningChunkCount
+        contentChunkCount = result.contentChunkCount
         stopReason = switch result.stopReason {
         case .stop: "stop"
         case .toolCalls: "tool_calls"

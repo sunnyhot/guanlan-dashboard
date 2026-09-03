@@ -77,6 +77,54 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
         )
     }
 
+    /// 2026-09-03 根治(runID 552F6FE4 轮 5):单步预算止损分阶段——研究轮 60s 不变,
+    /// 提交/fanout 修复轮对齐批报告轮成本(400s),避免「剩 331s 发起注定中途被杀
+    /// 的提交轮,输出全白烧且 0 暂存导致降级也失败」。
+    func testStepBudgetPhasedByTurnKind() {
+        let policy = TrendResearchRunPolicy()
+        XCTAssertEqual(
+            TrendResearchAgent.stepBudgetSeconds(isSubmissionTurn: false, policy: policy),
+            60,
+            "研究轮维持 60s"
+        )
+        XCTAssertEqual(
+            TrendResearchAgent.stepBudgetSeconds(isSubmissionTurn: true, policy: policy),
+            400,
+            "提交轮对齐 totalTimeoutPerReportBatchSeconds"
+        )
+        XCTAssertEqual(
+            TrendResearchAgent.stepBudgetSeconds(isSubmissionTurn: true, policy: policy),
+            policy.totalTimeoutPerReportBatchSeconds,
+            "与批次预算常量同源,改常量时本测试同步更新"
+        )
+    }
+
+    /// 2026-09-03 计量:model_response trace 落盘 usage 与推理链/正文分片分类,
+    /// 推理链占比可从诊断日志直接读出(runID 552F6FE4 复盘的前置)。
+    func testModelResponseTraceEncodesUsageAndChunkSplit() throws {
+        let result = AgentCompletionResult(
+            assistantMessage: AgentChatMessage(role: .assistant, content: "ok"),
+            toolCalls: [],
+            stopReason: .stop,
+            finishReason: "stop",
+            usage: AgentTokenUsage(
+                promptTokens: 1200, completionTokens: 800, totalTokens: 2000
+            ),
+            reasoningChunkCount: 22_720,
+            contentChunkCount: 243
+        )
+        let trace = AIAgentModelResponseTrace(result: result, durationSeconds: 617.5)
+        let data = try JSONEncoder().encode(trace)
+        let object = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        XCTAssertEqual(object["reasoningChunkCount"] as? Int, 22_720)
+        XCTAssertEqual(object["contentChunkCount"] as? Int, 243)
+        let usage = try XCTUnwrap(object["usage"] as? [String: Any])
+        XCTAssertEqual(usage["completion_tokens"] as? Int, 800)
+        XCTAssertEqual(object["stopReason"] as? String, "stop")
+    }
+
     // MARK: - effectiveLimits 扩张钳制
 
     func testEffectiveLimitsClampedByExpandedCap() {

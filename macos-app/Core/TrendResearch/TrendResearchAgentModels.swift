@@ -235,19 +235,28 @@ struct AgentCompletionResult: Sendable, Hashable {
     let finishReason: String?
     /// 供应商上报的 token 用量（流式尾包或 JSON 响应携带；未上报为 nil）。
     let usage: AgentTokenUsage?
+    /// 流式分类计数(2026-09-03 计量,runID 552F6FE4 复盘):reasoning_content 与
+    /// content 的分片数。非流式路径为 0。诊断日志据此量化推理链占比(实测单轮
+    /// 90%+ 输出是推理链),不再只靠 wall-clock 盲测。
+    var reasoningChunkCount: Int = 0
+    var contentChunkCount: Int = 0
 
     init(
         assistantMessage: AgentChatMessage,
         toolCalls: [AgentToolCall],
         stopReason: AgentStopReason,
         finishReason: String?,
-        usage: AgentTokenUsage? = nil
+        usage: AgentTokenUsage? = nil,
+        reasoningChunkCount: Int = 0,
+        contentChunkCount: Int = 0
     ) {
         self.assistantMessage = assistantMessage
         self.toolCalls = toolCalls
         self.stopReason = stopReason
         self.finishReason = finishReason
         self.usage = usage
+        self.reasoningChunkCount = reasoningChunkCount
+        self.contentChunkCount = contentChunkCount
     }
 }
 
@@ -282,8 +291,7 @@ struct AgentTokenUsage: Sendable, Hashable, Codable {
     }
 }
 
-/// OpenAI-compatible SSE 响应的传输进度。
-///
+/// OpenAI-compatible SSE 响应的传输进度。///
 /// 只暴露时序和分片数量，不把模型正文或工具参数写入运行日志。
 enum AgentStreamProgress: Sendable, Hashable {
     case firstChunk(elapsed: Double)

@@ -256,6 +256,20 @@ struct TrendResearchAgent: Sendable {
     /// 但能拦住「注定跑不完一轮」的请求,让预算止损真正发生。
     static let minimumStepBudgetSeconds: Double = 60
 
+    /// 单步最小预算分阶段(2026-09-03 根治,runID 552F6FE4 轮 5):提交轮实测
+    /// 352-617s,统一的 60s 止损对提交轮形同虚设——轮 5 剩 331s 仍发起,
+    /// 331s 流式输出全部白烧且彼时 0 只暂存、W5 降级也随之失败。研究轮维持
+    /// 60s;提交/fanout 修复轮对齐一批报告的预期轮成本(400s),剩余不足则
+    /// 止损转降级完成(W5),已暂存批次保值。
+    static func stepBudgetSeconds(
+        isSubmissionTurn: Bool,
+        policy: TrendResearchRunPolicy
+    ) -> Double {
+        isSubmissionTurn
+            ? policy.totalTimeoutPerReportBatchSeconds
+            : minimumStepBudgetSeconds
+    }
+
     init(
         // 经 LLM 网关：预算 / 记账 / trace 立即生效；重试关闭（本 Agent 自带
         // 超时恢复循环，网关级重试会造成双重等待）。
@@ -414,7 +428,12 @@ struct TrendResearchAgent: Sendable {
                 }
                 // 单步最小预算护栏：剩余为正但不足一次有意义的模型往返时直接止损，
                 // 不发起注定中途超时的计费请求（语义与 totalTimeout 区分，可观测）。
-                if remainingTotal < Self.minimumStepBudgetSeconds {
+                // 提交轮按批报告轮成本对齐(2026-09-03),研究轮维持 60s。
+                let stepBudget = Self.stepBudgetSeconds(
+                    isSubmissionTurn: submissionMode,
+                    policy: policy
+                )
+                if remainingTotal < stepBudget {
                     throw TrendResearchAgentError.budgetSkipBeforeRequest(remaining: remainingTotal)
                 }
                 let configuredTimeout = max(1, settings.timeoutSeconds)
@@ -1171,9 +1190,9 @@ struct TrendResearchAgent: Sendable {
         while waveStart < units.count {
             let wave = units[waveStart..<min(waveStart + Self.fanoutMaxConcurrentUnits, units.count)]
             waveStart += wave.count
-            // 每波前查预算:不足一个最小步时直接回退交互循环,由轮间守卫统一终局/降级。
+            // 每波前查预算:不足一个提交轮成本时直接回退交互循环,由轮间守卫统一终局/降级。
             let remaining = runDeadline.timeIntervalSinceNow
-            guard remaining >= Self.minimumStepBudgetSeconds else {
+            guard remaining >= Self.stepBudgetSeconds(isSubmissionTurn: true, policy: policy) else {
                 await AIAgentDiagnosticLog.record(
                     "fanout_skipped_budget_exhausted",
                     payload: AgentJSONValue.object([
@@ -1247,8 +1266,9 @@ struct TrendResearchAgent: Sendable {
         )
         for (unit, errors) in failedUnits {
             // 修复轮发起前查预算:预算不足时不再烧修复轮,直接回退。
+            // 修复轮即提交轮,阈值按批报告轮成本对齐(2026-09-03)。
             let remaining = runDeadline.timeIntervalSinceNow
-            guard remaining >= Self.minimumStepBudgetSeconds else {
+            guard remaining >= Self.stepBudgetSeconds(isSubmissionTurn: true, policy: policy) else {
                 await AIAgentDiagnosticLog.record(
                     "fanout_repair_gave_up",
                     payload: AgentJSONValue.object([

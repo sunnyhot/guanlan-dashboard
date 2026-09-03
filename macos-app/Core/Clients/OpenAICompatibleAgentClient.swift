@@ -418,7 +418,9 @@ struct OpenAICompatibleAgentClient: Sendable {
                 completionTokens: completionTokens,
                 totalTokens: promptTokens + completionTokens,
                 estimated: true
-            )
+            ),
+            reasoningChunkCount: result.reasoningChunkCount,
+            contentChunkCount: result.contentChunkCount
         )
     }
 
@@ -894,6 +896,10 @@ private struct AgentStreamingResponseAccumulator {
     private(set) var finishReason: String?
     private var receivedChoice = false
     private(set) var receivedChunkCount = 0
+    // 2026-09-03 计量(runID 552F6FE4 复盘):分类分片计数,诊断日志据此量化
+    // 推理链占比(实测单轮 90%+ 输出是 reasoning_content)。
+    private(set) var reasoningChunkCount = 0
+    private(set) var contentChunkCount = 0
     private var usage: AgentTokenUsage?
 
     var isFinished: Bool {
@@ -927,9 +933,11 @@ private struct AgentStreamingResponseAccumulator {
         if let fragment = delta.content {
             content += fragment
             receivedContent = true
+            contentChunkCount += 1
         }
         if let fragment = delta.reasoningContent {
             reasoning += fragment
+            reasoningChunkCount += 1
         }
         for (position, fragment) in (delta.toolCalls ?? []).enumerated() {
             let index = fragment.index ?? position
@@ -996,7 +1004,9 @@ private struct AgentStreamingResponseAccumulator {
             toolCalls: toolCalls,
             stopReason: AgentStopReason(finishReason: resolvedFinishReason),
             finishReason: resolvedFinishReason,
-            usage: usage
+            usage: usage,
+            reasoningChunkCount: reasoningChunkCount,
+            contentChunkCount: contentChunkCount
         )
     }
 }
