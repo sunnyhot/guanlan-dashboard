@@ -540,6 +540,48 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertTrue(assembled.marketOutlook.first?.rationale.hasPrefix("中性") == true, "rationale 只补不重写")
     }
 
+    /// 2026-09-03 根治(runID 552F6FE4):拒批修复按点名精准清除,不再整块清空——
+    /// 4 只被点名的基金连坐 25 只健康基金、fanout 已暂存成果被销毁是撞死线直接机制。
+    func testPrepareRepairsClearsOnlyNamedFunds() async throws {
+        let codes = ["000001", "000002", "000003", "000004", "000005"]
+        let store = TrendReportDraftStore(expectedFundCodes: codes)
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: codes.map { makeAsset(code: $0) })
+        )
+        var progress = await store.progress()
+        XCTAssertTrue(progress.remainingFundCodes.isEmpty, "5 只全部暂存")
+
+        // 点名 2 只 → 只清 2 只,其余 3 只保留
+        await store.prepareRepairs(for: [
+            "已持有基金趋势周期缺少 counterSignals/反证条件：基金000002 medium",
+            "已持有基金趋势周期缺少 counterSignals/反证条件：基金000004 short",
+        ])
+        progress = await store.progress()
+        XCTAssertEqual(
+            Set(progress.remainingFundCodes),
+            Set(["000002", "000004"]),
+            "只清被点名的 2 只"
+        )
+
+        // 泛化错误(无点名) → 回退全清,保守契约向后兼容
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: ["000002", "000004"].map { makeAsset(code: $0) })
+        )
+        await store.prepareRepairs(for: ["已持有基金模块存在需要整体修复的问题"])
+        progress = await store.progress()
+        XCTAssertEqual(Set(progress.remainingFundCodes), Set(codes), "点名不中 → 全清")
+
+        // sector 类错误不碰基金
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: codes.map { makeAsset(code: $0) })
+        )
+        await store.prepareRepairs(for: [
+            "板块「航运/交运」方向为 uncertain,rationale 末尾必须写「待观察信号:……」说明什么信号出现后转向。"
+        ])
+        progress = await store.progress()
+        XCTAssertTrue(progress.remainingFundCodes.isEmpty, "sector 错误不清基金")
+    }
+
     /// 清洗器的 uncertain 早退分支同样补出口（与入库修补双保险）。
     func testSanitizedHorizonAppendsExitToSelfReportedUncertain() {        let horizon = TrendHorizonView(
             horizon: .medium,

@@ -611,7 +611,8 @@ actor TrendReportDraftStore {
 
     /// 完整 Validator 仍可能发现跨模块问题。只清空涉及的模块，让模型局部修复，
     /// 不要求重新生成已经通过的其它模块。
-    func prepareRepairs(for messages: [String]) {        let joined = messages.joined(separator: "\n")
+    func prepareRepairs(for messages: [String]) {
+        let joined = messages.joined(separator: "\n")
         var matched = false
         if joined.contains("组合结论")
             || joined.contains("短中长期")
@@ -635,7 +636,22 @@ actor TrendReportDraftStore {
             || joined.contains("assetTrends")
             || joined.contains("资产「") {
             if requiredModuleToolNameSet.contains(TrendReportModuleToolName.assetBatch) {
-                assetTrendsByCode.removeAll()
+                // 2026-09-03 根治(runID 552F6FE4):此前关键词命中即 removeAll,
+                // 4 只被点名的基金连坐 25 只健康基金,fanout 已暂存成果被整块销毁
+                // 是该运行撞死线的直接机制。终检错误带基金名(终检读的是同一份
+                // store 数据,名字同源可匹配),先按点名精准清除;一个都没点名
+                // (泛化描述/文案改版)才回退全清——保守方向不变。同名 A/C 份额
+                // 会被连带清除,过度清除有界且下一轮 remaining 自然引导重提。
+                let namedKeys = assetTrendsByCode.keys.filter { key in
+                    guard let name = assetTrendsByCode[key]?.name,
+                          !name.isEmpty else { return false }
+                    return joined.contains(name)
+                }
+                if namedKeys.isEmpty {
+                    assetTrendsByCode.removeAll()
+                } else {
+                    namedKeys.forEach { assetTrendsByCode.removeValue(forKey: $0) }
+                }
                 matched = true
             }
         }
