@@ -1000,6 +1000,22 @@ enum TrendReportEvidenceSanitizer {
             evidence.metadata.isAssociated(entityCode: fundCode, entityName: fundName)
         }
         if hasAssociated, removed.isEmpty {
+            // 2026-09-03 根治(runID 552F6FE4 轮 3 的 4 条拒批):健康直通是唯一绕过
+            // rebuild 兜底的出口,周期级 counterSignals 为空时原样放行、潜伏到全量
+            // 终审才引爆。保守占位与 rebuild 的「证据不足」区分——这里证据是合格的,
+            // 只是缺反证表述。rebuild 分支已有同型兜底,只补此分支即全覆盖。
+            guard !horizon.counterSignals.isEmpty else {
+                let patched = TrendHorizonView(
+                    horizon: horizon.horizon,
+                    direction: horizon.direction,
+                    confidence: horizon.confidence,
+                    rationale: horizon.rationale,
+                    whatWouldChange: horizon.whatWouldChange,
+                    counterSignals: ["模型未提供该周期反证条件，关键假设或行情变化后重估。"],
+                    claimEvidence: horizon.claimEvidence
+                )
+                return (patched, [])
+            }
             return (horizon, [])  // 完全健康，原样返回
         }
         if hasAssociated {

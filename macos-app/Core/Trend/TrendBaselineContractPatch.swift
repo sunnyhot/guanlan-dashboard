@@ -22,7 +22,7 @@ enum TrendBaselineContractPatch {
                 exemptionReason: value.claimEvidence.exemptionReason
             ),
             whatWouldChange: nonEmptyOrFallback(value.whatWouldChange, counterSignals: value.counterSignals),
-            counterSignals: value.counterSignals,
+            counterSignals: nonEmptyCounterSignals(value.counterSignals),
             claimEvidence: value.claimEvidence
         )
     }
@@ -41,7 +41,7 @@ enum TrendBaselineContractPatch {
                     exemptionReason: market.claimEvidence.exemptionReason
                 ),
                 evidenceIDs: market.evidenceIDs,
-                counterSignals: market.counterSignals,
+                counterSignals: nonEmptyCounterSignals(market.counterSignals),
                 claimEvidence: market.claimEvidence
             )
         }
@@ -62,7 +62,7 @@ enum TrendBaselineContractPatch {
                 ),
                 whatWouldChange: nonEmptyOrFallback(sector.whatWouldChange, counterSignals: sector.counterSignals),
                 evidenceIDs: sector.evidenceIDs,
-                counterSignals: sector.counterSignals,
+                counterSignals: nonEmptyCounterSignals(sector.counterSignals),
                 claimEvidence: sector.claimEvidence
             )
         }
@@ -134,6 +134,15 @@ enum TrendBaselineContractPatch {
             text += (text.isEmpty ? "" : " ") + "待观察信号:\(waiting)后重估方向。"
         }
         return text
+    }
+
+    /// 2026-09-03 根治(runID 552F6FE4):counterSignals 透传是明确性契约的静默漏洞
+    /// ——validator 要求 overview 周期/板块/大类资产的反证条件非空,入库补丁此前
+    /// 只补 rationale/whatWouldChange。中性措辞:不宣称「证据不足」(证据可能健康,
+    /// 只是缺反证表述)。同时滤掉空串占位。
+    private static func nonEmptyCounterSignals(_ signals: [String]) -> [String] {
+        let trimmed = signals.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return trimmed.isEmpty ? ["出现与当前判断相反的关键信号时重估。"] : trimmed
     }
 
     private static func nonEmptyOrFallback(_ value: String, counterSignals: [String]) -> String {

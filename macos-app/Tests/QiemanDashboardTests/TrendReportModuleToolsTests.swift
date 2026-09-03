@@ -462,9 +462,86 @@ final class TrendReportModuleToolsTests: XCTestCase {
         )
     }
 
+    /// 2026-09-03 根治(runID 552F6FE4):market/sectors/overview 周期的 counterSignals
+    /// 空值此前透传入库、潜伏到终审才拒批。现在 TrendBaselineContractPatch 入库即补中性占位。
+    func testStorePatchesEmptyCounterSignalsOnEntry() async throws {
+        let store = TrendReportDraftStore(expectedFundCodes: ["000001"])
+        let base = TrendAnalysisReport.fixture(
+            generatedAt: "2026-09-03 14:00:00",
+            externalSignalStatus: .partial
+        )
+        let confidence = base.horizons.first?.confidence
+            ?? TrendConfidence(score: 50, label: TrendConfidence.label(for: 50))
+        let rawHorizons: [TrendHorizonView] = [
+            TrendHorizonView(
+                horizon: .short,
+                direction: .bullish,
+                confidence: confidence,
+                rationale: "偏强,量能放大。",
+                whatWouldChange: "量能萎缩则重估。",
+                counterSignals: [],
+                claimEvidence: .empty
+            )
+        ] + base.horizons.filter { $0.horizon != .short }
+        let emptySignalsOutlook = TrendMarketOutlook(
+            id: "market-bond", name: "境内债券/固收", category: "assetClass",
+            direction: .neutral,
+            confidence: TrendConfidence(score: 50, label: "中"),
+            rationale: "中性,利率平稳。",
+            evidenceIDs: [],
+            counterSignals: []
+        )
+        let emptySignalsSector = TrendSectorView(
+            id: "sector:bank", name: "银行", exposureText: "持仓含银行",
+            direction: .neutral,
+            confidence: TrendConfidence(score: 50, label: "中"),
+            rationale: "中性,红利平稳。",
+            evidenceIDs: [],
+            counterSignals: []
+        )
+
+        try await store.storeOverview(
+            TrendReportOverviewModule(portfolio: base.portfolio, horizons: rawHorizons)
+        )
+        try await store.storeMarket(
+            TrendReportMarketModule(
+                marketOutlook: [emptySignalsOutlook], sectors: [emptySignalsSector], opportunities: []
+            )
+        )
+        try await store.storeAssetBatch(
+            TrendReportAssetBatchModule(assetTrends: [makeAsset(code: "000001")])
+        )
+        try await store.storeActions(
+            TrendReportActionsModule(
+                keyAssets: [], actions: [], warnings: [],
+                disclaimer: "非投资建议，仅供个人研究参考。"
+            )
+        )
+
+        let snapshot = makeSnapshot(codes: ["000001"])
+        let assembledOptional = await store.assembledReport(snapshot: snapshot)
+        let assembled = try XCTUnwrap(assembledOptional)
+        XCTAssertEqual(
+            assembled.horizons.first { $0.horizon == .short }?.counterSignals,
+            ["出现与当前判断相反的关键信号时重估。"],
+            "overview 周期缺反证 → 中性占位"
+        )
+        XCTAssertEqual(
+            assembled.marketOutlook.first?.counterSignals,
+            ["出现与当前判断相反的关键信号时重估。"],
+            "大盘/大类资产缺反证 → 中性占位"
+        )
+        XCTAssertEqual(
+            assembled.sectors.first?.counterSignals,
+            ["出现与当前判断相反的关键信号时重估。"],
+            "板块缺反证 → 中性占位"
+        )
+        XCTAssertEqual(assembled.marketOutlook.first?.direction, .neutral, "方向不动")
+        XCTAssertTrue(assembled.marketOutlook.first?.rationale.hasPrefix("中性") == true, "rationale 只补不重写")
+    }
+
     /// 清洗器的 uncertain 早退分支同样补出口（与入库修补双保险）。
-    func testSanitizedHorizonAppendsExitToSelfReportedUncertain() {
-        let horizon = TrendHorizonView(
+    func testSanitizedHorizonAppendsExitToSelfReportedUncertain() {        let horizon = TrendHorizonView(
             horizon: .medium,
             direction: .uncertain,
             confidence: TrendConfidence(score: 40, label: TrendConfidence.label(for: 40)),

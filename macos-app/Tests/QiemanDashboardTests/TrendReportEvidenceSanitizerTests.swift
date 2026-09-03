@@ -143,6 +143,108 @@ final class TrendReportEvidenceSanitizerTests: XCTestCase {
         )
     }
 
+    // MARK: - 2026-09-03 根治：周期级 counterSignals 兜底 + 关联降级补出口（runID 552F6FE4）
+
+    /// 健康直通分支（证据关联、无幻觉 ID）此前是唯一绕过 rebuild 兜底的出口，
+    /// 周期级 counterSignals 为空时原样放行、潜伏到全量终审才引爆（轮 3 拒批的 4 条）。
+    func testHealthyHorizonWithEmptyCounterSignalsGetsConservativeFallback() {
+        let real = evidence(id: "market:stock:600519:2026-09-02 15:00:00", entityCode: "161725")
+        let module = TrendReportAssetBatchModule(assetTrends: [
+            TrendAssetView(
+                id: "fund:161725", name: "招商中证白酒", code: "161725", sector: "场外基金",
+                impactText: "涨跌归因：茅台跌0.10%拖累。",
+                horizons: [
+                    horizon(supporting: ["market:stock:600519:2026-09-02 15:00:00"], counterSignals: []),
+                    horizon(supporting: ["market:stock:600519:2026-09-02 15:00:00"], counterSignals: ["白酒需求证伪"]),
+                ],
+                rationale: "r", counterSignals: ["c"],
+                claimEvidence: TrendClaimEvidence(supportingEvidenceIDs: ["market:stock:600519:2026-09-02 15:00:00"])
+            )
+        ])
+        let (sanitized, _) = TrendReportEvidenceSanitizer.sanitizedAssetBatch(module, evidence: [real])
+        let patched = sanitized.assetTrends[0].horizons[0]
+        XCTAssertEqual(patched.direction, .bullish, "方向不动")
+        XCTAssertEqual(patched.claimEvidence.supportingEvidenceIDs, ["market:stock:600519:2026-09-02 15:00:00"], "证据不动")
+        XCTAssertEqual(patched.rationale, "偏强", "rationale 不动")
+        XCTAssertEqual(
+            patched.counterSignals,
+            ["模型未提供该周期反证条件，关键假设或行情变化后重估。"],
+            "缺反证的健康周期补保守占位"
+        )
+        XCTAssertEqual(
+            sanitized.assetTrends[0].horizons[1].counterSignals,
+            ["白酒需求证伪"],
+            "已有反证的周期不动"
+        )
+    }
+
+    /// keyAssets 走同一条 sanitizedHorizon 链，健康周期缺反证同样兜底。
+    func testKeyAssetHealthyHorizonEmptyCounterSignalsGetsFallback() {
+        let fundEvidence = evidence(
+            id: "market:fund-estimate:007346:2026-09-02 11:31:00",
+            entityCode: "007346"
+        )
+        let keyAsset = TrendAssetView(
+            id: "k1", name: "易方达科技创新混合A", code: "007346", sector: "场外基金",
+            impactText: "涨跌归因：重仓股深调拖累。",
+            horizons: [
+                horizon(direction: .bullish, supporting: ["market:fund-estimate:007346:2026-09-02 11:31:00"]),
+            ],
+            rationale: "r",
+            counterSignals: [],
+            claimEvidence: .empty
+        )
+        let module = TrendReportActionsModule(
+            keyAssets: [keyAsset], actions: [], warnings: [], disclaimer: "仅供参考"
+        )
+        let (sanitized, _, _) = TrendReportEvidenceSanitizer.sanitizedActions(
+            module, evidence: [fundEvidence]
+        )
+        let horizon = sanitized.keyAssets[0].horizons[0]
+        XCTAssertEqual(horizon.direction, .bullish, "关联证据健康 → 方向保留")
+        XCTAssertEqual(
+            horizon.counterSignals,
+            ["模型未提供该周期反证条件，关键假设或行情变化后重估。"],
+            "keyAssets 健康周期缺反证同样补占位"
+        )
+    }
+
+    /// 关联降级此前只改 direction 不补出口，被自家 W4 明确性校验整份拒批
+    /// （runID 552F6FE4 轮 3 的 7 条 sector/marketOutlook 拒批）。降级即补出口 + 置信度压低。
+    func testAssociationDowngradedAppendsExitAndCapsConfidence() {
+        let sector = TrendSectorView(
+            id: "sector:shipping", name: "航运/交运", exposureText: "持仓含交运",
+            direction: .bearish,
+            confidence: TrendConfidence(score: 55, label: "中"),
+            rationale: "偏弱,运价与出行链走弱。",
+            whatWouldChange: "运价指数反弹或油价大幅回落，则本判断作废。",
+            evidenceIDs: [],
+            counterSignals: ["油价若大幅回落将改善航空成本端"],
+            claimEvidence: .empty
+        )
+        let downgradedSector = SubmitTrendReportTool.associationDowngraded(sector)
+        XCTAssertEqual(downgradedSector.direction, .uncertain)
+        XCTAssertTrue(downgradedSector.rationale.contains("待观察信号"), "补出口：\(downgradedSector.rationale)")
+        XCTAssertTrue(downgradedSector.rationale.hasPrefix("偏弱"), "原文保留，只追加出口")
+        XCTAssertLessThanOrEqual(downgradedSector.confidence.score, 35, "置信度压到低档")
+        XCTAssertEqual(downgradedSector.counterSignals, sector.counterSignals, "已有反证不动")
+        XCTAssertEqual(downgradedSector.whatWouldChange, sector.whatWouldChange, "作废条件不动")
+
+        let market = TrendMarketOutlook(
+            id: "market:bond", name: "境内债券/固收", category: "assetClass",
+            direction: .neutralNegative,
+            confidence: TrendConfidence(score: 50, label: "中"),
+            rationale: "中性偏弱。",
+            evidenceIDs: [],
+            counterSignals: ["货币政策转向"]
+        )
+        let downgradedMarket = SubmitTrendReportTool.associationDowngraded(market)
+        XCTAssertEqual(downgradedMarket.direction, .uncertain)
+        XCTAssertTrue(downgradedMarket.rationale.contains("待观察信号"))
+        XCTAssertLessThanOrEqual(downgradedMarket.confidence.score, 35)
+        XCTAssertEqual(downgradedMarket.counterSignals, market.counterSignals)
+    }
+
     func testWarningDecodesImpactFallback() throws {
         let json = #"{"id":"w1","title":"红利高估值风险","impact":"若利率转向可能补跌。"}"#
         let warning = try JSONDecoder().decode(TrendWarning.self, from: Data(json.utf8))

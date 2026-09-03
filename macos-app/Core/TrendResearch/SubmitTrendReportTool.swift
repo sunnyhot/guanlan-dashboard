@@ -109,7 +109,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             let claim = normalizedSectors[index]
             guard claim.direction != .uncertain else { continue }
             if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, sectorKey: claim.name) {
-                normalizedSectors[index].direction = .uncertain
+                normalizedSectors[index] = Self.associationDowngraded(claim)
                 associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-sector-\(claim.id)", title: "证据关联降级", detail: "板块「\(claim.name)」的支持证据与该板块无明确关联，已降级为 uncertain。"))
             }
         }
@@ -117,7 +117,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             let claim = normalizedMarket[index]
             guard claim.direction != .uncertain else { continue }
             if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, entityName: claim.name) {
-                normalizedMarket[index].direction = .uncertain
+                normalizedMarket[index] = Self.associationDowngraded(claim)
                 associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-market-\(claim.id)", title: "证据关联降级", detail: "大盘/大类资产「\(claim.name)」的支持证据与该主题无明确关联，已降级为 uncertain。"))
             }
         }
@@ -125,7 +125,7 @@ struct SubmitTrendReportTool: TrendResearchTool {
             let claim = normalizedOpportunities[index]
             guard claim.direction != .uncertain else { continue }
             if claimPolicy.lacksAssociatedSupport(evidence: claim.claimEvidence, evidenceByID: canonicalByID, entityName: claim.name) {
-                normalizedOpportunities[index].direction = .uncertain
+                normalizedOpportunities[index] = Self.associationDowngraded(claim)
                 associationDowngradeWarnings.append(TrendWarning(id: "association-downgrade-opportunity-\(claim.id)", title: "证据关联降级", detail: "机会「\(claim.name)」的支持证据与该主题无明确关联，已降级为 uncertain。"))
             }
         }
@@ -418,6 +418,70 @@ struct SubmitTrendReportTool: TrendResearchTool {
                 value.claimEvidence,
                 legacySupportingIDs: value.evidenceIDs
             )
+        )
+    }
+
+    /// 2026-09-03 根治(runID 552F6FE4 轮 3 的 7 条拒批):关联降级发生在终检链上,
+    /// 晚于 storeMarket 入库时的 W4 补丁——此前只改 direction 不补出口,降级条目
+    /// 被自家 W4 明确性校验(uncertain 必须有「待观察信号」出口)整份拒批。与
+    /// horizon 强制降级(normalized(forceShortUncertainReasons:))同口径:App 补
+    /// 出口 + 置信度压到低档。三类条目(板块/大类资产/机会)各一个重载。
+    static func associationDowngraded(_ value: TrendSectorView) -> TrendSectorView {
+        var rationale = value.rationale
+        if !rationale.contains("待观察信号") {
+            rationale += (rationale.isEmpty ? "" : " ") + "待观察信号:与该主题关联的支撑证据恢复后重估方向。"
+        }
+        return TrendSectorView(
+            id: value.id,
+            name: value.name,
+            exposureText: value.exposureText,
+            direction: .uncertain,
+            confidence: TrendConfidence(score: min(35, value.confidence.score), label: "低").appNormalized,
+            rationale: rationale,
+            whatWouldChange: value.whatWouldChange,
+            evidenceIDs: value.evidenceIDs,
+            counterSignals: value.counterSignals,
+            claimEvidence: value.claimEvidence
+        )
+    }
+
+    static func associationDowngraded(_ value: TrendMarketOutlook) -> TrendMarketOutlook {
+        var rationale = value.rationale
+        if !rationale.contains("待观察信号") {
+            rationale += (rationale.isEmpty ? "" : " ") + "待观察信号:与该主题关联的支撑证据恢复后重估方向。"
+        }
+        return TrendMarketOutlook(
+            id: value.id,
+            name: value.name,
+            category: value.category,
+            direction: .uncertain,
+            confidence: TrendConfidence(score: min(35, value.confidence.score), label: "低").appNormalized,
+            rationale: rationale,
+            evidenceIDs: value.evidenceIDs,
+            counterSignals: value.counterSignals,
+            claimEvidence: value.claimEvidence
+        )
+    }
+
+    static func associationDowngraded(_ value: TrendOpportunity) -> TrendOpportunity {
+        var rationale = value.rationale
+        if !rationale.contains("待观察信号") {
+            rationale += (rationale.isEmpty ? "" : " ") + "待观察信号:与该主题关联的支撑证据恢复后重估方向。"
+        }
+        return TrendOpportunity(
+            id: value.id,
+            name: value.name,
+            category: value.category,
+            scope: value.scope,
+            direction: .uncertain,
+            confidence: TrendConfidence(score: min(35, value.confidence.score), label: "低").appNormalized,
+            rationale: rationale,
+            whatWouldChange: value.whatWouldChange,
+            triggerConditions: value.triggerConditions,
+            invalidatingConditions: value.invalidatingConditions,
+            evidenceIDs: value.evidenceIDs,
+            counterSignals: value.counterSignals,
+            claimEvidence: value.claimEvidence
         )
     }
 
