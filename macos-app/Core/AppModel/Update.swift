@@ -35,6 +35,18 @@ extension AppModel {
         HomebrewCaskInstallation.isManaged()
     }
 
+    var homebrewUpgradeCommand: String {
+        "brew update && brew upgrade " + HomebrewCaskInstallation.caskToken
+    }
+
+    func copyHomebrewUpgradeCommand() {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(homebrewUpgradeCommand, forType: .string)
+        noticeMessage = "已复制 Homebrew 升级命令，请在终端粘贴并运行：" + homebrewUpgradeCommand
+        #endif
+    }
+
     func checkForUpdates(userInitiated: Bool) async {
         guard !isCheckingForUpdates else { return }
         if userInitiated {
@@ -51,7 +63,7 @@ extension AppModel {
                 if isHomebrewManagedApp {
                     // brew 管理:仍检查(知道有新版),但不弹安装弹窗、不覆盖安装。
                     isPresentingUpdateSheet = false
-                    noticeMessage = "发现新版本 \(update.version)。本应用由 Homebrew 管理，请运行 brew upgrade 更新。"
+                    noticeMessage = "发现新版本 \(update.version)。可复制 Homebrew 升级命令并在终端运行。"
                 } else {
                     isPresentingUpdateSheet = true
                     noticeMessage = "发现新版本 \(update.version)，可以下载并重启安装。"
@@ -70,7 +82,7 @@ extension AppModel {
         guard let update = availableUpdate else { return }
         guard !isInstallingUpdate else { return }
         if isHomebrewManagedApp {
-            errorMessage = "本应用由 Homebrew 管理，请运行 brew upgrade 更新；应用内覆盖安装已停用。"
+            errorMessage = "本应用由 Homebrew 管理，请使用 Homebrew 升级命令更新；应用内覆盖安装已停用。"
             return
         }
 

@@ -159,6 +159,30 @@ jobs:
             /tmp/QiemanDashboard-${{ steps.version.outputs.version }}.zip
             /tmp/latest.json
 
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v6
+        with:
+          repository: sunnyhot/homebrew-tap
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          fetch-depth: 0
+
+      - name: Sync Homebrew cask
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # 让 Homebrew 与 GitHub Release 保持同一版本和 SHA256，避免 App 检测到新版但 brew 无法升级。
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main
+          bash "$GITHUB_WORKSPACE/scripts/update_homebrew_cask.sh" "$VERSION" "/tmp/QiemanDashboard-${VERSION}.zip" "."
+          git add Casks/guanlan.rb
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: 更新观澜 cask 至 ${VERSION}" -m "由 Release 工作流自动同步 version/sha256；回滚：git revert 本提交。"
+            git push origin main
+          fi
+
       - name: Update latest.json on main branch
         env:
           BODY: ${{ steps.notes.outputs.app_notes }}

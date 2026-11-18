@@ -147,9 +147,12 @@ extension SettingsSectionView {
 
                     if model.availableUpdate != nil {
                         if model.isHomebrewManagedApp {
-                            Label("由 Homebrew 管理，请用 brew upgrade 更新", systemImage: "terminal")
-                                .font(AppPalette.appFont(.footnote, weight: .medium))
-                                .foregroundStyle(AppPalette.muted)
+                            Button {
+                                model.copyHomebrewUpgradeCommand()
+                            } label: {
+                                Label("复制升级命令", systemImage: "doc.on.doc")
+                            }
+                            .buttonStyle(.appSecondary)
                         } else {
                             Button {
                                 Task { await model.downloadAndInstallAvailableUpdate() }
@@ -223,7 +226,7 @@ extension SettingsSectionView {
         }
         if model.availableUpdate != nil {
             return model.isHomebrewManagedApp
-                ? "发现新版本；本应用由 Homebrew 管理，请 brew upgrade"
+                ? "发现新版本；可复制 Homebrew 升级命令"
                 : "发现新版本，可在下方下载并安装"
         }
         return "当前已是最新版本，也可手动检查"

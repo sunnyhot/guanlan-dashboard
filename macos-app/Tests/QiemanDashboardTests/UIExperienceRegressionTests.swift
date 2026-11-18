@@ -783,6 +783,17 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(console.contains("NextHourGuidanceFollowupReviewsView"))
     }
 
+    func testHomebrewUpdateOffersCopyableUpgradeCommand() throws {
+        let panel = try source(at: "Views_macOS/SettingsAppPanel.swift")
+        let updateModel = try source(at: "Core/AppModel/Update.swift")
+
+        XCTAssertTrue(panel.contains("复制升级命令"))
+        XCTAssertTrue(panel.contains("model.copyHomebrewUpgradeCommand()"))
+        XCTAssertTrue(updateModel.contains("brew update && brew upgrade"))
+        XCTAssertTrue(updateModel.contains("NSPasteboard.general.setString"))
+        XCTAssertFalse(updateModel.contains("(homebrewUpgradeCommand)"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let sourceURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

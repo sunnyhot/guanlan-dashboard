@@ -196,6 +196,12 @@ final class AppUpdateCheckerTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: realRoot + "/guanlan/4.9.6", withIntermediateDirectories: true)
         XCTAssertTrue(HomebrewCaskInstallation.isManaged(caskroomRoots: [emptyRoot, realRoot]), "任一 root 命中即 brew 管理")
     }
+
+    @MainActor
+    func testHomebrewUpgradeCommandUsesInstalledCaskName() {
+        let model = AppModel()
+        XCTAssertEqual(model.homebrewUpgradeCommand, "brew update && brew upgrade guanlan")
+    }
 }
 
 // Mirror of the private GitHubReleasePayload for testing decode logic
