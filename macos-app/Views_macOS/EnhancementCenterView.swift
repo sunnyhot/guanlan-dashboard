@@ -34,7 +34,7 @@ struct EnhancementCenterView: View {
                 // 页面内实时完成的研判不算未读,离开时再记一次。
                 AppModel.markAIResearchSeen()
             }
-            .onChange(of: model.selectedTrendTrackingItemID) { _, id in
+            .onChange(of: model.selectedDecisionCaseID) { _, id in
                 guard let id else { return }
                 deepLinkedCase = model.decisionCases.first { $0.id == id }
             }

@@ -15,7 +15,6 @@ final class TrendNotificationPreferencesTests: XCTestCase {
             outcome: outcome,
             userInitiated: userInitiated,
             isFirstReport: isFirstReport,
-            opportunityCount: 3,
             failureSummary: failureSummary
         )
     }
@@ -23,8 +22,8 @@ final class TrendNotificationPreferencesTests: XCTestCase {
     func testDefaultPrefsOnlyAllowCloseReviewSuccessAndAutoFailure() {
         let prefs = TrendNotificationPreferences.default
         XCTAssertTrue(prefs.wants(notice(scope: .closeReview, outcome: .succeeded)))
-        XCTAssertTrue(prefs.wants(notice(scope: .marketRadar, outcome: .failed)))
-        XCTAssertFalse(prefs.wants(notice(scope: .marketRadar, outcome: .succeeded)))
+        XCTAssertTrue(prefs.wants(notice(scope: .longTerm, outcome: .failed)))
+        XCTAssertFalse(prefs.wants(notice(scope: .longTerm, outcome: .succeeded)))
         XCTAssertFalse(prefs.wants(notice(scope: .longTerm, outcome: .succeeded)))
         XCTAssertFalse(prefs.wants(notice(scope: .full, outcome: .succeeded)))
     }
@@ -34,7 +33,7 @@ final class TrendNotificationPreferencesTests: XCTestCase {
             closeReviewSuccessEnabled: false,
             autoFailureEnabled: false
         )
-        XCTAssertFalse(allOff.wants(notice(scope: .marketRadar, outcome: .failed, userInitiated: true)))
+        XCTAssertFalse(allOff.wants(notice(scope: .closeReview, outcome: .failed, userInitiated: true)))
         XCTAssertFalse(allOff.wants(notice(scope: .full, outcome: .succeeded, userInitiated: true)))
 
         let firstReportOn = TrendNotificationPreferences(firstReportEnabled: true)
@@ -63,7 +62,7 @@ final class TrendNotificationPreferencesTests: XCTestCase {
         XCTAssertEqual(decoded.notifications, .default)
         XCTAssertTrue(decoded.notifications.closeReviewSuccessEnabled)
         XCTAssertTrue(decoded.notifications.autoFailureEnabled)
-        XCTAssertFalse(decoded.notifications.marketRadarSuccessEnabled)
+        XCTAssertFalse(decoded.notifications.longTermSuccessEnabled)
     }
 
     func testPartialNotificationsDecodeKeepsSpecifiedValues() throws {
@@ -74,19 +73,19 @@ final class TrendNotificationPreferencesTests: XCTestCase {
         )
         let data = try JSONEncoder().encode(settings)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        object["notifications"] = ["marketRadarSuccessEnabled": true]
+        object["notifications"] = ["longTermSuccessEnabled": true]
         let patched = try JSONSerialization.data(withJSONObject: object)
 
         let decoded = try JSONDecoder().decode(TrendAnalysisSettings.self, from: patched)
-        XCTAssertTrue(decoded.notifications.marketRadarSuccessEnabled)
+        XCTAssertTrue(decoded.notifications.longTermSuccessEnabled)
         XCTAssertTrue(decoded.notifications.autoFailureEnabled, "未写的键回退默认值")
     }
 
     func testPayloadTitleBodyAndAnchor() {
-        let radar = notice(scope: .marketRadar, outcome: .succeeded)
-        XCTAssertEqual(radar.title, "今日市场机会已更新")
-        XCTAssertTrue(radar.body.contains("3 个方向"))
-        XCTAssertEqual(radar.sectionAnchor, .marketRadar)
+        let longTerm = notice(scope: .longTerm, outcome: .succeeded)
+        XCTAssertEqual(longTerm.title, "本周组合研判已更新")
+        XCTAssertTrue(longTerm.body.contains("组合方向与行动候选"))
+        XCTAssertEqual(longTerm.sectionAnchor, .longTerm)
 
         let failed = notice(scope: .closeReview, outcome: .failed, failureSummary: "Key 无效")
         XCTAssertTrue(failed.title.contains("未完成"))

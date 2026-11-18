@@ -420,6 +420,23 @@ extension TrendHorizon {
 }
 
 extension TrendDirection {
+    var displayText: String {
+        switch self {
+        case .bullish:
+            return "偏强"
+        case .neutralPositive:
+            return "中性偏强"
+        case .neutral:
+            return "中性"
+        case .neutralNegative:
+            return "中性偏弱"
+        case .bearish:
+            return "偏弱"
+        case .uncertain:
+            return "暂不明确"
+        }
+    }
+
     var dashboardText: String {
         switch self {
         case .bullish:

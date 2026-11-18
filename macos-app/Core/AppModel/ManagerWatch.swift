@@ -541,10 +541,10 @@ extension AppModel {
 
     func openWorkbenchTrend(targetID: String? = nil) {
         selectedSection = .enhancement
-        if let targetID {
-            // 通知深链跳到 AI 研判单页；命中跟踪项时设置 selectedTrendTrackingItemID，
-            // 页面会监听它并自动展开底部折叠的旧趋势跟踪清单。
-            _ = selectTrackingItem(forTargetID: targetID)
+        if let targetID,
+           let caseID = UUID(uuidString: targetID),
+           decisionCases.contains(where: { $0.id == caseID }) {
+            selectedDecisionCaseID = caseID
         }
     }
 

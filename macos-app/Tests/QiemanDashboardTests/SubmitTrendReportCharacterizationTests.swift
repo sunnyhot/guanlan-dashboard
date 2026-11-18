@@ -313,14 +313,14 @@ final class SubmitTrendReportCharacterizationTests: XCTestCase {
         let ledger = TrendEvidenceLedger()
         let context = TrendResearchToolContext(snapshot: snapshot, evidenceLedger: ledger)
 
-        // fixture 默认 schemaVersion=1
         let report = TrendAnalysisReport.fixture(
             generatedAt: "2026-07-24 10:00:00", externalSignalStatus: .unavailable
         )
-        XCTAssertEqual(report.schemaVersion, 1, "前置:fixture 默认 schemaVersion 应为 1")
+        XCTAssertEqual(report.schemaVersion, 2, "前置:fixture 默认 schemaVersion 应为 2")
 
         let reportData = try JSONEncoder().encode(report)
-        let reportObject = try XCTUnwrap(JSONSerialization.jsonObject(with: reportData) as? [String: Any])
+        var reportObject = try XCTUnwrap(JSONSerialization.jsonObject(with: reportData) as? [String: Any])
+        reportObject["schemaVersion"] = 1
         let arguments = try JSONSerialization.data(withJSONObject: ["report": reportObject])
 
         let result = await SubmitTrendReportTool().execute(

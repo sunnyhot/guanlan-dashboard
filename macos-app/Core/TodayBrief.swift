@@ -10,7 +10,6 @@ enum TodayBriefKind: String, Hashable {
     case forumRecord
     case managerWatch
     case closeReviewMissed
-    case marketRadarMissed
     case longTermMissed
     case autoAnalysisRepeatedFailure
 }
@@ -67,8 +66,7 @@ struct TodayBriefContext: Hashable {
     let managerWatchError: String?
     /// 今晚收盘复盘的自动窗口已尝试但未成功（同日至多一次，不会自动重试）。
     let closeReviewAutoMissed: Bool
-    /// W3.5:昨日市场雷达/长期研判的自动窗口错过(尝试失败或未运行)。
-    var missedMarketRadar = false
+    /// W3.5:长期研判的自动窗口错过(尝试失败或未运行)。
     var missedLongTerm = false
     /// W3.5 连续失败升级:连续 ≥ 2 个自动窗口失败时的模块名/连击数/人话原因。
     var autoFailureScopeName: String?
@@ -94,7 +92,6 @@ struct TodayBriefContext: Hashable {
         managerWatchScopeText: String = "",
         managerWatchError: String? = nil,
         closeReviewAutoMissed: Bool = false,
-        missedMarketRadar: Bool = false,
         missedLongTerm: Bool = false,
         autoFailureScopeName: String? = nil,
         autoFailureStreakCount: Int = 0,
@@ -118,7 +115,6 @@ struct TodayBriefContext: Hashable {
         self.managerWatchScopeText = managerWatchScopeText
         self.managerWatchError = managerWatchError
         self.closeReviewAutoMissed = closeReviewAutoMissed
-        self.missedMarketRadar = missedMarketRadar
         self.missedLongTerm = missedLongTerm
         self.autoFailureScopeName = autoFailureScopeName
         self.autoFailureStreakCount = autoFailureStreakCount
@@ -173,22 +169,6 @@ enum TodayBriefBuilder {
                     tone: .warning,
                     destination: .aiResearch,
                     priority: 32
-                )
-            )
-        }
-
-        // W3.5:错过的自动窗口主动问(跨日错过,今日简报给可执行入口)。
-        if context.missedMarketRadar {
-            items.append(
-                TodayBriefItem(
-                    kind: .marketRadarMissed,
-                    title: "市场雷达未完成",
-                    detail: "昨天的市场扫描没有生成,可现在补做(约 ¥0.5–2)",
-                    metric: "待补做",
-                    iconName: "scope",
-                    tone: .warning,
-                    destination: .aiResearch,
-                    priority: 33
                 )
             )
         }
@@ -390,20 +370,28 @@ extension AppModel {
         }
 
         // W3.5:跨日错过的自动窗口(尝试失败或未运行)。
+        let now = Self.timestampString()
         let missed = TrendMissedWindowCheck.missedScopes(
             lastModuleAutoAnalysisKeys: trendSettings.lastModuleAutoAnalysisKeys,
             lastModuleGeneratedAt: trendSettings.lastModuleGeneratedAt,
-            now: Self.timestampString()
+            now: now
         )
-        let missedMarketRadar = missed.contains { $0.scope == .marketRadar }
-        let missedLongTerm = missed.contains { $0.scope == .longTerm }
+        let missedLongTerm = missed.contains {
+            $0.scope == .longTerm
+                && TrendMissedWindowCheck.shouldPromptManualCatchUp(
+                    $0,
+                    autoAnalysisEnabled: trendSettings.dailyAutoAnalysisEnabled,
+                    now: now
+                )
+        }
 
         // W3.5 连续失败升级:取连击最高的模块(≥ 2 才值得升级提示)。
         var autoFailureScopeName: String?
         var autoFailureStreakCount = 0
         var autoFailureReasonText: String?
-        if let worst = trendSettings.autoFailureStreaks.max(by: { $0.value < $1.value }),
-           worst.value >= 2,
+        if let worst = trendSettings.autoFailureStreaks
+            .filter({ TrendResearchRunScope(rawValue: $0.key) != nil && $0.value >= 2 })
+            .max(by: { $0.value < $1.value }),
            let scope = TrendResearchRunScope(rawValue: worst.key) {
             autoFailureScopeName = scope.displayName
             autoFailureStreakCount = worst.value
@@ -431,7 +419,6 @@ extension AppModel {
             managerWatchScopeText: managerWatchScopeText,
             managerWatchError: managerWatchSettings.lastErrorMessage,
             closeReviewAutoMissed: closeReviewAutoMissed,
-            missedMarketRadar: missedMarketRadar,
             missedLongTerm: missedLongTerm,
             autoFailureScopeName: autoFailureScopeName,
             autoFailureStreakCount: autoFailureStreakCount,

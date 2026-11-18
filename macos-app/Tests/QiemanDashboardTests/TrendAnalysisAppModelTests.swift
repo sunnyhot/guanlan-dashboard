@@ -125,6 +125,7 @@ final class TrendAnalysisAppModelTests: XCTestCase {
     func testModuleAutoAnalysisRunsOncePerScheduledWindow() async {
         let model = AppModel()
         model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
+        model.trendSettings.lastModuleGeneratedAt[TrendResearchRunScope.longTerm.rawValue] = "2026-06-21 20:00:00"
         installSupportingProbe(model)
         // W3.1:默认偏好下 closeReview 成功会发通知;注入 spy 避免触达系统通知中心。
         let notificationSpy = TrendCompletionNotificationSpy()
@@ -137,12 +138,8 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 21:00:00")
         await model.runDailyTrendAnalysisIfNeeded(createdAt: "2026-06-22 22:00:00")
 
-        // 2026-09-01 下线收编:marketRadar 09:00 槽已删,早间轮询不再触发运行;
-        // 21:00 closeReview 窗口只跑一次。
+        // 早间轮询不触发运行;21:00 closeReview 窗口只跑一次。
         XCTAssertEqual(agent.runCount, 1)
-        XCTAssertNil(
-            model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.marketRadar.rawValue]
-        )
         XCTAssertEqual(
             model.trendSettings.lastModuleAutoAnalysisKeys[TrendResearchRunScope.closeReview.rawValue],
             "2026-06-22 21:00"
@@ -157,6 +154,7 @@ final class TrendAnalysisAppModelTests: XCTestCase {
     func testFailedAutomaticModuleIsNotRetriedByPollingOrNextLaunchCheck() async {
         let model = AppModel()
         model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
+        model.trendSettings.lastModuleGeneratedAt[TrendResearchRunScope.longTerm.rawValue] = "2026-06-21 20:00:00"
         installSupportingProbe(model)
         let notificationSpy = TrendCompletionNotificationSpy()
         notificationSpy.install(on: model)
@@ -262,19 +260,43 @@ final class TrendAnalysisAppModelTests: XCTestCase {
             result: .failure(TrendResearchAgentError.turnLimitExceeded)
         )
 
-        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-22 09:00:00", scope: .marketRadar)
-        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue], 1)
-        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-23 09:00:00", scope: .marketRadar)
-        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue], 2)
-        XCTAssertNotNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.marketRadar.rawValue])
+        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-22 21:00:00", scope: .closeReview)
+        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.closeReview.rawValue], 1)
+        await model.generateTrendAnalysis(userInitiated: false, createdAt: "2026-06-23 21:00:00", scope: .closeReview)
+        XCTAssertEqual(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.closeReview.rawValue], 2)
+        XCTAssertNotNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.closeReview.rawValue])
 
         // 成功即清零(手动成功也算——证明了链路本身可用)。
         model.trendResearchAgent = FakeTrendResearchAgent(
-            result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-24 09:30:00", externalSignalStatus: .partial))
+            result: .success(TrendAnalysisReport.fixture(generatedAt: "2026-06-24 21:30:00", externalSignalStatus: .partial))
         )
-        await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-24 09:00:00", scope: .marketRadar)
-        XCTAssertNil(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.marketRadar.rawValue])
-        XCTAssertNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.marketRadar.rawValue])
+        await model.generateTrendAnalysis(userInitiated: true, createdAt: "2026-06-24 21:00:00", scope: .closeReview)
+        XCTAssertNil(model.trendSettings.autoFailureStreaks[TrendResearchRunScope.closeReview.rawValue])
+        XCTAssertNil(model.trendSettings.lastAutoFailureMessages[TrendResearchRunScope.closeReview.rawValue])
+    }
+
+    func testNeverRanLongTermIsSuppressedFromManualPrompts() {
+        let model = AppModel()
+        model.trendSettings = makeProviderSettings(dailyAutoAnalysisEnabled: true)
+
+        XCTAssertFalse(model.missedTrendWindowsForPrompt.contains { $0.scope == .longTerm })
+        XCTAssertFalse(model.todayBriefItems.contains { $0.kind == .longTermMissed })
+    }
+
+    func testLegacyUnknownFailureDoesNotMaskActiveScope() {
+        let model = AppModel()
+        model.trendSettings.autoFailureStreaks = [
+            "marketRadar": 9,
+            TrendResearchRunScope.closeReview.rawValue: 2,
+        ]
+        model.trendSettings.lastAutoFailureMessages = [
+            TrendResearchRunScope.closeReview.rawValue: "测试失败"
+        ]
+
+        XCTAssertEqual(model.worstAutoFailureStreak?.scope, .closeReview)
+        XCTAssertEqual(model.worstAutoFailureStreak?.streak, 2)
+        let brief = model.todayBriefItems.first { $0.kind == .autoAnalysisRepeatedFailure }
+        XCTAssertTrue(brief?.detail.contains("今日收盘复盘") ?? false)
     }
 
     func testUnreadAIResearchCountClearsAfterSeen() {
@@ -286,7 +308,6 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         XCTAssertTrue(model.unreadAIResearchCount == 0, "无任何内容时不提示")
 
         // 从未访问过,但有内容 → 算 1 条未读,引导进去看一次。
-        // (marketRadar 链路时间戳已于 2026-09-01 下线移除,改用 closeReview 验证。)
         model.trendSettings.markModuleGenerated(scope: .closeReview, generatedAt: "2026-06-22 21:30:00")
         XCTAssertEqual(model.unreadAIResearchCount, 1)
 
@@ -310,8 +331,8 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         let agent = BlockingTrendResearchAgent()
         model.trendResearchAgent = agent
 
-        // 手动雷达运行中再点复盘 → 排队,不打断当前任务(互斥契约不变)。
-        model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
+        // 手动长期研判运行中再点复盘 → 排队,不打断当前任务(互斥契约不变)。
+        model.startTrendAnalysisFromUser(withExpectation: .longTerm)
         try await waitUntil { agent.suspendedCount >= 1 }
         model.startTrendAnalysisFromUser(withExpectation: .closeReview)
         XCTAssertEqual(model.queuedUserRequestedScope, .closeReview)
@@ -341,7 +362,7 @@ final class TrendAnalysisAppModelTests: XCTestCase {
         let agent = BlockingTrendResearchAgent()
         model.trendResearchAgent = agent
 
-        model.startTrendAnalysisFromUser(withExpectation: .marketRadar)
+        model.startTrendAnalysisFromUser(withExpectation: .longTerm)
         try await waitUntil { agent.suspendedCount >= 1 }
         model.startTrendAnalysisFromUser(withExpectation: .closeReview)
         XCTAssertEqual(model.queuedUserRequestedScope, .closeReview)

@@ -328,7 +328,7 @@ private struct IntradayEmptyHintView: View {
         switch kind {
         case .closeReview: return model.marketCloseReviewTitle
         case .longTerm: return "组合中期研判"
-        case .intraday, .marketRadar: return ""
+        case .intraday, .marketOpportunity: return ""
         }
     }
 

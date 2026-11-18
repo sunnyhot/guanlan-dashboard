@@ -132,10 +132,8 @@ struct TrendResearchRunPolicy: Sendable {
         // 基础 18 轮已为常见的 15 只以内组合预留 3 个持仓报告批次。
         let extraReportBatches = max(0, reportBatchCount - 3)
         switch scope {
-        case .marketRadar:
-            return (18, 28)
         case .closeReview:
-            // 2026-09-01 收编:closeReview 接管 market 模块(marketRadar 09:00 调度已停),
+            // closeReview 同时生成 market 与持仓归因模块，
             // +1 轮 +1 工具调用预算。
             return (
                 min(expandedMaxTurns, 9 + extraPages + max(1, reportBatchCount)),

@@ -69,15 +69,12 @@ actor TrendReportDraftStore {
         baselineReport: TrendAnalysisReport?,
         expectedFundCodes: [String]
     ) -> TrendResearchRunScope {
-        guard requestedScope != .full, let baselineReport else { return .full }
+        guard requestedScope != .full, baselineReport != nil else { return .full }
         if requestedScope == .closeReview,
            expectedFundCodes.compactMap(normalizedCode).isEmpty {
             return .full
         }
-        guard requestedScope == .marketRadar else { return requestedScope }
-        let baselineCodes = Set(baselineReport.assetTrends.compactMap { normalizedCode($0.code) })
-        let expectedCodes = Set(expectedFundCodes.compactMap(normalizedCode))
-        return baselineCodes == expectedCodes ? requestedScope : .full
+        return requestedScope
     }
 
     private let expectedFundCodesByNormalized: [String: String]
@@ -101,7 +98,7 @@ actor TrendReportDraftStore {
             uniquingKeysWith: { first, _ in first }
         )
         // 增量运行必须有上一份完整、已校验报告作为未更新模块的基线。
-        // 市场雷达不重算持仓；若持仓清单已经变化，也回退为 full 以维持报告完整性。
+        // 增量运行按本次模块复用基线，无法维持完整性的场景回退为 full。
         let effectiveScope = Self.effectiveScope(
             requestedScope: requestedScope,
             baselineReport: baselineReport,

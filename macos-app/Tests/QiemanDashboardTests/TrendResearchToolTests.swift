@@ -139,63 +139,6 @@ final class TrendResearchToolTests: XCTestCase {
         XCTAssertTrue(evidence?.metadata.isAssociated(entityName: "兴全趋势投资混合") == true)
     }
 
-    func testMarketRadarSnapshotDoesNotExposeFundOrUnderlyingHoldingQuotes() async throws {
-        let assessment = TrendSourceFreshnessPolicy.assess(
-            quoteType: .lastTrade,
-            asOf: "2026-08-10 15:00:00",
-            receivedAt: "2026-08-10 15:02:00"
-        )
-        let quotes = [
-            TrendResearchQuote(
-                kind: "index",
-                evidenceID: "market:index:000001:2026-08-10 15:00:00",
-                code: "000001",
-                name: "上证指数",
-                price: 3900,
-                changePct: 0.8,
-                changeAmount: 31,
-                quotedAt: "2026-08-10 15:00:00",
-                sourceLabel: "指数行情",
-                assessment: assessment
-            ),
-            TrendResearchQuote(
-                kind: "fund-estimate",
-                evidenceID: "market:fund-estimate:163402:2026-08-10 15:00:00",
-                code: "163402",
-                name: "兴全趋势投资混合",
-                price: 1.2,
-                changePct: 2.6,
-                changeAmount: nil,
-                quotedAt: "2026-08-10 15:00:00",
-                sourceLabel: "基金估值",
-                assessment: assessment
-            ),
-        ]
-        let snapshot = makeSnapshot(
-            assets: [makeAsset(code: "163402")],
-            quotes: quotes
-        )
-        let ledger = TrendEvidenceLedger()
-        let context = TrendResearchToolContext(
-            snapshot: snapshot,
-            scope: .marketRadar,
-            evidenceLedger: ledger
-        )
-        let call = AgentToolCall(
-            id: "market-only",
-            function: AgentToolFunctionCall(
-                name: "get_market_snapshot",
-                arguments: "{}"
-            )
-        )
-
-        let result = await registry.execute(call, context: context)
-        let data = try parseData(result)
-        let returnedQuotes = try XCTUnwrap(data["quotes"] as? [[String: Any]])
-        XCTAssertEqual(returnedQuotes.compactMap { $0["kind"] as? String }, ["index"])
-        let fundEvidence = await ledger.canonical(for: quotes[1].evidenceID)
-        XCTAssertNil(fundEvidence)
-    }
 
     func testHarnessRequiresMarketSnapshotWhenQuotesAreAvailable() {
         let quote = TrendResearchQuote(

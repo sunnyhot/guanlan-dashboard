@@ -14,9 +14,9 @@ extension TrendActionKind {
 extension NextHourGuidanceActionKind {
     var evidencePolicyLevel: TrendEvidencePolicyLevel {
         switch self {
-        case .buy, .sell, .buySmall, .reduceSmall:
+        case .buy, .sell:
             return .execution
-        case .hold, .watch, .wait, .avoidChasing:
+        case .hold:
             return .informational
         }
     }

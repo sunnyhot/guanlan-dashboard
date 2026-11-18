@@ -178,7 +178,7 @@ final class InvestmentTodayResearchSummaryTests: XCTestCase {
         )
     }
 
-    func testRadarRowPicksStrongestSignal() {
+    func testMarketOpportunityRowPicksStrongestSignal() {
         // 优先级:keyOpportunity(1) 先于 startWatching(2),即使把握分更低。
         let analysis = MarketOpportunityAnalysis(
             assetClasses: [],
@@ -200,13 +200,13 @@ final class InvestmentTodayResearchSummaryTests: XCTestCase {
             trendReport: nil,
             currentTimestamp: now
         )
-        let row = summary.rows.first { $0.kind == .marketRadar }
+        let row = summary.rows.first { $0.kind == .marketOpportunity }
         XCTAssertEqual(row?.headline, "高股息红利 · 重点机会")
         // 带秒时间戳截取 "HH:mm",不是 "mm:ss"。
         XCTAssertEqual(row?.footnote, "共 2 个方向 · 更新 09:00")
     }
 
-    func testRadarTieBreaksByConfidence() {
+    func testMarketOpportunityTieBreaksByConfidence() {
         let analysis = MarketOpportunityAnalysis(
             assetClasses: [
                 signal(name: "黄金", recommendation: .keyOpportunity, confidenceScore: 80)
@@ -276,7 +276,7 @@ final class InvestmentTodayResearchSummaryTests: XCTestCase {
         )
         XCTAssertEqual(
             summary.rows.map(\.kind),
-            [.closeReview, .intraday, .marketRadar, .longTerm]
+            [.closeReview, .intraday, .marketOpportunity, .longTerm]
         )
     }
 }

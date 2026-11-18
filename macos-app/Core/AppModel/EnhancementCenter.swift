@@ -18,9 +18,7 @@ extension AppModel {
         loadTrendAnalysisState()
         loadMarketCloseReviewArchive()
         loadNextHourGuidanceState()
-        loadTrendTrackingState()
         loadInvestmentIntelligenceState()
-        loadMarketSignals()
     }
 
     func loadManagerWatchTimeline() {

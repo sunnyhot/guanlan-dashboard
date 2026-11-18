@@ -3,14 +3,12 @@ import Foundation
 /// 一次趋势 Agent 只更新一个产品模块；未更新的内容从上一份已校验报告中复用。
 enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
     case full
-    case marketRadar
     case closeReview
     case longTerm
 
     var displayName: String {
         switch self {
         case .full: "完整 AI 分析"
-        case .marketRadar: "全市场机会雷达"
         case .closeReview: "今日收盘复盘"
         case .longTerm: "组合长期研判"
         }
@@ -19,7 +17,6 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
     var triggerDescription: String {
         switch self {
         case .full: "手动完整分析"
-        case .marketRadar: "每日 09:00 市场雷达"
         case .closeReview: "每日 21:00 收盘复盘"
         case .longTerm: "每周日 20:00 长期研判"
         }
@@ -34,12 +31,8 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
                 TrendReportModuleToolName.assetBatch,
                 TrendReportModuleToolName.actions,
             ]
-        case .marketRadar:
-            [TrendReportModuleToolName.market]
         case .closeReview:
-            // 2026-09-01 下线收编:Tavily 移除后 marketRadar 每日净产出仅 marketOutlook
-            // 几条(opportunities/sectors 恒空),09:00 独立调度已停——大盘强弱改由
-            // 每日收盘复盘顺带更新,复用其已有的大盘行情 context。
+            // 收盘复盘同时更新大盘强弱与逐只持仓归因，复用同一行情上下文。
             [
                 TrendReportModuleToolName.market,
                 TrendReportModuleToolName.assetBatch,
@@ -58,15 +51,15 @@ enum TrendResearchRunScope: String, Codable, CaseIterable, Hashable, Sendable {
     }
 
     var requiresPortfolioOverview: Bool {
-        self != .marketRadar
+        true
     }
 
     var requiresPortfolioAssets: Bool {
-        self != .marketRadar
+        true
     }
 
     var requiresFundLookThrough: Bool {
-        self != .marketRadar
+        true
     }
 
     var requiresMarketSnapshot: Bool {
@@ -117,12 +110,8 @@ struct TrendScheduledModuleSlot: Hashable, Sendable {
     let key: String
 }
 
-/// 固定错峰运行：收盘复盘晚上（含大盘强弱更新）、长期研判每周一次。
-/// 2026-09-01 下线注记：marketRadar 09:00 槽移除——Tavily 移除后其每日净产出仅
-/// marketOutlook 几条（opportunities/sectors 恒空），已收编进 closeReview 的 market
-/// 模块；scope 枚举与手动路径保留作存量兼容，UI 入口已删。
+/// 收盘复盘仅在当天 21:00 后运行；长期研判错过周日窗口后，在下次启动或轮询自动补做。已尝试窗口不自动重试。
 enum TrendModuleAutoAnalysisSchedule {
-    static let marketRadarTime = "09:00"
     static let closeReviewTime = "21:00"
     static let longTermTime = "20:00"
 
@@ -134,25 +123,25 @@ enum TrendModuleAutoAnalysisSchedule {
         guard let day = TrendAutoAnalysisSchedule.dayString(from: timestamp),
               let minute = minuteOfDay(from: timestamp) else { return nil }
 
-        if minute >= 21 * 60 {
-            return uncompletedSlot(
-                scope: .closeReview,
-                key: "\(day) \(closeReviewTime)",
-                lastCompletedKeys: lastCompletedKeys,
-                lastGeneratedAtByScope: lastGeneratedAtByScope
-            )
+        // 当天收盘复盘优先；已完成或已尝试后才调度长期补做，避免并发任务。
+        if minute >= 21 * 60,
+           let closeReview = uncompletedSlot(
+               scope: .closeReview,
+               key: "\(day) \(closeReviewTime)",
+               lastCompletedKeys: lastCompletedKeys,
+               lastGeneratedAtByScope: lastGeneratedAtByScope
+           ) {
+            return closeReview
         }
 
-        if minute >= 20 * 60 {
-            return uncompletedSlot(
-                scope: .longTerm,
-                key: "\(mostRecentSunday(day)) \(longTermTime)",
-                lastCompletedKeys: lastCompletedKeys,
-                lastGeneratedAtByScope: lastGeneratedAtByScope
-            )
-        }
-
-        return nil
+        // 长期研判只补「完全未执行」的最近窗口。attempt key 已存在的失败窗口
+        // 会被 uncompletedSlot 拒绝，因此不会在启动或轮询中反复扣费重试。
+        return uncompletedSlot(
+            scope: .longTerm,
+            key: "\(latestLongTermWindowDay(for: day, minute: minute)) \(longTermTime)",
+            lastCompletedKeys: lastCompletedKeys,
+            lastGeneratedAtByScope: lastGeneratedAtByScope
+        )
     }
 
     private static func uncompletedSlot(
@@ -178,6 +167,18 @@ enum TrendModuleAutoAnalysisSchedule {
             return nil
         }
         return hour * 60 + minute
+    }
+
+    /// 最近一个已经到期的长期研判窗口。周日 20:00 前不回用当天未来窗口，
+    /// 而是补上一周；其他日期直接使用本周刚过去的周日窗口。
+    private static func latestLongTermWindowDay(for day: String, minute: Int) -> String {
+        let sunday = mostRecentSunday(day)
+        guard sunday == day, minute < 20 * 60,
+              let date = dateFormatter.date(from: day),
+              let previousSunday = calendar.date(byAdding: .day, value: -7, to: date) else {
+            return sunday
+        }
+        return dateFormatter.string(from: previousSunday)
     }
 
     private static func mostRecentSunday(_ day: String) -> String {

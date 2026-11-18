@@ -55,47 +55,6 @@ extension AppModel {
             }
         }
 
-        // 兼容 GLM 中间版本的目录式 Repository。旧目录只读保留，迁到当前唯一 Store/Journal。
-        if let baseDirectory = investmentIntelligenceDirectoryURL,
-           let journalDirectory = decisionCaseJournalDirectoryURL {
-            do {
-                let migration = LegacyDecisionCaseMigration(baseDirectory: baseDirectory)
-                if migration.needsMigration {
-                    let legacyCases = try migration.migrate(
-                        into: DecisionCaseJournalStore(baseDirectory: journalDirectory)
-                    )
-                    for legacyCase in legacyCases {
-                        if let index = decisionCases.firstIndex(where: {
-                            $0.id == legacyCase.id || $0.caseKey == legacyCase.caseKey
-                        }) {
-                            // 用户处置和更完整的事件历史优先保留；当前指标仍由随后刷新更新。
-                            if decisionCases[index].userDisposition == .pending,
-                               legacyCase.userDisposition != .pending {
-                                decisionCases[index] = legacyCase
-                            } else {
-                                let knownEventIDs = Set(decisionCases[index].events.map(\.id))
-                                let missingEvents = legacyCase.events.filter { !knownEventIDs.contains($0.id) }
-                                decisionCases[index].events.append(contentsOf: missingEvents)
-                                decisionCases[index].events.sort { $0.at < $1.at }
-                                decisionCases[index].createdAt = min(
-                                    decisionCases[index].createdAt,
-                                    legacyCase.createdAt
-                                )
-                                decisionCases[index].latestResearchRunID =
-                                    decisionCases[index].latestResearchRunID ?? legacyCase.latestResearchRunID
-                                decisionCases[index].latestReviewID =
-                                    decisionCases[index].latestReviewID ?? legacyCase.latestReviewID
-                            }
-                        } else {
-                            decisionCases.append(legacyCase)
-                        }
-                    }
-                    persistDecisionCases()
-                }
-            } catch {
-                errorMessage = "旧决策记录迁移失败：\(error.localizedDescription)"
-            }
-        }
 
         // 加载可恢复的研究运行与复盘记录。
         if let journalDir = decisionCaseJournalDirectoryURL {
@@ -123,8 +82,6 @@ extension AppModel {
                         runs[cs.id] = run
                         if let report = run.report { reports[cs.id] = report }
                         if let message = run.errorMessage, !message.isEmpty { errors[cs.id] = message }
-                    } else if let legacyReport = store.loadLegacyLatestResearch(caseID: cs.id) {
-                        reports[cs.id] = legacyReport
                     }
                     reviews[cs.id] = try store.loadReviews(caseID: cs.id)
                 } catch {
@@ -136,60 +93,50 @@ extension AppModel {
             decisionCaseResearchErrors = errors
             decisionCaseReviews = reviews
         }
-
-        // Slice 6:从旧 TrendTracking 迁移(一次性,用 legacy: 前缀去重)
-        migrateLegacyTrackingIfNeeded()
     }
 
-    /// 从旧 trend-tracking-items.json 增量迁移到 DecisionCase。
-    /// per-item 去重:按每个 tracking item 的 caseKey 判断是否已迁移(不用全局 contains)。
-    /// 新增的 tracking item 仍能增量迁移。
-    /// 旧文件保留不删除(sunset 三阶段:N 版双读)。
-    private func migrateLegacyTrackingIfNeeded() {
-        guard let trackingURL = trendTrackingItemsFileURL else { return }
-        guard FileManager.default.fileExists(atPath: trackingURL.path) else { return }
+    // MARK: - 行动候选匹配
 
-        do {
-            let trackingItems = try TrendTrackingStore().load(from: trackingURL)
-            guard !trackingItems.isEmpty else { return }
-
-            // 已有的 caseKey 集合(per-item 去重)
-            let existingKeys = Set(decisionCases.map(\.caseKey))
-            var newCases: [DecisionCase] = []
-
-            for item in trackingItems {
-                if item.status == .ended { continue }  // ended 不迁移
-
-                // 构造迁移后的 caseKey(与 TrendTrackingMigration 一致)
-                let subjectID = item.assetCode?.lowercased() ?? item.assetName.lowercased()
-                let caseKey = "legacy:\(item.action.rawValue)|\(subjectID)"
-
-                if existingKeys.contains(caseKey) { continue }  // 已迁移跳过
-
-                let migrated = TrendTrackingMigration.migrate(item)
-                newCases.append(migrated)
-            }
-
-            guard !newCases.isEmpty else { return }
-            decisionCases.append(contentsOf: newCases)
-            persistDecisionCases()
-        } catch {
-            errorMessage = "旧跟踪清单迁移失败:\(error.localizedDescription)"
+    static func matchedRow(
+        for action: TrendActionCandidate,
+        in rows: [PersonalAssetAggregateRow]
+    ) -> PersonalAssetAggregateRow? {
+        guard let targetName = action.targetName?.trimmingCharacters(in: .whitespacesAndNewlines), !targetName.isEmpty else {
+            return nil
         }
+        var lookup: [String: PersonalAssetAggregateRow] = [:]
+        for row in rows {
+            lookup[row.fundName.lowercased()] = row
+            lookup[row.key.lowercased()] = row
+            if let code = row.fundCode {
+                lookup[code.lowercased()] = row
+            }
+        }
+        let key = targetName.lowercased()
+        if let exact = lookup[key] {
+            return exact
+        }
+        return lookup.first { element in
+            key.contains(element.key) || element.key.contains(key)
+        }?.value
+    }
+
+    static func timestampString(addingDays days: Int) -> String {
+        let date = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: date)
     }
 
     // MARK: - 行动候选 → 决策案例(sunset 方案 A:写入路径切换)
 
-    /// 行动候选的决策案例键。trend: 是新写入口;legacy: 兼容已迁移的旧项。
-    /// 两键互为去重键:同一动作无论经旧清单迁移还是新按钮加入,只保留一案。
-    static func decisionCaseKeys(
+    /// 行动候选的决策案例键。
+    static func decisionCaseKey(
         actionKind: TrendActionKind,
         subjectID: String
-    ) -> (fresh: String, legacy: String) {
-        (
-            "trend:\(actionKind.rawValue)|\(subjectID)",
-            "legacy:\(actionKind.rawValue)|\(subjectID)"
-        )
+    ) -> String {
+        "trend:\(actionKind.rawValue)|\(subjectID)"
     }
 
     /// 「加入关注」:行动候选直接创建 DecisionCase(sunset 后的唯一 UI 写入口)。
@@ -201,9 +148,9 @@ extension AppModel {
         let row = Self.matchedRow(for: action, in: personalAssetRows)
         let assetName = row?.fundName ?? action.targetName ?? action.title
         let subjectID = (row?.fundCode ?? assetName).lowercased()
-        let keys = Self.decisionCaseKeys(actionKind: action.kind, subjectID: subjectID)
+        let caseKey = Self.decisionCaseKey(actionKind: action.kind, subjectID: subjectID)
 
-        if decisionCases.contains(where: { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }) {
+        if decisionCases.contains(where: { $0.caseKey == caseKey }) {
             noticeMessage = "该标的和动作已在判断与复盘清单中。"
             return false
         }
@@ -222,7 +169,7 @@ extension AppModel {
 
         let score = action.confidence.score
         let createdCase = DecisionCase(
-            caseKey: keys.fresh,
+            caseKey: caseKey,
             kind: .trendAction,
             dimension: .directHolding,
             subjectName: assetName,
@@ -256,7 +203,7 @@ extension AppModel {
         return true
     }
 
-    /// 行动候选是否已有对应决策案例(新键或旧迁移键任一命中)。
+    /// 行动候选是否已有对应决策案例。
     func hasDecisionCase(for action: TrendActionCandidate, report: TrendAnalysisReport) -> Bool {
         decisionCase(for: action, report: report) != nil
     }
@@ -266,8 +213,8 @@ extension AppModel {
         let row = Self.matchedRow(for: action, in: personalAssetRows)
         let assetName = row?.fundName ?? action.targetName ?? action.title
         let subjectID = (row?.fundCode ?? assetName).lowercased()
-        let keys = Self.decisionCaseKeys(actionKind: action.kind, subjectID: subjectID)
-        return decisionCases.first { $0.caseKey == keys.fresh || $0.caseKey == keys.legacy }
+        let caseKey = Self.decisionCaseKey(actionKind: action.kind, subjectID: subjectID)
+        return decisionCases.first { $0.caseKey == caseKey }
     }
 
     /// W5.1:加入关注后当场设定/调整复查时间;`days` 传 nil 清除(暂不提醒)。

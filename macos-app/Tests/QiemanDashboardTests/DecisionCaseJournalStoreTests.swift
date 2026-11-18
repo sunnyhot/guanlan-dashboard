@@ -40,23 +40,6 @@ final class DecisionCaseJournalStoreTests: XCTestCase {
         XCTAssertEqual(try store.loadReviews(caseID: caseID).map(\.id), [earlier.id, later.id])
     }
 
-    func testLegacyBareReportDoesNotBreakRunLoading() throws {
-        let directory = makeTemporaryDirectory()
-        let store = DecisionCaseJournalStore(baseDirectory: directory)
-        let caseID = UUID()
-        let report = makeReport(caseID: caseID)
-        let researchDirectory = directory
-            .appendingPathComponent(caseID.uuidString)
-            .appendingPathComponent("research")
-        try FileManager.default.createDirectory(at: researchDirectory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(report).write(
-            to: researchDirectory.appendingPathComponent("legacy.json"),
-            options: .atomic
-        )
-
-        XCTAssertNil(try store.loadLatestResearchRun(caseID: caseID))
-        XCTAssertEqual(store.loadLegacyLatestResearch(caseID: caseID), report)
-    }
 
     func testPresenterTreatsMissingPortfolioEvidenceAsInsufficientData() {
         let summary = InvestmentIntelligencePresenter.makeSummary(
@@ -71,54 +54,6 @@ final class DecisionCaseJournalStoreTests: XCTestCase {
         XCTAssertTrue(InvestmentIntelligence.releaseDefaultEnabled)
     }
 
-    func testLegacyDirectoryRepositoryMigratesWithoutDeletingSource() throws {
-        let baseDirectory = makeTemporaryDirectory()
-        let decisionCase = makeDecisionCase()
-        let caseDirectory = baseDirectory
-            .appendingPathComponent("cases")
-            .appendingPathComponent(decisionCase.id.uuidString)
-        let researchDirectory = caseDirectory.appendingPathComponent("research")
-        let reviewsDirectory = caseDirectory.appendingPathComponent("reviews")
-        try FileManager.default.createDirectory(at: researchDirectory, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: reviewsDirectory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(decisionCase).write(
-            to: caseDirectory.appendingPathComponent("case.json"),
-            options: .atomic
-        )
-
-        let legacyRunID = UUID()
-        let legacyRun: [String: Any] = [
-            "id": legacyRunID.uuidString,
-            "caseID": decisionCase.id.uuidString,
-            "trigger": "automatic",
-            "inputFingerprint": "legacy",
-            "startedAt": "2026-08-05 08:00:00",
-            "status": "cancelled",
-            "providerName": "provider",
-            "modelName": "model"
-        ]
-        try JSONSerialization.data(withJSONObject: legacyRun).write(
-            to: researchDirectory.appendingPathComponent("\(legacyRunID.uuidString).json"),
-            options: .atomic
-        )
-        let review = makeReview(caseID: decisionCase.id, at: "2026-08-05 09:00:00")
-        try JSONEncoder().encode(review).write(
-            to: reviewsDirectory.appendingPathComponent("\(review.id.uuidString).json"),
-            options: .atomic
-        )
-
-        let journal = DecisionCaseJournalStore(baseDirectory: baseDirectory.appendingPathComponent("journals"))
-        let migration = LegacyDecisionCaseMigration(baseDirectory: baseDirectory)
-        let migrated = try migration.migrate(into: journal)
-
-        XCTAssertEqual(migrated, [decisionCase])
-        XCTAssertEqual(try journal.loadLatestResearchRun(caseID: decisionCase.id)?.id, legacyRunID)
-        XCTAssertEqual(try journal.loadLatestResearchRun(caseID: decisionCase.id)?.status, .interrupted)
-        XCTAssertEqual(try journal.loadReviews(caseID: decisionCase.id), [review])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: caseDirectory.path), "旧目录必须保留")
-        XCTAssertFalse(migration.needsMigration)
-        XCTAssertTrue(try migration.migrate(into: journal).isEmpty)
-    }
 
     private func makeTemporaryDirectory() -> URL {
         let directory = FileManager.default.temporaryDirectory

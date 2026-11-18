@@ -18,8 +18,6 @@ struct TrendCompletionNotification: Equatable, Sendable {
     let userInitiated: Bool
     /// 本次成功前是否已有任何报告(手动首份研判的「第一份研判已生成」用)。
     let isFirstReport: Bool
-    /// 机会方向数(仅 marketRadar/full 成功时有意义)。
-    let opportunityCount: Int
     let failureSummary: String?
 
     var title: String {
@@ -28,7 +26,6 @@ struct TrendCompletionNotification: Equatable, Sendable {
             if userInitiated && isFirstReport { return "你的第一份研判已生成" }
             switch scope {
             case .closeReview: return "今日复盘已生成"
-            case .marketRadar: return "今日市场机会已更新"
             case .longTerm: return "本周组合研判已更新"
             case .full: return "研判已生成"
             }
@@ -43,8 +40,6 @@ struct TrendCompletionNotification: Equatable, Sendable {
             if userInitiated && isFirstReport { return "点击查看你的第一份 AI 研判。" }
             switch scope {
             case .closeReview: return "点击查看今天的收盘复盘。"
-            case .marketRadar:
-                return opportunityCount > 0 ? "\(opportunityCount) 个方向,点击查看。" : "点击查看今日扫描结果。"
             case .longTerm: return "点击查看组合方向与行动候选。"
             case .full: return "点击查看完整研判。"
             }
@@ -60,7 +55,6 @@ struct TrendCompletionNotification: Equatable, Sendable {
     var sectionAnchor: InvestmentTodayResearchRow.Kind? {
         switch scope {
         case .closeReview: return .closeReview
-        case .marketRadar: return .marketRadar
         case .longTerm: return .longTerm
         case .full: return .longTerm
         }

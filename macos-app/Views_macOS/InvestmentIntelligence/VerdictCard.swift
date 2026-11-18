@@ -14,26 +14,7 @@ extension TrendHorizon {
     }
 }
 
-// W4.4:TrendDirection 展示映射从 EnhancementTrendPanel 的私有扩展迁出,
-// 供结论卡与各研判卡共用。W4.5:「不确定」统一为「暂不明确」。
 extension TrendDirection {
-    var displayText: String {
-        switch self {
-        case .bullish:
-            return "偏强"
-        case .neutralPositive:
-            return "中性偏强"
-        case .neutral:
-            return "中性"
-        case .neutralNegative:
-            return "中性偏弱"
-        case .bearish:
-            return "偏弱"
-        case .uncertain:
-            return "暂不明确"
-        }
-    }
-
     var tint: Color {
         switch self {
         case .bullish, .neutralPositive:

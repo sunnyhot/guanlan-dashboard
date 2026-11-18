@@ -445,7 +445,6 @@ struct AlphaVantageSettings: Codable, Hashable, Sendable {
 /// 其余链路由用户在设置里显式打开,避免通知轰炸。
 struct TrendNotificationPreferences: Codable, Hashable {
     var closeReviewSuccessEnabled: Bool
-    var marketRadarSuccessEnabled: Bool
     var longTermSuccessEnabled: Bool
     var firstReportEnabled: Bool
     var autoFailureEnabled: Bool
@@ -454,13 +453,11 @@ struct TrendNotificationPreferences: Codable, Hashable {
 
     init(
         closeReviewSuccessEnabled: Bool = true,
-        marketRadarSuccessEnabled: Bool = false,
         longTermSuccessEnabled: Bool = false,
         firstReportEnabled: Bool = false,
         autoFailureEnabled: Bool = true
     ) {
         self.closeReviewSuccessEnabled = closeReviewSuccessEnabled
-        self.marketRadarSuccessEnabled = marketRadarSuccessEnabled
         self.longTermSuccessEnabled = longTermSuccessEnabled
         self.firstReportEnabled = firstReportEnabled
         self.autoFailureEnabled = autoFailureEnabled
@@ -469,7 +466,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         closeReviewSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .closeReviewSuccessEnabled) ?? true
-        marketRadarSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .marketRadarSuccessEnabled) ?? false
         longTermSuccessEnabled = try container.decodeIfPresent(Bool.self, forKey: .longTermSuccessEnabled) ?? false
         firstReportEnabled = try container.decodeIfPresent(Bool.self, forKey: .firstReportEnabled) ?? false
         autoFailureEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoFailureEnabled) ?? true
@@ -478,7 +474,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(closeReviewSuccessEnabled, forKey: .closeReviewSuccessEnabled)
-        try container.encode(marketRadarSuccessEnabled, forKey: .marketRadarSuccessEnabled)
         try container.encode(longTermSuccessEnabled, forKey: .longTermSuccessEnabled)
         try container.encode(firstReportEnabled, forKey: .firstReportEnabled)
         try container.encode(autoFailureEnabled, forKey: .autoFailureEnabled)
@@ -486,7 +481,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case closeReviewSuccessEnabled
-        case marketRadarSuccessEnabled
         case longTermSuccessEnabled
         case firstReportEnabled
         case autoFailureEnabled
@@ -504,7 +498,6 @@ struct TrendNotificationPreferences: Codable, Hashable {
             }
             switch notice.scope {
             case .closeReview: return closeReviewSuccessEnabled
-            case .marketRadar: return marketRadarSuccessEnabled
             case .longTerm: return longTermSuccessEnabled
             case .full: return false
             }
@@ -517,9 +510,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
     var alphaVantage: AlphaVantageSettings
     var defaultPrivacyMode: TrendPrivacyMode
     var dailyAutoAnalysisEnabled: Bool
-    var dailyAutoAnalysisTimes: [String]
-    var lastAutoAnalysisDay: String?
-    var lastAutoAnalysisSlotKey: String?
     var lastModuleAutoAnalysisKeys: [String: String]
     var lastModuleGeneratedAt: [String: String]
     var notifications: TrendNotificationPreferences
@@ -533,9 +523,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         alphaVantage: .empty,
         defaultPrivacyMode: .sanitized,
         dailyAutoAnalysisEnabled: false,
-        dailyAutoAnalysisTimes: TrendAutoAnalysisSchedule.default.timeStrings,
-        lastAutoAnalysisDay: nil,
-        lastAutoAnalysisSlotKey: nil,
         lastModuleAutoAnalysisKeys: [:],
         lastModuleGeneratedAt: [:],
         notifications: .default,
@@ -548,9 +535,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         alphaVantage: AlphaVantageSettings = .empty,
         defaultPrivacyMode: TrendPrivacyMode,
         dailyAutoAnalysisEnabled: Bool,
-        dailyAutoAnalysisTimes: [String] = TrendAutoAnalysisSchedule.default.timeStrings,
-        lastAutoAnalysisDay: String? = nil,
-        lastAutoAnalysisSlotKey: String? = nil,
         lastModuleAutoAnalysisKeys: [String: String] = [:],
         lastModuleGeneratedAt: [String: String] = [:],
         notifications: TrendNotificationPreferences = .default,
@@ -561,9 +545,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         self.alphaVantage = alphaVantage
         self.defaultPrivacyMode = defaultPrivacyMode
         self.dailyAutoAnalysisEnabled = dailyAutoAnalysisEnabled
-        self.dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(timeStrings: dailyAutoAnalysisTimes).timeStrings
-        self.lastAutoAnalysisDay = lastAutoAnalysisDay
-        self.lastAutoAnalysisSlotKey = lastAutoAnalysisSlotKey
         self.lastModuleAutoAnalysisKeys = lastModuleAutoAnalysisKeys
         self.lastModuleGeneratedAt = lastModuleGeneratedAt
         self.notifications = notifications
@@ -580,15 +561,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         ) ?? .empty
         defaultPrivacyMode = try container.decodeIfPresent(TrendPrivacyMode.self, forKey: .defaultPrivacyMode) ?? .sanitized
         dailyAutoAnalysisEnabled = try container.decodeIfPresent(Bool.self, forKey: .dailyAutoAnalysisEnabled) ?? false
-        if let times = try container.decodeIfPresent([String].self, forKey: .dailyAutoAnalysisTimes) {
-            dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(timeStrings: times).timeStrings
-        } else if let time = try container.decodeIfPresent(String.self, forKey: .dailyAutoAnalysisTime) {
-            dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(timeString: time).timeStrings
-        } else {
-            dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule.default.timeStrings
-        }
-        lastAutoAnalysisDay = try container.decodeIfPresent(String.self, forKey: .lastAutoAnalysisDay)
-        lastAutoAnalysisSlotKey = try container.decodeIfPresent(String.self, forKey: .lastAutoAnalysisSlotKey)
         lastModuleAutoAnalysisKeys = try container.decodeIfPresent(
             [String: String].self,
             forKey: .lastModuleAutoAnalysisKeys
@@ -617,9 +589,6 @@ struct TrendAnalysisSettings: Codable, Hashable {
         try container.encode(alphaVantage, forKey: .alphaVantage)
         try container.encode(defaultPrivacyMode, forKey: .defaultPrivacyMode)
         try container.encode(dailyAutoAnalysisEnabled, forKey: .dailyAutoAnalysisEnabled)
-        try container.encode(dailyAutoAnalysisTimes, forKey: .dailyAutoAnalysisTimes)
-        try container.encodeIfPresent(lastAutoAnalysisDay, forKey: .lastAutoAnalysisDay)
-        try container.encodeIfPresent(lastAutoAnalysisSlotKey, forKey: .lastAutoAnalysisSlotKey)
         try container.encode(lastModuleAutoAnalysisKeys, forKey: .lastModuleAutoAnalysisKeys)
         try container.encode(lastModuleGeneratedAt, forKey: .lastModuleGeneratedAt)
         try container.encode(notifications, forKey: .notifications)
@@ -632,43 +601,11 @@ struct TrendAnalysisSettings: Codable, Hashable {
         case alphaVantage
         case defaultPrivacyMode
         case dailyAutoAnalysisEnabled
-        case dailyAutoAnalysisTimes
-        case dailyAutoAnalysisTime
-        case lastAutoAnalysisDay
-        case lastAutoAnalysisSlotKey
         case lastModuleAutoAnalysisKeys
         case lastModuleGeneratedAt
         case notifications
         case autoFailureStreaks
         case lastAutoFailureMessages
-    }
-
-    var dailyAutoAnalysisSchedule: TrendAutoAnalysisSchedule {
-        TrendAutoAnalysisSchedule(timeStrings: dailyAutoAnalysisTimes)
-    }
-
-    var dailyAutoAnalysisTimesText: String {
-        dailyAutoAnalysisSchedule.text
-    }
-
-    mutating func updateDailyAutoAnalysisTimes(from text: String) {
-        dailyAutoAnalysisTimes = TrendAutoAnalysisSchedule(text: text).timeStrings
-    }
-
-    mutating func normalizeDailyAutoAnalysisTimes() {
-        dailyAutoAnalysisTimes = dailyAutoAnalysisSchedule.timeStrings
-    }
-
-    func hasAutoAnalyzed(on day: String) -> Bool {
-        lastAutoAnalysisDay == day
-    }
-
-    func dueAutoAnalysisSlot(at timestamp: String) -> TrendAutoAnalysisSlot? {
-        dailyAutoAnalysisSchedule.dueSlot(
-            at: timestamp,
-            lastCompletedSlotKey: lastAutoAnalysisSlotKey,
-            legacyLastAutoAnalysisDay: lastAutoAnalysisDay
-        )
     }
 
     func dueModuleAutoAnalysisSlot(at timestamp: String) -> TrendScheduledModuleSlot? {
@@ -688,7 +625,7 @@ struct TrendAnalysisSettings: Codable, Hashable {
         generatedAt: String
     ) {
         let scopes = scope == .full
-            ? [TrendResearchRunScope.marketRadar, .closeReview, .longTerm]
+            ? [TrendResearchRunScope.closeReview, .longTerm]
             : [scope]
         for moduleScope in scopes {
             lastModuleGeneratedAt[moduleScope.rawValue] = generatedAt
@@ -699,10 +636,10 @@ struct TrendAnalysisSettings: Codable, Hashable {
         lastModuleGeneratedAt[scope.rawValue]
     }
 
-    /// W3.5:成功生成后清零对应模块的连续失败计数(full 同时清三个模块)。
+    /// W3.5:成功生成后清零对应模块的连续失败计数(full 同时清两个模块)。
     mutating func clearAutoFailureStreak(scope: TrendResearchRunScope) {
         let scopes = scope == .full
-            ? [TrendResearchRunScope.marketRadar, .closeReview, .longTerm]
+            ? [TrendResearchRunScope.closeReview, .longTerm]
             : [scope]
         for moduleScope in scopes {
             autoFailureStreaks[moduleScope.rawValue] = nil
@@ -1372,7 +1309,7 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
         evidence: [TrendEvidence],
         warnings: [TrendWarning],
         disclaimer: String,
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         disposition: TrendReportDisposition = .analysisOnly,
         sourceStatuses: [TrendSourceStatus] = []
     ) {
@@ -1400,7 +1337,15 @@ struct TrendAnalysisReport: Codable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        let decodedSchemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard decodedSchemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "仅支持 schemaVersion=2 的趋势报告"
+            )
+        }
+        schemaVersion = decodedSchemaVersion
         generatedAt = try container.decodeIfPresent(String.self, forKey: .generatedAt) ?? ""
         dataAsOf = try container.decodeIfPresent(String.self, forKey: .dataAsOf) ?? ""
         disposition = try container.decodeIfPresent(

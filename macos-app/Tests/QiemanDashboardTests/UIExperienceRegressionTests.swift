@@ -683,7 +683,6 @@ final class UIExperienceRegressionTests: XCTestCase {
             at: "Views_macOS/InvestmentIntelligence/UserDecisionProfilePanel.swift"
         )
         let iosEnhancement = try source(at: "Views_iOS/EnhancementSectionView.swift")
-        let iosTracking = try source(at: "Views_iOS/IOSTrendTrackingListView.swift")
         let iosGlossary = try source(at: "Views_iOS/IOSResearchTermGlossaryView.swift")
 
         // macOS 画像入口:研判基础卡按钮 + sheet + 与 iOS 一致的字段
@@ -697,9 +696,7 @@ final class UIExperienceRegressionTests: XCTestCase {
 
         // iOS 术语统一:不再出现「置信度」,档位来自 ConfidenceGrade
         XCTAssertFalse(iosEnhancement.contains("置信度"))
-        XCTAssertFalse(iosTracking.contains("置信度"))
         XCTAssertTrue(iosEnhancement.contains("ConfidenceGrade(score:"))
-        XCTAssertTrue(iosTracking.contains("ConfidenceGrade(score:"))
 
         // iOS 词表:同源 ResearchTerm,带「怎么读」入口
         XCTAssertTrue(iosEnhancement.contains("IOSResearchTermGlossaryView"))
@@ -747,7 +744,7 @@ final class UIExperienceRegressionTests: XCTestCase {
         XCTAssertFalse(today.contains("trackingContent"))
         XCTAssertFalse(center.contains("isLegacyTrackingExpanded"))
 
-        // 通知深链改路由到决策案例详情(迁移保持 ID 稳定)
+        // 通知深链路由到决策案例详情
         XCTAssertTrue(center.contains("deepLinkedCase"))
         XCTAssertTrue(center.contains("DecisionCaseDetailSheet(caseID: caseItem.id)"))
     }
@@ -761,17 +758,21 @@ final class UIExperienceRegressionTests: XCTestCase {
         let subAgents = try source(at: "Core/NextHourGuidance/NextHourGuidanceSubAgents.swift")
         let today = try source(at: "Views_macOS/EnhancementTodayPanel.swift")
 
-        // V1 system prompt 与 V2 决策 user message 都带回指指令
-        XCTAssertTrue(core.contains("followup_reviews 中逐条回指"))
+        // 汇总决策要求逐条回指；子 Agent 只依据注入的本地热榜核对事件。
         XCTAssertTrue(core.contains("逐条回指到 followup_reviews"))
-        // 取证积极性:先查再答,不许不查就 inconclusive(2026-08-19 强化;
-        // 2026-09-02 联网搜索下线后,取证来源改为实时行情+注入热榜)
-        XCTAssertTrue(core.contains("必须先取证再回答"))
-        XCTAssertTrue(core.contains("market_news 热榜是否出现相关事件"))
+        XCTAssertTrue(core.contains("三个分析团队已替你核实的结论就是合格证据"))
+        XCTAssertTrue(subAgents.contains("market_news 列表是唯一可引用的事实来源"))
+        // 旧 V1/V2 分支已退场，Controller 与 Agent 只保留统一 run() 入口。
+        XCTAssertTrue(controller.contains("nextHourGuidanceAgent.run("))
+        XCTAssertFalse(controller.contains("runV2"))
+        XCTAssertFalse(core.contains("func runV2("))
         // 净化 + 报告字段
         XCTAssertTrue(core.contains("sanitizeFollowupReviews"))
         XCTAssertTrue(core.contains("followupReviews: followup.reviews"))
         // 注入:context 组装调用 + 窗口规则
+        XCTAssertFalse(controller.contains("禁止输出买入或卖出"))
+        XCTAssertFalse(controller.contains("只允许持有"))
+        XCTAssertFalse(controller.contains("仅报价在 20 分钟内的标的可形成买卖建议"))
         XCTAssertTrue(controller.contains("makeLastCloseReviewContext(generatedAt: generatedAt)"))
         XCTAssertTrue(controller.contains("calendarDayDistance"))
         // V2 子 Agent 主动核对:行情看量能,新闻与注入热榜逐条核对

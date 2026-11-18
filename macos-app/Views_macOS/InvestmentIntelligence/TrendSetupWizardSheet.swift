@@ -30,7 +30,7 @@ struct TrendSetupWizardSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
-    /// 空态「缺 Tavily」等入口可直达对应步骤。
+    /// 空态可直达对应配置步骤。
     var initialStep: Step = .provider
 
     @State private var step: Step = .provider
@@ -184,7 +184,7 @@ struct TrendSetupWizardSheet: View {
         VStack(alignment: .leading, spacing: AppPalette.spaceM) {
             // W1.7 成本预期:第一次见就讲清楚计费方式与量级。
             Label(
-                "Key 直接向模型服务商计费,本 App 不中转、不抽成;一次市场雷达约 ¥0.5–2(视模型与搜索次数)。",
+                "Key 直接向模型服务商计费,本 App 不中转、不抽成;一次完整研判约 ¥0.5–2(视模型与调用次数)。",
                 systemImage: "yuan.currency.sign.circle"
             )
             .font(AppPalette.appFont(.footnote))
@@ -671,7 +671,7 @@ struct TrendSetupWizardSheet: View {
                         .font(AppPalette.appFont(.body, weight: .semibold))
                         .foregroundStyle(AppPalette.ink)
                     // W1.7:自动分析开启前再次确认费用。
-                    Text("每日 09:00(市场雷达)与 21:00(收盘复盘)各运行一次,费用由你的 Key 承担,每次约 ¥0.5–2;随时可关。")
+                    Text("每日 21:00 收盘复盘、每周日 20:00 长期研判自动运行,费用由你的 Key 承担;随时可关。")
                         .font(AppPalette.appFont(.caption))
                         .foregroundStyle(AppPalette.muted)
                         .fixedSize(horizontal: false, vertical: true)

@@ -74,15 +74,6 @@ struct TrendResearchPromptBuilder: Sendable {
         let contract: String
         var yesterdayAuditText = ""
         switch scope {
-        case .marketRadar:
-            mission = "只更新全市场机会雷达。不得读取、评价或推断个人持仓；上一份报告中的组合、持仓与行动模块由 App 原样复用。"
-            flow = """
-先调用 get_market_snapshot 读取主要指数，用 get_market_breadth 补充全市场涨跌/涨停/成交额广度，可用 get_financial_headlines 获取热榜快讯佐证消息面。大盘/大类资产观点基于行情、广度与快讯判断；opportunities 本次留空（App 会强制清空），不得用记忆填充。完成后只调用 submit_trend_market_module。
-"""
-            contract = """
-submit_trend_market_module JSON：
-{"marketOutlook":[{"id":"","name":"","category":"index|assetClass","direction":"bullish|neutralPositive|neutral|neutralNegative|bearish|uncertain","confidence":{"score":0,"label":"低|中|高"},"rationale":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"sectors":[{"id":"","name":"","exposureText":"全市场依据，不写个人持仓","direction":"","confidence":{},"rationale":"","whatWouldChange":"","evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}],"opportunities":[{"id":"","name":"","category":"index|assetClass|sector","scope":"marketWide","direction":"","confidence":{},"rationale":"","whatWouldChange":"","triggerConditions":[],"invalidatingConditions":[],"evidenceIDs":[],"counterSignals":[],"claimEvidence":{}}]}
-"""
         case .closeReview:
             mission = "更新今日收盘复盘：大盘/大类资产强弱判断与逐只持仓涨跌归因。组合结论与行动模块从缓存报告复用，不生成行动建议。"
             // 2026-09-02:昨日判断验证摘要注入——模型生成今日判断时能看到昨天的
@@ -105,7 +96,7 @@ impactText 必须以「涨跌归因：」或「原因待确认：」开头。只
 \(Self.attributionCoverageHint(snapshot: snapshot, alphaVantageConfigured: alphaVantageConfigured))
 """
         case .longTerm:
-            mission = "只更新组合长期研判：组合结论、短中长期周期、逐只持仓趋势与少量行动候选。全市场机会雷达从缓存报告复用，不重新做八组全市场扫描。"
+            mission = "只更新组合长期研判：组合结论、短中长期周期、逐只持仓趋势与少量行动候选。市场模块从缓存报告复用，不重新扫描。"
             let alpha = alphaVantageConfigured ? "官方源之后至少调用一次 alpha_vantage_research。" : ""
             flow = """
 依次调用 get_portfolio_overview、分页读完 get_portfolio_assets；有穿透时调用 get_fund_lookthrough；调用 get_market_snapshot（可用 get_market_breadth 补充广度）。\(alpha)然后按 App 开放顺序提交 submit_trend_overview_module、submit_trend_asset_batch（每批最多 \(TrendReportDraftStore.assetBatchSize) 只）、submit_trend_actions_module。
@@ -149,9 +140,7 @@ actions：{"keyAssets":[asset],"actions":[{"id":"","kind":"watch|waitForConfirma
         snapshot: TrendResearchSnapshot,
         scope: TrendResearchRunScope
     ) -> AgentChatMessage {
-        let scopeData = scope == .marketRadar
-            ? "本次不提供个人持仓信息。"
-            : "资产数：\(snapshot.assets.count)。"
+        let scopeData = "资产数：\(snapshot.assets.count)。"
         return AgentChatMessage(
             role: .user,
             content: """

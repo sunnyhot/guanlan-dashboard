@@ -316,7 +316,7 @@ final class AgentRunPolicyCharacterizationTests: XCTestCase {
                 metadata: AIAgentDiagnosticRunMetadata(
                     runID: UUID(),
                     agentKind: "trend-research",
-                    scope: "marketRadar",
+                    scope: "closeReview",
                     trigger: "scheduled",
                     providerName: "test",
                     baseURL: "https://example.test/v1",

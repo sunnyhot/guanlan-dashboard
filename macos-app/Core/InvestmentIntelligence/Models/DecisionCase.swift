@@ -137,7 +137,8 @@ enum DecisionCaseEventType: String, Codable, Hashable, Sendable {
     case userClosed
     case userReopened
     case profileUpdated
-    case migrated  // Slice 6:从旧 TrendTracking 迁移
+    /// 仅用于解码既有 v2 迁移事件；现行代码不再生成。
+    case migrated
 }
 
 enum DecisionCaseActor: String, Codable, Hashable, Sendable {
@@ -242,12 +243,20 @@ struct DecisionCase: Codable, Hashable, Sendable, Identifiable {
         self.userDisposition = userDisposition
     }
 
-    // MARK: - V1 兼容解码
+    // MARK: - V2 解码
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        let decodedSchemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        guard decodedSchemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: c,
+                debugDescription: "仅支持 schemaVersion=2 的 DecisionCase"
+            )
+        }
+        schemaVersion = decodedSchemaVersion
         caseKey = try c.decodeIfPresent(String.self, forKey: .caseKey) ?? ""
         kind = try c.decodeIfPresent(DecisionCaseKind.self, forKey: .kind) ?? .concentrationRisk
         dimension = try c.decodeIfPresent(ConcentrationDimension.self, forKey: .dimension) ?? .directHolding

@@ -88,10 +88,6 @@ extension AppModel {
         dataDirectoryURL?.appendingPathComponent("next-hour-guidance.json", isDirectory: false)
     }
 
-    var trendTrackingItemsFileURL: URL? {
-        dataDirectoryURL?.appendingPathComponent("trend-tracking-items.json", isDirectory: false)
-    }
-
     var fundLookThroughCacheFileURL: URL? {
         dataDirectoryURL?.appendingPathComponent("fund-look-through-cache.json", isDirectory: false)
     }

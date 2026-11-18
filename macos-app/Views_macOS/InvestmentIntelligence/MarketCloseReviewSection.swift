@@ -137,7 +137,7 @@ struct MarketCloseReviewSection: View {
         isShowingDetails = true
     }
 
-    /// 只显示真正由收盘复盘入口触发的进度。市场雷达即使因合并约束回退成
+    /// 只显示真正由收盘复盘入口触发的进度。其他分析即使回退成
     /// effective `.full`，也不能让这个板块看起来正在重做收盘复盘。
     private var isGeneratingCloseReview: Bool {
         guard model.trendGenerationState == .generating else { return false }

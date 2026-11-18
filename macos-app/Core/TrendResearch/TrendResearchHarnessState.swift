@@ -169,7 +169,7 @@ struct TrendResearchHarnessState: Sendable {
             return "调用 get_market_snapshot 读取基金净值、大盘与底层证券当日涨跌；基金归因不能只复述持仓结构。"
         }
         if alphaVantageRequired, alphaVantageAttempts == 0 {
-            return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方源，不得覆盖 SEC 等一手证据。"
+            return "调用 alpha_vantage_research 获取与当前标的最相关的一项结构化补充；它不是官方一手证据，不得覆盖本地行情、基金披露或其他一手证据。"
         }
         if remainingResearchToolCalls == 0 {
             return "研究工具预算已收敛；使用现有证据提交当前模块。未覆盖的全市场维度不得生成机会结论。"

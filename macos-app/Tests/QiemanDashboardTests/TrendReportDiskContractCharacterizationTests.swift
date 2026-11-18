@@ -7,7 +7,7 @@ import XCTest
 // 冻结 TrendAnalysisReportStore 的当前行为(见 docs/ai-pipeline-baseline.md 第 5 节):
 //   - 单文件覆盖写,无历史目录
 //   - 文件权限统一收紧为 0o600
-//   - 旧 schemaVersion=1 报告能被解码(向后兼容)
+//   - schemaVersion=1 报告拒绝解码
 //   - 当前 schema 往返一致
 final class TrendReportDiskContractCharacterizationTests: XCTestCase {
 
@@ -71,9 +71,9 @@ final class TrendReportDiskContractCharacterizationTests: XCTestCase {
         XCTAssertEqual((permissions?.intValue ?? 0) & 0o777, 0o600)
     }
 
-    // MARK: - 测试 11:旧 v1 报告解码向后兼容
+    // MARK: - 测试 11:旧 v1 报告拒绝解码
 
-    func testLegacyV1ReportDecodesWithDefaults() throws {
+    func testLegacyV1ReportIsRejected() throws {
         // 最小 v1 报告:缺 schemaVersion(默认 1)、缺新增集合字段(默认空数组)
         let legacyJSON = """
         {
@@ -101,13 +101,9 @@ final class TrendReportDiskContractCharacterizationTests: XCTestCase {
           "disclaimer": "本内容非投资建议，仅供参考。"
         }
         """
-        let report = try JSONDecoder().decode(TrendAnalysisReport.self, from: Data(legacyJSON.utf8))
-
-        XCTAssertEqual(report.schemaVersion, 1, "无 schemaVersion 字段时应默认为 1")
-        XCTAssertTrue(report.marketOutlook.isEmpty, "缺 marketOutlook 应默认空数组")
-        XCTAssertTrue(report.opportunities.isEmpty, "缺 opportunities 应默认空数组")
-        XCTAssertTrue(report.sourceStatuses.isEmpty, "缺 sourceStatuses 应默认空数组")
-        XCTAssertEqual(report.id, UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(TrendAnalysisReport.self, from: Data(legacyJSON.utf8))
+        )
     }
 
     // MARK: - 测试 12:当前 schema 往返一致

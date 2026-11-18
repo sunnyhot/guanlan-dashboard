@@ -10,7 +10,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 - 支持持仓分析：组合诊断、基金对比、收益归因、基金穿透（look-through）
 - 支持平台分析：主理人策略雷达、交易时间总览、平台持仓概览
 - 支持 alfa 投顾组合调仓与持仓（晓磊「基金全磊打」等），平台板块「长赢调仓/投顾组合」切换，多组合汇总展示 + chip 筛选 + 当前持仓（目标配置占比）+ 组合目录选择/手动添加
-- 支持 AI 投资研判：趋势研究 Agent（多轮 Tool Calling + Evidence Ledger）、下一小时盘中研判、AI 趋势跟踪清单
+- 支持 AI 投资研判：趋势研究 Agent（多轮 Tool Calling + Evidence Ledger）、下一小时盘中研判、DecisionCase 判断与复盘
 - 中国股市惯例：红色涨、绿色跌
 
 **技术栈**: SwiftUI + AppKit/UIKit + Foundation (macOS 14+ / iOS) | SPM 测试/校验 + swiftc 打包
@@ -53,18 +53,14 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `Core/FundLookThrough.swift` | 944 | **基金穿透计算**：披露抓取/缓存、底层证券、行业暴露、资产类别暴露、覆盖率、陈旧披露警告。返回 `PortfolioLookThroughSnapshot` |
 | `Core/NextHourGuidance.swift` | 1398 | 下一小时盘中研判（intraday 决策通道，独立于长期组合决策） |
 | `Core/AppModel.swift` | 714 | **核心状态容器**：@MainActor ObservableObject |
-| `Core/AppModel/` | 6411 (28 文件) | AppModel 子功能拆分。最大几块：TrendAnalysis(880) / ManagerWatch(657) / PortfolioCRUD(581) / NextHourGuidanceController(534) / PersonalWatchlistActions(386) / AssetAggregation(340) / Validation(432) / Alfa(311) / InvestmentPlan(244) / PortfolioRefresh(225) / ComputedProperties(207) / Auth(200) / TrendTracking(172) / Automation(165) / PendingTrade(153) 等。完整清单见目录 |
+| `Core/AppModel/` | 6411 (28 文件) | AppModel 子功能拆分。最大几块：TrendAnalysis(880) / ManagerWatch(657) / PortfolioCRUD(581) / NextHourGuidanceController(534) / PersonalWatchlistActions(386) / AssetAggregation(340) / Validation(432) / Alfa(311) / InvestmentPlan(244) / PortfolioRefresh(225) / ComputedProperties(207) / Auth(200) / Automation(165) / PendingTrade(153) 等。完整清单见目录 |
 | `Core/CLI/` | 369 (2 文件) | Contract(74, snake_case encoder/decoder、NullDouble 包装) + DTOs(295, 命令输出 DTO) |
 | `Core/QiemanCommandLine.swift` | （在 Core/ 下） | 命令路由、JSON 契约与增量巡检（注：CLI 逻辑文件在 Core/ 顶层，非 Core/CLI/ 子目录） |
 | `Core/Clients/` | 3 文件 | 外部数据源 + LLM API 客户端（通用基础设施）：AlphaVantageClient(含 quota/cache/budget) / OpenAICompatibleAgentClient(OpenAI 兼容 LLM)。SEC 客户端已于 2026-08-31 移除。被 TrendResearch 工具、NextHourGuidance、InvestmentIntelligence 跨子系统复用。Tavily 客户端已于 2026-08-28 移除 |
 | `Core/TrendResearch/` | 8367 (22 文件) | **AI 趋势研究子系统**：TrendResearchAgent(821) 多轮 Tool Calling Harness / TrendResearchToolRegistry(576) / TrendResearchSnapshot(460) / SubmitTrendReportTool / TrendAnalysisValidator / TrendEvidenceLedger（actor，在 TrendResearchTool.swift 内）/ TrendClaimEvidencePolicy(261) / TrendEvidenceMetadata / SEC+AlphaVantage 研究工具（调用 `Core/Clients/` 的 client）/ TrendSourceFreshnessPolicy。数据源 client 已移至 `Core/Clients/`。详见下方「AI 研判子系统」 |
-| `Core/Trend/` | 3519 (11 文件) | 趋势数据层：TrendAnalysisStore / TrendTrackingModels / TrendTrackingStore / TrendAnalysisValidator / TrendReportModuleTools / TrendSourceStatus 等趋势报告与跟踪持久化和校验 |
+| `Core/Trend/` | 3519 (11 文件) | 趋势数据层：TrendAnalysisStore / TrendAnalysisValidator / TrendReportModuleTools / TrendSourceStatus 等趋势报告持久化和校验 |
 | `Core/MarketData/` | ~2600 (13 文件) | **市场数据引擎（L1/L2）**：统一行情契约/腾讯全字段/新浪+东财快照/东财腾讯K线双源/NewsNow热榜/广度计算/熔断限速缓存/MarketDataEngine fallback 门面/TechnicalAnalysisEngine 规则技术分析（六模块100分制）。设计参考 daily_stock_analysis（MIT） |
 | `Core/InvestmentIntelligence/DecisionContract/` | 4 文件 | **决策契约（L3）**：CanonicalDecisionScale（五带/三态/八态单一事实源）、MarketPhase（7态+行为禁令+节假日近似表）、结构稳定器护栏、数据质量→置信度封顶 |
-| `Core/InvestmentIntelligence/MarketSignals/` | 6 文件 | **信号闭环（L6）**：行动候选/仪表盘抽取、市价结算（先止损/跳空开盘价）、反向失效、胜率记忆校准（≥30样本，70%胜率中性锚）、`market-signals/` 一对象一文件 Store |
-| `Core/InvestmentIntelligence/StrategySkills/` | 4 文件 | **策略技能（L4）**：15 技能 Swift 常量库（移植 DSA strategies，量化口径保留）、默认纪律基线注入、regime 路由 |
-| `Core/InvestmentIntelligence/MarketResearchPipeline/` | 2 文件 | **多 Agent 流水线（L7）**：quick/standard/full/specialist 四档、确定性技术观点+单发LLM情报/风险/决策、风险否决单向状态机、LLM 失败确定性兜底 |
-| `Core/Backtest/` | 1 文件 | **策略规则级回测（L8）**：技能量化条件历史求值，胜率/盈亏比/回撤 |
 | `Core/TrendResearch/TrendResearchArgumentCanonicalizer.swift` | 100 | 工具签名参数值规范化（等价代码格式共享缓存） |
 | `Core/NativeSnapshotStore.swift` | 246 | 数据快照持久化（注：是规范化 Snapshot DTO 的文件 Store，**不是数据库**，不涉及 SQLite） |
 | `Core/UserPortfolioStore.swift` | 351 | 用户持仓存储 |
@@ -100,7 +96,7 @@ macOS / iOS 原生 SwiftUI 应用 + Swift CLI，管理且慢（Qieman）投资�
 | `TrendResearch/TrendEvidenceMetadata.swift` | 230 | sourceTier/sourceKind 等元数据 |
 | `TrendResearch/SubmitTrendReportTool.swift` | 720 | 报告提交工具 + TrendAnalysisValidator + TrendReportDisposition（数据不足自动清空行动，App 覆盖模型自报时间/来源/Evidence） |
 | `TrendResearch/{SEC,AlphaVantage}ResearchTool.swift` | — | 外部研究工具（对应 Client 已移至 `Core/Clients/`） |
-| `Trend/TrendAnalysisStore.swift` 等 11 文件 | 3519 | 趋势报告持久化、跟踪项模型/存储、报告模块工具、来源状态、新鲜度策略 |
+| `Trend/TrendAnalysisStore.swift` 等 11 文件 | 3519 | 趋势报告持久化、报告模块工具、来源状态、新鲜度策略 |
 
 > 复用边界（投资智能改造必读）：可复用 = Harness 循环模式、Tool Registry、Evidence Ledger（登记/溯源/ID 稳定/并发安全）、Snapshot 冻结、Validator、研究工具。**需新建** = 来源独立性/同源去重/时效评分/Claim 级权重/证据冲突/跨运行持久化图谱（即 Evidence Intelligence Engine 的评分与冲突部分）。
 
@@ -196,7 +192,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
        │    ├─ TrendResearchAgent (多轮 Tool Calling, 长期趋势研究)
        │    ├─ NextHourGuidance (intraday 盘中研判, 独立通道)
        │    ├─ TrendEvidenceLedger (actor, 证据登记/溯源)
-       │    └─ TrendTracking (AI 趋势跟踪清单)
+       │    └─ DecisionCase (判断与复盘)
        ├─ Insight Cores (TodayBrief / PortfolioDiagnostics / ProfitAttribution / StrategyRadar / FundLookThrough)
        ├─ MenuBarTicker (菜单栏小组件)
        └─ Stores (持仓/计划/交易/关注/快照/趋势报告/跟踪项, 各独立 JSON Store)
@@ -214,7 +210,7 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 6. **数据持久化** — 纯 JSON 文件 + 各独立 Store 类管理（**无 SQLite**：全仓库无 sqlite3/GRDB/FMDB/CREATE TABLE，Package.swift 无数据库依赖）。高频追加对象用「一对象一文件 + index 摘要」而非单大 JSON 数组。`NativeSnapshotStore` 是 Snapshot DTO 的文件 Store，不是数据库。引入 SQLite 属于新增基础设施，需专门评估
 7. **AppModel 拆分** — 核心状态在 AppModel.swift，子功能拆到 AppModel/ 子目录
 8. **分析模块纯派生** — 今日简报、组合诊断、收益归因、策略雷达优先基于本地已聚合数据计算，不在 View 内写业务计算
-9. **AI 行动跟踪单一路径** — 今日研判行动候选由用户主动加入跟踪清单；旧 TradeSignal 设置/通知链已删除
+9. **AI 行动跟踪单一路径** — 今日研判行动候选由用户主动加入 DecisionCase；旧 TradeSignal 与 TrendTracking 链路已删除
 10. **Release notes** — GitHub Actions 从 tag 间 commit 标题生成更新内容；面向用户的提交标题要清晰、可读
 
 ## 已知坑点
@@ -255,5 +251,5 @@ QiemanDashboardApp (@main, macOS / iOS 双端)
 - 新增持仓分析能力优先放 Core 纯计算模型，再由 SwiftUI 面板展示
 - 不要把 `.claude/`、`.agents/`、本地统计日志等个人工作区文件提交进项目
 - 参考 `PROJECT_MAP.md` 获取更详细的架构说明
-- AI 研判三条链路(趋势研究 / 下一小时研判 / 跟踪清单)的行为契约见 `docs/ai-pipeline-baseline.md`;改造这些链路前必读,对应的 `*CharacterizationTests.swift` 是行为冻结基线
+- AI 研判三条链路(趋势研究 / 下一小时研判 / DecisionCase)的行为契约见 `docs/ai-pipeline-baseline.md`;改造这些链路前必读,对应的 `*CharacterizationTests.swift` 是行为冻结基线
 - 投资智能系统(Investment Intelligence)新代码用 `InvestmentIntelligence.enabled` flag gate(Slice 0 默认 false,见 `Core/InvestmentIntelligence/InvestmentIntelligenceFeatureFlag.swift`)

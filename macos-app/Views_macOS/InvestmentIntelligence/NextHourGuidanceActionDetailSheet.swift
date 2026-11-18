@@ -131,11 +131,11 @@ struct NextHourGuidanceActionDetailSheet: View {
 
     private var tint: Color {
         switch action.action {
-        case .buy, .buySmall:
+        case .buy:
             AppPalette.marketGain
-        case .sell, .reduceSmall:
+        case .sell:
             AppPalette.marketLoss
-        case .hold, .watch, .wait, .avoidChasing:
+        case .hold:
             AppPalette.info
         }
     }

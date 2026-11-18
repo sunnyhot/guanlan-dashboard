@@ -76,7 +76,7 @@ struct ContentView: View {
     private func badge(for section: AppSection) -> Int {
         switch section {
         case .portfolio: return model.pendingTrades.count
-        case .enhancement: return model.trendTrackingItems.count
+        case .enhancement: return model.activeDecisionCases.count
         default: return 0
         }
     }

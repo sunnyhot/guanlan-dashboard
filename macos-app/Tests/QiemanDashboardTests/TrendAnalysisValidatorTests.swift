@@ -176,10 +176,7 @@ final class TrendAnalysisValidatorTests: XCTestCase {
     }
 
     func testAcceptsFixtureReport() {
-        let report = TrendAnalysisReport.fixture(
-            generatedAt: "2026-06-22 12:00:00",
-            externalSignalStatus: .partial
-        )
+        let report = DemoTrendReport.shared
 
         let result = TrendAnalysisValidator().validate(report)
 
@@ -312,10 +309,11 @@ final class TrendAnalysisValidatorTests: XCTestCase {
             direction: .uncertain,
             confidence: TrendConfidence(score: 40, label: "低"),
             rationale: "市场信号不足。",
-            counterSignals: []
+            counterSignals: [],
+            claimEvidence: TrendClaimEvidence(supportingEvidenceIDs: ["demo:market:csi300"])
         )
         let patched = TrendBaselineContractPatch.horizon(legacy)
-        let base = clarityReport()
+        let base = DemoTrendReport.shared
         let report = base.replacingHorizons(
             base.horizons.map { $0.horizon == .short ? patched : $0 }
         )
@@ -366,12 +364,18 @@ private extension TrendAnalysisReport {
             externalSignalStatus: externalSignalStatus,
             portfolio: portfolio,
             horizons: horizons,
+            marketOutlook: marketOutlook,
             sectors: sectors,
+            opportunities: opportunities,
             keyAssets: keyAssets,
+            assetTrends: assetTrends,
             actions: actions,
             evidence: evidence,
             warnings: warnings,
-            disclaimer: disclaimer
+            disclaimer: disclaimer,
+            schemaVersion: schemaVersion,
+            disposition: disposition,
+            sourceStatuses: sourceStatuses
         )
     }
 
@@ -384,12 +388,18 @@ private extension TrendAnalysisReport {
             externalSignalStatus: externalSignalStatus,
             portfolio: portfolio,
             horizons: horizons,
+            marketOutlook: marketOutlook,
             sectors: sectors,
+            opportunities: opportunities,
             keyAssets: keyAssets,
+            assetTrends: assetTrends,
             actions: actions,
             evidence: evidence,
             warnings: warnings,
-            disclaimer: disclaimer
+            disclaimer: disclaimer,
+            schemaVersion: schemaVersion,
+            disposition: disposition,
+            sourceStatuses: sourceStatuses
         )
     }
 
@@ -402,12 +412,18 @@ private extension TrendAnalysisReport {
             externalSignalStatus: externalSignalStatus,
             portfolio: portfolio,
             horizons: horizons,
+            marketOutlook: marketOutlook,
             sectors: sectors,
+            opportunities: opportunities,
             keyAssets: keyAssets,
+            assetTrends: assetTrends,
             actions: actions,
             evidence: evidence,
             warnings: warnings,
-            disclaimer: disclaimer
+            disclaimer: disclaimer,
+            schemaVersion: schemaVersion,
+            disposition: disposition,
+            sourceStatuses: sourceStatuses
         )
     }
 
@@ -420,13 +436,18 @@ private extension TrendAnalysisReport {
             externalSignalStatus: externalSignalStatus,
             portfolio: portfolio,
             horizons: horizons,
+            marketOutlook: marketOutlook,
             sectors: sectors,
+            opportunities: opportunities,
             keyAssets: keyAssets,
             assetTrends: assetTrends,
             actions: actions,
             evidence: evidence,
             warnings: warnings,
-            disclaimer: disclaimer
+            disclaimer: disclaimer,
+            schemaVersion: schemaVersion,
+            disposition: disposition,
+            sourceStatuses: sourceStatuses
         )
     }
 }

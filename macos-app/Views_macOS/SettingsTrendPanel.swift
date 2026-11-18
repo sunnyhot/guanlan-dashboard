@@ -97,15 +97,6 @@ struct TrendSettingsPanel: View {
                     tint: AppPalette.info
                 )
 
-                SettingsDivider(isInset: true)
-
-                SettingsRow(
-                    title: "全市场机会雷达",
-                    value: "每日 09:00",
-                    detail: "只更新大类资产、宽基与行业机会，不读取个人持仓",
-                    icon: "scope",
-                    tint: AppPalette.brand
-                )
 
                 SettingsDivider(isInset: true)
 
@@ -122,7 +113,7 @@ struct TrendSettingsPanel: View {
                 SettingsRow(
                     title: "组合长期研判",
                     value: "每周日 20:00",
-                    detail: "更新组合周期、持仓趋势与行动候选；错过后在下一个 20:00 窗口补跑",
+                    detail: "更新组合周期、持仓趋势与行动候选；完全未运行时，下次启动自动补做",
                     icon: "calendar.badge.clock",
                     tint: AppPalette.positive
                 )

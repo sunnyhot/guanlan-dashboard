@@ -2,36 +2,26 @@ import XCTest
 @testable import QiemanDashboard
 
 final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
-    func testWeekdayHasNoMorningSlotAfterRadarRetirement() {
-        // 2026-09-01 下线收编:marketRadar 09:00 槽移除,大盘强弱并入 21:00 收盘复盘。
-        XCTAssertNil(
-            TrendModuleAutoAnalysisSchedule.dueSlot(
-                at: "2026-08-10 08:59:00",
-                lastCompletedKeys: [:]
+    func testWeekdayMorningDoesNotRunCloseReviewWhenLongTermAlreadyDone() {
+        let completed = [TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00"]
+        for timestamp in ["2026-08-10 08:59:00", "2026-08-10 09:00:00", "2026-08-10 15:30:00"] {
+            XCTAssertNil(
+                TrendModuleAutoAnalysisSchedule.dueSlot(
+                    at: timestamp,
+                    lastCompletedKeys: completed
+                )
             )
-        )
-        XCTAssertNil(
-            TrendModuleAutoAnalysisSchedule.dueSlot(
-                at: "2026-08-10 09:00:00",
-                lastCompletedKeys: [:]
-            )
-        )
-        XCTAssertNil(
-            TrendModuleAutoAnalysisSchedule.dueSlot(
-                at: "2026-08-10 15:30:00",
-                lastCompletedKeys: [:]
-            )
-        )
+        }
         XCTAssertEqual(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: "2026-08-10 21:00:00",
-                lastCompletedKeys: [:]
+                lastCompletedKeys: completed
             )?.scope,
             .closeReview
         )
     }
 
-    func testSundayLongTermWindowDoesNotRunMarketRadarBackToBack() {
+    func testSundayLongTermWindowRunsBeforeCloseReview() {
         let slot = TrendModuleAutoAnalysisSchedule.dueSlot(
             at: "2026-08-09 20:15:00",
             lastCompletedKeys: [:]
@@ -59,6 +49,57 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
         )
     }
 
+    func testLongTermAutomaticallyCatchesUpOnNextLaunch() {
+        let slot = TrendModuleAutoAnalysisSchedule.dueSlot(
+            at: "2026-08-10 08:30:00",
+            lastCompletedKeys: [:]
+        )
+        XCTAssertEqual(slot?.scope, .longTerm)
+        XCTAssertEqual(slot?.key, "2026-08-09 20:00")
+    }
+
+    func testSundayBeforeWindowCatchesUpPreviousWeek() {
+        let slot = TrendModuleAutoAnalysisSchedule.dueSlot(
+            at: "2026-08-09 08:30:00",
+            lastCompletedKeys: [:]
+        )
+        XCTAssertEqual(slot?.scope, .longTerm)
+        XCTAssertEqual(slot?.key, "2026-08-02 20:00")
+    }
+
+    func testFailedLongTermWindowDoesNotAutomaticallyRetry() {
+        XCTAssertNil(
+            TrendModuleAutoAnalysisSchedule.dueSlot(
+                at: "2026-08-10 08:30:00",
+                lastCompletedKeys: [
+                    TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00"
+                ]
+            )
+        )
+    }
+
+    func testCloseReviewIsNotAutomaticallyCaughtUpNextMorning() {
+        XCTAssertNil(
+            TrendModuleAutoAnalysisSchedule.dueSlot(
+                at: "2026-08-11 08:30:00",
+                lastCompletedKeys: [
+                    TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00"
+                ]
+            )
+        )
+    }
+
+    func testCompletedCloseReviewThenAllowsLongTermCatchUp() {
+        let slot = TrendModuleAutoAnalysisSchedule.dueSlot(
+            at: "2026-08-10 21:30:00",
+            lastCompletedKeys: [
+                TrendResearchRunScope.closeReview.rawValue: "2026-08-10 21:00"
+            ]
+        )
+        XCTAssertEqual(slot?.scope, .longTerm)
+        XCTAssertEqual(slot?.key, "2026-08-09 20:00")
+    }
+
     func testCompletedModuleSlotIsNotRepeated() {
         let timestamp = "2026-08-10 21:30:00"
         let first = TrendModuleAutoAnalysisSchedule.dueSlot(
@@ -67,7 +108,10 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
         )
         XCTAssertNotNil(first)
 
-        let completed = [TrendResearchRunScope.closeReview.rawValue: first?.key ?? ""]
+        let completed = [
+            TrendResearchRunScope.closeReview.rawValue: first?.key ?? "",
+            TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00",
+        ]
         XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: timestamp,
@@ -80,7 +124,9 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
         XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: "2026-08-10 22:00:00",
-                lastCompletedKeys: [:],
+                lastCompletedKeys: [
+                    TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00"
+                ],
                 lastGeneratedAtByScope: [
                     TrendResearchRunScope.closeReview.rawValue: "2026-08-10 21:11:52"
                 ]
@@ -92,11 +138,20 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
         XCTAssertNil(
             TrendModuleAutoAnalysisSchedule.dueSlot(
                 at: "2026-08-11 08:30:00",
-                lastCompletedKeys: [:],
+                lastCompletedKeys: [
+                    TrendResearchRunScope.longTerm.rawValue: "2026-08-09 20:00"
+                ],
                 lastGeneratedAtByScope: [
                     TrendResearchRunScope.closeReview.rawValue: "2026-08-10 21:11:52"
                 ]
             )
+        )
+    }
+
+    func testRetiredScopeIsNotInRunScopeCases() {
+        XCTAssertEqual(
+            Set(TrendResearchRunScope.allCases.map { $0.rawValue }),
+            ["full", "closeReview", "longTerm"]
         )
     }
 
@@ -107,7 +162,6 @@ final class TrendModuleAutoAnalysisScheduleTests: XCTestCase {
             generatedAt: "2026-08-10 21:05:00"
         )
 
-        XCTAssertEqual(settings.moduleGeneratedAt(.marketRadar), "2026-08-10 21:05:00")
         XCTAssertEqual(settings.moduleGeneratedAt(.closeReview), "2026-08-10 21:05:00")
         XCTAssertEqual(settings.moduleGeneratedAt(.longTerm), "2026-08-10 21:05:00")
     }

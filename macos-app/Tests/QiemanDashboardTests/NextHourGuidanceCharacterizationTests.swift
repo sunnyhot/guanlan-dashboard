@@ -46,29 +46,16 @@ final class NextHourGuidanceCharacterizationTests: XCTestCase {
         XCTAssertEqual(normal.confidence, 65)
     }
 
-    // MARK: - 测试:NextHourGuidanceActionKind 旧值兼容解码 + policyLevel
+    // MARK: - 测试:NextHourGuidanceActionKind 当前值与 policyLevel
 
-    func testActionKindDecodesLegacyValuesAndMapsPolicyLevel() throws {
-        // 旧版 kind 字符串仍可解码(向后兼容)
-        let legacyKinds: [(String, NextHourGuidanceActionKind)] = [
-            ("buy", .buy), ("sell", .sell), ("hold", .hold),
-            ("watch", .watch), ("wait", .wait),
-            ("avoid_chasing", .avoidChasing),
-            ("buy_small", .buySmall), ("reduce_small", .reduceSmall)
-        ]
-        for (raw, expected) in legacyKinds {
+    func testActionKindSupportsCurrentValuesAndMapsPolicyLevel() throws {
+        for raw in ["buy", "sell", "hold"] {
             let json = "{\"action\":\"\(raw)\"}"
-            let decoded = try JSONDecoder().decode(LegacyActionWrapper.self, from: Data(json.utf8))
-            XCTAssertEqual(decoded.action, expected, "旧值 \(raw) 应可解码")
+            XCTAssertNoThrow(try JSONDecoder().decode(LegacyActionWrapper.self, from: Data(json.utf8)))
         }
-
-        // evidencePolicyLevel:执行级(buy/sell/buySmall/reduceSmall)vs 信息级(其余)
         XCTAssertEqual(NextHourGuidanceActionKind.buy.evidencePolicyLevel, .execution)
         XCTAssertEqual(NextHourGuidanceActionKind.sell.evidencePolicyLevel, .execution)
-        XCTAssertEqual(NextHourGuidanceActionKind.buySmall.evidencePolicyLevel, .execution)
-        XCTAssertEqual(NextHourGuidanceActionKind.reduceSmall.evidencePolicyLevel, .execution)
         XCTAssertEqual(NextHourGuidanceActionKind.hold.evidencePolicyLevel, .informational)
-        XCTAssertEqual(NextHourGuidanceActionKind.watch.evidencePolicyLevel, .informational)
     }
 
     private struct LegacyActionWrapper: Codable {

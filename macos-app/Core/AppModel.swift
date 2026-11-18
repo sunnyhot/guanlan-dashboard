@@ -190,8 +190,6 @@ final class AppModel: ObservableObject {
     var _nativeClient: QiemanNativeClient?
     var _nativeClientInitialized = false
 
-    // L6 市场信号服务的懒加载缓存（依赖运行期 dataDirectoryURL，无法在 init 构造）
-    var marketSignalServiceCache: MarketSignalService?
     // L1 广度预暖防重入标志
     var isPrewarmingMarketBreadth = false
 
@@ -495,16 +493,6 @@ final class AppModel: ObservableObject {
         set { enhancementState.nextHourGuidanceError = newValue }
     }
 
-    var trendTrackingItems: [TrendTrackingItem] {
-        get { enhancementState.trendTrackingItems }
-        set { enhancementState.trendTrackingItems = newValue }
-    }
-
-    var selectedTrendTrackingItemID: UUID? {
-        get { enhancementState.selectedTrendTrackingItemID }
-        set { enhancementState.selectedTrendTrackingItemID = newValue }
-    }
-
     var pendingInvestmentSectionAnchor: InvestmentTodayResearchRow.Kind? {
         get { enhancementState.pendingInvestmentSectionAnchor }
         set { enhancementState.pendingInvestmentSectionAnchor = newValue }
@@ -514,6 +502,11 @@ final class AppModel: ObservableObject {
     var decisionCases: [DecisionCase] {
         get { enhancementState.decisionCases }
         set { enhancementState.decisionCases = newValue }
+    }
+
+    var selectedDecisionCaseID: UUID? {
+        get { enhancementState.selectedDecisionCaseID }
+        set { enhancementState.selectedDecisionCaseID = newValue }
     }
 
     var userDecisionProfile: UserDecisionProfile {
@@ -565,42 +558,6 @@ final class AppModel: ObservableObject {
     var lastDecisionReviewError: String {
         get { enhancementState.lastDecisionReviewError }
         set { enhancementState.lastDecisionReviewError = newValue }
-    }
-
-    // L6/L7/L8 App 集成 proxy（2026-08-31）
-    var marketSignals: [MarketDecisionSignal] {
-        get { enhancementState.marketSignals }
-        set { enhancementState.marketSignals = newValue }
-    }
-
-    var lastMarketSignalSettleSummary: String {
-        get { enhancementState.lastMarketSignalSettleSummary }
-        set { enhancementState.lastMarketSignalSettleSummary = newValue }
-    }
-
-    var marketResearchState: TrendGenerationState {
-        get { enhancementState.marketResearchState }
-        set { enhancementState.marketResearchState = newValue }
-    }
-
-    var lastMarketResearchError: String {
-        get { enhancementState.lastMarketResearchError }
-        set { enhancementState.lastMarketResearchError = newValue }
-    }
-
-    var latestMarketResearchResult: MarketResearchPipelineResult? {
-        get { enhancementState.latestMarketResearchResult }
-        set { enhancementState.latestMarketResearchResult = newValue }
-    }
-
-    var latestBacktestReport: BacktestReport? {
-        get { enhancementState.latestBacktestReport }
-        set { enhancementState.latestBacktestReport = newValue }
-    }
-
-    var isRunningBacktest: Bool {
-        get { enhancementState.isRunningBacktest }
-        set { enhancementState.isRunningBacktest = newValue }
     }
 
     var isPresentingCommandPalette: Bool {

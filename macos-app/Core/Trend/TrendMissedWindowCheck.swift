@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 「错过」= 上一个自动窗口时刻已过,而该模块在那之后没有成功生成:
 /// - `failedAttempt`:窗口内已尝试(attempt key 在窗口时刻之后)但未成功——不会自动重试;
-/// - `neverRan`:窗口过去了连尝试都没有(App 不在线),下一班才会再试。
+/// - `neverRan`:窗口过去了连尝试都没有(App 不在线),按各模块补做策略处理。
 struct TrendMissedWindow: Equatable, Hashable {
     enum Reason: Equatable, Hashable {
         case failedAttempt
@@ -20,9 +20,8 @@ struct TrendMissedWindow: Equatable, Hashable {
 enum TrendMissedWindowCheck {
     /// 各模块的自动时刻,与 `TrendModuleAutoAnalysisSchedule` 保持同源。
     private static let slotTimes: [TrendResearchRunScope: String] = [
-        .marketRadar: "09:00",
-        .closeReview: "21:00",
-        .longTerm: "20:00"
+        .closeReview: TrendModuleAutoAnalysisSchedule.closeReviewTime,
+        .longTerm: TrendModuleAutoAnalysisSchedule.longTermTime
     ]
 
     private static let formatter: DateFormatter = {
@@ -71,13 +70,22 @@ enum TrendMissedWindowCheck {
 
     /// W3.5 横幅时机:只有「错过了且下一班自动运行不会马上补上」时才提示,
     /// 避免怂恿用户手动做马上会自动发生的事。
-    /// 自动分析未开启时没有「下一班」,错过只能靠手动补 → 恒可提示。
+    /// 自动分析未开启时不会自动补做，错过只能靠手动补 → 恒可提示。
     static func shouldPromptManualCatchUp(
         _ missed: TrendMissedWindow,
         autoAnalysisEnabled: Bool,
         now: String
     ) -> Bool {
         guard autoAnalysisEnabled else { return true }
+        // 长期未执行窗口会在下次启动/轮询自动补；当天收盘复盘也会在 21:00 后
+        // 自动运行，无需再展示手动横幅。隔天收盘复盘不自动补，仍允许人工处理。
+        if missed.reason == .neverRan {
+            if missed.scope == .longTerm { return false }
+            if missed.scope == .closeReview,
+               String(now.prefix(10)) == String(missed.windowKey.prefix(10)) {
+                return false
+            }
+        }
         guard let nowDate = date(from: String(now.prefix(16))) else { return false }
         guard let nextDate = nextWindowDate(for: missed.scope, after: nowDate) else { return true }
         // 距下一班 ≤ 2 小时:自动运行马上会补,不提示。
@@ -131,7 +139,7 @@ enum TrendMissedWindowCheck {
         for scope: TrendResearchRunScope,
         after now: Date
     ) -> Date? {
-        let slotTime = slotTimes[scope] ?? "09:00"
+        guard let slotTime = slotTimes[scope] else { return nil }
         let calendar = Calendar(identifier: .gregorian)
         var cursor = now
         for _ in 0..<8 {

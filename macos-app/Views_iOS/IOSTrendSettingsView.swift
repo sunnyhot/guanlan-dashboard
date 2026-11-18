@@ -161,7 +161,7 @@ struct IOSTrendSettingsView: View {
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
             // W1.7 成本预期。
             Label(
-                "Key 直接向模型服务商计费,本 App 不中转;一次市场雷达约 ¥0.5–2(视模型与搜索次数)。",
+                "Key 直接向模型服务商计费,本 App 不中转;一次完整研判约 ¥0.5–2(视模型与调用次数)。",
                 systemImage: "yensign.circle"
             )
             .font(.footnote)
@@ -415,7 +415,7 @@ struct IOSTrendSettingsView: View {
 
             // 可选增强收敛为提示(W1.8 简化;不写入占位 Key,诚实引导到完整设置)。
             Label(
-                "可选增强:联网搜索 Tavily(解锁全市场雷达)、Alpha Vantage(美股财报)——稍后在「查看完整设置」里粘贴对应 Key。",
+                "可选增强:Alpha Vantage(美股财报)——稍后在「查看完整设置」里粘贴对应 Key。",
                 systemImage: "plus.circle"
             )
             .font(.footnote)
@@ -432,7 +432,7 @@ struct IOSTrendSettingsView: View {
                     Text("顺便开启自动分析")
                         .font(.footnote.weight(.semibold))
                     // W1.7:自动分析开启前再次确认费用。
-                    Text("每日 09:00 与 21:00 各运行一次,费用由你的 Key 承担,每次约 ¥0.5–2;随时可关。")
+                    Text("每日 21:00 收盘复盘、每周日 20:00 长期研判自动运行,费用由你的 Key 承担;随时可关。")
                         .font(.caption2)
                         .foregroundStyle(IOSDesign.muted)
                 }

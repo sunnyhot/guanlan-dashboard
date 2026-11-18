@@ -136,8 +136,7 @@ final class EnhancementState: ObservableObject {
     @Published var nextHourGuidanceGenerationState: TrendGenerationState = .idle
     @Published var nextHourGuidanceProgressStage: NextHourGuidanceProgressStage = .idle
     @Published var nextHourGuidanceError = ""
-    @Published var trendTrackingItems: [TrendTrackingItem] = []
-    @Published var selectedTrendTrackingItemID: UUID?
+    @Published var selectedDecisionCaseID: UUID?
     /// W3.1 通知深链:链路 A 完成通知点击后要滚动到的研判区段;
     /// EnhancementCenterView 消费后清空。
     @Published var pendingInvestmentSectionAnchor: InvestmentTodayResearchRow.Kind?
@@ -158,13 +157,4 @@ final class EnhancementState: ObservableObject {
     @Published var decisionCaseReviews: [UUID: [DecisionReview]] = [:]
     @Published var lastDecisionReviewError = ""
 
-    // L6/L7/L8 App 集成（2026-08-31）：市场信号闭环 + 研究流水线 + 策略回测。
-    // 全部由 InvestmentIntelligence.enabled gate；信号不自动建 Case、不自动交易。
-    @Published var marketSignals: [MarketDecisionSignal] = []
-    @Published var lastMarketSignalSettleSummary = ""
-    @Published var marketResearchState: TrendGenerationState = .idle
-    @Published var lastMarketResearchError = ""
-    @Published var latestMarketResearchResult: MarketResearchPipelineResult?
-    @Published var latestBacktestReport: BacktestReport?
-    @Published var isRunningBacktest = false
 }

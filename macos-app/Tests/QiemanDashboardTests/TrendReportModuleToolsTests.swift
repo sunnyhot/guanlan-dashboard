@@ -283,41 +283,9 @@ final class TrendReportModuleToolsTests: XCTestCase {
         XCTAssertNil(degraded, "零暂存时维持失败契约,不产生降级报告")
     }
 
-    func testMarketRadarOnlyRequestsMarketModuleAndReusesBaseline() async throws {
-        let base = TrendAnalysisReport.fixture(
-            generatedAt: "2026-07-26 10:00:00",
-            externalSignalStatus: .partial
-        )
-        let codes = base.assetTrends.compactMap(\.code)
-        let store = TrendReportDraftStore(
-            expectedFundCodes: codes,
-            scope: .marketRadar,
-            baselineReport: base
-        )
-
-        var progress = await store.progress()
-        XCTAssertEqual(progress.nextToolName, TrendReportModuleToolName.market)
-        XCTAssertEqual(progress.totalSections, 1)
-
-        try await store.storeMarket(
-            TrendReportMarketModule(
-                marketOutlook: [makeMarketOutlook()],
-                sectors: [],
-                opportunities: []
-            )
-        )
-        progress = await store.progress()
-        XCTAssertTrue(progress.isComplete)
-
-        let assembled = await store.assembledReport(snapshot: makeSnapshot(codes: codes))
-        XCTAssertEqual(assembled?.portfolio, base.portfolio)
-        XCTAssertEqual(assembled?.assetTrends, base.assetTrends)
-        XCTAssertEqual(assembled?.marketOutlook.first?.name, "市场环境")
-    }
 
     func testCloseReviewRequestsMarketThenAssetBatches() async throws {
-        // 2026-09-01 下线收编:closeReview 接管 market 模块(marketRadar 09:00 调度已停),
-        // 大盘强弱随每日收盘复盘更新;基线 market 不再预填。
+        // 收盘复盘同时生成 market 与持仓归因模块;基线 market 不预填。
         let code = "000001"
         let base = reportWithAssets([makeAsset(code: code)])
         let store = TrendReportDraftStore(

@@ -6,7 +6,7 @@ struct InvestmentTodayResearchRow: Hashable, Sendable, Identifiable {
     enum Kind: String, Hashable, Sendable {
         case closeReview
         case intraday
-        case marketRadar
+        case marketOpportunity
         case longTerm
     }
 
@@ -75,7 +75,7 @@ struct InvestmentTodayResearchSummary: Hashable, Sendable {
            let top = Self.topSignal(marketAnalysis) {
             rows.append(
                 InvestmentTodayResearchRow(
-                    kind: .marketRadar,
+                    kind: .marketOpportunity,
                     title: "全市场机会",
                     headline: "\(top.name) · \(top.recommendation.displayName)",
                     footnote: "共 \(marketAnalysis.marketSignalCount) 个方向 · 更新 \(Self.shortTimeText(marketAnalysis.generatedAt))"
@@ -161,9 +161,9 @@ extension AppModel {
     }
 
     /// 「全市场机会」分析的唯一入口(带 memo,原 P4.9 并入 P1):
-    /// 面板与摘要卡共用,输入(report id/generatedAt + 雷达模块时间)未变时复用上次结果。
+    /// 面板与摘要卡共用,输入(report id/generatedAt + 收盘复盘模块时间)未变时复用上次结果。
     var marketOpportunities: MarketOpportunityAnalysis? {
-        let generatedAt = trendSettings.moduleGeneratedAt(.marketRadar)
+        let generatedAt = trendSettings.moduleGeneratedAt(.closeReview)
         let key = [
             trendReport?.id.uuidString ?? "-",
             trendReport?.generatedAt ?? "-",
@@ -196,7 +196,7 @@ extension AIResearchTab {
         case .intraday: return .intraday
         case .closeReview: return .closeReview
         case .longTerm: return .longTerm
-        case .marketRadar: return nil
+        case .marketOpportunity: return nil
         }
     }
 }

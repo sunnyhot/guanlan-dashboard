@@ -4,7 +4,7 @@ import XCTest
 // MARK: - 行动候选 → 决策案例转换测试(#12 sunset 方案 A)
 //
 // 写入切换的核心契约:
-// 1. 按钮建案用 trend: 键,与旧迁移的 legacy: 键互为去重——同一动作只保留一案;
+// 1. 按钮建案使用 trend: 键,同一动作只保留一案;
 // 2. 自然语言条件进 detail 并标注人工复核,不预设复查时间;
 // 3. 案例类型为 trendAction,把握档位用统一 ConfidenceGrade 文案。
 
@@ -83,34 +83,6 @@ final class DecisionCaseTrackingTransitionTests: XCTestCase {
         XCTAssertFalse(model.setDecisionCaseReviewDue(caseID: UUID(), daysFromNow: 3))
     }
 
-    func testNewKeyDeduplicatesAgainstMigratedLegacyKey() {
-        // 场景:旧跟踪项已迁移成 legacy: 案例;用户再按同一动作的「加入关注」不得重复建案。
-        let model = AppModel()
-        let subjectID = "沪深300增强".lowercased()
-        let legacyKey = "legacy:\(TrendActionKind.considerIncrease.rawValue)|\(subjectID)"
-        model.decisionCases = [
-            DecisionCase(
-                caseKey: legacyKey,
-                kind: .trendAction,
-                dimension: .directHolding,
-                subjectName: "沪深300增强",
-                subjectCode: nil,
-                lifecycle: .monitoring,
-                decisionState: .watch,
-                metricValue: 70,
-                metricLabel: "把握 较高 70",
-                metricDescription: "迁移自旧跟踪",
-                title: "沪深300增强 · 考虑加仓",
-                detail: "旧项",
-                createdAt: "2026-08-01 21:00:00",
-                updatedAt: "2026-08-01 21:00:00"
-            )
-        ]
-
-        XCTAssertFalse(model.addDecisionCase(from: candidate(), report: report()))
-        XCTAssertEqual(model.decisionCases.count, 1, "legacy 键命中时不得新建")
-        XCTAssertTrue(model.hasDecisionCase(for: candidate(), report: report()))
-    }
 
     func testDifferentActionOrSubjectCreatesSeparateCase() {
         let model = AppModel()

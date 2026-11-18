@@ -198,7 +198,7 @@ struct MarketCloseReviewSnapshot: Codable, Hashable {
                 ? "当前仍在盘中，组合按最新估值展示，不把盘中变化冒充收盘结论。"
                 : (hasMarketContext
                     ? "基于收盘时冻结的个人持仓涨跌与当时已有的市场环境；缺失净值不补零。"
-                    : "基于收盘时冻结的个人持仓涨跌与持仓归因；未使用次日盘中数据，也不依赖全市场机会雷达。")
+                    : "基于收盘时冻结的个人持仓涨跌与持仓归因；未使用次日盘中数据，也不依赖其他全市场扫描。")
         )
     }
 
@@ -696,7 +696,7 @@ extension AppModel {
         let matchingPortfolioSnapshot = closeReviewDay == portfolioSnapshotDay
             ? userPortfolioSnapshot
             : nil
-        // 共享趋势报告可能已经被次日市场雷达更新；没有独立归档时，也不能把
+        // 共享趋势报告可能已经被其他增量模块更新；没有独立归档时，也不能把
         // 今天的市场模块配上昨天的复盘时间。只有同日旧报告才允许兼容展示。
         let matchingReport = closeReviewDay != nil && closeReviewDay == reportDay
             ? trendReport

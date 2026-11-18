@@ -2,7 +2,7 @@ import Foundation
 
 /// 收盘复盘的独立冻结快照。
 ///
-/// 趋势总报告会被次日市场雷达增量覆盖，个人组合也会在启动时刷新；因此收盘复盘
+/// 趋势总报告会被其他增量模块覆盖，个人组合也会在启动时刷新；因此收盘复盘
 /// 必须单独落盘，才能保证次日 21:00 前仍展示上一交易日的收盘数据，而不是盘中数据。
 struct MarketCloseReviewArchive: Codable, Hashable {
     static let currentSchemaVersion = 3

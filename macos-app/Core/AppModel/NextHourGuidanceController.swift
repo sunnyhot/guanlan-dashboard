@@ -254,27 +254,17 @@ extension AppModel {
                     noticeMessage = "盘中研判会继续，但完整诊断日志初始化失败：\(error.localizedDescription)"
                 }
             }
-            // 投资智能启用时走 V2（3+1 子 Agent 编排），否则走原 V1 单体循环
             let report: NextHourGuidanceReport
             nextHourGuidanceProgressStage = .analyzing
             report = try await AIAgentDiagnosticLog.$recorder.withValue(
                 diagnosticRecorder
             ) {
                 do {
-                    let result: NextHourGuidanceReport
-                    if InvestmentIntelligence.enabled {
-                        result = try await nextHourGuidanceAgent.runV2(
-                            context: context,
-                            researchSnapshot: researchSnapshot,
-                            settings: provider,
-                        )
-                    } else {
-                        result = try await nextHourGuidanceAgent.run(
-                            context: context,
-                            researchSnapshot: researchSnapshot,
-                            settings: provider,
-                        )
-                    }
+                    let result = try await nextHourGuidanceAgent.run(
+                        context: context,
+                        researchSnapshot: researchSnapshot,
+                        settings: provider,
+                    )
                     await AIAgentDiagnosticLog.record("run_completed", payload: result)
                     return result
                 } catch is CancellationError {
@@ -406,19 +396,19 @@ extension AppModel {
         let marketDataIsFresh = freshMarketCount > 0 || hasFreshAssetQuotes
         var marketDataWarnings = additionalWarnings
         if market.isEmpty, !hasFreshAssetQuotes {
-            marketDataWarnings.append("未取得上证、沪深300或创业板指数行情，风控规则禁止输出买入或卖出。")
+            marketDataWarnings.append("未取得上证、沪深300或创业板指数行情，相关市场结论证据不足，请谨慎参考。")
         } else if freshMarketCount == 0, !hasFreshAssetQuotes {
-            marketDataWarnings.append("大盘行情时间距当前超过 20 分钟，风控规则禁止输出买入或卖出。")
+            marketDataWarnings.append("大盘指数行情超过 20 分钟，相关结论可能滞后，请谨慎参考。")
         } else if freshMarketCount == 0 {
-            marketDataWarnings.append("大盘指数行情不够新；仅报价在 20 分钟内的标的可形成买卖建议，并应降低置信度。")
+            marketDataWarnings.append("大盘指数行情不够新，相关结论可能滞后，建议降低置信度并谨慎参考。")
         }
         let staleAssetNames = assets.filter { !$0.quoteIsFresh }.map(\.name)
         if !staleAssetNames.isEmpty {
             marketDataWarnings.append(
-                "以下标的报价超过 20 分钟或缺少准确时间，只允许持有：\(staleAssetNames.prefix(8).joined(separator: "、"))"
+                "以下标的报价超过 20 分钟或缺少准确时间，建议降低置信度并谨慎处理：\(staleAssetNames.prefix(8).joined(separator: "、"))"
             )
         }
-        marketDataWarnings.append("联网搜索已下线；外部事件证据改用本地财经热榜（NewsNow）。热榜未覆盖该标的相关事件时，禁止输出买入或卖出。")
+        marketDataWarnings.append("联网搜索已下线；外部事件参考本地财经热榜（NewsNow），买卖建议按当前研判规则生成。")
         let latestActions = (trendReport?.actions ?? []).prefix(5).map {
             "\($0.title)：\($0.detail)"
         }

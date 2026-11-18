@@ -5,7 +5,7 @@ import SwiftUI
 //
 // W7.1:与 macOS 同一信息架构的纵向单页——今日研判摘要(含 hero 一句话)
 // → 研判基础 → 今日收盘复盘 → AI 眼中的组合 → 判断与复盘。
-// 旧「观点/组合/决策/记录」四段与趋势跟踪兼容路径保留给 flag 关闭时。
+// 旧「观点/组合/决策/记录」四段与证据分段保留给 flag 关闭时。
 
 struct EnhancementSectionView: View {
     @EnvironmentObject private var model: AppModel
@@ -18,7 +18,6 @@ struct EnhancementSectionView: View {
     // 旧分段(InvestmentIntelligence 关闭时的兼容路径)
     private enum ResearchSegment: String, CaseIterable, Identifiable {
         case report = "研判"
-        case tracking = "跟踪"
         case evidence = "证据"
         var id: String { rawValue }
     }
@@ -58,7 +57,6 @@ struct EnhancementSectionView: View {
                     intelligencePortfolioContent
                     // 判断与复盘:活跃事项 + 待复盘 + 历史
                     iosJudgementSection
-                    // 市场信号与研究（L6 闭环 / L7 流水线 / L8 回测，2026-08-31）
                 } else {
                     // 旧分段(兼容)
                     Picker("", selection: $segment) {
@@ -71,7 +69,6 @@ struct EnhancementSectionView: View {
 
                     switch segment {
                     case .report:  reportContent
-                    case .tracking: trackingContent
                     case .evidence: evidenceContent
                     }
                 }
@@ -138,7 +135,7 @@ struct EnhancementSectionView: View {
         switch kind {
         case .closeReview: return "sunset.fill"
         case .intraday: return "clock.arrow.circlepath"
-        case .marketRadar: return "scope"
+        case .marketOpportunity: return "scope"
         case .longTerm: return "briefcase.fill"
         }
     }
@@ -507,6 +504,21 @@ struct EnhancementSectionView: View {
 
     // MARK: 投资智能 - 我的组合
 
+    @ViewBuilder
+    private func iosPortfolioMetric(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: IOSDesign.spaceM) {
+            Text(title)
+                .font(.footnote)
+                .foregroundStyle(IOSDesign.muted)
+            Spacer(minLength: IOSDesign.spaceM)
+            Text(value)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(IOSDesign.ink)
+                .multilineTextAlignment(.trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var intelligencePortfolioContent: some View {
         VStack(alignment: .leading, spacing: IOSDesign.spaceM) {
             Text("AI 眼中的组合")
@@ -587,13 +599,6 @@ struct EnhancementSectionView: View {
         if !summary.sectors.isEmpty {
             sectorsCard(summary)
         }
-    }
-
-    // MARK: 跟踪
-
-    @ViewBuilder
-    private var trackingContent: some View {
-        IOSTrendTrackingListView()
     }
 
     // MARK: 证据

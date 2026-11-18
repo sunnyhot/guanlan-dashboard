@@ -18,7 +18,7 @@ final class EnhancementRoutingTests: XCTestCase {
         XCTAssertEqual(model.selectedSection, .enhancement)
     }
 
-    func testTrackingUUIDDeepLinkSelectsItem() {
+    func testDecisionCaseUUIDDeepLinkSelectsItem() {
         let model = AppModel()
         model.dataDirectoryURL = temporaryDirectory()
         let action = TrendActionCandidate(
@@ -27,13 +27,13 @@ final class EnhancementRoutingTests: XCTestCase {
             confidence: TrendConfidence(score: 70, label: "中"),
             triggerConditions: [], invalidatingConditions: []
         )
-        XCTAssertTrue(model.addTrackingItem(from: action, report: TrendAnalysisReport.fixture(generatedAt: "2026-07-23 10:00:00", externalSignalStatus: .available)))
-        let id = model.trendTrackingItems[0].id
+        XCTAssertTrue(model.addDecisionCase(from: action, report: TrendAnalysisReport.fixture(generatedAt: "2026-07-23 10:00:00", externalSignalStatus: .available)))
+        let id = model.decisionCases[0].id
 
         let payload = NotificationDeepLinkPayload(type: .workbenchTrend, targetID: id.uuidString)
         model.handleNotificationDeepLink(payload)
         XCTAssertEqual(model.selectedSection, .enhancement)
-        XCTAssertEqual(model.selectedTrendTrackingItemID, id)
+        XCTAssertEqual(model.selectedDecisionCaseID, id)
     }
 
     private func temporaryDirectory() -> URL {

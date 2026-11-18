@@ -47,10 +47,6 @@ struct DecisionCaseJournalStore {
                 records.append(record)
                 continue
             }
-            // Step 2 曾把裸 DecisionCaseResearchReport 写到同一目录；这不是损坏文件。
-            if (try? decoder.decode(DecisionCaseResearchReport.self, from: data)) != nil {
-                continue
-            }
             // 真正无法识别的 JSON 必须抛错，不能静默吞掉审计历史损坏。
             _ = try decoder.decode(DecisionCaseResearchRunRecord.self, from: data)
         }
@@ -59,33 +55,6 @@ struct DecisionCaseJournalStore {
 
     func loadLatestResearchRun(caseID: UUID) throws -> DecisionCaseResearchRunRecord? {
         try loadResearchRuns(caseID: caseID).last
-    }
-
-    /// 兼容 GLM Step 2 已写入的“裸报告”文件；读取后会在下次研究时自然升级为运行记录。
-    func loadLegacyLatestResearch(caseID: UUID) -> DecisionCaseResearchReport? {
-        let dir = researchDirectory(caseID: caseID)
-        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else {
-            return nil
-        }
-        let sorted = files
-            .filter { $0.pathExtension == "json" }
-            .sorted { (a, b) -> Bool in
-                let attrsA = try? FileManager.default.attributesOfItem(atPath: a.path)
-                let attrsB = try? FileManager.default.attributesOfItem(atPath: b.path)
-                let da = (attrsA?[FileAttributeKey.modificationDate] as? Date) ?? Date.distantPast
-                let db = (attrsB?[FileAttributeKey.modificationDate] as? Date) ?? Date.distantPast
-                return da > db
-            }
-        for latest in sorted {
-            guard let data = try? Data(contentsOf: latest) else { continue }
-            if (try? decoder.decode(DecisionCaseResearchRunRecord.self, from: data)) != nil {
-                continue
-            }
-            if let report = try? decoder.decode(DecisionCaseResearchReport.self, from: data) {
-                return report
-            }
-        }
-        return nil
     }
 
     // MARK: - 复盘

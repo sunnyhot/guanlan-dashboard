@@ -62,7 +62,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(settings.alphaVantage.dailyRequestLimit, 25)
         XCTAssertEqual(settings.defaultPrivacyMode, .sanitized)
         XCTAssertFalse(settings.dailyAutoAnalysisEnabled)
-        XCTAssertEqual(settings.dailyAutoAnalysisTimes, ["09:30", "14:30"])
     }
 
     func testSettingsStoreSavesAndLoadsProviderSettings() throws {
@@ -83,9 +82,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
             ),
             defaultPrivacyMode: .fullDetail,
             dailyAutoAnalysisEnabled: true,
-            dailyAutoAnalysisTimes: ["15:10", "09:30"],
-            lastAutoAnalysisDay: "2026-06-22",
-            lastAutoAnalysisSlotKey: "2026-06-22 15:10"
         )
 
         let store = try isolatedSettingsStore()
@@ -102,19 +98,15 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(loaded.alphaVantage.dailyRequestLimit, 25)
         XCTAssertEqual(loaded.defaultPrivacyMode, settings.defaultPrivacyMode)
         XCTAssertEqual(loaded.dailyAutoAnalysisEnabled, settings.dailyAutoAnalysisEnabled)
-        XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["09:30", "15:10"])
-        XCTAssertEqual(loaded.lastAutoAnalysisDay, settings.lastAutoAnalysisDay)
-        XCTAssertEqual(loaded.lastAutoAnalysisSlotKey, "2026-06-22 15:10")
     }
 
-    func testSettingsStoreKeepsLegacyProviderSettingsAndUsesDefaultSchedule() throws {
+    func testSettingsStoreKeepsLegacyProviderSettings() throws {
         let directory = try temporaryDirectory()
         let url = directory.appendingPathComponent("trend-settings.json")
         try """
         {
           "dailyAutoAnalysisEnabled": true,
           "defaultPrivacyMode": "完整明细",
-          "lastAutoAnalysisDay": "2026-06-22",
           "provider": {
             "baseURL": "https://open.bigmodel.cn/api/coding/paas/v4",
             "model": "glm-5.2",
@@ -134,26 +126,8 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertFalse(loaded.alphaVantage.isConfigured)
         XCTAssertEqual(loaded.defaultPrivacyMode, .fullDetail)
         XCTAssertTrue(loaded.dailyAutoAnalysisEnabled)
-        XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["09:30", "14:30"])
-        XCTAssertEqual(loaded.lastAutoAnalysisDay, "2026-06-22")
     }
 
-    func testSettingsStoreMigratesSingleLegacyScheduleTime() throws {
-        let directory = try temporaryDirectory()
-        let url = directory.appendingPathComponent("trend-settings.json")
-        try """
-        {
-          "dailyAutoAnalysisEnabled": true,
-          "dailyAutoAnalysisTime": "15:10",
-          "defaultPrivacyMode": "脱敏摘要",
-          "provider": {}
-        }
-        """.write(to: url, atomically: true, encoding: .utf8)
-
-        let loaded = try isolatedSettingsStore().load(from: url)
-
-        XCTAssertEqual(loaded.dailyAutoAnalysisTimes, ["15:10"])
-    }
 
     func testReportStoreKeepsLatestSuccessfulReport() throws {
         let directory = try temporaryDirectory()
@@ -202,7 +176,7 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(outlook(category: "商品").categoryDisplayName, "商品")
     }
 
-    func testLegacyReportDecodesMissingExpandedSectionsAsEmptyArrays() throws {
+    func testReportDecodesMissingExpandedSectionsAsEmptyArrays() throws {
         let report = TrendAnalysisReport.fixture(
             generatedAt: "2026-06-22 12:00:00",
             externalSignalStatus: .partial
@@ -223,18 +197,6 @@ final class TrendAnalysisStoreTests: XCTestCase {
         XCTAssertTrue(decoded.assetTrends.isEmpty)
     }
 
-    func testSameDayAutoAnalysisUsesStoredLocalDay() {
-        let settings = TrendAnalysisSettings(
-            provider: .empty,
-            defaultPrivacyMode: .sanitized,
-            dailyAutoAnalysisEnabled: true,
-            lastAutoAnalysisDay: "2026-06-22",
-            lastAutoAnalysisSlotKey: nil
-        )
-
-        XCTAssertTrue(settings.hasAutoAnalyzed(on: "2026-06-22"))
-        XCTAssertFalse(settings.hasAutoAnalyzed(on: "2026-06-23"))
-    }
 
     private func isolatedSettingsStore() throws -> TrendAnalysisSettingsStore {
         let suiteName = "com.sunnyhot.qieman.dashboard.tests.\(UUID().uuidString)"
@@ -261,6 +223,7 @@ final class TrendAnalysisStoreTests: XCTestCase {
 
 private let expandedReportJSON = """
 {
+  "schemaVersion": 2,
   "generatedAt": "2026-06-24 10:00:00",
   "dataAsOf": "2026-06-24 10:00:00",
   "privacyMode": "脱敏摘要",

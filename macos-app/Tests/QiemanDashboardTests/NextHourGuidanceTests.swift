@@ -214,7 +214,7 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(report.supportingEvidence(for: action).map(\.id), [rawEvidence.id])
     }
 
-    func testFocusedAgentDecodesSubmittedGuidance() async throws {
+    func testThreePlusOneAgentDecodesSubmittedGuidance() async throws {
         let arguments = """
         {
           "headline": "缩量震荡，以持有为主",
@@ -231,12 +231,23 @@ final class NextHourGuidanceTests: XCTestCase {
             "confidence": 68,
             "evidence_ids": ["local:next-hour:asset:fund:510300"]
           }],
-          "risk_checks": ["确认行情时间没有滞后", "确认没有待处理的重复订单"]
+          "risk_checks": ["确认行情时间没有滞后", "确认没有待处理的重复订单"],
+          "followup_reviews": [{
+            "item_index": 0,
+            "status": "confirmed",
+            "note": "今日行情已确认该关注事项",
+            "evidence_ids": ["analysis:market:fund:510300"]
+          }]
         }
         """
         let client = FakeNextHourAgentClient(arguments: arguments)
         let agent = NextHourGuidanceAgent(client: client)
-        let context = try makeAgentContext()
+        let context = try makeAgentContext(
+            lastCloseReview: LastCloseReviewContext(
+                generatedAt: "2026-07-26 21:00:00",
+                tomorrowWatch: ["红利能否放量"]
+            )
+        )
         let settings = TrendAIProviderSettings(
             providerName: "Test",
             baseURL: "https://api.example.com/v1",
@@ -257,11 +268,27 @@ final class NextHourGuidanceTests: XCTestCase {
         XCTAssertEqual(report.posture, .balanced)
         XCTAssertEqual(report.actions.first?.action, .hold)
         XCTAssertEqual(report.actions.first?.confidence, 68)
-        XCTAssertEqual(report.actions.first?.evidenceIDs, ["local:next-hour:asset:fund:510300"])
-        XCTAssertEqual(client.callCount, 2)
+        XCTAssertEqual(
+            Set(report.actions.first?.evidenceIDs ?? []),
+            Set([
+                "analysis:market:fund:510300",
+                "analysis:news:fund:510300",
+                "analysis:portfolio:fund:510300",
+            ])
+        )
+        XCTAssertEqual(client.callCount, 4, "行情、新闻、持仓三个分析调用加一次汇总决策")
+        XCTAssertFalse(report.warnings.contains { $0.contains("禁止输出买入或卖出") })
+        XCTAssertFalse(report.warnings.contains { $0.contains("只允许持有") })
+        XCTAssertTrue(report.warnings.contains { $0.contains("NewsNow") })
+        let followupReview = try XCTUnwrap(report.followupReviews.first)
+        XCTAssertEqual(report.followupReviews.count, 1)
+        XCTAssertEqual(followupReview.status, .confirmed)
+        XCTAssertEqual(followupReview.evidenceIDs, ["analysis:market:fund:510300"])
     }
 
-    private func makeAgentContext() throws -> NextHourGuidanceContext {
+    private func makeAgentContext(
+        lastCloseReview: LastCloseReviewContext? = nil
+    ) throws -> NextHourGuidanceContext {
         let slot = try XCTUnwrap(
             NextHourGuidanceSchedule.default.dueSlot(
                 at: "2026-07-27 10:15:00",
@@ -301,8 +328,119 @@ final class NextHourGuidanceTests: XCTestCase {
             latestTrendHeadline: "中性",
             latestTrendActions: [],
             latestAssetConclusions: [],
-            dataRules: []
+            dataRules: [],
+            lastCloseReview: lastCloseReview
         )
+    }
+
+    func testBuyWithLiveMarketContextRemainsActionable() async throws {
+        let (report, client) = try await runGuidance(
+            action: "buy",
+            evidenceIDs: [
+                "local:next-hour:asset:fund:510300",
+                "analysis:market:fund:510300",
+                "analysis:news:fund:510300",
+            ],
+            includeMarketToolCall: true
+        )
+
+        XCTAssertEqual(report.actions.first?.action, .buy)
+        XCTAssertEqual(report.disposition, .actionable)
+        XCTAssertTrue(report.auditEvidence.contains { $0.id == "local:next-hour:asset:fund:510300" })
+        XCTAssertEqual(client.callCount, 5, "一次真实行情工具、三次分析调用和一次汇总决策")
+    }
+
+    func testRepeatedSameEvidenceIDDoesNotSatisfyFloor() async throws {
+        let (report, _) = try await runGuidance(
+            action: "buy",
+            evidenceIDs: [
+                "local:next-hour:asset:fund:510300",
+                "local:next-hour:asset:fund:510300",
+                "local:next-hour:asset:fund:510300",
+            ],
+            includeMarketToolCall: true
+        )
+
+        XCTAssertEqual(report.actions.first?.action, .hold)
+        XCTAssertEqual(report.disposition, .insufficientEvidence)
+        XCTAssertEqual(report.actions.first?.evidenceIDs, ["local:next-hour:asset:fund:510300"])
+        XCTAssertTrue(report.actions.first?.rationale.contains("真实证据不足 3 条") ?? false)
+    }
+
+    func testBuyWithoutRawQuoteEvidenceDowngradesToHold() async throws {
+        let (report, _) = try await runGuidance(
+            action: "buy",
+            evidenceIDs: [
+                "analysis:market:fund:510300",
+                "analysis:news:fund:510300",
+                "analysis:portfolio:fund:510300",
+            ]
+        )
+
+        XCTAssertEqual(report.actions.first?.action, .hold)
+        XCTAssertEqual(report.disposition, .insufficientEvidence)
+        XCTAssertTrue(report.actions.first?.rationale.contains("原始行情证据") ?? false)
+    }
+
+    func testBuyAfterEvidenceRepairNeedsThreeRealIDs() async throws {
+        let (report, _) = try await runGuidance(
+            action: "buy",
+            evidenceIDs: [
+                "local:next-hour:asset:fund:510300",
+                "fake:1",
+                "fake:2",
+            ],
+            includeMarketToolCall: true
+        )
+
+        XCTAssertEqual(report.actions.first?.action, .hold)
+        XCTAssertEqual(report.disposition, .insufficientEvidence)
+        XCTAssertEqual(report.actions.first?.evidenceIDs, ["local:next-hour:asset:fund:510300"])
+        XCTAssertTrue(report.actions.first?.rationale.contains("真实证据不足 3 条") ?? false)
+    }
+
+    private func runGuidance(
+        action: String,
+        evidenceIDs: [String],
+        includeMarketToolCall: Bool = false
+    ) async throws -> (NextHourGuidanceReport, FakeNextHourAgentClient) {
+        let object: [String: Any] = [
+            "headline": "盘中测试",
+            "posture": "balanced",
+            "summary": "验证最终证据门禁。",
+            "actions": [[
+                "target_id": "fund:510300",
+                "target_name": "沪深300ETF",
+                "action": action,
+                "instruction": "小仓测试",
+                "rationale": "测试动作",
+                "trigger": "测试触发条件",
+                "invalidation": "测试失效条件",
+                "confidence": 90,
+                "evidence_ids": evidenceIDs,
+            ]],
+            "risk_checks": ["确认行情", "确认持仓"],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object)
+        let arguments = String(data: data, encoding: .utf8) ?? "{}"
+        let client = FakeNextHourAgentClient(
+            arguments: arguments,
+            includeMarketToolCall: includeMarketToolCall
+        )
+        let agent = NextHourGuidanceAgent(client: client)
+        let settings = TrendAIProviderSettings(
+            providerName: "Test",
+            baseURL: "https://api.example.com/v1",
+            model: "test-model",
+            apiKey: "sk-test",
+            timeoutSeconds: 300
+        )
+        let report = try await agent.run(
+            context: makeAgentContext(),
+            researchSnapshot: makeResearchSnapshot(),
+            settings: settings
+        )
+        return (report, client)
     }
 
     private func makeResearchSnapshot() -> TrendResearchSnapshot {
@@ -360,11 +498,14 @@ final class NextHourGuidanceTests: XCTestCase {
 
 private final class FakeNextHourAgentClient: TrendResearchAgentClient, @unchecked Sendable {
     private let lock = NSLock()
-    private let arguments: String
+    private let guidanceArguments: String
+    private let includeMarketToolCall: Bool
+    private var didRequestMarketContext = false
     private(set) var callCount = 0
 
-    init(arguments: String) {
-        self.arguments = arguments
+    init(arguments: String, includeMarketToolCall: Bool = false) {
+        self.guidanceArguments = arguments
+        self.includeMarketToolCall = includeMarketToolCall
     }
 
     func complete(
@@ -378,19 +519,60 @@ private final class FakeNextHourAgentClient: TrendResearchAgentClient, @unchecke
         deadline: Date?,
         streamProgress: (@Sendable (AgentStreamProgress) async -> Void)?
     ) async throws -> AgentCompletionResult {
-        lock.lock()
-        callCount += 1
-        let currentCallCount = callCount
-        lock.unlock()
-        let toolName = currentCallCount == 1
-            ? "get_live_market_context"
-            : "submit_next_hour_guidance"
+        let currentCallCount = lock.withLock {
+            callCount += 1
+            return callCount
+        }
+
+        if includeMarketToolCall,
+           tools.contains(where: { $0.function.name == "get_live_market_context" }) {
+            let shouldRequest = lock.withLock {
+                if didRequestMarketContext { return false }
+                didRequestMarketContext = true
+                return true
+            }
+            if shouldRequest {
+                let call = AgentToolCall(
+                    id: "call-live-market-context",
+                    function: AgentToolFunctionCall(name: "get_live_market_context", arguments: "{}")
+                )
+                let message = AgentChatMessage(role: .assistant, content: nil, toolCalls: [call])
+                return AgentCompletionResult(
+                    assistantMessage: message,
+                    toolCalls: [call],
+                    stopReason: .toolCalls,
+                    finishReason: "tool_calls"
+                )
+            }
+        }
+
+        let submitNames = [
+            "submit_market_signal",
+            "submit_news_events",
+            "submit_portfolio_context",
+            "submit_next_hour_guidance",
+        ]
+        guard let submitName = submitNames.first(where: { name in
+            tools.contains { $0.function.name == name }
+        }) else {
+            throw NextHourGuidanceAgentError.invalidSubmission(["测试未识别提交工具"])
+        }
+
+        let arguments: String
+        switch submitName {
+        case "submit_market_signal":
+            arguments = #"{"overallTrend":"横盘震荡","perAssetSignals":[{"targetID":"fund:510300","targetName":"沪深300ETF","trend":"横盘震荡","confidence":68,"rationale":"价格维持区间震荡"}],"freshnessWarning":null}"#
+        case "submit_news_events":
+            arguments = #"{"macroSummary":null,"perAssetEvents":[{"targetID":"fund:510300","targetName":"沪深300ETF","sentiment":"中性","keyEvents":[],"sources":[],"confidence":50}]}"#
+        case "submit_portfolio_context":
+            arguments = #"{"perAssetContext":[{"targetID":"fund:510300","targetName":"沪深300ETF","position":"正常","riskExposure":"无特殊风险","overlapNote":null,"recommendation":"维持"}]}"#
+        default:
+            arguments = guidanceArguments
+        }
+
         let call = AgentToolCall(
             id: "call-next-hour-\(currentCallCount)",
-            function: AgentToolFunctionCall(
-                name: toolName,
-                arguments: currentCallCount == 1 ? "{}" : arguments
-            )
+            function: AgentToolFunctionCall(name: submitName, arguments: arguments)
         )
         let message = AgentChatMessage(
             role: .assistant,

@@ -89,7 +89,6 @@ extension AppModel {
     }
 
     func saveTrendAnalysisSettings() {
-        trendSettings.normalizeDailyAutoAnalysisTimes()
         guard let trendAnalysisSettingsFileURL else { return }
         do {
             try TrendAnalysisSettingsStore().save(trendSettings, to: trendAnalysisSettingsFileURL)
@@ -102,8 +101,6 @@ extension AppModel {
         guard let trendAnalysisReportFileURL else { return }
         do {
             try TrendAnalysisReportStore().save(report, to: trendAnalysisReportFileURL)
-            // L6 信号闭环（2026-08-31）：报告落盘即抽取行动候选入库（去重/校准/反向失效）
-            ingestMarketSignalsFromReport(report)
         } catch {
             lastTrendError = error.localizedDescription
         }
@@ -573,7 +570,7 @@ extension AppModel {
             }
             trendReport = report
             lastTrendGeneratedAt = report.generatedAt
-            // effective scope 可能因增量合并约束从 marketRadar/closeReview 回退为 full；
+            // effective scope 可能因增量合并约束从 closeReview 回退为 full；
             // 产品层新鲜度仍只能推进用户或调度器真正请求的模块。
             trendSettings.markModuleGenerated(
                 scope: requestedScope,
@@ -612,7 +609,6 @@ extension AppModel {
                     outcome: .succeeded,
                     userInitiated: userInitiated,
                     isFirstReport: !hadExistingReport,
-                    opportunityCount: report.opportunities.count,
                     failureSummary: nil
                 )
             )
@@ -649,7 +645,6 @@ extension AppModel {
                         outcome: .failed,
                         userInitiated: userInitiated,
                         isFirstReport: !hadExistingReport,
-                        opportunityCount: 0,
                         failureSummary: error.localizedDescription
                     )
                 )
@@ -700,7 +695,7 @@ extension AppModel {
     }
 
     /// W3.2:手动入口触发时给预期(时长 + 成本同场提示),走全局 Toast;
-    /// 自动调度不经过这里。四个手动按钮统一走此入口。
+    /// 自动调度不经过这里。手动分析入口统一走这里。
     func startTrendAnalysisFromUser(withExpectation scope: TrendResearchRunScope) {
         noticeMessage = Self.trendRunExpectationText(scope: scope)
         startTrendAnalysis(userInitiated: true, scope: scope)
@@ -710,8 +705,6 @@ extension AppModel {
         switch scope {
         case .full:
             return "完整研判通常需要 5–15 分钟,期间可正常使用,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
-        case .marketRadar:
-            return "市场雷达通常需要 5–15 分钟,完成后会通知你;预计消耗 ¥0.5–2 量级(视模型与搜索次数)。"
         case .closeReview:
             return "收盘复盘通常需要 5–15 分钟,期间可正常使用,完成后会通知你。"
         case .longTerm:
@@ -1254,8 +1247,9 @@ extension AppModel {
 
     /// W3.5:连续失败最严重的模块(连击 ≥ 2 才升级提示),附人话原因。
     var worstAutoFailureStreak: (scope: TrendResearchRunScope, streak: Int, reasonText: String?)? {
-        guard let worst = trendSettings.autoFailureStreaks.max(by: { $0.value < $1.value }),
-              worst.value >= 2,
+        guard let worst = trendSettings.autoFailureStreaks
+            .filter({ TrendResearchRunScope(rawValue: $0.key) != nil && $0.value >= 2 })
+            .max(by: { $0.value < $1.value }),
               let scope = TrendResearchRunScope(rawValue: worst.key) else { return nil }
         let reasonText = trendSettings.lastAutoFailureMessages[worst.key]
             .map { TrendErrorTriage.explain($0).reasonText }

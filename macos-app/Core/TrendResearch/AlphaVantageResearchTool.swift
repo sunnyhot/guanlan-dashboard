@@ -25,7 +25,7 @@ struct AlphaVantageResearchTool: TrendResearchTool {
     let cache: AlphaVantageResponseCache
 
     let name = "alpha_vantage_research"
-    let description = "查询 Alpha Vantage 的结构化市场数据补充：ETF_PROFILE（ETF 持仓与行业）、EARNINGS_CALENDAR（未来财报日历）或 TIME_SERIES_DAILY（日线并在本地计算收益、均线、波动率和回撤）。它是第三方供应商数据，不是官方一手证据；应在 SEC 等官方源之后、普通网页搜索之前使用。"
+    let description = "查询 Alpha Vantage 的结构化市场数据补充：ETF_PROFILE（ETF 持仓与行业）、EARNINGS_CALENDAR（未来财报日历）或 TIME_SERIES_DAILY（日线并在本地计算收益、均线、波动率和回撤）。它是第三方供应商数据，不是官方一手证据；仅用于补充本地行情和基金披露，不得替代或覆盖其他一手证据。"
     let parameters: AgentJSONValue = [
         "type": "object",
         "properties": [

@@ -9,7 +9,7 @@
 1. [三条链路总览](#1-三条链路总览)
 2. [链路 A:趋势研究(TrendResearch)](#2-链路-a趋势研究trendresearch)
 3. [链路 B:下一小时盘中研判(NextHourGuidance)](#3-链路-b下一小时盘中研判nexthourguidance)
-4. [链路 C:AI 趋势跟踪清单(TrendTracking)](#4-链路-c-ai-趋势跟踪清单trendtracking)
+4. [链路 C:决策案例(DecisionCase)](#4-链路-c决策案例decisioncase)
 5. [磁盘文件契约](#5-磁盘文件契约)
 6. [Evidence ID 生成规则](#6-evidence-id-生成规则)
 7. [SubmitTrendReportTool 校验链](#7-submittrendreporttool-校验链)
@@ -27,7 +27,7 @@
 │    → TrendResearchAgent.run(多轮 Tool Calling)                   │
 │    → SubmitTrendReportTool(校验+归一化)                           │
 │    → TrendAnalysisReportStore 落盘                                │
-│    → TrendTrackingItem 的唯一数据源                                │
+│    → DecisionCase 的行动候选来源                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  链路 B:下一小时盘中研判(60s 轮询,intraday)                        │
 │  NextHourGuidanceController → generateNextHourGuidance           │
@@ -35,20 +35,19 @@
 │    → NextHourGuidanceStore 落盘                                   │
 │    ← 单向接收 A 的最新报告作为「旧研判边界」参考                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  链路 C:AI 趋势跟踪清单(用户驱动)                                   │
-│  用户在链路 A 的行动候选上点击「加入跟踪」                            │
-│    → AppModel.addTrackingItem(from: TrendActionCandidate)        │
-│    → TrendTrackingStore 落盘                                      │
+│  链路 C:决策案例(用户驱动)                                         │
+│  用户在链路 A 的行动候选上点击「加入关注」                            │
+│    → AppModel.addDecisionCase(from:report:)                      │
+│    → DecisionCaseStore 落盘                                       │
 │    ← 数据只来自链路 A,与链路 B 无数据互通                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **关键不变量(改造时不得破坏)**:
 - 链路 A 与链路 B **双向互斥**:任一运行中,另一不启动(见第 8 节)。
-- 链路 B 的结果**不会**创建 TrendTrackingItem(模型不兼容:NextHourGuidanceAction vs TrendActionCandidate)。
+- 链路 B 的结果**不会**自动创建 DecisionCase，盘中与组合决策保持独立。
 - **P5 回指契约(2026-08-19 增补)**:盘中 context 可含 `lastCloseReview`(仅昨天/上一交易日的复盘「明日关注」,周末跨度 ≤3 天);提交工具新增**可选** `followup_reviews`(item_index/status/note/evidence_ids);净化规则——confirmed 必须挂**当日**有效证据(昨日发布的外部证据不算),否则强制降级 inconclusive;越界/重复丢弃;回指与 actions 校验解耦,回指问题不 fail 提交;无 lastCloseReview 时行为与旧版逐字节一致。输出 `NextHourGuidanceReport.followupReviews`,旧存档解码为空。详见 docs/2026-08-19-p5-followup-review-contract-change.md。
-- 链路 C 的唯一创建入口是 `addTrackingItem(from:report:)`,无自动条件求值。
-  > **2026-08-19 sunset 注记(方案 A,总计划 #12)**:链路 C 进入退场。UI 写入入口已切换——行动候选「加入关注」按钮改为 `addDecisionCase(from:report:)` 直接创建 DecisionCase(kind=.trendAction,caseKey `trend:` 前缀,与迁移键 `legacy:` 互为去重);旧清单 UI 移出页面,通知深链改路由到案例详情(迁移保持 ID 稳定)。`addTrackingItem` 模型函数与落盘格式保留(N+2 移除),本条不变量在模型层仍然成立。
+- 行动候选创建 DecisionCase 的唯一入口是 `addDecisionCase(from:report:)`，使用稳定的 `trend:` caseKey，无自动条件求值。
 
 ---
 
@@ -60,18 +59,18 @@
 
 | scope | 自动时刻 | 本次生成 | 复用 |
 |---|---|---|---|
-| `marketRadar` | **已下线（2026-09-01）**，09:00 自动槽与 UI 入口移除，scope 枚举保留作存量兼容 | marketOutlook / sectors / opportunities | 组合、持仓、行动 |
 | `closeReview` | 每日 21:00 | marketOutlook / sectors（**2026-09-01 起接管**，大盘强弱随复盘更新）+ assetTrends（当日涨跌归因） | 组合长期判断、行动 |
-| `longTerm` | 每周日 20:00（错过后下一个 20:00 窗口补跑） | portfolio / horizons / assetTrends / keyAssets / actions | 市场雷达 |
+| `longTerm` | 每周日 20:00；完全未运行时，下次启动或轮询自动补做 | portfolio / horizons / assetTrends / keyAssets / actions | 市场模块 |
 | `full` | 首次无基线或显式完整分析 | 全部模块 | 无 |
 
-> **2026-09-01 下线收编注记（全市场机会雷达）**：Tavily 移除后 marketRadar 每日净产出仅 marketOutlook 几条（opportunities/sectors 恒空），UI 卡片还引导用户「重新生成」一个永远不会有结果的功能。处置：①`TrendModuleAutoAnalysisSchedule.dueSlot` 删除 09:00 槽（早间无自动运行）；②closeReview 的 `requiredModuleToolNames` 加入 market 模块（`[market, assetBatch]`，轮次/工具预算 +1，prompt 契约同步）——大盘强弱每日随收盘复盘更新，基线 market 不再预填；③双端 UI 死卡片/容器 Radar 槽/「市场雷达完成」通知开关/研究时间线 marketRadar 链移除；④`TrendAnalysisReport.opportunities` 等模型字段与 `TrendResearchRunScope.marketRadar` 枚举保留（schema/存量解码兼容），`InvestmentTodayResearchRow.Kind.marketRadar` 行构建保留但由 `marketSignalCount > 0` 门控永不出现。
+> **2026-11-18 marketRadar 完整移除注记**：退役的 09:00 全市场机会雷达不再保留 `TrendResearchRunScope.marketRadar` 枚举、手动 Agent 路径、通知偏好、错过窗口、简报或旧配置兼容分支。旧设置中的 radar 字符串不会进入现行调度或失败汇总，也不会遮住活跃模块提醒。大盘强弱继续由 closeReview 的 market 模块更新；通用 `MarketOpportunityEngine` 与「全市场机会」摘要卡保留，锚点改名为 `marketOpportunity`，新鲜度读取 closeReview 时间。
 
-盘中链路 B 仍按原交易时段运行。`TrendReportDraftStore` 以旧报告预填非本次模块，旧 evidence 同步写入新运行 Ledger；最终仍必须经过 `SubmitTrendReportTool` 统一归一化和完整 Validator。市场雷达若检测到持仓代码已经变化、增量合并无法保持完整性，会一次性回退为 `full`。
+盘中链路 B 仍按原交易时段运行。`TrendReportDraftStore` 以旧报告预填非本次模块，旧 evidence 同步写入新运行 Ledger；最终仍必须经过 `SubmitTrendReportTool` 统一归一化和完整 Validator。
+各模块的新鲜度时间独立保存在 `TrendAnalysisSettings.lastModuleGeneratedAt`。增量更新只推进当前模块时间；`full` 同时推进收盘复盘与长期研判两项。旧配置首次加载时用旧报告 `generatedAt` 初始化两项。
 
-各模块的新鲜度时间独立保存在 `TrendAnalysisSettings.lastModuleGeneratedAt`。增量更新只推进当前模块时间；`full` 同时推进三项。旧配置首次加载时用旧报告 `generatedAt` 初始化三项，避免早晨市场雷达更新后把昨晚的收盘复盘误标为“今天已复盘”。
+> **2026-11-18 安全自动补做**：仅在自动分析开启、模型已配置且窗口完全未执行（neverRan）时补做。longTerm 在下次启动或 60 秒轮询中补最近一个已到期窗口，周日 20:00 前补上一周而非未来窗口；closeReview 仍仅当天 21:00 后运行，隔天不自动补。attempt key 已存在的失败窗口不自动重试，避免反复扣费。当天将自动运行的 closeReview 与将自动补做的 longTerm 不再显示手动横幅或简报；隔天 closeReview、失败窗口及自动分析关闭时仍保留人工入口。
 
-收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。**2026-09-02 追加：昨日判断验证（对账切片）**——closeReview 快照冻结时把上一次复盘快照的 marketPulse 方向与今日指数行情做确定性对账（`CloseReviewJudgmentAudit`，|涨跌幅|≥0.2% 才结算、neutral/uncertain 记无结论不奖罚），结果三路消费：注入 closeReview prompt（模型可见昨日命中情况）、写入冻结快照 `yesterdayJudgmentAudit` 字段（旧 JSON 缺键解码宽容）、双端复盘区段「昨日判断验证」展示。纯本地零 LLM 成本；这是 L6 信号闭环精神的最小落地，全套信号化（触发价/胜率校准）待本切片验证价值后再评估。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受次日市场雷达覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
+收盘复盘采用同日、非补跑语义：21:00 后当日自动窗口至多尝试一次，错过后不会在次日启动时补做。**2026-09-02 追加：昨日判断验证（对账切片）**——closeReview 快照冻结时把上一次复盘快照的 marketPulse 方向与今日指数行情做确定性对账（`CloseReviewJudgmentAudit`，|涨跌幅|≥0.2% 才结算、neutral/uncertain 记无结论不奖罚），结果三路消费：注入 closeReview prompt（模型可见昨日命中情况）、写入冻结快照 `yesterdayJudgmentAudit` 字段（旧 JSON 缺键解码宽容）、双端复盘区段「昨日判断验证」展示。纯本地零 LLM 成本；这是 L6 信号闭环精神的最小落地，全套信号化（触发价/胜率校准）待本切片验证价值后再评估。完成后把当晚报告和当晚组合涨跌冻结到独立的 `market-close-review.json`；次日 21:00 前页面只展示这份上一交易日快照，不读取启动后刷新的盘中持仓，也不受其他增量模块覆盖共享趋势报告的影响。收盘复盘以冻结组合涨跌和逐只持仓归因为主，不依赖「全市场机会雷达」的 marketWide 结论；同时点已有的市场环境只作为可选补充。标题随快照日期显示为「今日收盘复盘」「昨日收盘复盘」或「最近收盘复盘」。旧版本若尚无冻结快照、生成了「无全市场结论」空快照，或共享报告已被次日模块覆盖，会从本地 `ai-analysis-logs/*-closeReview-*.jsonl` 的 `run_completed` 恢复已校验报告，并从同次运行的 `get_portfolio_assets` 结果恢复当晚冻结持仓，全程不发起网络或模型请求。自动窗口在发起前即持久化尝试键，失败后不会被 60 秒轮询或反复启动 App 重试；用户仍可手动更新。
 
 **2026-08-19 复盘生成提速注记(#1/#2/#3/#5)**:①分批批量 5→8(`TrendReportDraftStore.assetBatchSize`,schema/描述/prompt 均随常量);②submit 拒批后,校验错误以「拒批教训」correction 前移注入(每条去重一次、单次最多两条),避免后续批次重复同类拒批;③已接受的 asset batch 提交,其 assistant tool_call 参数在后续上下文中替换为短桩(id/名称保留,callID 链不断;诊断日志仍存全量);④closeReview 且持有基金 ≥12 时,Agent 先走**批次并行 fan-out**:harness 预取只读数据 → 每批一次并行单轮生成 → 复用同一提交校验与组装终检链;任何环节失败返回 nil 回退原交互循环(草稿已暂存的批次保留,按 remaining 继续)——行为契约不变,仅生成方式并行化。fan-out 的 E2E 测试缺口暂以契约源码断言 + 生产运行验证覆盖。
 
@@ -81,7 +80,7 @@
 
 **2026-09-03 根治注记(fan-out 直收购官,runID 552F6FE4 复盘)**:此前 fan-out 只并行生成基金批次,而 closeReview 必重算 market(增量 init 清空、market 加入 requiredModuleToolNames),`assembledReport` 要求四模块齐全 → fan-out 永远差一块、注定 `return nil` 回退交互从头再走,~600s 并行成果只剩「暂存进 store」。现 fan-out 单元 = 基金批次 + 市场模块(`FanoutUnit`),同一并行波生成、生成后按序入库(market 在后,入库时四模块齐全会走 `executeTrendModule` 就地组装终检),组装终检与成功收尾复用既有第 4/5 步零新路径;修复循环统一覆盖批/市单元。配套:①并发上限 `fanoutMaxConcurrentUnits = 3`(分波 TaskGroup;网关对 trend-research `maxRetriesPerProvider=0`,5 路齐发一路 429 即单元失败,限 3 换限流鲁棒性,墙钟代价 < 一个批次轮——29 只全程预期 ~1100s 而非单波 ~700s);②fan-out 修复预算改用扩容口径 `effectiveInvalidSubmissionBudget`(与交互循环一致,market 并入后 5 个提交可能全败);③fan-out 第 4 步终检失败先 `prepareRepairs`(按点名)再回退交互,回退后模型只补缺失部分。回退契约不变:任一环节失败仍返回 nil 落回交互循环,已暂存模块保值。
 
-中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily，`marketRadar` 不读取个人持仓工具。
+中间数据按来源复用：基金披露磁盘缓存 24 小时、Tavily 语义目标缓存 6 小时、SEC/Alpha Vantage 按接口时效缓存；同一运行内工具签名继续去重。`closeReview` 不调用 Tavily。
 
 ### 2.1 调用图
 
@@ -161,7 +160,7 @@ AppModel 持有 `var trendResearchAgent: any TrendResearchAgentProtocol`(默认 
 
 `effectiveLimits` 随 assetCount/sectorCount/reportAssetCount 扩张,但被 expanded 硬上限钳制。
 
-**2026-09-01 根治注记(预算强制化,2026-08-31 晚五连败实证)**:①`expandedTotalTimeoutSeconds` 1800→3600,`effectiveTotalTimeout` = min(3600, 1800 + 4s/只) 的扩容从死代码变为真实生效(此前 base=cap=1800 恒等于 1800);②运行截止时间(deadline = started + effectiveTotal)下传到每一次模型请求,客户端流式字节循环在分片边界硬检查——持续吐片但总时长失控不再无界(实证单轮流式 405-725s、超总预算 382s 才终止);新错误 `OpenAICompatibleAgentClientError.runDeadlineExceeded` 与可恢复的空闲超时 `.timedOut` 区分,Agent 把它直接映射为 `totalTimeoutExceeded` 终局,空闲超时恢复前也先复查剩余预算;③`minimumStepBudgetSeconds` 8→60(此前剩 23s 照样放行);④主体已 finish 只差 usage 尾包的流在截止时间到点时保住已完成响应(usage 保守估算)。`TrendResearchAgentClient` 协议与 `GatewayAgentClient`/`OpenAICompatibleModelProvider`/`OpenAICompatibleAgentClient` 相应新增 `deadline: Date?` 参数(默认 nil,NextHour/MarketResearchPipeline/DecisionCase 调用方显式传 nil 保持原行为)。
+**2026-09-01 根治注记(预算强制化,2026-08-31 晚五连败实证)**:①`expandedTotalTimeoutSeconds` 1800→3600,`effectiveTotalTimeout` = min(3600, 1800 + 4s/只) 的扩容从死代码变为真实生效(此前 base=cap=1800 恒等于 1800);②运行截止时间(deadline = started + effectiveTotal)下传到每一次模型请求,客户端流式字节循环在分片边界硬检查——持续吐片但总时长失控不再无界(实证单轮流式 405-725s、超总预算 382s 才终止);新错误 `OpenAICompatibleAgentClientError.runDeadlineExceeded` 与可恢复的空闲超时 `.timedOut` 区分,Agent 把它直接映射为 `totalTimeoutExceeded` 终局,空闲超时恢复前也先复查剩余预算;③`minimumStepBudgetSeconds` 8→60(此前剩 23s 照样放行);④主体已 finish 只差 usage 尾包的流在截止时间到点时保住已完成响应(usage 保守估算)。`TrendResearchAgentClient` 协议与 `GatewayAgentClient`/`OpenAICompatibleModelProvider`/`OpenAICompatibleAgentClient` 相应新增 `deadline: Date?` 参数(默认 nil,NextHour/DecisionCase 调用方显式传 nil 保持原行为)。
 
 **2026-09-01 傍晚追加根治(截止 watchdog 与字节到达解耦,runID 0A55B952 首跑实证)**:上述②的「分片边界硬检查」存在盲区——流内全部检查(空闲超时/硬截止/心跳)都挂在换行字节(0x0A)分支里,「socket 层有活动但无换行字节」的挂死会绕过一切;唯一兜底 URLSession timeoutInterval 会被传输层活动续命,实证第 7 轮挂 46 分钟、运行截止后 19 分钟才收场。修复:`OpenAICompatibleAgentClient` 新增 `withRunDeadlineWatchdog`(消费者独立 Task + 截止计时器到点取消消费者),`decodeStreamingResponse` 与 `collect`(整段 JSON/错误 body 同源漏洞)都接入;取消翻译统一在消费层——主体已 finish 保住响应(usage 估算兜底),否则 `runDeadlineExceeded`;外部取消经 `onCancel` 直达消费者,用户取消语义不变。配套:趋势 Agent 每次模型请求带 `maxOutputTokensPerRequest`(policy 默认 32768,服务端截断退化生成,配合 `.length` 重发机制;此前请求不设输出上限,glm-5.3-flash 实证可在巨型单行 submit 载荷上无界生成 49 分钟)。`TrendResearchAgentClient.complete` 协议相应新增 `maxOutputTokens: Int?` 参数(其它链路调用方显式传 nil 保持原行为)。回归测试:`testClientCutsNewlineFreeStreamHangAtRunDeadline`/`testClientPreservesFinishedStreamWhenDeadlineFiresDuringUsageTail`/`testClientEncodesMaxOutputTokensCap`/`testEveryModelRequestCarriesMaxOutputTokensCap`。
 
@@ -225,12 +224,15 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 
 ### 3.2 Agent 内部
 
-`NextHourGuidanceAgent.run`(`Core/NextHourGuidance.swift:612`):
+> **2026-11-18 V1 退场注记**：原单 Agent 多轮 Tool Calling（10 轮 / 20 次工具 / 300 秒）及其 V1 专属提交校验已从现行代码删除，不再根据 `InvestmentIntelligence.enabled` 回退。协议与 Controller 统一调用 `NextHourGuidanceAgent.run`，该入口现为 3+1 子 Agent 编排；下文涉及 V1 的历史记录只用于解释演进，不代表现行行为。
+
+`NextHourGuidanceAgent.run`(`Core/NextHourGuidance.swift`):
 - 每次运行**新建** `TrendEvidenceLedger()`(actor,非持久化,**不复用**链路 A 的 ledger)
-- 工具:`get_live_market_context` / `get_fund_lookthrough` / `official_sec_research` / `web_search` / `submit_next_hour_guidance`
-- 预算:`maxTurns=10` / `maxToolCalls=20` / `maxWebSearches=4` / `minimumWebSearchAttempts=2` / `totalTimeoutSeconds=300`
-- Tavily 与长期趋势研究共享跨启动磁盘缓存，但盘中链路只接受 10 分钟内结果
-- 校验:`validate()` + `TrendClaimEvidencePolicy().validateExecution()` 双层把关
+- 行情、新闻、持仓结构三个子 Agent 并行生成结构化结论，再由汇总决策 Agent 调用 `submit_next_hour_guidance`
+- 行情工具直接消费冻结的实时上下文并登记真实证据，其他工具消费真实 `TrendResearchSnapshot` 与共享 Ledger，不再使用 placeholder；决策 Agent 同时收到原始工具证据索引。
+- 三个分析结论按标的注入 Ledger；汇总提交先经过 `enforceEvidenceFloor`，再组装报告并修复证据绑定。伪造 ID 被移除后，`enforceFinalEvidenceRequirements` 再次校验：至少 3 条不同的真实证据、包含原始行情 ID、基金有披露时包含穿透 ID、confidence ≥55；不足则最终降级为 hold 并标记 insufficientEvidence。
+- 子 Agent 各自最多 4 轮、单路预算 90 秒；汇总决策最多 4 轮。原 V1 的 300 秒总预算和 `validateExecution` 不在现行路径
+- 昨日关注回指继续由共享的 `sanitizeFollowupReviews` 净化；盘中动作仅接受 buy / sell / hold，旧动作不再兼容解码。
 
 ### 3.3 调度窗口(NextHourGuidanceSchedule)
 
@@ -249,57 +251,18 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 ---
 
 ## 4. 链路 C:AI 趋势跟踪清单(TrendTracking)
+## 4. 链路 C:决策案例(DecisionCase)
 
-### 4.1 调用图
+### 4.1 当前写入与状态
 
-```
-用户在「今日研判」行动候选上点击「加入跟踪」
-  EnhancementTodayPanel.swift:356  model.addTrackingItem(from: action, report: report)
-    → addTrackingItem(from: TrendActionCandidate, report: TrendAnalysisReport) -> Bool
-        dedupeKey 去重(同标的+动作+isActive) → insert → saveTrendTrackingItems()
-```
+- 行动候选通过 `addDecisionCase(from:report:)` 写入，使用 `trend:<action>|<subject>` 去重；旧 `TrendTrackingItem`、`addTrackingItem`、`legacy:` 键和迁移逻辑已删除。
+- 集中度风险由 `ConcentrationRiskEngine` 生成或更新，用户决策画像约束强行动状态；Case 不自动交易。
+- 生命周期与投资判断正交，追加式事件历史写入 `decision-cases.json`；通知通过 `selectedDecisionCaseID` 打开现有 Case。
+- `schemaVersion=2` 是当前唯一接受版本，v1 解码直接拒绝。GLM Repository、裸研究报告与旧跟踪文件不再迁移或加载。
 
-### 4.2 状态管理(全部人工触发,无自动条件求值)
+### 4.2 条件语义
 
-| 方法 | 行为 |
-|---|---|
-| `markTrackingItem(id:status:note:)` | 通用状态变更 + statusHistory append |
-| `snoozeTrackingItem(id, days)` | → `.processed` + snoozeUntil |
-| `resumeTrackingItem(id)` | → `.observing` |
-| `endTrackingItem(id)` | → `.ended` |
-| `removeTrackingItem(id)` | 物理删除 + 清空 selectedTrendTrackingItemID |
-| `recoverSnoozedTrackingItems(now:)` | 启动/刷新时暂缓到期自动恢复为 `.observing` |
-| `hasActiveTrackingItem(for:)` | UI 按钮态判定(按 assetName/assetCode/assetKey 三路匹配) |
-
-**关键不变量**:`triggerConditions` / `invalidatingConditions` 是**自然语言字符串数组**,代码注释明确「第一版人工管理,不根据自然语言条件伪造自动触发」。任何 status 变更都由用户手动触发。
-
-### 4.3 TrendTrackingItem 字段表
-
-定义在 `Core/Trend/TrendTrackingModels.swift:64`。**无 schemaVersion**,向后兼容纯靠 Codable `decodeIfPresent ?? 默认值`。
-
-| 字段 | 类型 | 可空 | 默认/编解码行为 |
-|---|---|---|---|
-| `id` | `UUID` | 否 | decode 缺失则 `UUID()` |
-| `sourceReportID` | `UUID` | 否 | 缺失则 `UUID()` |
-| `sourceGeneratedAt` | `String` | 否 | 缺失则 `""` |
-| `assetKey` | `String?` | 是 | encodeIfPresent |
-| `assetName` | `String` | 否 | 缺失则 `""` |
-| `assetCode` | `String?` | 是 | encodeIfPresent |
-| `action` | `TrendActionKind` | 否 | 缺失则 `.watch` |
-| `reason` | `String` | 否 | 缺失则 `""` |
-| `confidence` | `TrendConfidence` | 否 | 缺失则 `score:0, label:"低"` |
-| `triggerConditions` | `[String]` | 否 | **自然语言**,缺失则 `[]` |
-| `invalidatingConditions` | `[String]` | 否 | **自然语言**,缺失则 `[]` |
-| `createdAt` | `String` | 否 | 缺失则 `""` |
-| `status` | `TrendTrackingStatus` | 否 | 缺失则 `.observing` |
-| `snoozeUntil` | `String?` | 是 | encodeIfPresent;status≠.processed 时被清空 |
-| `statusHistory` | `[TrendTrackingStatusChange]` | 否 | 缺失则 `[]` |
-
-派生属性:`isActive`(status≠.ended)、`dedupeKey`(assetKey 或 `name|code` lowercased 兜底 + `|` + action.rawValue)
-
-`status` 枚举:observing / approaching / triggered / invalidated / staleData / processed / ended
-
-`statusHistory` 元素 `TrendTrackingStatusChange`:`at: String` / `from: TrendTrackingStatus?` / `to: TrendTrackingStatus` / `note: String`
+自然语言触发/失效条件只用于人工复核，不自动求值、不自动建案、不自动交易。
 
 ---
 
@@ -318,18 +281,17 @@ NextHourGuidanceController.restartNextHourGuidanceSchedulerLoop
 | AI 完整诊断日志 | `ai-analysis-logs/<YYYY-MM-DD>-<scope>-<runID>.jsonl` | 每行独立 JSON + sortedKeys | **0o600**（目录 0o700） | 无 | 最近 20 份且总量不超过 200 MB；始终保留最新一份 | `AIAgentDiagnosticRecorder` |
 | Agent 审计产物 | `trend-agent-runs/<YYYY-MM-DD>-<runID>.json` | prettyPrinted | **0o600** | 无 | **最近 20 个**,超出按 mtime 删除 | `TrendAgentRunArtifactStore` |
 | 下一小时研判 | `next-hour-guidance.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `NextHourGuidanceStore` |
-| 跟踪清单 | `trend-tracking-items.json` | prettyPrinted + sortedKeys | **0o600** | **无** | 单文件覆盖 | `TrendTrackingStore` |
 | 基金穿透缓存 | `fund-look-through-cache.json` | — | — | — | — | `FundLookThroughClient` |
 | Tavily 搜索缓存 | `~/Library/Caches/QiemanDashboard/AIResearch/Tavily/*.json` | prettyPrinted + sortedKeys | **0o600** | 1 | 每请求一文件，最多 64 个；长期 6 小时、盘中读取门槛 10 分钟 | `TrendWebSearchResponseCache` |
 | (已预留)组合洞察快照 | `portfolio-insight-snapshots.json` | — | — | — | — | URL 已定义,暂无 Store 消费 |
 
 > **2026-09-02 密钥存储迁移注记（Keychain 退役）**：API Key（趋势模型/AlphaVantage）与同步凭证（password/accessToken）自本日起存 UserDefaults（`LocalSecretStore`，account 沿用旧 fallback key `qieman.trend.*`/`qieman.sync.*`）。根因：旧签名身份创建的钥匙串条目被新身份读取会触发授权弹窗，拒绝后每次重现（2026-08-31 实证；稳定签名身份无法覆盖本地开发构建混用场景）。迁移零弹框：UserDefaults 已有值（旧 fallback 通道每次成功读都会回填）直接使用；无值时至多尝试读一次旧 Keychain（标记防重复弹框），随后 delete 全部旧条目（delete 不弹窗）。`KeychainHelper.swift` 已删除，读写经注入闭包（测试不受影响）。
 
-完整诊断日志通过 `AIAgentDiagnosticLog.recorder` TaskLocal 贯穿趋势研究、市场雷达、收盘复盘、长期研判、盘中 V1/V2 子 Agent 与 DecisionCase 专项研究。按执行顺序保存：运行元数据、完整模型 messages/tools 请求、完整 assistant 响应、工具参数、工具原始结果、实际回灌模型的结果、校验错误、重试以及最终报告或失败状态。API Key、Authorization、Cookie、Token、Secret 和 Password 字段递归替换为 `[redacted]`；为了定位持仓归因问题，其余业务数据会保留，因此日志只应在本机受控范围内使用。设置页“AI 研判 → 完整诊断日志”可直接打开目录。
+完整诊断日志通过 `AIAgentDiagnosticLog.recorder` TaskLocal 贯穿趋势研究、收盘复盘、长期研判、盘中 3+1 子 Agent 与 DecisionCase 专项研究。按执行顺序保存：运行元数据、完整模型 messages/tools 请求、完整 assistant 响应、工具参数、工具原始结果、实际回灌模型的结果、校验错误、重试以及最终报告或失败状态。API Key、Authorization、Cookie、Token、Secret 和 Password 字段递归替换为 `[redacted]`；为了定位持仓归因问题，其余业务数据会保留，因此日志只应在本机受控范围内使用。设置页“AI 研判 → 完整诊断日志”可直接打开目录。
 
 ### 当前已知不一致(改造时需注意)
 
-1. **`next-hour-guidance.json` 与 `trend-tracking-items.json` 无 schemaVersion**。向后兼容纯靠 Codable 默认值兜底,任何字段重命名都会静默吞掉旧数据。投资智能改造若引入 DecisionCase,应从一开始就带 schemaVersion。
+1. **历史数据不再兼容**：`TrendAnalysisReport` 与 `DecisionCase` 仅接受 `schemaVersion=2`，v1 解码直接拒绝。旧跟踪、信号与迁移文件仅保留在磁盘，不再由现行代码加载。
 
 ---
 
@@ -468,7 +430,7 @@ runDailyTrendAnalysisIfNeeded():
 ### 8.2 数据层隔离
 
 - 链路 B **单向接收**链路 A 的报告(经 NextHourGuidanceContext),无反向数据流
-- 链路 B 的结果(NextHourGuidanceReport)与链路 C 的对象(TrendTrackingItem)**模型不兼容**,无转换路径
+- 链路 B 的结果(NextHourGuidanceReport)与链路 C 的 DecisionCase **模型不兼容**,无自动转换路径
 - 链路 B 每次运行**新建** TrendEvidenceLedger,不复用链路 A 的 ledger
 
 ### 8.3 投资智能改造的影响
@@ -506,7 +468,7 @@ runDailyTrendAnalysisIfNeeded():
 | Claim 级权重 | 现有只做关联性校验,无 claim 级证据权重 |
 | 证据冲突检测 | 现有只有 supports/counters 区分,无冲突图 |
 | 跨运行持久化证据图谱 | 现有 Ledger 是 in-memory,运行结束即销毁 |
-| DecisionCase 状态机 | 全新,现有 TrendTrackingItem 无状态机 |
+| DecisionCase 状态机 | 已落地，当前仅接受 schemaVersion=2 |
 | 结构化触发条件求值 | 现有 triggerConditions 是自然语言,不可自动求值 |
 
 ### 9.3 Harness 抽取策略(重要)
@@ -572,16 +534,19 @@ Core/TrendResearch/
 Decision LLM 输出 → `RiskOverrideStateMachine`（风险否决，单向保守：仅压进攻方向）→ `DecisionGuardrailPipeline`（结构稳定器 → 市场阶段护栏 → 数据质量置信度封顶）。每次修正落 `DecisionScoreCalibration` 审计字段。
 
 ### 10.5 M7 运行时增量（不破坏第 2/7 节既有契约）
+## 10. 市场数据与通用决策基础设施
 
-- 工具签名 = sorted-keys JSON + **参数值级代码规范化**（`0700.HK`≡`hk700`≡`HK00700`）→ 等价调用共享缓存与非重试语义
-- `budgetSkipBeforeRequest`：剩余预算 <8s 止损终止（区别于 totalTimeout，不发计费请求）
-- `get_market_snapshot` scope guard：请求代码与冻结快照完全无交集 → `scope_violation` 错误（部分缺失仍走 warning）
+### 10.1 当前保留模块
 
-### 10.6 App 集成接线（2026-08-31 全部完成）
+- `Core/MarketData/`：多源行情、K线、全市场快照、NewsNow、缓存与熔断，以及规则技术分析。
+- `Core/InvestmentIntelligence/DecisionContract/`：`CanonicalDecisionScale` 与 `MarketPhase`，供技术分析、调度和其他现行模块共用。
+- `Core/TrendResearch/TrendResearchArgumentCanonicalizer.swift`：参数值级代码规范化与等价调用缓存。
 
-核心库与 Agent 工具已完成；App 侧接线全部落地：
-- **L6 信号闭环全自动**：趋势报告落盘自动 ingest（`saveTrendAnalysisReport` → 抽取/去重/反向失效/胜率校准，`MarketSignalActions.ingestMarketSignalsFromReport`）；每日盘后 15:35 起 60s 轮询触发 `settleDueSignals`（每天一次，UserDefaults `qieman.marketSignals.lastSettleDay` 记日）；Store 落在 `investment-intelligence/market-signals/`
-- **L7 流水线 UI 入口（2026-09-02 已下线）**：「市场信号与研究」双端面板移除（实证零使用：L6 信号存储从未有过数据、L7/L8 从未运行过一次），`marketResearchState` 退出互斥 guard、信号结算 15:35 轮询停用；**Core（MarketSignals/Pipeline/Backtest/胜率校准）全部保留**，`runMarketResearch`/`settleDueSignals` 等 AppModel 方法与测试不动，重启只需恢复 UI 接线。L6 的「判断可验证」精神由收盘复盘的昨日判断对账切片承接（见第 2.0 节注记）
-- **L8 回测入口**：同面板策略技能 Picker + 标的 → `runStrategyBacktest` 拉约一年日 K 规则回测（纯本地计算，无 LLM、不占互斥）
-- **L1 广度预暖 + 注入**：`MarketDataEngine.shared` 全局单例（缓存/熔断共享，各处自建实例会使 TTL 缓存失效）；交易日 09:00–15:30 由 60s 调度循环预暖广度缓存（`MarketDataWarmup`，TTL 10 分钟内 Agent 工具秒回）；`NextHourGuidanceContext.marketBreadth` 预取注入——V1 经 contextToolResult 以 `market:breadth:{date}` 同口径登记证据，V2 市场 Agent user message 直带广度摘要；字段缺省 nil 与旧版行为完全一致（解码兼容有测试锁定）
-- **展示**：双端活跃/最近结算信号列表 + 全局胜率记忆摘要；方向与结算红涨绿跌走 `AppPalette.marketGain/marketLoss`
+### 10.2 Agent 工具
+
+- `get_market_breadth`：全市场广度（TTL 10 分钟），证据 ID `market:breadth:{date}`。
+- `get_daily_kline`：日 K + 技术分析摘要，证据 ID `ta:{code}:{date}`。
+
+### 10.3 已移除链路
+
+2026-11-18 起，L6 市场信号、L7 市场研究流水线、L8 策略回测及仅供其使用的策略技能库完整移除：不再加载信号、抽取报告行动候选、写信号 Store、执行结算或提供 AppModel 运行入口。通用市场机会分析不属于上述退役模块，继续保留。

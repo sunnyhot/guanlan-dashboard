@@ -101,6 +101,36 @@ final class DecisionCaseStateMachineTests: XCTestCase {
         XCTAssertEqual(cs.schemaVersion, DecisionCase.currentSchemaVersion)
     }
 
+    func testV1CaseIsRejected() throws {
+        let encoded = try JSONEncoder().encode(makeCase(state: .stable, lifecycle: .decisionReady))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object["schemaVersion"] = 1
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        XCTAssertThrowsError(try JSONDecoder().decode(DecisionCase.self, from: data))
+    }
+
+    func testV2MigratedEventDecodes() throws {
+        var cs = makeCase(state: .watch, lifecycle: .monitoring)
+        cs.events = [
+            DecisionCaseEvent(
+                at: "2026-08-01 20:00:00",
+                type: .migrated,
+                previousLifecycle: nil,
+                newLifecycle: .monitoring,
+                previousDecisionState: nil,
+                newDecisionState: .watch,
+                reason: "既有 v2 迁移事件",
+                actor: .migration
+            )
+        ]
+        let data = try JSONEncoder().encode(cs)
+
+        let decoded = try JSONDecoder().decode(DecisionCase.self, from: data)
+        XCTAssertEqual(decoded.schemaVersion, 2)
+        XCTAssertEqual(decoded.events.first?.type, .migrated)
+    }
+
     // MARK: - UserDecisionProfile 默认值与约束
 
     func testDefaultProfileDoesNotAllowStrongAction() {

@@ -9,8 +9,8 @@ import Foundation
 //
 // 复用基础设施（不重写）：
 // - TrendResearchAgentClient（protocol）—— 所有子 Agent 共用 client.complete()
-// - TrendResearchToolRegistry —— web_search/SEC/lookthrough 工具集
-// - TrendEvidenceLedger（actor）—— 3 个子 Agent 共享同一个 Ledger
+// - TrendResearchToolRegistry —— 基金穿透等只读工具
+// - TrendEvidenceLedger（actor）—— 三方结构化结论统一登记到主 Ledger
 
 // MARK: - ① 行情信号 Agent 输出
 
@@ -72,6 +72,9 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
 
     let client: any TrendResearchAgentClient
     let registry: TrendResearchToolRegistry
+    let liveContext: NextHourGuidanceContext
+    let researchSnapshot: TrendResearchSnapshot
+    let evidenceLedger: TrendEvidenceLedger
 
     // 预算
     private static let perAgentTimeout: Double = 90
@@ -81,26 +84,30 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
 
     init(
         client: any TrendResearchAgentClient,
-        registry: TrendResearchToolRegistry
+        registry: TrendResearchToolRegistry,
+        context: NextHourGuidanceContext,
+        snapshot: TrendResearchSnapshot,
+        evidenceLedger: TrendEvidenceLedger
     ) {
         self.client = client
         self.registry = registry
+        self.liveContext = context
+        self.researchSnapshot = snapshot
+        self.evidenceLedger = evidenceLedger
     }
 
     /// 并行运行 3 个子 Agent，返回各自的结构化结论。
     func runAnalysisAgents(
-        context: NextHourGuidanceContext,
-        snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings
     ) async throws -> (MarketSignalAssessment, NewsEventAssessment, PortfolioContextAssessment) {
         async let market = runMarketSignalAgent(
-            context: context, settings: settings
+            context: liveContext, settings: settings
         )
         async let news = runNewsEventAgent(
-            context: context, settings: settings
+            context: liveContext, settings: settings
         )
         async let portfolio = runPortfolioContextAgent(
-            context: context, snapshot: snapshot, settings: settings
+            context: liveContext, snapshot: researchSnapshot, settings: settings
         )
         return try await (market, news, portfolio)
     }
@@ -153,6 +160,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
 
         let userMessage = """
         请分析以下标的的实时行情走势并提交结论。标的数量：\(context.assets.count)
+        实时行情上下文（App 已冻结）：\(context.jsonString())
         \(context.lastCloseReview.map { review in
             "昨日关注(需在行情维度逐条核对并在结论中回应):" +
             review.tomorrowWatch.joined(separator: "；")
@@ -168,6 +176,8 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             userMessage: userMessage,
             tools: tools,
             submitToolName: "submit_market_signal",
+            context: context,
+            snapshot: researchSnapshot,
             settings: settings,
             temperature: Self.marketAgentTemp
         )
@@ -240,6 +250,8 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             userMessage: userMessage,
             tools: tools,
             submitToolName: "submit_news_events",
+            context: context,
+            snapshot: researchSnapshot,
             settings: settings,
             temperature: Self.newsAgentTemp
         )
@@ -299,6 +311,8 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             userMessage: userMessage,
             tools: tools,
             submitToolName: "submit_portfolio_context",
+            context: context,
+            snapshot: snapshot,
             settings: settings,
             temperature: Self.portfolioAgentTemp
         )
@@ -313,6 +327,8 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
         userMessage: String,
         tools: [AgentToolDefinition],
         submitToolName: String,
+        context: NextHourGuidanceContext,
+        snapshot: TrendResearchSnapshot,
         settings: TrendAIProviderSettings,
         temperature: Double
     ) async throws -> T {
@@ -375,9 +391,23 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
                 continue
             }
 
-            // 执行非提交工具（web_search / lookthrough 等）
+            // 执行非提交工具。行情使用冻结的实时上下文，穿透与其他工具使用真实研究快照。
             for call in result.toolCalls where call.function.name != submitToolName {
-                let toolResult = await registry.execute(call, context: makeDummyContext())
+                let toolResult: TrendResearchToolResult
+                if call.function.name == "get_live_market_context" {
+                    toolResult = await NextHourGuidanceEvidenceFactory.liveContextResult(
+                        context: context,
+                        ledger: evidenceLedger
+                    )
+                } else {
+                    let toolContext = TrendResearchToolContext(
+                        snapshot: snapshot,
+                        scope: .full,
+                        evidenceLedger: evidenceLedger,
+                        alphaVantageSettings: .empty
+                    )
+                    toolResult = await registry.execute(call, context: toolContext)
+                }
                 await AIAgentDiagnosticLog.recordToolResult(
                     turn: turn + 1,
                     call: call,
@@ -407,19 +437,7 @@ struct NextHourGuidanceSubAgentOrchestrator: Sendable {
             description: "读取实时行情、持仓报价、大盘指数。",
             parameters: ["type": "object", "properties": [:], "additionalProperties": false]
         )
-        // 注意：实际行情数据通过 user message 注入（context.jsonString()），
-        // 这里工具定义让模型知道可以读取。真正执行时返回 context 摘要。
-    }
-
-    private func makeDummyContext() -> TrendResearchToolContext {
-        // 子 Agent 的工具执行（lookthrough）需要一个 ToolContext。
-        // 实际运行时由编排器注入真实的 Ledger/Snapshot/settings；
-        // 这里只在模型未调用工具就提交时作为兜底（不会执行真实搜索）。
-        TrendResearchToolContext(
-            snapshot: TrendResearchSnapshot.placeholder,
-            evidenceLedger: TrendEvidenceLedger(),
-            alphaVantageSettings: .empty
-        )
+        // 实际执行时由 NextHourGuidanceEvidenceFactory 返回冻结上下文并登记真实证据。
     }
 
     private func makeEmptyAssessment<T: Decodable>() throws -> T {
@@ -449,5 +467,125 @@ enum NextHourGuidanceSubAgentError: Error, LocalizedError {
         switch self {
         case .assessmentDecodeFailed: return "子 Agent 结论解码失败"
         }
+    }
+}
+
+/// 将盘中冻结上下文转换为真实工具结果和可核验证据，供 3+1 子 Agent 共用。
+enum NextHourGuidanceEvidenceFactory {
+    static func liveContextResult(
+        context: NextHourGuidanceContext,
+        ledger: TrendEvidenceLedger
+    ) async -> TrendResearchToolResult {
+        var evidence: [TrendEvidence] = context.assets.map { asset in
+            let priceText = asset.currentPrice.map { String($0) } ?? "未知"
+            let changeText = asset.estimateChangePct.map { String(format: "%+.2f%%", $0) } ?? "未知"
+            let weightText = asset.weightPct.map { String(format: "%.2f%%", $0) } ?? "未知"
+            let summary = asset.name + "（" + (asset.code ?? "无代码") + "）价格 "
+                + priceText + "，涨跌 " + changeText + "，组合权重 " + weightText + "。"
+            return TrendEvidence(
+                id: asset.evidenceID,
+                sourceName: asset.quoteSource ?? "本地持仓行情",
+                title: asset.name + " 行情与持仓快照",
+                url: nil,
+                publishedAt: asset.quoteTime,
+                retrievedAt: context.generatedAt,
+                summary: summary,
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .portfolioSnapshot,
+                    sourceTier: .primary,
+                    entityCodes: [asset.code].compactMap { $0 },
+                    entityNames: [asset.name],
+                    quoteType: asset.quoteAssessment.quoteType,
+                    freshnessStatus: asset.quoteAssessment.freshnessStatus,
+                    metadataConfidence: .deterministic
+                )
+            )
+        }
+        evidence.append(contentsOf: context.market.map { quote in
+            TrendEvidence(
+                id: quote.evidenceID,
+                sourceName: quote.sourceLabel,
+                title: quote.name,
+                url: nil,
+                publishedAt: quote.quotedAt,
+                retrievedAt: context.generatedAt,
+                summary: quote.name + " " + String(quote.price) + "，涨跌 "
+                    + (quote.changePct.map { String(format: "%+.2f%%", $0) } ?? "未知") + "。",
+                metadata: TrendEvidenceMetadata(
+                    sourceKind: .marketQuote,
+                    sourceTier: .primary,
+                    entityNames: [quote.name],
+                    quoteType: quote.quoteAssessment.quoteType,
+                    freshnessStatus: quote.quoteAssessment.freshnessStatus,
+                    metadataConfidence: .deterministic
+                )
+            )
+        })
+        if let breadth = context.marketBreadth {
+            let amountText = breadth.totalAmountYi.map { String(format: "%.1f", $0) } ?? "缺失"
+            evidence.append(
+                TrendEvidence(
+                    id: breadth.evidenceID,
+                    sourceName: "全市场行情快照",
+                    title: "A股市场广度统计（预暖注入）",
+                    url: nil,
+                    publishedAt: nil,
+                    retrievedAt: breadth.computedAt,
+                    summary: breadth.summary + "；两市成交额约 " + amountText + " 亿元。边界："
+                        + (breadth.dataBoundary.isEmpty ? "无" : breadth.dataBoundary),
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .marketQuote,
+                        sourceTier: .primary,
+                        requestedTopicKeys: ["market-breadth", "市场广度"],
+                        entityNames: ["A股整体"],
+                        metadataConfidence: .deterministic
+                    )
+                )
+            )
+        }
+        if let news = context.marketNews {
+            evidence.append(contentsOf: news.map { item in
+                TrendEvidence(
+                    id: item.evidenceID,
+                    sourceName: item.sourceName + "（NewsNow 热榜）",
+                    title: item.title,
+                    url: item.url,
+                    publishedAt: nil,
+                    retrievedAt: context.generatedAt,
+                    summary: item.title,
+                    metadata: TrendEvidenceMetadata(
+                        sourceKind: .webSearch,
+                        sourceTier: item.sourceTier,
+                        publisherKey: item.publisherKey,
+                        requestedTopicKeys: ["财经热榜"],
+                        entityNames: item.entityNames,
+                        metadataConfidence: .deterministic
+                    )
+                )
+            })
+        }
+        await ledger.record(evidence)
+
+        guard let data = try? JSONEncoder().encode(context),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return .content(
+                TrendResearchToolEnvelope.error(
+                    code: "context_serialization_failed",
+                    message: "实时行情上下文序列化失败。"
+                ),
+                isError: true
+            )
+        }
+        return .content(
+            TrendResearchToolEnvelope.success(
+                [
+                    "context": object,
+                    "fresh_market_data": context.marketDataIsFresh,
+                    "evidence_rule": "buy/sell 需至少 3 条不同的真实证据并包含原始行情 ID；基金有披露时还需穿透证据"
+                ],
+                warnings: context.marketDataWarnings,
+                evidenceIDs: evidence.map { $0.id }
+            )
+        )
     }
 }

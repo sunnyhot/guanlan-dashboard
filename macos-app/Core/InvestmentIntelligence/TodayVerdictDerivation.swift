@@ -43,7 +43,7 @@ enum TodayVerdictDerivation {
             return "短线\(postureWord(for: posture))"
         }
 
-        // ③ 市场雷达最强信号。
+        // ③ 全市场机会最强信号。
         if let name = input.topRadarSignalName?.trimmingCharacters(in: .whitespacesAndNewlines),
            !name.isEmpty,
            let recommendation = input.topRadarRecommendation {

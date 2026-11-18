@@ -1,6 +1,6 @@
 import Foundation
 
-// 工具注册表：组合概览、持仓、市场快照、市场广度、日K技术分析、SEC 官方源、Alpha Vantage 和报告提交。
+// 工具注册表：组合概览、持仓、市场快照、市场广度、日K技术分析、Alpha Vantage 和报告提交。
 //
 // submit_trend_report 见 SubmitTrendReportTool.swift。
 
@@ -408,28 +408,22 @@ struct MarketSnapshotTool: TrendResearchTool {
             return .content(TrendResearchToolEnvelope.error(code: "invalid_arguments", message: "参数不是合法 JSON：\(error.localizedDescription)"), isError: true)
         }
 
-        let isMarketOnly = context.scope == .marketRadar
         let includeIndices = params.include_indices ?? true
-        let includeUnderlyingHoldings = !isMarketOnly
-            && (params.include_underlying_holdings ?? true)
+        let includeUnderlyingHoldings = params.include_underlying_holdings ?? true
         let snapshot = context.snapshot
         var quotes: [TrendResearchQuote] = []
         if includeIndices {
             quotes += snapshot.marketQuotes.filter { $0.kind == "index" }
         }
         let requestedCodes = params.asset_codes.map { Set($0) }
-        if !isMarketOnly {
-            quotes += snapshot.marketQuotes.filter { quote in
-                quote.kind == "fund-estimate" && (requestedCodes?.contains(quote.code) ?? true)
-            }
+        quotes += snapshot.marketQuotes.filter { quote in
+            quote.kind == "fund-estimate" && (requestedCodes?.contains(quote.code) ?? true)
         }
 
-        let relevantPositions = isMarketOnly
-            ? []
-            : relevantUnderlyingPositions(
-                snapshot: snapshot,
-                requestedFundCodes: requestedCodes
-            )
+        let relevantPositions = relevantUnderlyingPositions(
+            snapshot: snapshot,
+            requestedFundCodes: requestedCodes
+        )
         let relevantUnderlyingCodes = Set(relevantPositions.map(\.code))
         if includeUnderlyingHoldings {
             quotes += snapshot.marketQuotes.filter { quote in
