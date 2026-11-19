@@ -937,7 +937,7 @@ private struct MenuBarGoldForexRow: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(quote.kind.isForex ? "CNY" : "USD/oz")
+                Text(quote.kind.unitLabel)
                     .font(AppPalette.appFont(.caption))
                     .foregroundStyle(AppPalette.muted)
             }
@@ -968,7 +968,7 @@ private struct MenuBarGoldForexRow: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(quote.kind.label) \(priceText)，\(percentOptional(quote.changePct))"
+            "\(quote.kind.label) \(priceText) \(quote.kind.unitLabel)，\(percentOptional(quote.changePct))"
         )
     }
 }

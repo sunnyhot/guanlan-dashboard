@@ -477,7 +477,7 @@ final class QiemanPlatformNativeClient {
     }
 
     /// 解析新浪批量行情文本为黄金/汇率报价。
-    /// hf_（海外现货）字段：[0]最新 [6]时间 [7]昨收 [12]日期 [13]名称；
+    /// hf_/gds_（海外/国内现货）字段：[0]最新 [6]时间 [7]昨收 [12]日期 [13]名称；
     /// fx_（外汇）字段：[0]时间 [3]昨收 [8]最新 [9]名称 [10]涨跌% [11]涨跌额 [17]日期。
     /// internal 供解析单测直接喂样例文本（字段布局先例见 fetchSinaGlobalFuturesEstimate / fetchSinaForexEstimate）。
     func parseGoldForexQuotes(text: String) -> [GoldForexKind: GoldForexQuote] {

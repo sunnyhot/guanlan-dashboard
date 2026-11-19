@@ -92,10 +92,11 @@ struct MarketIndexQuote: Hashable, Identifiable {
 }
 
 /// 黄金/汇率行情标的，统一走新浪行情（腾讯无外汇数据）。
-/// 海外现货（hf_ 前缀）与外汇（fx_ 前缀）返回字段布局不同，解析差异见
+/// 海外/国内现货（hf_/gds_ 前缀）与外汇（fx_ 前缀）返回字段布局不同，解析差异见
 /// `QiemanPlatformNativeClient.fetchGoldForexQuotes`。
 enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
     case xauUSD
+    case au9999CNY
     case xagUSD
     case usdCNY
     case usdCNH
@@ -105,6 +106,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
     var sinaSymbol: String {
         switch self {
         case .xauUSD: return "hf_XAU"
+        case .au9999CNY: return "gds_AU9999"
         case .xagUSD: return "hf_XAG"
         case .usdCNY: return "fx_susdcny"
         case .usdCNH: return "fx_susdcnh"
@@ -114,6 +116,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .xauUSD: return "伦敦金"
+        case .au9999CNY: return "上海金 Au99.99"
         case .xagUSD: return "伦敦银"
         case .usdCNY: return "美元/在岸人民币"
         case .usdCNH: return "美元/离岸人民币"
@@ -123,9 +126,18 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
     var compactLabel: String {
         switch self {
         case .xauUSD: return "伦敦金"
+        case .au9999CNY: return "上海金"
         case .xagUSD: return "伦敦银"
         case .usdCNY: return "在岸人民币"
         case .usdCNH: return "离岸人民币"
+        }
+    }
+
+    var unitLabel: String {
+        switch self {
+        case .xauUSD, .xagUSD: return "USD/oz"
+        case .au9999CNY: return "元/克"
+        case .usdCNY, .usdCNH: return "CNY"
         }
     }
 
