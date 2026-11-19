@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.0/QiemanDashboard-5.0.0.zip",
-    "name" : "QiemanDashboard-5.0.0.zip",
-    "sha256" : "ee5e9da1edd52b84e2525a615fd2b22a346068f67d289355a5e30e9bd64f2d57",
-    "size" : 8270877
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.1/QiemanDashboard-5.0.1.zip",
+    "name" : "QiemanDashboard-5.0.1.zip",
+    "sha256" : "655b951df7fd14fca183287ee747aff3263c4966d4259ef2fee14067749539c7",
+    "size" : 8274575
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.0/QiemanDashboard-5.0.0.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.1/QiemanDashboard-5.0.1.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-5.0.0.zip",
-      "size" : 8270877
+      "name" : "QiemanDashboard-5.0.1.zip",
+      "size" : 8274575
     }
   ],
-  "body" : "发布 v5.0.0 统一盘中研判并清理退役投资链路",
-  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v5.0.0",
-  "name" : "观澜 v5.0.0",
-  "notes" : "发布 v5.0.0 统一盘中研判并清理退役投资链路",
+  "body" : "菜单栏新增上海金 Au99.99 并发布 v5.0.1\n完善 Homebrew 升级命令与发布同步",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v5.0.1",
+  "name" : "观澜 v5.0.1",
+  "notes" : "菜单栏新增上海金 Au99.99 并发布 v5.0.1\n完善 Homebrew 升级命令与发布同步",
   "published_at" : "",
-  "sha256" : "ee5e9da1edd52b84e2525a615fd2b22a346068f67d289355a5e30e9bd64f2d57",
-  "tag" : "v5.0.0",
-  "tag_name" : "v5.0.0",
-  "version" : "5.0.0"
+  "sha256" : "655b951df7fd14fca183287ee747aff3263c4966d4259ef2fee14067749539c7",
+  "tag" : "v5.0.1",
+  "tag_name" : "v5.0.1",
+  "version" : "5.0.1"
 }
