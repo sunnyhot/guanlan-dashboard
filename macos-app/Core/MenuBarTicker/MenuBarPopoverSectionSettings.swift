@@ -45,7 +45,7 @@ struct MenuBarPopoverSectionSettings: Codable, Hashable {
         order: [.portfolio, .watchlist, .marketIndices, .goldForex],
         hidden: [],
         marketIndexKinds: [.sseComposite, .csi300, .chinext],
-        goldForexKinds: [.xauUSD, .au9999CNY, .usdCNY]
+        goldForexKinds: [.xauUSD, .au9999CNY, .agTDCNY, .usdCNY]
     )
 
     init(

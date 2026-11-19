@@ -98,6 +98,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
     case xauUSD
     case au9999CNY
     case xagUSD
+    case agTDCNY
     case usdCNY
     case usdCNH
 
@@ -108,6 +109,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
         case .xauUSD: return "hf_XAU"
         case .au9999CNY: return "gds_AU9999"
         case .xagUSD: return "hf_XAG"
+        case .agTDCNY: return "gds_AGTD"
         case .usdCNY: return "fx_susdcny"
         case .usdCNH: return "fx_susdcnh"
         }
@@ -118,6 +120,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
         case .xauUSD: return "伦敦金"
         case .au9999CNY: return "上海金 Au99.99"
         case .xagUSD: return "伦敦银"
+        case .agTDCNY: return "上海银 Ag(T+D)"
         case .usdCNY: return "美元/在岸人民币"
         case .usdCNH: return "美元/离岸人民币"
         }
@@ -128,6 +131,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
         case .xauUSD: return "伦敦金"
         case .au9999CNY: return "上海金"
         case .xagUSD: return "伦敦银"
+        case .agTDCNY: return "上海银"
         case .usdCNY: return "在岸人民币"
         case .usdCNH: return "离岸人民币"
         }
@@ -137,6 +141,7 @@ enum GoldForexKind: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .xauUSD, .xagUSD: return "USD/oz"
         case .au9999CNY: return "元/克"
+        case .agTDCNY: return "元/千克"
         case .usdCNY, .usdCNH: return "CNY"
         }
     }

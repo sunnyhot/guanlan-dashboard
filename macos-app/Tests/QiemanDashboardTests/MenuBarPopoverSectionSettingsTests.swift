@@ -26,7 +26,7 @@ final class MenuBarPopoverSectionSettingsTests: XCTestCase {
         )
         XCTAssertEqual(settings.visibleSections, settings.order)
         XCTAssertEqual(settings.marketIndexKinds, [.sseComposite, .csi300, .chinext])
-        XCTAssertEqual(settings.goldForexKinds, [.xauUSD, .au9999CNY, .usdCNY])
+        XCTAssertEqual(settings.goldForexKinds, [.xauUSD, .au9999CNY, .agTDCNY, .usdCNY])
         XCTAssertFalse(settings.isHidden(.marketIndices))
         XCTAssertFalse(settings.isHidden(.goldForex))
     }
@@ -211,6 +211,7 @@ final class MenuBarPopoverSectionSettingsTests: XCTestCase {
         let text = """
         var hq_str_hf_XAU="4609.36,4601.580,4609.36,4609.71,4613.31,4571.63,15:26:00,4601.58,4603.23,0,0,0,2026-08-28,伦敦金（现货黄金）";
         var hq_str_gds_AU9999="800.30,0,798.10,800.58,803.90,797.00,20:46:52,801.93,803.90,1142,1.00,1.00,2026-11-19,沪金99";
+        var hq_str_gds_AGTD="10732.00,0,10720.00,10730.00,10782.00,10710.00,21:03:04,10911.00,10715.00,58414,16.00,60.00,2026-11-19,白银延期";
         var hq_str_fx_susdcny="15:26:06,6.7197000000,6.7215000000,6.7249000000,121.0000000000,6.7108000000,6.7215000000,6.7094000000,6.7206000000,在岸人民币,-0.0639,-0.0043,0.0121,此行情由新浪财经计算得出,0.0000,0.0000,,2026-08-28";
         """
 
@@ -238,6 +239,19 @@ final class MenuBarPopoverSectionSettingsTests: XCTestCase {
         XCTAssertEqual(domesticGold?.changePct ?? 0, -0.20, accuracy: 0.0001)
         XCTAssertEqual(domesticGold?.name, "沪金99")
         XCTAssertEqual(domesticGold?.quotedAt, "2026-11-19 20:46:52")
+
+        // gds_(上海银 Ag(T+D))报价单位是元/千克，同样复用现货字段布局。
+        XCTAssertEqual(GoldForexKind.agTDCNY.sinaSymbol, "gds_AGTD")
+        XCTAssertEqual(GoldForexKind.agTDCNY.label, "上海银 Ag(T+D)")
+        XCTAssertEqual(GoldForexKind.agTDCNY.unitLabel, "元/千克")
+        let domesticSilver = quotes[.agTDCNY]
+        XCTAssertNotNil(domesticSilver)
+        XCTAssertEqual(domesticSilver?.price ?? 0, 10732.00, accuracy: 0.0001)
+        XCTAssertEqual(domesticSilver?.previousClose ?? 0, 10911.00, accuracy: 0.0001)
+        XCTAssertEqual(domesticSilver?.changeAmount ?? 0, -179.00, accuracy: 0.0001)
+        XCTAssertEqual(domesticSilver?.changePct ?? 0, -1.64, accuracy: 0.0001)
+        XCTAssertEqual(domesticSilver?.name, "白银延期")
+        XCTAssertEqual(domesticSilver?.quotedAt, "2026-11-19 21:03:04")
 
         // fx_(在岸人民币):最新 [8]、昨收 [3],涨跌率 [10]、涨跌额 [11] 直接采用返回值。
         let cny = quotes[.usdCNY]
