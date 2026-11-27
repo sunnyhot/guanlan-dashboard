@@ -128,6 +128,9 @@ final class AppModel: ObservableObject {
     let pendingTradesStore = PendingTradesStore()
     let investmentPlansStore = InvestmentPlansStore()
     let managerWatchStore = ManagerWatchStore()
+    let fundEstimateCalibrationStore = FundEstimateCalibrationStore()
+    /// 估值校准台账（估算 vs 事后净值）。纯派生数据，不触发 UI 重绘，不做 @Published。
+    var fundEstimateCalibrationLedger = FundEstimateCalibrationLedger()
     let notificationManager = LocalNotificationManager()
     let personalAssetAutomation = PersonalAssetAutomation()
     /// 平台无关更新服务。macOS 走 GitHub Release 自更新；iOS 由 App Store 管理。
@@ -677,6 +680,7 @@ final class AppModel: ObservableObject {
             fundLookThroughClient = FundLookThroughClient(
                 storageFileURL: fundLookThroughCacheFileURL
             )
+            loadSavedFundEstimateCalibration()
             loadSavedPortfolio()
             loadSavedPersonalWatchlist()
             loadPendingTrades()

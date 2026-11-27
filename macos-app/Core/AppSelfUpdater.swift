@@ -292,11 +292,13 @@ struct AppSelfUpdater {
             until /usr/bin/open -n "${APP_PATH}"; do
               attempts=$((attempts + 1))
               if [ "${attempts}" -gt 20 ]; then
-                echo "Timed out trying to relaunch updated app"
-                exit 1
+                echo "Timed out trying to relaunch updated app; keeping installed app and cleaning backup"
+                break
               fi
               sleep 0.5
             done
+            # 安装成功后无论能否自动重启都清理备份；此前 open 超时直接 exit 1 会把
+            # .previous-update 永久留在 /Applications（用户机器上出现过两个残留）。
             rm -rf "${BACKUP_PATH}"
             rm -rf "${WORK_DIR}"
           else

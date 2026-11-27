@@ -1,6 +1,28 @@
 import CryptoKit
 import Foundation
 
+/// 基金概况（跟踪标的/类型）内存缓存。actor 保证 async 上下文安全。
+actor FundProfileCache {
+    static let maxEntries = 256
+    private var profiles: [String: (Date, FundProfileSummary)] = [:]
+
+    func profile(for fundCode: String, ttl: TimeInterval) -> FundProfileSummary? {
+        guard let (loadedAt, profile) = profiles[fundCode],
+              Date().timeIntervalSince(loadedAt) < ttl else {
+            return nil
+        }
+        return profile
+    }
+
+    func store(_ profile: FundProfileSummary, for fundCode: String) {
+        if profiles.count >= Self.maxEntries, profiles[fundCode] == nil,
+           let oldest = profiles.keys.sorted().first {
+            profiles.removeValue(forKey: oldest)
+        }
+        profiles[fundCode] = (Date(), profile)
+    }
+}
+
 actor QiemanPlatformCache {
     static let maxPayloadEntries = 16
     static let maxFundCacheEntries = 256
@@ -148,6 +170,15 @@ final class QiemanPlatformNativeClient {
     let now: () -> Date
     private static let preloadConcurrencyLimit = 6
 
+    /// 估值校准台账快照提供者（只读）。AppModel 启动时注入；默认空台账，融合退化为新鲜度优先。
+    /// 落账与结算由 AppModel 在拿到 snapshot 后执行，client 不写台账。
+    var estimateLedgerProvider: @Sendable () -> FundEstimateCalibrationLedger = { FundEstimateCalibrationLedger() }
+    /// 穿透披露提供者（复用 FundLookThroughClient 磁盘/内存缓存）。默认 nil → 不做穿透估值。
+    var lookThroughProvider: (@Sendable (String) async -> FundLookThroughDisclosure?)?
+    /// 基金概况缓存（跟踪标的/类型）。概况变化慢，按天缓存。
+    private let fundProfileCache = FundProfileCache()
+    private let fundProfileTTL: TimeInterval = 24 * 60 * 60
+
     init(session: URLSession = .shared, now: @escaping () -> Date = Date.init) {
         self.session = session
         self.now = now
@@ -233,7 +264,12 @@ final class QiemanPlatformNativeClient {
                 costValue: costValue,
                 profitAmount: profitAmount,
                 profitPct: profitPct,
-                estimateChangePct: pricePayload.estimateChangePct
+                estimateChangePct: pricePayload.estimateChangePct,
+                estimateConfidence: pricePayload.estimateConfidence,
+                estimateSource: pricePayload.estimateSource,
+                estimateErrorBandPct: pricePayload.estimateErrorBandPct,
+                hasEstimateDisagreement: pricePayload.hasEstimateDisagreement,
+                estimateContributors: pricePayload.estimateContributors
             )
         }
 
@@ -651,7 +687,12 @@ final class QiemanPlatformNativeClient {
                 officialNavDate: firstNonEmpty([quote?.officialNavDate ?? "", latestNav?.date ?? ""]),
                 estimatePrice: quote?.estimatePrice,
                 estimatePriceTime: quote?.estimateTime ?? "",
-                estimateChangePct: quote?.estimateChangePct
+                estimateChangePct: quote?.estimateChangePct,
+                estimateConfidence: quote?.estimateConfidence,
+                estimateSource: quote?.estimateSource,
+                estimateErrorBandPct: quote?.estimateErrorBandPct,
+                hasEstimateDisagreement: quote?.hasEstimateDisagreement ?? false,
+                estimateContributors: quote?.estimateContributors ?? []
             )
         case .stock:
             let quote = stockQuotes[holding.normalizedFundCode]
@@ -1293,42 +1334,312 @@ final class QiemanPlatformNativeClient {
             return historyQuote
         }
 
+        // 官方净值未出（盘中）：并行拉取多路估值候选，交给融合引擎按历史 RMSE 加权 + 新鲜度排序。
         let baseOfficialQuote = latestOfficialQuote ?? historyQuote
-        let legacyQuote = await fetchLegacyFundQuote(fundCode)
-        if let legacyQuote,
-           legacyQuote.estimatePrice != nil || legacyQuote.estimateChangePct != nil {
-            return mergingFundEstimate(
-                fundCode: fundCode,
-                base: baseOfficialQuote ?? legacyQuote,
-                estimate: NativeFundEstimate(
-                    fundName: legacyQuote.fundName,
-                    price: legacyQuote.estimatePrice,
-                    time: legacyQuote.estimateTime,
-                    changePct: legacyQuote.estimateChangePct,
-                    source: "eastmoney_legacy_estimate",
-                    sourceLabel: "东方财富盘中估值"
+        let officialNav = baseOfficialQuote?.officialNav ?? history?.series.last?.nav
+        let fundName = firstNonEmpty([baseOfficialQuote?.fundName ?? "", history?.fundName ?? ""])
+
+        async let legacyQuoteTask = fetchLegacyFundQuote(fundCode)
+        async let sinaEstimateTask = fetchSinaFundEstimate(fundCode)
+        async let lookThroughTask = fetchHoldingsLookThroughEstimate(
+            fundCode: fundCode,
+            fundName: fundName,
+            officialNav: officialNav
+        )
+        async let trackingIndexTask = fetchTrackingIndexEstimate(
+            fundCode: fundCode,
+            officialNav: officialNav
+        )
+        let (legacyQuote, sinaEstimate, lookThroughEstimate, trackingIndexEstimate) = try await (
+            legacyQuoteTask, sinaEstimateTask, lookThroughTask, trackingIndexTask
+        )
+
+        var candidates: [FundEstimateCandidate] = []
+        if let legacyQuote, legacyQuote.estimateChangePct != nil, !legacyQuote.estimateTime.isEmpty {
+            candidates.append(
+                FundEstimateCandidate(
+                    source: FundEstimateSource.eastmoneyLegacyEstimate.rawValue,
+                    sourceLabel: "东方财富盘中估值",
+                    changePct: legacyQuote.estimateChangePct ?? 0,
+                    estimatedNav: legacyQuote.estimatePrice ?? 0,
+                    estimatedAt: legacyQuote.estimateTime,
+                    intrinsicConfidence: 0.85
                 )
             )
         }
-
-        if let sinaEstimate = try? await fetchSinaFundEstimate(fundCode) {
-            return mergingFundEstimate(
-                fundCode: fundCode,
-                base: baseOfficialQuote ?? legacyQuote,
-                estimate: sinaEstimate
+        if let sinaEstimate, let changePct = sinaEstimate.changePct {
+            candidates.append(
+                FundEstimateCandidate(
+                    source: FundEstimateSource.sinaEstimate.rawValue,
+                    sourceLabel: sinaEstimate.sourceLabel,
+                    changePct: changePct,
+                    estimatedNav: sinaEstimate.price ?? 0,
+                    estimatedAt: sinaEstimate.time,
+                    intrinsicConfidence: 0.8
+                )
             )
         }
+        if let lookThroughEstimate {
+            candidates.append(lookThroughEstimate)
+        }
+        if let trackingIndexEstimate {
+            candidates.append(trackingIndexEstimate)
+        }
 
+        let ledger = estimateLedgerProvider()
+        if let fused = FundEstimateFusionEngine.fuse(
+            candidates: candidates,
+            fundCode: fundCode,
+            officialNav: officialNav ?? 0,
+            ledger: ledger,
+            now: now()
+        ) {
+            let base = baseOfficialQuote ?? legacyQuote
+            let merged = mergingFundEstimate(
+                fundCode: fundCode,
+                base: base,
+                estimate: NativeFundEstimate(
+                    fundName: firstNonEmpty([fundName, base?.fundName ?? ""]),
+                    price: fused.estimatedNav,
+                    time: fused.estimatedAt,
+                    changePct: fused.changePct,
+                    source: fused.primarySource,
+                    sourceLabel: fused.sourceLabel
+                )
+            )
+            var result = merged
+            result.estimateConfidence = fused.confidence
+            result.estimateSource = fused.primarySource
+            result.estimateErrorBandPct = fused.errorBandPct
+            result.hasEstimateDisagreement = fused.hasSignificantDisagreement
+            result.estimateContributors = fused.topContributors
+            return result
+        }
+
+        // 所有估值源都失败：旧版按基金名猜代理兜底（QDII/债基等无盘中估值的品种）。
         if let base = baseOfficialQuote ?? legacyQuote,
            let proxyEstimate = try? await fetchFundProxyEstimate(
                fundCode: fundCode,
-               fundName: firstNonEmpty([base.fundName, history?.fundName ?? ""]),
+               fundName: firstNonEmpty([base.fundName, fundName]),
                baseQuote: base
            ) {
             return mergingFundEstimate(fundCode: fundCode, base: base, estimate: proxyEstimate)
         }
 
         return baseOfficialQuote ?? legacyQuote ?? .empty(fundCode)
+    }
+
+    // MARK: - 跟踪指数估值（指数基金 / ETF 联接）
+
+    /// 指数基金：用真实跟踪标的的实时行情做估值。
+    /// ETF 联接约 95% 仓位在目标 ETF、5% 现金，估算涨幅 ≈ 指数涨幅 × 0.95。
+    private func fetchTrackingIndexEstimate(
+        fundCode: String,
+        officialNav: Double?
+    ) async -> FundEstimateCandidate? {
+        guard let officialNav, officialNav > 0 else { return nil }
+        guard let profile = await fetchFundProfile(fundCode: fundCode),
+              profile.isIndexFund,
+              let tracking = profile.trackingTarget,
+              let target = FundTrackingIndexMap.target(forTrackingTarget: tracking) else {
+            return nil
+        }
+        let quotes = await fetchTencentQuotes(symbols: [target.symbol])
+        guard let quote = quotes[target.symbol],
+              let changePct = quote.changePct, changePct.isFinite, abs(changePct) <= 30,
+              let priceTime = quote.priceTime.nilIfEmpty else {
+            return nil
+        }
+        // 现金拖累：指数涨 x%，基金只涨 x × (1 − 现金比例)。
+        let effectiveChange = changePct * (1 - target.cashDragPct / 100)
+        return FundEstimateCandidate(
+            source: FundEstimateSource.trackingIndex.rawValue,
+            sourceLabel: "跟踪指数 · \(target.label)",
+            changePct: effectiveChange,
+            estimatedNav: officialNav * (1 + effectiveChange / 100),
+            estimatedAt: priceTime,
+            intrinsicConfidence: 0.95
+        )
+    }
+
+    /// 取基金概况（带日级缓存）。
+    func fetchFundProfile(fundCode: String) async -> FundProfileSummary? {
+        if let cached = await fundProfileCache.profile(for: fundCode, ttl: fundProfileTTL) {
+            return cached
+        }
+
+        let url = URL(string: "https://fundf10.eastmoney.com/jbgk_\(fundCode).html")!
+        var profile: FundProfileSummary?
+        for attempt in 0..<2 {
+            let text = (try? await requestText(absoluteURL: url, headers: [
+                "Referer": "https://fundf10.eastmoney.com/",
+            ])) ?? ""
+            if let parsed = FundProfileParser.parse(text) {
+                profile = parsed
+                break
+            }
+            if attempt == 0 {
+                try? await Task.sleep(nanoseconds: 400_000_000)
+            }
+        }
+        guard let profile else { return nil }
+        await fundProfileCache.store(profile, for: fundCode)
+        return profile
+    }
+
+    // MARK: - 持仓穿透估值
+
+    /// 用定期报告披露的持仓/行业/资产配置 × 实时行情自算估值。
+    /// 依赖 `lookThroughProvider` 注入；未注入或披露不可用时返回 nil（不阻断其它来源）。
+    private func fetchHoldingsLookThroughEstimate(
+        fundCode: String,
+        fundName: String,
+        officialNav: Double?
+    ) async -> FundEstimateCandidate? {
+        guard let officialNav, officialNav > 0,
+              let provider = lookThroughProvider,
+              let disclosure = await provider(fundCode) else {
+            return nil
+        }
+        let stockHoldings = disclosure.holdings.filter { $0.kind == .stock }
+        guard !stockHoldings.isEmpty || !disclosure.industries.isEmpty else { return nil }
+
+        // 需要行情的标的：个股（归一化为腾讯 symbol）+ 行业代理 + 债券代理。
+        var symbols: [String] = []
+        var stockKeyBySymbol: [String: String] = [:]
+        for holding in stockHoldings {
+            let key = FundHoldingsEstimateEngine.normalizedStockKey(holding.code)
+            guard let symbol = tencentSymbol(forKey: key) else { continue }
+            symbols.append(symbol)
+            stockKeyBySymbol[symbol] = key
+        }
+        let industryByProxy = FundHoldingsEstimateEngine.aggregateIndustries(disclosure.industries)
+        let proxies = Array(industryByProxy.keys) + [
+            FundHoldingsEstimateEngine.fallbackProxy,
+            FundEstimateProxyMap.Proxy(symbol: "sh000012", label: "国债指数"),
+        ]
+        symbols.append(contentsOf: proxies.map(\.symbol))
+        let uniqueSymbols = Array(Set(symbols)).sorted()
+
+        let quotes = await fetchTencentQuotes(symbols: uniqueSymbols)
+        var stockChangePcts: [String: Double] = [:]
+        var proxyChangePcts: [String: Double] = [:]
+        for (symbol, quote) in quotes {
+            guard let changePct = quote.changePct, changePct.isFinite else { continue }
+            if let key = stockKeyBySymbol[symbol] {
+                stockChangePcts[key] = changePct
+            }
+            proxyChangePcts[symbol] = changePct
+        }
+
+        let input = FundHoldingsEstimateInput(
+            fundCode: fundCode,
+            holdings: disclosure.holdings,
+            industries: disclosure.industries,
+            assetAllocation: disclosure.assetAllocation,
+            asOf: disclosure.asOf,
+            stockChangePcts: stockChangePcts,
+            proxyChangePcts: proxyChangePcts,
+            bondProxyChangePct: proxyChangePcts["sh000012"]
+        )
+        guard let result = FundHoldingsEstimateEngine.estimate(
+            input: input,
+            officialNav: officialNav,
+            now: now()
+        ) else { return nil }
+        // 覆盖率门槛：ETF 联接基金 ~90% 仓位在目标 ETF，股票持仓表近乎为空，
+        // 其「覆盖率」只有个位数百分比——这种情况下穿透只是用宽基代理冒充估算，不应作为候选。
+        guard result.coveragePct >= 20 else { return nil }
+
+        let estimateTime = quotes.values
+            .compactMap { $0.priceTime.nilIfEmpty }
+            .max() ?? currentMarketDateText()
+        return FundEstimateCandidate(
+            source: FundEstimateSource.holdingsLookThrough.rawValue,
+            sourceLabel: "持仓穿透",
+            changePct: result.changePct,
+            estimatedNav: result.estimatedNav,
+            estimatedAt: estimateTime,
+            intrinsicConfidence: result.intrinsicConfidence,
+            topContributors: result.topContributors
+        )
+    }
+
+    /// 批量腾讯行情（30 只一批），返回 symbol → quote。复用 `fetchSingleTencentQuote` 的解析。
+    private func fetchTencentQuotes(symbols: [String]) async -> [String: NativeStockQuote] {
+        var result: [String: NativeStockQuote] = [:]
+        let chunks = stride(from: 0, to: symbols.count, by: 30).map { Array(symbols[$0..<min($0 + 30, symbols.count)]) }
+        await withTaskGroup(of: [(String, NativeStockQuote)].self) { group in
+            for chunk in chunks where !chunk.isEmpty {
+                group.addTask {
+                    let url = URL(string: "https://qt.gtimg.cn/q=\(chunk.joined(separator: ","))")!
+                    let text = (try? await self.requestText(absoluteURL: url, headers: [
+                        "Accept": "text/plain,*/*",
+                        "Referer": "https://gu.qq.com/",
+                    ])) ?? ""
+                    return self.parseTencentQuoteLines(text)
+                }
+            }
+            for await pairs in group {
+                for (symbol, quote) in pairs {
+                    result[symbol] = quote
+                }
+            }
+        }
+        return result
+    }
+
+    /// 解析 `v_sh600519="...";v_sz000001="...";` 形式的多行响应。
+    func parseTencentQuoteLines(_ text: String) -> [(String, NativeStockQuote)] {
+        var pairs: [(String, NativeStockQuote)] = []
+        let pattern = #"v_([a-zA-Z]{2}[A-Za-z0-9\.]+)="([^"]*)";"#
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let range = NSRange(text.startIndex..., in: text)
+        for match in regex.matches(in: text, range: range) {
+            guard let symbolRange = Range(match.range(at: 1), in: text),
+                  let payloadRange = Range(match.range(at: 2), in: text) else { continue }
+            let symbol = String(text[symbolRange])
+            let payload = String(text[payloadRange])
+            let parts = payload.split(separator: "~", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count > 32 else { continue }
+            let price = doubleValue(parts[safe: 3]) ?? 0
+            let previousClose = doubleValue(parts[safe: 4])
+            let changePct = resolvedChangePct(
+                reported: doubleValue(parts[safe: 32]),
+                latest: price,
+                previous: previousClose
+            )
+            let quote = NativeStockQuote(
+                stockCode: normalizedString(parts[safe: 2]).nilIfEmpty ?? symbol,
+                stockName: normalizedString(parts[safe: 1]),
+                price: price,
+                priceTime: formattedTencentQuoteTime(parts[safe: 30]),
+                priceSource: "tencent_stock_quote",
+                priceSourceLabel: "股票行情",
+                previousClose: previousClose,
+                changePct: changePct
+            )
+            pairs.append((symbol, quote))
+        }
+        return pairs
+    }
+
+    /// 统一行情 key（A股 6 位 / HK00700 / 美股）→ 腾讯 symbol。
+    func tencentSymbol(forKey key: String) -> String? {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.hasPrefix("HK") {
+            let digits = trimmed.dropFirst(2)
+            guard digits.count == 5, digits.allSatisfy(\.isNumber) else { return nil }
+            return "hk" + digits
+        }
+        if trimmed.range(of: #"^\d{6}$"#, options: .regularExpression) != nil {
+            return tencentStockSymbol(for: trimmed)
+        }
+        if trimmed.range(of: #"^[A-Z]{1,5}$"#, options: .regularExpression) != nil {
+            return "us" + trimmed.lowercased()
+        }
+        return nil
     }
 
     private func fetchLegacyFundQuote(_ fundCode: String) async -> NativeFundQuote? {

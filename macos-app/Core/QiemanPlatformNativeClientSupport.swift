@@ -153,16 +153,18 @@ extension QiemanPlatformNativeClient {
 
     func formattedTencentQuoteTime(_ value: String?) -> String {
         let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if raw.count >= 10, raw.dropFirst(4).first == "-" {
-            return String(raw.prefix(19))
+        // 港股/部分品种形如 "2026/11/27 15:48:28"，统一斜杠为短横线。
+        let normalized = raw.replacingOccurrences(of: "/", with: "-")
+        if normalized.count >= 10, normalized.dropFirst(4).first == "-" {
+            return String(normalized.prefix(19))
         }
-        guard raw.count >= 14 else { return raw }
-        let year = raw.prefix(4)
-        let month = raw.dropFirst(4).prefix(2)
-        let day = raw.dropFirst(6).prefix(2)
-        let hour = raw.dropFirst(8).prefix(2)
-        let minute = raw.dropFirst(10).prefix(2)
-        let second = raw.dropFirst(12).prefix(2)
+        guard normalized.count >= 14 else { return normalized }
+        let year = normalized.prefix(4)
+        let month = normalized.dropFirst(4).prefix(2)
+        let day = normalized.dropFirst(6).prefix(2)
+        let hour = normalized.dropFirst(8).prefix(2)
+        let minute = normalized.dropFirst(10).prefix(2)
+        let second = normalized.dropFirst(12).prefix(2)
         return "\(year)-\(month)-\(day) \(hour):\(minute):\(second)"
     }
 

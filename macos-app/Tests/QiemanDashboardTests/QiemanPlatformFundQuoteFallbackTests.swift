@@ -46,6 +46,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     ],
                 ])
                 return Self.response(for: url, data: data)
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -108,6 +111,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     ],
                 ])
                 return Self.response(for: url, data: data)
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -149,6 +155,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     "Data": ["LSJZList": []],
                 ])
                 return Self.response(for: url, data: data)
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -186,6 +195,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     "Data": ["LSJZList": []],
                 ])
                 return Self.response(for: url, data: data)
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -233,6 +245,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     ],
                 ])
                 return Self.response(for: url, data: data)
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -282,6 +297,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     var hq_str_fu_163415="兴全商业模式混合(LOF)A,16:04:00,5.0374,5.1120,5.9720,0,-1.4593,2026-07-20,5.0679,-0.8627";
                     """.utf8)
                 )
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -342,6 +360,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                         changePct: "-1.49"
                     )
                 )
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -410,6 +431,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     var hq_str_hf_NQ="29000.000,,28990.000,28995.000,29010.000,28700.000,18:20:00,28750.000,28740.000,0,1,1,2026-07-20,纳斯达克指数期货,0";
                     """.utf8)
                 )
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -477,6 +501,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                     var hq_str_fx_susdcny="18:25:26,6.7682,6.7698,6.7752,234,6.7677,6.7768,6.7534,6.7690,美元人民币,-0.0915,-0.0062,0.0234,行情,0,0,,2026-07-20";
                     """.utf8)
                 )
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -528,6 +555,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                 return Self.response(for: url, data: data)
             case "hq.sinajs.cn", "qt.gtimg.cn":
                 return Self.response(for: url, data: Data("var empty=\"\";".utf8))
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -576,6 +606,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                 return Self.response(for: url, data: Data("jsonpgz();".utf8))
             case "hq.sinajs.cn", "qt.gtimg.cn":
                 return Self.response(for: url, data: Data("var empty=\"\";".utf8))
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -658,6 +691,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                 return Self.response(for: url, data: data)
             case "hq.sinajs.cn", "qt.gtimg.cn":
                 return Self.response(for: url, data: Data("var empty=\"\";".utf8))
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -705,6 +741,9 @@ final class QiemanPlatformFundQuoteFallbackTests: XCTestCase {
                 return Self.response(for: url, data: data)
             case "hq.sinajs.cn", "qt.gtimg.cn":
                 return Self.response(for: url, data: Data("var empty=\"\";".utf8))
+            case "hq.sinajs.cn" where url.absoluteString.contains("list=fu_"):
+                // 估值融合引擎并行拉取新浪盘中估值；未显式 stub 的旧回退测试返回空串（无候选）。
+                return Self.response(for: url, data: Data())
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.unsupportedURL)
@@ -812,6 +851,13 @@ private final class MockQiemanPlatformURLProtocol: URLProtocol {
         request
     }
 
+    /// 旧版回退测试不关心基金概况页（`jbgk_*.html`，估值融合引擎新增的数据源）。
+    /// 默认返回「混合型」概况：非指数基金 → 不产生跟踪指数候选，旧测试行为保持不变。
+    /// 需要测概况的用例在 handler 里显式匹配 `fundf10.eastmoney.com` 即可覆盖。
+    static var defaultFundProfileHTML = """
+    <table><tr><th>基金类型</th><td>混合型-偏股</td></tr><tr><th>跟踪标的</th><td>--</td></tr></table>
+    """
+
     override func startLoading() {
         guard let handler = Self.requestHandler else {
             client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
@@ -819,7 +865,14 @@ private final class MockQiemanPlatformURLProtocol: URLProtocol {
         }
 
         do {
-            let (response, data) = try handler(request)
+            let (response, data): (HTTPURLResponse, Data)
+            if request.url?.host == "fundf10.eastmoney.com",
+               request.url?.path.hasPrefix("/jbgk_") == true {
+                response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                data = Data(Self.defaultFundProfileHTML.utf8)
+            } else {
+                (response, data) = try handler(request)
+            }
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)

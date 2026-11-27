@@ -88,6 +88,52 @@ struct NativeFundQuote {
     let estimatePrice: Double?
     let estimateTime: String
     let estimateChangePct: Double?
+    /// 估值可信度（由校准台账 RMSE 分档；未校准为 `.unknown`）。
+    var estimateConfidence: FundEstimateConfidence?
+    /// 估值来源标识（`FundEstimateSource.rawValue`）。
+    var estimateSource: String?
+    /// 误差带半宽（百分点），高/中可信时展示「±x%」。
+    var estimateErrorBandPct: Double?
+    /// 多源估值分歧是否显著。
+    var hasEstimateDisagreement: Bool
+    /// 穿透贡献明细（仅持仓穿透源）。
+    var estimateContributors: [FundEstimateContribution]
+
+    init(
+        fundCode: String,
+        fundName: String,
+        price: Double,
+        priceTime: String,
+        priceSource: String,
+        priceSourceLabel: String,
+        officialNav: Double?,
+        officialNavDate: String,
+        estimatePrice: Double?,
+        estimateTime: String,
+        estimateChangePct: Double?,
+        estimateConfidence: FundEstimateConfidence? = nil,
+        estimateSource: String? = nil,
+        estimateErrorBandPct: Double? = nil,
+        hasEstimateDisagreement: Bool = false,
+        estimateContributors: [FundEstimateContribution] = []
+    ) {
+        self.fundCode = fundCode
+        self.fundName = fundName
+        self.price = price
+        self.priceTime = priceTime
+        self.priceSource = priceSource
+        self.priceSourceLabel = priceSourceLabel
+        self.officialNav = officialNav
+        self.officialNavDate = officialNavDate
+        self.estimatePrice = estimatePrice
+        self.estimateTime = estimateTime
+        self.estimateChangePct = estimateChangePct
+        self.estimateConfidence = estimateConfidence
+        self.estimateSource = estimateSource
+        self.estimateErrorBandPct = estimateErrorBandPct
+        self.hasEstimateDisagreement = hasEstimateDisagreement
+        self.estimateContributors = estimateContributors
+    }
 
     static func empty(_ fundCode: String) -> NativeFundQuote {
         NativeFundQuote(
@@ -153,4 +199,41 @@ struct NativeUserPortfolioPricePayload {
     let estimatePrice: Double?
     let estimatePriceTime: String
     let estimateChangePct: Double?
+    var estimateConfidence: FundEstimateConfidence?
+    var estimateSource: String?
+    var estimateErrorBandPct: Double?
+    var hasEstimateDisagreement: Bool
+    var estimateContributors: [FundEstimateContribution]
+
+    init(
+        assetName: String,
+        currentPrice: Double?,
+        priceTime: String,
+        priceSource: String,
+        officialNav: Double?,
+        officialNavDate: String,
+        estimatePrice: Double?,
+        estimatePriceTime: String,
+        estimateChangePct: Double?,
+        estimateConfidence: FundEstimateConfidence? = nil,
+        estimateSource: String? = nil,
+        estimateErrorBandPct: Double? = nil,
+        hasEstimateDisagreement: Bool = false,
+        estimateContributors: [FundEstimateContribution] = []
+    ) {
+        self.assetName = assetName
+        self.currentPrice = currentPrice
+        self.priceTime = priceTime
+        self.priceSource = priceSource
+        self.officialNav = officialNav
+        self.officialNavDate = officialNavDate
+        self.estimatePrice = estimatePrice
+        self.estimatePriceTime = estimatePriceTime
+        self.estimateChangePct = estimateChangePct
+        self.estimateConfidence = estimateConfidence
+        self.estimateSource = estimateSource
+        self.estimateErrorBandPct = estimateErrorBandPct
+        self.hasEstimateDisagreement = hasEstimateDisagreement
+        self.estimateContributors = estimateContributors
+    }
 }

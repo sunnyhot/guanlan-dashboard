@@ -132,9 +132,20 @@ struct PersonalAssetTableRow: View {
                             .font(AppPalette.appFont(.footnote))
                             .foregroundStyle(changeTint)
                     } else {
-                        Text("估值 \(decimalText(estimatePrice)) · \(percentOptional(row.estimateChangePct))")
-                            .font(AppPalette.appFont(.footnote))
-                            .foregroundStyle(changeTint)
+                        HStack(spacing: 6) {
+                            Text("估值 \(decimalText(estimatePrice)) · \(percentOptional(row.estimateChangePct))")
+                                .font(AppPalette.appFont(.footnote))
+                                .foregroundStyle(changeTint)
+                            if let badge = row.estimateConfidenceBadge {
+                                EstimateConfidenceBadge(
+                                    text: badge,
+                                    tint: row.hasEstimateDisagreement
+                                        ? AppPalette.warning
+                                        : AppPalette.confidenceTint(row.estimateConfidence)
+                                )
+                            }
+                        }
+                        .help(row.estimateHelpText ?? "")
                     }
                 }
                 Text("成本 \(row.costPrice.map(decimalText) ?? "—")")

@@ -911,6 +911,21 @@ struct ToolbarBadge: View {
     }
 }
 
+/// 估值可信度小角标（「准 / 中 / 偏 / 分歧」），紧贴估值文案右侧。
+struct EstimateConfidenceBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(AppPalette.appFont(.caption2, weight: .semibold, design: .monospaced))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+    }
+}
+
 struct ToastBar: View {
     let text: String
     let tint: Color

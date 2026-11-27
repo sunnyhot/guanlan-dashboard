@@ -45,6 +45,7 @@ extension AppModel {
                 forceQuoteRefresh: forceQuoteRefresh ?? updateNotice
             )
             userPortfolioSnapshot = snapshot
+            updateFundEstimateCalibration(with: snapshot)
             rebuildAssetRows()
             recordPortfolioInsightSnapshotIfPossible(createdAt: snapshot.refreshedAt)
             lastPortfolioRefreshAt = Date()

@@ -219,6 +219,58 @@ struct UserPortfolioValuationRow: Hashable, Identifiable {
     let profitAmount: Double?
     let profitPct: Double?
     let estimateChangePct: Double?
+    /// 估值可信度（校准后）。
+    var estimateConfidence: FundEstimateConfidence?
+    /// 估值来源标识。
+    var estimateSource: String?
+    /// 误差带半宽（百分点）。
+    var estimateErrorBandPct: Double?
+    /// 多源估值是否显著分歧。
+    var hasEstimateDisagreement: Bool
+    /// 穿透贡献明细。
+    var estimateContributors: [FundEstimateContribution]
+
+    init(
+        holding: UserPortfolioHolding,
+        fundName: String,
+        currentPrice: Double?,
+        priceTime: String?,
+        priceSource: String?,
+        officialNav: Double?,
+        officialNavDate: String?,
+        estimatePrice: Double?,
+        estimatePriceTime: String?,
+        marketValue: Double?,
+        costValue: Double?,
+        profitAmount: Double?,
+        profitPct: Double?,
+        estimateChangePct: Double?,
+        estimateConfidence: FundEstimateConfidence? = nil,
+        estimateSource: String? = nil,
+        estimateErrorBandPct: Double? = nil,
+        hasEstimateDisagreement: Bool = false,
+        estimateContributors: [FundEstimateContribution] = []
+    ) {
+        self.holding = holding
+        self.fundName = fundName
+        self.currentPrice = currentPrice
+        self.priceTime = priceTime
+        self.priceSource = priceSource
+        self.officialNav = officialNav
+        self.officialNavDate = officialNavDate
+        self.estimatePrice = estimatePrice
+        self.estimatePriceTime = estimatePriceTime
+        self.marketValue = marketValue
+        self.costValue = costValue
+        self.profitAmount = profitAmount
+        self.profitPct = profitPct
+        self.estimateChangePct = estimateChangePct
+        self.estimateConfidence = estimateConfidence
+        self.estimateSource = estimateSource
+        self.estimateErrorBandPct = estimateErrorBandPct
+        self.hasEstimateDisagreement = hasEstimateDisagreement
+        self.estimateContributors = estimateContributors
+    }
 
     var id: UUID { holding.id }
 

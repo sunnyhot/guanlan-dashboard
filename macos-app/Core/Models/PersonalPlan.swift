@@ -400,6 +400,66 @@ struct PersonalAssetAggregateRow: Identifiable, Hashable {
         holdingRow?.estimateChangePct
     }
 
+    var estimateConfidence: FundEstimateConfidence? {
+        holdingRow?.estimateConfidence
+    }
+
+    var estimateSourceLabel: String? {
+        guard let source = holdingRow?.estimateSource else { return nil }
+        return FundEstimateSource(rawValue: source)?.displayName
+    }
+
+    var estimateErrorBandPct: Double? {
+        holdingRow?.estimateErrorBandPct
+    }
+
+    var hasEstimateDisagreement: Bool {
+        holdingRow?.hasEstimateDisagreement ?? false
+    }
+
+    var estimateContributors: [FundEstimateContribution] {
+        holdingRow?.estimateContributors ?? []
+    }
+
+    /// 估值可信度角标文案；不需要展示时为 nil。
+    var estimateConfidenceBadge: String? {
+        if hasEstimateDisagreement { return "分歧" }
+        switch estimateConfidence {
+        case .high: return "准"
+        case .medium: return "中"
+        case .low: return "偏"
+        case .unknown, .none: return nil
+        }
+    }
+
+    /// 悬停提示：来源 / 误差带 / 穿透贡献。
+    var estimateHelpText: String? {
+        var lines: [String] = []
+        if let source = estimateSourceLabel {
+            lines.append("估值来源：\(source)")
+        }
+        if let band = estimateErrorBandPct {
+            lines.append(String(format: "历史误差：±%.2f%%", band))
+        }
+        if let confidence = estimateConfidence, confidence != .unknown {
+            lines.append("可信度：\(confidence.displayName)")
+        }
+        if hasEstimateDisagreement {
+            lines.append("多个估值来源分歧较大，已按历史准确度加权")
+        }
+        let contributors = estimateContributors.prefix(5)
+        if !contributors.isEmpty {
+            lines.append("主要贡献：")
+            for c in contributors {
+                lines.append(String(
+                    format: "  %@ %.2f%% × %+.2f%% = %+.2f%%",
+                    c.name, c.weightPct, c.changePct, c.contributionPct
+                ))
+            }
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
     var estimateChangeAmount: Double? {
         holdingRow?.estimatedDailyChangeAmount
     }

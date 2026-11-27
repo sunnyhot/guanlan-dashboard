@@ -166,6 +166,16 @@ enum AppPalette {
     static let info = adaptive(light: rgb(0.10, 0.35, 0.70), dark: rgb(0.38, 0.62, 0.96))
     static let accentWarm = adaptive(light: rgb(0.62, 0.34, 0.08), dark: rgb(0.90, 0.62, 0.28))
 
+    /// 估值可信度角标色：高=positive，中=info，低=danger，待校准=muted。
+    static func confidenceTint(_ confidence: FundEstimateConfidence?) -> Color {
+        switch confidence {
+        case .high: return positive
+        case .medium: return info
+        case .low: return danger
+        case .unknown, .none: return muted
+        }
+    }
+
     // MARK: - Chinese Market Convention (red=up, green=down)
 
     static let marketGain = adaptive(light: rgb(0.70, 0.12, 0.12), dark: rgb(0.96, 0.36, 0.32))
