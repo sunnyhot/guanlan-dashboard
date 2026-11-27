@@ -1,26 +1,26 @@
 {
   "asset" : {
     "content_type" : "application/zip",
-    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.2/QiemanDashboard-5.0.2.zip",
-    "name" : "QiemanDashboard-5.0.2.zip",
-    "sha256" : "a3cb03d71e5184bd051dc3af9dec5c21d74631481db1e7fa6fcadb1c8ce24400",
-    "size" : 8277250
+    "download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.1.0/QiemanDashboard-5.1.0.zip",
+    "name" : "QiemanDashboard-5.1.0.zip",
+    "sha256" : "fba0833a56f9b323b96ef9e74a803350d0c241b25dae13c87b14e6c9ae727b20",
+    "size" : 8455506
   },
   "assets" : [
     {
-      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.0.2/QiemanDashboard-5.0.2.zip",
+      "browser_download_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/download/v5.1.0/QiemanDashboard-5.1.0.zip",
       "content_type" : "application/zip",
-      "name" : "QiemanDashboard-5.0.2.zip",
-      "size" : 8277250
+      "name" : "QiemanDashboard-5.1.0.zip",
+      "size" : 8455506
     }
   ],
-  "body" : "菜单栏新增上海银 Ag(T+D) 并发布 v5.0.2",
-  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v5.0.2",
-  "name" : "观澜 v5.0.2",
-  "notes" : "菜单栏新增上海银 Ag(T+D) 并发布 v5.0.2",
+  "body" : "基金盘中估值升级为多源融合 + 校准台账，发布 v5.1.0",
+  "html_url" : "https://github.com/sunnyhot/guanlan-dashboard/releases/tag/v5.1.0",
+  "name" : "观澜 v5.1.0",
+  "notes" : "基金盘中估值升级为多源融合 + 校准台账，发布 v5.1.0",
   "published_at" : "",
-  "sha256" : "a3cb03d71e5184bd051dc3af9dec5c21d74631481db1e7fa6fcadb1c8ce24400",
-  "tag" : "v5.0.2",
-  "tag_name" : "v5.0.2",
-  "version" : "5.0.2"
+  "sha256" : "fba0833a56f9b323b96ef9e74a803350d0c241b25dae13c87b14e6c9ae727b20",
+  "tag" : "v5.1.0",
+  "tag_name" : "v5.1.0",
+  "version" : "5.1.0"
 }
